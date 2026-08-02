@@ -20,6 +20,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { FileAttachments } from "@/components/FileAttachments";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
 import {
@@ -49,6 +50,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   useAddCustomerConsent,
   useAddCustomerNote,
@@ -74,7 +76,6 @@ import {
   useSendMessage,
   useUpdateCustomer,
   useUpdateCustomerStatus,
-  uploadFileViaIntent,
 } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName, type Customer, type EntitlementView } from "@/lib/api/types";
@@ -122,7 +123,6 @@ function ClientProfile() {
   const notes = useCustomerNotes(clientId);
   const addNote = useAddCustomerNote(clientId);
   const updateStatus = useUpdateCustomerStatus();
-  const [uploading, setUploading] = useState(false);
 
   if (customer.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading client…</p>;
@@ -202,33 +202,6 @@ function ClientProfile() {
           <Button variant="outline" onClick={() => setQuick("package")} disabled={isAnonymised}>
             <Package className="size-4" /> Sell package
           </Button>
-          <label className="inline-flex">
-            <input
-              type="file"
-              className="sr-only"
-              disabled={uploading || !tenant.businessId || isAnonymised}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file || !tenant.businessId) return;
-                setUploading(true);
-                try {
-                  await uploadFileViaIntent(tenant.businessId, file, {
-                    ownerType: "customer",
-                    ownerId: client.id,
-                  });
-                  toast.success("File uploaded");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Upload failed");
-                } finally {
-                  setUploading(false);
-                }
-              }}
-            />
-            <Button variant="outline" asChild disabled={uploading || isAnonymised}>
-              <span>{uploading ? "Uploading…" : "Upload file"}</span>
-            </Button>
-          </label>
           <Button onClick={() => setBookingOpen(true)} disabled={isAnonymised}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
@@ -256,6 +229,7 @@ function ClientProfile() {
           <TabsTrigger value="payments">Payment history</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="details">Details, tags &amp; consents</TabsTrigger>
           <TabsTrigger value="privacy">Portal &amp; privacy</TabsTrigger>
         </TabsList>
@@ -436,6 +410,19 @@ function ClientProfile() {
 
         <TabsContent value="messages" className="mt-4">
           <ClientMessages customerId={client.id} />
+        </TabsContent>
+
+        <TabsContent value="files" className="mt-4">
+          <SectionCard
+            title="Attachments"
+            description="Photos, waivers and other documents held against this client (RECA-504)."
+          >
+            <FileAttachments
+              ownerType="customer"
+              ownerId={client.id}
+              canUpload={!isAnonymised && tenant.can(PERMISSIONS.CUSTOMER_UPDATE)}
+            />
+          </SectionCard>
         </TabsContent>
 
         <TabsContent value="details" className="mt-4 space-y-6">

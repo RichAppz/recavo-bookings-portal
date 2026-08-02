@@ -40,6 +40,7 @@ export type PolicyDocument = schemas["PolicyDocument"];
 export type Invitation = schemas["Invitation"];
 export type LinkedRecord = schemas["LinkedRecord"];
 export type AuditEvent = schemas["AuditEvent"];
+export type BusinessLifecycle = schemas["BusinessLifecycle"];
 export type ProblemDetails = schemas["ProblemDetails"];
 
 /**

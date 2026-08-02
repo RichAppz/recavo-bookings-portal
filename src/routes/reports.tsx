@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDownToLine } from "lucide-react";
+import { ArrowDownToLine, Download, Loader2, Lock } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -15,13 +15,24 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
-import { Can } from "@/lib/tenant/tenant-context";
+import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useDashboard, useRequestExport } from "@/lib/api/hooks";
-import { formatMoney, pct } from "@/lib/format";
+import { ApiError } from "@/lib/api";
+import { downloadExportFile, useDashboard, useRequestExport } from "@/lib/api/hooks";
+import type { ExportRequest } from "@/lib/api/types";
+import { formatInTz, formatMoney, isoDate, pct } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reports")({
@@ -51,11 +62,32 @@ export const Route = createFileRoute("/reports")({
 
 const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
 
-function monthRange(offset = 0) {
+function monthBounds(offset = 0) {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1);
-  return { from: from.toISOString(), to: to.toISOString() };
+  const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+  return { from: isoDate(from), to: isoDate(to) };
+}
+
+/** Half-open UTC window for an `<input type="date">` pair: [from 00:00, to+1day 00:00). */
+function toDateTimeRange(from: string, to: string): { from?: string; to?: string } {
+  const out: { from?: string; to?: string } = {};
+  if (from) out.from = new Date(`${from}T00:00:00.000Z`).toISOString();
+  if (to) {
+    const end = new Date(`${to}T00:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() + 1);
+    out.to = end.toISOString();
+  }
+  return out;
+}
+
+/** Equal-length window immediately preceding `[from, to)`, for the comparison stat cards. */
+function previousRange(from?: string, to?: string): { from?: string; to?: string } {
+  if (!from || !to) return {};
+  const durationMs = new Date(to).getTime() - new Date(from).getTime();
+  const prevTo = new Date(from);
+  const prevFrom = new Date(prevTo.getTime() - durationMs);
+  return { from: prevFrom.toISOString(), to: prevTo.toISOString() };
 }
 
 function pctChange(current: number, previous: number) {
@@ -64,11 +96,16 @@ function pctChange(current: number, previous: number) {
 }
 
 function ReportsPage() {
-  const thisMonth = useMemo(() => monthRange(0), []);
-  const lastMonth = useMemo(() => monthRange(-1), []);
-  const dashboard = useDashboard(thisMonth);
-  const previous = useDashboard(lastMonth);
-  const requestExport = useRequestExport();
+  const tenant = useTenant();
+  const defaultRange = useMemo(() => monthBounds(0), []);
+  const [from, setFrom] = useState(defaultRange.from);
+  const [to, setTo] = useState(defaultRange.to);
+
+  const range = toDateTimeRange(from, to);
+  const previous = previousRange(range.from, range.to);
+
+  const dashboard = useDashboard(range);
+  const previousDashboard = useDashboard(previous);
 
   const revenueBreakdown = dashboard.data
     ? [
@@ -89,40 +126,23 @@ function ReportsPage() {
   const occupancy = dashboard.data
     ? [
         {
-          name: "This month",
+          name: "Selected range",
           booked: dashboard.data.occupancy.seats,
           capacity: dashboard.data.occupancy.capacity,
         },
       ]
     : [];
 
+  const currentLocationName =
+    tenant.currentLocationId === "all"
+      ? "all locations"
+      : (tenant.locations.find((l) => l.id === tenant.currentLocationId)?.name ?? "this location");
+
   return (
     <>
       <PageHeader
         title="Reports"
-        description="How the business performed this month, compared with last month."
-        actions={
-          <Button
-            variant="outline"
-            disabled={requestExport.isPending}
-            onClick={async () => {
-              try {
-                await requestExport.mutateAsync({
-                  type: "dashboard",
-                  from: thisMonth.from,
-                  to: thisMonth.to,
-                });
-                toast.success("Export requested", {
-                  description: "You'll be able to download it once processing finishes.",
-                });
-              } catch {
-                /* toasted by hook */
-              }
-            }}
-          >
-            <ArrowDownToLine className="size-4" /> Export report
-          </Button>
-        }
+        description={`How ${tenant.business?.tradingName ?? "the business"} performed, filtered to ${currentLocationName}.`}
       />
 
       <Can
@@ -134,6 +154,62 @@ function ReportsPage() {
           />
         }
       >
+        <SectionCard
+          title="Filters"
+          description="Date range and location apply to every chart on this page"
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="rep-from">From</Label>
+              <Input
+                id="rep-from"
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-[160px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="rep-to">To</Label>
+              <Input
+                id="rep-to"
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-[160px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Location</Label>
+              <Select value={tenant.currentLocationId} onValueChange={tenant.setCurrentLocationId}>
+                <SelectTrigger className="w-[210px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {tenant.locations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const bounds = monthBounds(0);
+                setFrom(bounds.from);
+                setTo(bounds.to);
+              }}
+            >
+              Reset to this month
+            </Button>
+          </div>
+        </SectionCard>
+
         {dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
@@ -146,22 +222,27 @@ function ReportsPage() {
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label="Revenue this month"
+                label="Revenue"
                 value={formatMoney(dashboard.data.revenue.netMinor, dashboard.data.basis.currency)}
                 change={
-                  previous.data
-                    ? pctChange(dashboard.data.revenue.netMinor, previous.data.revenue.netMinor)
+                  previousDashboard.data
+                    ? pctChange(
+                        dashboard.data.revenue.netMinor,
+                        previousDashboard.data.revenue.netMinor,
+                      )
                     : undefined
                 }
+                hint="vs. previous equal period"
               />
               <StatCard
-                label="Bookings this month"
+                label="Bookings"
                 value={String(dashboard.data.bookings.count)}
                 change={
-                  previous.data
-                    ? pctChange(dashboard.data.bookings.count, previous.data.bookings.count)
+                  previousDashboard.data
+                    ? pctChange(dashboard.data.bookings.count, previousDashboard.data.bookings.count)
                     : undefined
                 }
+                hint="vs. previous equal period"
               />
               <StatCard
                 label="Attendance rate"
@@ -179,10 +260,10 @@ function ReportsPage() {
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard
                 title="Revenue breakdown"
-                description="Net, refunded and disputed for the current month"
+                description="Net, refunded and disputed for the selected range"
               >
                 {revenueBreakdown.length === 0 ? (
-                  <EmptyState title="No revenue yet this month" />
+                  <EmptyState title="No revenue in this range" />
                 ) : (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -300,7 +381,7 @@ function ReportsPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Packages and credits" description="Prepaid activity this month">
+              <SectionCard title="Packages and credits" description="Prepaid activity in this range">
                 <dl className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <dt className="text-xs text-muted-foreground">Package sales</dt>
@@ -328,14 +409,137 @@ function ReportsPage() {
                 </dl>
               </SectionCard>
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              Breakdowns by service, trainer and location, plus scheduled exports, are coming in a
-              future update.
-            </p>
           </>
         )}
+
+        <Can
+          permission={PERMISSIONS.REPORT_EXPORT}
+          fallback={
+            <SectionCard title="Data exports">
+              <p className="text-sm text-muted-foreground">
+                Ask a business owner or administrator to grant you export access.
+              </p>
+            </SectionCard>
+          }
+        >
+          <ExportCard />
+        </Can>
       </Can>
     </>
+  );
+}
+
+const EXPORT_TYPES = [
+  { value: "customers", label: "Clients" },
+  { value: "bookings", label: "Bookings" },
+] as const;
+
+function ExportCard() {
+  const requestExport = useRequestExport();
+  const [type, setType] = useState<(typeof EXPORT_TYPES)[number]["value"]>("customers");
+  const [result, setResult] = useState<{ export: ExportRequest; downloadUrl: string } | null>(null);
+  const [gate, setGate] = useState<"billing" | "feature" | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleRequest = async () => {
+    setGate(null);
+    try {
+      const data = await requestExport.mutateAsync({ type });
+      setResult(data);
+      toast.success("Export ready", {
+        description: `${data.export.rowCount} row(s) — expires ${new Date(data.export.expiresAt).toLocaleString("en-GB")}.`,
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.isBillingRequired) setGate("billing");
+        else if (err.isFeatureNotAvailable) setGate("feature");
+      }
+      // Other failures are already toasted by the mutation's onError.
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!result) return;
+    setDownloading(true);
+    try {
+      await downloadExportFile(result.downloadUrl, `${result.export.type}-export.csv`);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.detail || err.title : "Couldn't download the export.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Data exports"
+      description="Generate a CSV of clients or bookings for the whole business (not filtered by date range)"
+    >
+      {gate ? (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-4 text-sm">
+          <Lock className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
+          <div>
+            <p className="font-medium text-warning-foreground">
+              {gate === "billing" ? "Billing access required" : "Not available on your plan"}
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              {gate === "billing"
+                ? "Your subscription's current billing state is blocking exports. Resolve billing to continue."
+                : "Data exports aren't included in your current plan. Upgrade to unlock CSV exports."}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="grid gap-2">
+          <Label>Export type</Label>
+          <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPORT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button disabled={requestExport.isPending} onClick={handleRequest}>
+          {requestExport.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ArrowDownToLine className="size-4" />
+          )}
+          Request export
+        </Button>
+      </div>
+
+      {result ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 text-sm">
+          <div>
+            <p className="font-medium">
+              {EXPORT_TYPES.find((t) => t.value === result.export.type)?.label ?? result.export.type}{" "}
+              export — {result.export.rowCount} row(s)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Expires {formatInTz(result.export.expiresAt, "Europe/London")}
+            </p>
+          </div>
+          <Button variant="outline" disabled={downloading} onClick={handleDownload}>
+            {downloading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            Download CSV
+          </Button>
+        </div>
+      ) : null}
+    </SectionCard>
   );
 }
