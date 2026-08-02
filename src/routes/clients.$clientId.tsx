@@ -4,11 +4,14 @@ import {
   ArrowLeft,
   CalendarPlus,
   ChevronDown,
+  Copy,
+  Download,
   MessageSquare,
   Minus,
   Package,
   Plus,
   ShieldOff,
+  X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
@@ -16,31 +19,63 @@ import { BookingPanel } from "@/components/BookingPanel";
 import { FileAttachments } from "@/components/FileAttachments";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useTenant } from "@/lib/tenant/tenant-context";
-import { PERMISSIONS } from "@/lib/permissions";
+import { ApiError } from "@/lib/api";
 import {
   useAddCustomerNote,
   useAdjustEntitlement,
+  useAnonymiseCustomer,
+  useAssignCustomerTag,
+  useCreateCustomerLinkedRecord,
+  useCreateCustomerTag,
   useCustomer,
+  useCustomerAssignedTags,
   useCustomerBookings,
+  useCustomerConsents,
   useCustomerCredits,
+  useCustomerDsarExport,
+  useCustomerLinkedRecords,
   useCustomerNotes,
+  useCustomerTagsCatalogue,
   useEntitlementLedger,
+  useLinkCustomerPortal,
   useMessages,
   useOpenConversation,
   usePackages,
-  usePayments,
+  usePaymentsList,
+  useRecordCustomerConsent,
   useSendMessage,
+  useUnassignCustomerTag,
+  useUpdateCustomer,
   useUpdateCustomerStatus,
 } from "@/lib/api/hooks";
-import { ApiError } from "@/lib/api";
-import { customerDisplayName, type EntitlementView } from "@/lib/api/types";
+import { customerDisplayName, type Customer, type EntitlementView } from "@/lib/api/types";
+import { PERMISSIONS } from "@/lib/permissions";
 import { formatInTz, formatMoney, ukDate } from "@/lib/format";
+import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/clients/$clientId")({
@@ -75,15 +110,19 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [confirmDsar, setConfirmDsar] = useState(false);
+  const [confirmAnonymise, setConfirmAnonymise] = useState(false);
 
   const customer = useCustomer(clientId);
   const bookings = useCustomerBookings(clientId);
   const credits = useCustomerCredits(clientId);
   const packages = usePackages();
-  const payments = usePayments({ customerId: clientId });
+  const payments = usePaymentsList({ customerId: clientId });
   const notes = useCustomerNotes(clientId);
   const addNote = useAddCustomerNote(clientId);
   const updateStatus = useUpdateCustomerStatus();
+  const dsarExport = useCustomerDsarExport(clientId);
+  const anonymise = useAnonymiseCustomer(clientId);
 
   if (customer.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading client…</p>;
@@ -108,6 +147,7 @@ function ClientProfile() {
   }
 
   const client = customer.data;
+  const anonymised = client.status === "anonymised";
   const now = new Date().toISOString();
   const upcoming = (bookings.data ?? [])
     .filter(
@@ -120,9 +160,22 @@ function ClientProfile() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + e.balance.available, 0);
-  const lifetimeSpendMinor = (payments.data?.payments ?? [])
+  const lifetimeSpendMinor = (payments.payments ?? [])
     .filter((p) => p.state === "succeeded" || p.state === "partially_refunded")
     .reduce((sum, p) => sum + p.amountMinor - p.amountRefundedMinor, 0);
+
+  const downloadDsar = async () => {
+    const data = await dsarExport.mutateAsync();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dsar-${client.id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("DSAR export downloaded");
+    setConfirmDsar(false);
+  };
 
   return (
     <>
@@ -141,18 +194,28 @@ function ClientProfile() {
             <StatusBadge status={client.status} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {[client.emailDisplay, client.phoneDisplay].filter(Boolean).join(" · ")} · Client since{" "}
-            {ukDate(client.createdAt.slice(0, 10))}
+            {[client.emailDisplay, client.phoneDisplay].filter(Boolean).join(" · ") || "No contact"}{" "}
+            · Client since {ukDate(client.createdAt.slice(0, 10))}
           </p>
+          {client.userId ? (
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              Portal user: {client.userId}
+            </p>
+          ) : null}
+          {anonymised ? (
+            <p className="mt-2 text-sm text-destructive">
+              This client has been anonymised. Profile edits are disabled.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setQuick("message")}>
+          <Button variant="outline" disabled={anonymised} onClick={() => setQuick("message")}>
             <MessageSquare className="size-4" /> Message
           </Button>
-          <Button variant="outline" onClick={() => setQuick("package")}>
+          <Button variant="outline" disabled={anonymised} onClick={() => setQuick("package")}>
             <Package className="size-4" /> Sell package
           </Button>
-          <Button onClick={() => setBookingOpen(true)}>
+          <Button disabled={anonymised} onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
         </div>
@@ -172,15 +235,25 @@ function ClientProfile() {
         ))}
       </div>
 
-      <Tabs defaultValue="upcoming">
+      <Tabs defaultValue="profile">
         <TabsList className="flex-wrap">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming bookings</TabsTrigger>
           <TabsTrigger value="packages">Packages and credits</TabsTrigger>
           <TabsTrigger value="payments">Payment history</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="consents">Consents</TabsTrigger>
+          <TabsTrigger value="tags">Tags</TabsTrigger>
+          <TabsTrigger value="linked">Linked records</TabsTrigger>
+          <TabsTrigger value="portal">Portal link</TabsTrigger>
+          <TabsTrigger value="privacy">Privacy</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="profile" className="mt-4">
+          <CustomerProfileForm client={client} disabled={anonymised} />
+        </TabsContent>
 
         <TabsContent value="upcoming" className="mt-4">
           <SectionCard bodyClassName="p-0">
@@ -191,7 +264,11 @@ function ClientProfile() {
                 <EmptyState
                   title="No upcoming bookings"
                   description={`${customerDisplayName(client)} has nothing in the diary. Create a booking to get them back in.`}
-                  action={<Button onClick={() => setBookingOpen(true)}>Create booking</Button>}
+                  action={
+                    <Button disabled={anonymised} onClick={() => setBookingOpen(true)}>
+                      Create booking
+                    </Button>
+                  }
                 />
               </div>
             ) : (
@@ -247,6 +324,7 @@ function ClientProfile() {
                       packages.data?.find((p) => p.id === view.entitlement.packageId)?.name ??
                       "Package"
                     }
+                    disabled={anonymised}
                   />
                 ))}
               </div>
@@ -258,7 +336,7 @@ function ClientProfile() {
           <SectionCard bodyClassName="p-0">
             {payments.isLoading ? (
               <p className="p-6 text-sm text-muted-foreground">Loading payments…</p>
-            ) : (payments.data?.payments ?? []).length === 0 ? (
+            ) : (payments.payments ?? []).length === 0 ? (
               <div className="p-6">
                 <EmptyState title="No payments recorded" />
               </div>
@@ -276,7 +354,7 @@ function ClientProfile() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {(payments.data?.payments ?? []).map((p) => (
+                  {(payments.payments ?? []).map((p) => (
                     <tr key={p.id}>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {ukDate(p.createdAt.slice(0, 10))}
@@ -321,11 +399,12 @@ function ClientProfile() {
               <Textarea
                 rows={3}
                 value={note}
+                disabled={anonymised}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Add a training note, injury update or preference…"
               />
               <Button
-                disabled={addNote.isPending}
+                disabled={addNote.isPending || anonymised}
                 onClick={async () => {
                   if (!note.trim()) return toast.error("Write a note first");
                   await addNote.mutateAsync(note);
@@ -355,6 +434,50 @@ function ClientProfile() {
           </SectionCard>
         </TabsContent>
 
+        <TabsContent value="consents" className="mt-4">
+          <CustomerConsentsTab customerId={client.id} disabled={anonymised} />
+        </TabsContent>
+
+        <TabsContent value="tags" className="mt-4">
+          <CustomerTagsTab customerId={client.id} disabled={anonymised} />
+        </TabsContent>
+
+        <TabsContent value="linked" className="mt-4">
+          <CustomerLinkedRecordsTab customerId={client.id} disabled={anonymised} />
+        </TabsContent>
+
+        <TabsContent value="portal" className="mt-4">
+          <CustomerPortalLinkTab client={client} disabled={anonymised} />
+        </TabsContent>
+
+        <TabsContent value="privacy" className="mt-4 space-y-4">
+          <SectionCard
+            title="Data subject rights"
+            description="Export or anonymise this client under GDPR. Contact fields are already masked as returned by the API."
+          >
+            <div className="flex flex-wrap gap-2">
+              <Can permission={PERMISSIONS.CUSTOMER_EXPORT}>
+                <Button
+                  variant="outline"
+                  disabled={dsarExport.isPending || anonymised}
+                  onClick={() => setConfirmDsar(true)}
+                >
+                  <Download className="size-4" /> DSAR export
+                </Button>
+              </Can>
+              <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+                <Button
+                  variant="destructive"
+                  disabled={anonymise.isPending || anonymised}
+                  onClick={() => setConfirmAnonymise(true)}
+                >
+                  Anonymise client
+                </Button>
+              </Can>
+            </div>
+          </SectionCard>
+        </TabsContent>
+
         <TabsContent value="files" className="mt-4">
           <SectionCard
             title="Attachments"
@@ -369,25 +492,27 @@ function ClientProfile() {
         </TabsContent>
 
         <TabsContent value="messages" className="mt-4">
-          <ClientMessages customerId={client.id} />
+          <ClientMessages customerId={client.id} disabled={anonymised} />
         </TabsContent>
       </Tabs>
 
-      <div>
-        <Button
-          variant="outline"
-          disabled={updateStatus.isPending}
-          onClick={() =>
-            updateStatus.mutate({
-              customerId: client.id,
-              version: client.version,
-              status: client.status === "active" ? "archived" : "active",
-            })
-          }
-        >
-          <ShieldOff className="size-4" />
-          {client.status === "active" ? "Archive client" : "Reactivate client"}
-        </Button>
+      <div className="flex flex-wrap gap-2">
+        <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+          <Button
+            variant="outline"
+            disabled={updateStatus.isPending || anonymised}
+            onClick={() =>
+              updateStatus.mutate({
+                customerId: client.id,
+                version: client.version,
+                status: client.status === "active" ? "archived" : "active",
+              })
+            }
+          >
+            <ShieldOff className="size-4" />
+            {client.status === "active" ? "Archive client" : "Reactivate client"}
+          </Button>
+        </Can>
       </div>
 
       <AddBookingModal
@@ -397,11 +522,553 @@ function ClientProfile() {
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} customerId={client.id} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
+
+      <AlertDialog open={confirmDsar} onOpenChange={setConfirmDsar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Export DSAR bundle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This requests a personal-data export for {customerDisplayName(client)} and downloads
+              the JSON response.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={dsarExport.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void downloadDsar();
+              }}
+            >
+              {dsarExport.isPending ? "Exporting…" : "Export"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmAnonymise} onOpenChange={setConfirmAnonymise}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anonymise this client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This is irreversible. Personal details will be stripped and further edits will be
+              disabled.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep client</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={anonymise.isPending}
+              onClick={async (e) => {
+                e.preventDefault();
+                await anonymise.mutateAsync();
+                toast.success("Client anonymised");
+                setConfirmAnonymise(false);
+              }}
+            >
+              {anonymise.isPending ? "Anonymising…" : "Anonymise"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function EntitlementRow({ view, packageName }: { view: EntitlementView; packageName: string }) {
+function CustomerProfileForm({ client, disabled }: { client: Customer; disabled: boolean }) {
+  const update = useUpdateCustomer();
+  const [firstName, setFirstName] = useState(client.firstName);
+  const [lastName, setLastName] = useState(client.lastName ?? "");
+  const [email, setEmail] = useState(client.emailDisplay ?? "");
+  const [phone, setPhone] = useState(client.phoneDisplay ?? "");
+  const [preferredChannel, setPreferredChannel] = useState<"email" | "phone" | "none">(
+    client.contactPreferences.preferredChannel === "sms"
+      ? "none"
+      : client.contactPreferences.preferredChannel,
+  );
+  const [operationalNotifications, setOperationalNotifications] = useState(
+    client.contactPreferences.operationalNotifications,
+  );
+  const [marketingConsent, setMarketingConsent] = useState(client.marketingConsent.granted);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setFirstName(client.firstName);
+    setLastName(client.lastName ?? "");
+    setEmail(client.emailDisplay ?? "");
+    setPhone(client.phoneDisplay ?? "");
+    setPreferredChannel(
+      client.contactPreferences.preferredChannel === "sms"
+        ? "none"
+        : client.contactPreferences.preferredChannel,
+    );
+    setOperationalNotifications(client.contactPreferences.operationalNotifications);
+    setMarketingConsent(client.marketingConsent.granted);
+    setFieldErrors({});
+  }, [client]);
+
+  return (
+    <SectionCard
+      title="Profile"
+      description="Contact details are shown as returned by the API (may be masked). Saves use If-Match."
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="pf-first">First name</Label>
+          <Input
+            id="pf-first"
+            value={firstName}
+            disabled={disabled}
+            onChange={(e) => setFirstName(e.target.value)}
+          />
+          {fieldErrors.firstName ? (
+            <p className="text-xs text-destructive">{fieldErrors.firstName}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="pf-last">Last name</Label>
+          <Input
+            id="pf-last"
+            value={lastName}
+            disabled={disabled}
+            onChange={(e) => setLastName(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="pf-email">Email</Label>
+          <Input
+            id="pf-email"
+            type="email"
+            value={email}
+            disabled={disabled}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {fieldErrors.email ? (
+            <p className="text-xs text-destructive">{fieldErrors.email}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="pf-phone">Phone</Label>
+          <Input
+            id="pf-phone"
+            value={phone}
+            disabled={disabled}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          {fieldErrors.phone ? (
+            <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label>Preferred channel</Label>
+          <Select
+            value={preferredChannel}
+            disabled={disabled}
+            onValueChange={(v) => setPreferredChannel(v as "email" | "phone" | "none")}
+          >
+            <SelectTrigger className="max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+          {fieldErrors.preferredChannel ? (
+            <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            SMS is not available until delivery ships.
+          </p>
+        </div>
+        <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
+          <div>
+            <p className="text-sm font-medium">Operational notifications</p>
+            <p className="text-xs text-muted-foreground">Booking reminders and service updates.</p>
+          </div>
+          <Switch
+            checked={operationalNotifications}
+            disabled={disabled}
+            onCheckedChange={setOperationalNotifications}
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
+          <div>
+            <p className="text-sm font-medium">Marketing consent</p>
+            <p className="text-xs text-muted-foreground">
+              Last updated{" "}
+              {client.marketingConsent.updatedAt
+                ? ukDate(client.marketingConsent.updatedAt.slice(0, 10))
+                : "never"}
+            </p>
+          </div>
+          <Switch
+            checked={marketingConsent}
+            disabled={disabled}
+            onCheckedChange={setMarketingConsent}
+          />
+        </label>
+      </div>
+      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+        <div className="mt-4">
+          <Button
+            disabled={disabled || update.isPending || !firstName.trim()}
+            onClick={async () => {
+              setFieldErrors({});
+              try {
+                await update.mutateAsync({
+                  customerId: client.id,
+                  version: client.version,
+                  body: {
+                    firstName: firstName.trim(),
+                    lastName: lastName.trim() || null,
+                    email: email.trim() || null,
+                    phone: phone.trim() || null,
+                    preferredChannel,
+                    operationalNotifications,
+                    marketingConsent,
+                    marketingConsentSource: "staff_console",
+                  },
+                });
+                toast.success("Profile saved");
+              } catch (err) {
+                if (err instanceof ApiError) {
+                  if (err.isConflict) {
+                    toast.error("This client was updated elsewhere", {
+                      description: "Refresh the profile, then reapply your changes.",
+                    });
+                    return;
+                  }
+                  const next: Record<string, string> = {};
+                  for (const fe of err.fieldErrors) {
+                    if (fe.field) next[fe.field] = fe.message || fe.code || "Invalid";
+                  }
+                  setFieldErrors(next);
+                }
+              }
+            }}
+          >
+            {update.isPending ? "Saving…" : "Save profile"}
+          </Button>
+        </div>
+      </Can>
+    </SectionCard>
+  );
+}
+
+function CustomerConsentsTab({ customerId, disabled }: { customerId: string; disabled: boolean }) {
+  const consents = useCustomerConsents(customerId);
+  const record = useRecordCustomerConsent(customerId);
+  const [channel, setChannel] = useState("email");
+  const [granted, setGranted] = useState(true);
+  const [source, setSource] = useState("staff_console");
+
+  return (
+    <SectionCard title="Consents" description="Recorded marketing and notice consents.">
+      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-2">
+            <Label>Channel</Label>
+            <Input
+              value={channel}
+              disabled={disabled}
+              onChange={(e) => setChannel(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>Source</Label>
+            <Input value={source} disabled={disabled} onChange={(e) => setSource(e.target.value)} />
+          </div>
+          <label className="flex items-end gap-3 pb-2">
+            <Switch checked={granted} disabled={disabled} onCheckedChange={setGranted} />
+            <span className="text-sm">{granted ? "Granted" : "Withdrawn"}</span>
+          </label>
+          <Button
+            className="sm:col-span-3 sm:w-fit"
+            disabled={disabled || record.isPending || !channel.trim()}
+            onClick={async () => {
+              await record.mutateAsync({
+                channel: channel.trim(),
+                granted,
+                source: source.trim() || null,
+              });
+              toast.success("Consent recorded");
+            }}
+          >
+            Record consent
+          </Button>
+        </div>
+      </Can>
+      {consents.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading consents…</p>
+      ) : (consents.data ?? []).length === 0 ? (
+        <EmptyState title="No consents recorded" />
+      ) : (
+        <ul className="divide-y rounded-xl border">
+          {(consents.data ?? []).map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {c.channel} · {c.granted ? "Granted" : "Withdrawn"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {c.source ?? "—"} · {ukDate(c.recordedAt.slice(0, 10))}
+                </p>
+              </div>
+              <StatusBadge status={c.granted ? "active" : "archived"} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+function CustomerTagsTab({ customerId, disabled }: { customerId: string; disabled: boolean }) {
+  const catalogue = useCustomerTagsCatalogue({ status: "active" });
+  const assigned = useCustomerAssignedTags(customerId);
+  const assign = useAssignCustomerTag(customerId);
+  const unassign = useUnassignCustomerTag(customerId);
+  const createTag = useCreateCustomerTag();
+  const [tagId, setTagId] = useState("");
+  const [newTag, setNewTag] = useState("");
+
+  const assignedIds = useMemo(
+    () => new Set((assigned.data ?? []).map((t) => t.id)),
+    [assigned.data],
+  );
+  const available = (catalogue.data ?? []).filter((t) => !assignedIds.has(t.id));
+
+  return (
+    <SectionCard
+      title="Tags"
+      description="Assign catalogue tags for segmentation. Create tags here or in settings."
+    >
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(assigned.data ?? []).map((t) => (
+          <span
+            key={t.id}
+            className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-xs font-medium"
+          >
+            {t.name}
+            <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+              <button
+                type="button"
+                disabled={disabled || unassign.isPending}
+                className="rounded-full p-0.5 hover:bg-background"
+                aria-label={`Remove ${t.name}`}
+                onClick={async () => {
+                  await unassign.mutateAsync(t.id);
+                  toast.success("Tag removed");
+                }}
+              >
+                <X className="size-3" />
+              </button>
+            </Can>
+          </span>
+        ))}
+        {(assigned.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No tags assigned.</p>
+        ) : null}
+      </div>
+
+      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="grid min-w-[200px] flex-1 gap-2">
+            <Label>Assign tag</Label>
+            <Select value={tagId} disabled={disabled} onValueChange={setTagId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a tag" />
+              </SelectTrigger>
+              <SelectContent>
+                {available.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            disabled={disabled || !tagId || assign.isPending}
+            onClick={async () => {
+              await assign.mutateAsync(tagId);
+              setTagId("");
+              toast.success("Tag assigned");
+            }}
+          >
+            Assign
+          </Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <div className="grid min-w-[200px] flex-1 gap-2">
+            <Label>Create catalogue tag</Label>
+            <Input
+              value={newTag}
+              disabled={disabled}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="VIP"
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={disabled || !newTag.trim() || createTag.isPending}
+            onClick={async () => {
+              const tag = await createTag.mutateAsync(newTag.trim());
+              await assign.mutateAsync(tag.id);
+              setNewTag("");
+              toast.success("Tag created and assigned");
+            }}
+          >
+            Create & assign
+          </Button>
+        </div>
+      </Can>
+    </SectionCard>
+  );
+}
+
+function CustomerLinkedRecordsTab({
+  customerId,
+  disabled,
+}: {
+  customerId: string;
+  disabled: boolean;
+}) {
+  const records = useCustomerLinkedRecords(customerId);
+  const create = useCreateCustomerLinkedRecord(customerId);
+  const [label, setLabel] = useState("");
+
+  return (
+    <SectionCard
+      title="Linked records"
+      description="Instance records for this client. Schema/templates are configured in Settings."
+    >
+      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+        <div className="mb-6 flex flex-wrap items-end gap-2">
+          <div className="grid min-w-[220px] flex-1 gap-2">
+            <Label>Display label</Label>
+            <Input
+              value={label}
+              disabled={disabled}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. Bella (dog)"
+            />
+          </div>
+          <Button
+            disabled={disabled || create.isPending || !label.trim()}
+            onClick={async () => {
+              await create.mutateAsync({ displayLabel: label.trim(), values: {} });
+              setLabel("");
+              toast.success("Linked record created");
+            }}
+          >
+            Add record
+          </Button>
+        </div>
+      </Can>
+      {records.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading linked records…</p>
+      ) : (records.data ?? []).length === 0 ? (
+        <EmptyState
+          title="No linked records"
+          description="Add a record when one is needed for booking."
+        />
+      ) : (
+        <ul className="divide-y rounded-xl border">
+          {(records.data ?? []).map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">{r.displayLabel}</p>
+                <p className="text-xs text-muted-foreground">
+                  Updated {ukDate(r.updatedAt.slice(0, 10))}
+                </p>
+              </div>
+              <StatusBadge status={r.status} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+function CustomerPortalLinkTab({ client, disabled }: { client: Customer; disabled: boolean }) {
+  const link = useLinkCustomerPortal(client.id);
+  const [userId, setUserId] = useState("");
+  const [resultUserId, setResultUserId] = useState<string | null>(client.userId);
+
+  useEffect(() => {
+    setResultUserId(client.userId);
+  }, [client.userId]);
+
+  return (
+    <SectionCard
+      title="Portal link"
+      description="Links this customer to an existing portal user by userId (not a shareable magic link)."
+    >
+      {resultUserId ? (
+        <div className="mb-4 rounded-xl border bg-secondary/40 p-4">
+          <p className="text-sm font-medium">Linked portal user</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="rounded bg-background px-2 py-1 text-xs">{resultUserId}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(resultUserId);
+                toast.success("User ID copied");
+              }}
+            >
+              <Copy className="size-4" /> Copy
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mb-4 text-sm text-muted-foreground">No portal user linked yet.</p>
+      )}
+
+      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+        <div className="grid gap-3 sm:max-w-lg">
+          <div className="grid gap-2">
+            <Label htmlFor="portal-user">Portal user ID (UUID)</Label>
+            <Input
+              id="portal-user"
+              value={userId}
+              disabled={disabled}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </div>
+          <Button
+            disabled={disabled || link.isPending || !userId.trim()}
+            onClick={async () => {
+              const updated = await link.mutateAsync(userId.trim());
+              setResultUserId(updated.userId);
+              setUserId("");
+              toast.success("Portal user linked");
+            }}
+          >
+            {link.isPending ? "Linking…" : "Link portal user"}
+          </Button>
+        </div>
+      </Can>
+    </SectionCard>
+  );
+}
+
+function EntitlementRow({
+  view,
+  packageName,
+  disabled,
+}: {
+  view: EntitlementView;
+  packageName: string;
+  disabled?: boolean;
+}) {
   const [showLedger, setShowLedger] = useState(false);
   const ledger = useEntitlementLedger(showLedger ? view.entitlement.id : undefined);
   const adjust = useAdjustEntitlement();
@@ -423,7 +1090,7 @@ function EntitlementRow({ view, packageName }: { view: EntitlementView; packageN
         <Button
           variant="outline"
           size="sm"
-          disabled={adjust.isPending}
+          disabled={disabled || adjust.isPending}
           onClick={() =>
             adjust.mutate({
               entitlementId: view.entitlement.id,
@@ -437,7 +1104,7 @@ function EntitlementRow({ view, packageName }: { view: EntitlementView; packageN
         <Button
           variant="outline"
           size="sm"
-          disabled={adjust.isPending || view.balance.available <= 0}
+          disabled={disabled || adjust.isPending || view.balance.available <= 0}
           onClick={() =>
             adjust.mutate({
               entitlementId: view.entitlement.id,
@@ -483,7 +1150,7 @@ function EntitlementRow({ view, packageName }: { view: EntitlementView; packageN
   );
 }
 
-function ClientMessages({ customerId }: { customerId: string }) {
+function ClientMessages({ customerId, disabled }: { customerId: string; disabled?: boolean }) {
   const [reply, setReply] = useState("");
   const openConversation = useOpenConversation();
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -526,11 +1193,12 @@ function ClientMessages({ customerId }: { customerId: string }) {
           <div className="mt-4 flex gap-2">
             <Input
               value={reply}
+              disabled={disabled}
               onChange={(e) => setReply(e.target.value)}
               placeholder="Write a reply…"
             />
             <Button
-              disabled={sendMessage.isPending}
+              disabled={disabled || sendMessage.isPending}
               onClick={async () => {
                 if (!reply.trim()) return;
                 await sendMessage.mutateAsync(reply);

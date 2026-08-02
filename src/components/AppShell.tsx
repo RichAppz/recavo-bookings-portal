@@ -47,7 +47,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { useCustomers, useNotifications } from "@/lib/api/hooks";
+import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -110,6 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const results = search.trim().length > 1 ? (searchQuery.data?.items ?? []).slice(0, 5) : [];
 
   const notifications = useNotifications();
+  const markNotificationRead = useMarkNotificationRead();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
 
@@ -333,7 +334,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => (
-                    <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
+                    <DropdownMenuItem
+                      key={n.id}
+                      className="flex-col items-start gap-0.5"
+                      onClick={() => {
+                        if (!n.readAt) markNotificationRead.mutate(n.id);
+                      }}
+                    >
                       <span className="text-sm font-medium">{n.subject}</span>
                       <span className="text-xs text-muted-foreground">{n.body}</span>
                     </DropdownMenuItem>

@@ -19,13 +19,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   useAvailability,
+  useBookingAction,
   useCreateBooking,
+  useCreateBookingHold,
   useCustomers,
   useLocationsList,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
-import { toastApiError } from "@/lib/api";
+import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -43,18 +45,23 @@ export function AddBookingModal({
   const tenant = useTenant();
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [serviceId, setServiceId] = useState("");
+  const [variantId, setVariantId] = useState<string>("none");
   const [staffId, setStaffId] = useState("all");
   const [locationId, setLocationId] = useState("");
   const [date, setDate] = useState(isoDate(new Date()));
-  const [slotStart, setSlotStart] = useState<string | null>(null);
+  const [slotKey, setSlotKey] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"none" | "credit">("none");
+  const [mode, setMode] = useState<"create" | "hold">("create");
   const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const services = useServices();
   const staff = useStaffList();
   const locations = useLocationsList();
   const customers = useCustomers();
   const createBooking = useCreateBooking();
+  const createHold = useCreateBookingHold();
+  const confirmAction = useBookingAction("confirm");
 
   const service = services.data?.find((s) => s.id === serviceId);
   const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -63,6 +70,7 @@ export function AddBookingModal({
   const availability = useAvailability({
     serviceId: serviceId || undefined,
     locationId: locationId || undefined,
+    variantId: variantId !== "none" ? variantId : undefined,
     staffId: staffId !== "all" ? staffId : undefined,
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
@@ -74,16 +82,26 @@ export function AddBookingModal({
     [availability.data],
   );
 
-  const selectedSlot = slots.find((s) => s.start === slotStart) ?? null;
+  const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+
+  const handleConflict = () => {
+    toast.error("That slot was just taken", {
+      description: "Availability has been refreshed — pick another time.",
+    });
+    setSlotKey(null);
+    void availability.refetch();
+  };
 
   const reset = () => {
     setCustomerId(defaultCustomerId ?? "");
     setServiceId("");
+    setVariantId("none");
     setStaffId("all");
     setLocationId("");
-    setSlotStart(null);
+    setSlotKey(null);
     setPaymentMethod("none");
+    setMode("create");
     setNotes("");
   };
 
@@ -92,22 +110,47 @@ export function AddBookingModal({
       toast.error("Choose a client, service, location and time slot");
       return;
     }
+
+    // Staff hold/create bodies use start + staffId from the availability quote.
+    // Public booking requires `slotToken`; staff OpenAPI does not — the token is
+    // still used server-side when the quote is revalidated on hold/book.
+    const body = {
+      serviceId: service.id,
+      ...(variantId !== "none" ? { variantId } : {}),
+      locationId,
+      staffId: selectedSlot.staffId,
+      start: selectedSlot.start,
+      leadCustomerId: customerId,
+      paymentMethod,
+      notesInternal: notes || null,
+      source: "staff_console",
+      // Include slotToken when present so backends that accept it can bind the quote.
+      ...(selectedSlot.slotToken ? { slotToken: selectedSlot.slotToken } : {}),
+    };
+
+    setSubmitting(true);
     try {
-      await createBooking.mutateAsync({
-        serviceId: service.id,
-        locationId,
-        staffId: selectedSlot.staffId,
-        start: selectedSlot.start,
-        leadCustomerId: customerId,
-        paymentMethod,
-        notesInternal: notes || null,
-        source: "staff_console",
-      });
-      toast.success("Booking created");
+      if (mode === "hold") {
+        const held = await createHold.mutateAsync(body);
+        await confirmAction.mutateAsync({
+          bookingId: held.id,
+          ifMatch: held.version,
+        });
+        toast.success("Slot held and booking confirmed");
+      } else {
+        await createBooking.mutateAsync(body);
+        toast.success("Booking created");
+      }
       reset();
       onOpenChange(false);
     } catch (err) {
-      toastApiError(err);
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        handleConflict();
+      } else {
+        toastApiError(err);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -123,7 +166,7 @@ export function AddBookingModal({
         <DialogHeader>
           <DialogTitle>Add booking</DialogTitle>
           <DialogDescription>
-            Create a session for an existing client and take payment or use a package credit.
+            Search availability, pick a quote slot, then create directly or hold then confirm.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,7 +194,8 @@ export function AddBookingModal({
                 value={serviceId}
                 onValueChange={(v) => {
                   setServiceId(v);
-                  setSlotStart(null);
+                  setVariantId("none");
+                  setSlotKey(null);
                 }}
               >
                 <SelectTrigger>
@@ -167,12 +211,36 @@ export function AddBookingModal({
               </Select>
             </div>
             <div className="grid gap-2">
+              <Label>Variant</Label>
+              <Select
+                value={variantId}
+                onValueChange={(v) => {
+                  setVariantId(v);
+                  setSlotKey(null);
+                }}
+                disabled={!service || service.variants.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Default (no variant)</SelectItem>
+                  {(service?.variants ?? []).map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name} · {v.durationMinutes} min ·{" "}
+                      {formatMoney(v.priceMinor ?? 0, service!.currency)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <Label>Location</Label>
               <Select
                 value={locationId}
                 onValueChange={(v) => {
                   setLocationId(v);
-                  setSlotStart(null);
+                  setSlotKey(null);
                 }}
               >
                 <SelectTrigger>
@@ -193,7 +261,7 @@ export function AddBookingModal({
                 value={staffId}
                 onValueChange={(v) => {
                   setStaffId(v);
-                  setSlotStart(null);
+                  setSlotKey(null);
                 }}
               >
                 <SelectTrigger>
@@ -217,10 +285,22 @@ export function AddBookingModal({
                 value={date}
                 onChange={(e) => {
                   setDate(e.target.value);
-                  setSlotStart(null);
+                  setSlotKey(null);
                 }}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
               />
+            </div>
+            <div className="grid gap-2">
+              <Label>Flow</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="create">Create confirmed</SelectItem>
+                  <SelectItem value="hold">Hold then confirm</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -238,25 +318,42 @@ export function AddBookingModal({
               </p>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {slots.map((s) => (
-                  <button
-                    key={`${s.start}-${s.staffId}`}
-                    type="button"
-                    onClick={() => setSlotStart(s.start)}
-                    className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                      s.start === slotStart
-                        ? "border-primary bg-primary-soft text-primary"
-                        : "hover:bg-secondary"
-                    }`}
-                  >
-                    {formatInTz(s.start, s.displayTimezone || timezone, {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </button>
-                ))}
+                {slots.map((s) => {
+                  const key = `${s.start}:${s.staffId}`;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSlotKey(key)}
+                      className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
+                        key === slotKey
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "hover:bg-secondary"
+                      }`}
+                      title={
+                        s.remainingCapacity > 1
+                          ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
+                          : formatMoney(s.priceMinor, s.currency)
+                      }
+                    >
+                      {formatInTz(s.start, s.displayTimezone || timezone, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </button>
+                  );
+                })}
               </div>
             )}
+            {selectedSlot ? (
+              <p className="text-xs text-muted-foreground">
+                Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                {selectedSlot.remainingCapacity > 1
+                  ? ` · ${selectedSlot.remainingCapacity} places left`
+                  : ""}
+                {selectedSlot.slotToken ? " · slot token attached" : ""}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-2">
@@ -293,8 +390,14 @@ export function AddBookingModal({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={createBooking.isPending}>
-            {createBooking.isPending ? "Creating…" : "Create booking"}
+          <Button onClick={submit} disabled={submitting || !selectedSlot}>
+            {submitting
+              ? mode === "hold"
+                ? "Holding…"
+                : "Creating…"
+              : mode === "hold"
+                ? "Hold & confirm"
+                : "Create booking"}
           </Button>
         </DialogFooter>
       </DialogContent>

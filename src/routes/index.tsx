@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   BadgePoundSterling,
   CalendarPlus,
   CalendarX,
+  Lock,
   MessageSquarePlus,
   Package,
   TrendingUp,
@@ -12,6 +13,18 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
@@ -25,6 +38,13 @@ import {
   StatusBadge,
 } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -66,11 +86,28 @@ export const Route = createFileRoute("/")({
   ),
 });
 
-function monthRange() {
+type RangeKey = "month" | "30d" | "7d" | "all";
+
+function dashboardRange(key: RangeKey): { from?: string; to?: string; label: string } {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { from: from.toISOString(), to: to.toISOString() };
+  if (key === "all") return { label: "All time" };
+  if (key === "month") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { from: from.toISOString(), to: to.toISOString(), label: "This month" };
+  }
+  const days = key === "7d" ? 7 : 30;
+  const from = new Date(now);
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - (days - 1));
+  const to = new Date(now);
+  to.setHours(0, 0, 0, 0);
+  to.setDate(to.getDate() + 1);
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    label: key === "7d" ? "Last 7 days" : "Last 30 days",
+  };
 }
 
 function todayRange() {
@@ -80,18 +117,46 @@ function todayRange() {
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
+/** Dashboard requires REPORT_READ *and* plan feature `reports.basic` (RECA-157). */
+function isPlanGated(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 402 || (error.status === 403 && error.code === "FEATURE_NOT_AVAILABLE"))
+  );
+}
+
+const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
+
 function Overview() {
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [rangeKey, setRangeKey] = useState<RangeKey>("month");
   const today = isoDate(new Date());
 
-  const dashboard = useDashboard(monthRange());
+  const range = useMemo(() => dashboardRange(rangeKey), [rangeKey]);
+  const dashboard = useDashboard({ from: range.from, to: range.to });
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
     .sort((a, b) => a.start.localeCompare(b.start));
+
+  const attendanceChart = dashboard.data
+    ? [
+        { name: "Attended", value: dashboard.data.attendance.attended },
+        { name: "No-show", value: dashboard.data.attendance.noShow },
+        { name: "Cancelled", value: dashboard.data.attendance.cancelled },
+      ].filter((d) => d.value > 0)
+    : [];
+
+  const moneyChart = dashboard.data
+    ? [
+        { name: "Net revenue", value: dashboard.data.revenue.netMinor },
+        { name: "Booking value", value: dashboard.data.bookings.valueMinor },
+        { name: "Package sales", value: dashboard.data.packages.salesMinor },
+      ]
+    : [];
 
   return (
     <>
@@ -119,6 +184,25 @@ function Overview() {
           />
         }
       >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Metrics for {range.label}
+            {tenant.currentLocationId !== "all" ? " · filtered by location" : ""}. Omit a range for
+            all-time totals.
+          </p>
+          <Select value={rangeKey} onValueChange={(v) => setRangeKey(v as RangeKey)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Date range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">This month</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
@@ -126,42 +210,140 @@ function Overview() {
             ))}
           </div>
         ) : dashboard.isError ? (
-          <EmptyState
-            title="Couldn't load dashboard"
-            description={
-              dashboard.error instanceof ApiError
-                ? dashboard.error.detail || dashboard.error.title
-                : "Please try again shortly."
-            }
-          />
+          isPlanGated(dashboard.error) ? (
+            <EmptyState
+              icon={<Lock className="size-5" />}
+              title="Upgrade your plan for reports"
+              description="Revenue, attendance and occupancy reporting isn't included on your current plan."
+              action={
+                <Button variant="outline" asChild>
+                  <Link to="/platform">View plans</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="Couldn't load dashboard"
+              description={
+                dashboard.error instanceof ApiError
+                  ? dashboard.error.detail || dashboard.error.title
+                  : "Please try again shortly."
+              }
+              action={<Button onClick={() => dashboard.refetch()}>Try again</Button>}
+            />
+          )
         ) : dashboard.data ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Revenue this month"
-              value={formatMoney(dashboard.data.revenue.netMinor, dashboard.data.basis.currency)}
-              icon={<BadgePoundSterling className="size-4.5" />}
-            />
-            <StatCard
-              label="Bookings this month"
-              value={String(dashboard.data.bookings.count)}
-              icon={<CalendarPlus className="size-4.5" />}
-            />
-            <StatCard
-              label="Attendance"
-              value={String(dashboard.data.attendance.attended)}
-              hint={`${dashboard.data.attendance.noShow} no-shows · ${dashboard.data.attendance.cancelled} cancelled`}
-              icon={<TrendingUp className="size-4.5" />}
-            />
-            <StatCard
-              label="Occupancy rate"
-              value={pct(dashboard.data.occupancy.rate * 100)}
-              icon={<Users className="size-4.5" />}
-            />
-          </div>
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label={`Revenue · ${range.label}`}
+                value={formatMoney(dashboard.data.revenue.netMinor, dashboard.data.basis.currency)}
+                hint={`Gross ${formatMoney(dashboard.data.revenue.grossMinor, dashboard.data.basis.currency)} · refunded ${formatMoney(dashboard.data.revenue.refundedMinor, dashboard.data.basis.currency)}`}
+                icon={<BadgePoundSterling className="size-4.5" />}
+              />
+              <StatCard
+                label="Bookings"
+                value={String(dashboard.data.bookings.count)}
+                hint={`Value ${formatMoney(dashboard.data.bookings.valueMinor, dashboard.data.basis.currency)}`}
+                icon={<CalendarPlus className="size-4.5" />}
+              />
+              <StatCard
+                label="Attendance"
+                value={String(dashboard.data.attendance.attended)}
+                hint={`${dashboard.data.attendance.noShow} no-shows · ${dashboard.data.attendance.cancelled} cancelled`}
+                icon={<TrendingUp className="size-4.5" />}
+              />
+              <StatCard
+                label="Occupancy rate"
+                value={pct(dashboard.data.occupancy.rate * 100)}
+                hint={`${dashboard.data.occupancy.seats} of ${dashboard.data.occupancy.capacity} seats`}
+                icon={<Users className="size-4.5" />}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-6 xl:grid-cols-2">
+              <SectionCard
+                title="Money breakdown"
+                description="Dashboard has no time-series — folded totals for the selected range."
+              >
+                {moneyChart.every((d) => d.value === 0) ? (
+                  <EmptyState
+                    title="No money activity yet"
+                    description="Revenue and package sales will appear once bookings are paid."
+                  />
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={moneyChart}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(v) =>
+                            formatMoney(Number(v), dashboard.data!.basis.currency)
+                          }
+                          width={72}
+                        />
+                        <Tooltip
+                          formatter={(v: number) => formatMoney(v, dashboard.data!.basis.currency)}
+                        />
+                        <Bar dataKey="value" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                  <Metric label="Credits issued" value={String(dashboard.data.credits.issued)} />
+                  <Metric
+                    label="Credits redeemed"
+                    value={String(dashboard.data.credits.redeemed)}
+                  />
+                  <Metric
+                    label="Credits outstanding"
+                    value={String(dashboard.data.credits.outstanding)}
+                  />
+                  <Metric label="Credits expired" value={String(dashboard.data.credits.expired)} />
+                </dl>
+              </SectionCard>
+
+              <SectionCard title="Attendance mix" description="Attended vs no-show vs cancelled.">
+                {attendanceChart.length === 0 ? (
+                  <EmptyState
+                    title="No attendance data"
+                    description="Mark attendance on bookings to populate this chart."
+                  />
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={attendanceChart}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={48}
+                          outerRadius={80}
+                          paddingAngle={2}
+                        >
+                          {attendanceChart.map((_, i) => (
+                            <Cell key={i} fill={CHART_COLOURS[i % CHART_COLOURS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Basis: {dashboard.data.basis.dateBasis.replace("_", " ")} ·{" "}
+                  {dashboard.data.basis.timezone}
+                </p>
+              </SectionCard>
+            </div>
+          </>
         ) : null}
       </Can>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <SectionCard
           className="xl:col-span-2"
           title="Today"
@@ -282,6 +464,15 @@ function Overview() {
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
     </>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
+    </div>
   );
 }
 
