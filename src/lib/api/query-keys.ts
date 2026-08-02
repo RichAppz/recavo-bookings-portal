@@ -15,6 +15,8 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId] as const,
   bookingHistory: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "history"] as const,
+  bookingPayments: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "payments"] as const,
 
   availability: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "availability", filters ?? {}] as const,

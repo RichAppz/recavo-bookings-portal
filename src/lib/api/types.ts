@@ -11,6 +11,23 @@ export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
 export type Booking = schemas["Booking"];
+/** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
+export type BookingHistoryEntry = {
+  at?: string;
+  createdAt?: string;
+  timestamp?: string;
+  occurredAt?: string;
+  action?: string;
+  event?: string;
+  type?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  status?: string;
+  actorType?: string;
+  actorId?: string | null;
+  actorName?: string | null;
+  [key: string]: unknown;
+};
 export type AvailabilitySlot = schemas["AvailabilitySlot"];
 export type Customer = schemas["Customer"];
 export type CustomerNote = schemas["CustomerNote"];

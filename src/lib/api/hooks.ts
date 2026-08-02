@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ApiError,
   api,
   createIdempotentMutationFn,
   newIdempotencyKey,
@@ -9,6 +10,7 @@ import {
 import type {
   AvailabilitySlot,
   Booking,
+  BookingHistoryEntry,
   CatalogueService,
   ConnectAccount,
   Conversation,
@@ -137,7 +139,10 @@ export function useCreateBooking() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
   });
 }
 
@@ -154,7 +159,10 @@ export function useCreateBookingHold() {
         return res.data.booking;
       },
     ),
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
   });
 }
 
@@ -178,6 +186,67 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
       void qc.invalidateQueries({
         queryKey: queryKeys.booking(businessId, vars.bookingId),
       });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+
+export function useBookingHistory(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingHistory(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ history: BookingHistoryEntry[] }>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/history`,
+      );
+      return res.data.history;
+    },
+  });
+}
+
+export function useBookingPayments(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingPayments(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ payments: Payment[] }>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/payments`,
+      );
+      return res.data.payments;
+    },
+  });
+}
+
+export function useTakeBookingPayment() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      { payment?: Payment; clientSecret?: string | null },
+      { bookingId: string }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ payment?: Payment; clientSecret?: string | null }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/payment`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.booking(businessId, vars.bookingId),
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingPayments(businessId, vars.bookingId),
+      });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
     },
     onError: (err) => toastApiError(err),
   });
@@ -252,6 +321,21 @@ export function useStaffList() {
   });
 }
 
+export function useCreateStaff() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await api.post<{ staff: Staff }>(`/api/v1/businesses/${businessId}/staff`, body);
+      return res.data.staff;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useUpdateStaff() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -271,7 +355,12 @@ export function useUpdateStaff() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      }
+      toastApiError(err);
+    },
   });
 }
 
@@ -754,6 +843,31 @@ export function useAddStaffTimeOff() {
       void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+
+/** Cancels a [start, end) time-off block by id; requires the staff row's current version. */
+export function useRemoveStaffTimeOff() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { staffId: string; timeOffId: string; version: number }) => {
+      const res = await api.delete<{ staff: Staff }>(
+        `/api/v1/businesses/${businessId}/staff/${vars.staffId}/time-off/${vars.timeOffId}`,
+        { ifMatch: vars.version },
+      );
+      return res.data.staff;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      }
+      toastApiError(err);
+    },
   });
 }
 
