@@ -56,8 +56,42 @@ export type PolicyDocument = schemas["PolicyDocument"];
 export type Invitation = schemas["Invitation"];
 export type LinkedRecord = schemas["LinkedRecord"];
 export type ConsentRecord = schemas["ConsentRecord"];
+export type LinkedRecordDefinition = schemas["LinkedRecordDefinition"];
 export type AuditEvent = schemas["AuditEvent"];
+export type PrivacyNotice = schemas["PrivacyNotice"];
+export type BusinessLifecycle = schemas["BusinessLifecycle"];
 export type ProblemDetails = schemas["ProblemDetails"];
+
+export type PolicyDocumentType = PolicyDocument["type"];
+export type SaasPlanCode = PublicCataloguePlan["code"];
+export type SaasInterval = PublicCataloguePlan["prices"][number]["interval"];
+
+export type LinkedRecordDefinitionBundle = {
+  definition: LinkedRecordDefinition;
+  fields: Array<Record<string, unknown>>;
+};
+
+export type SubscriptionChangePreview = {
+  previewToken: string;
+  expiresAt: string;
+  changeKind: "upgrade" | "downgrade" | "interval_switch";
+  timing: "immediate" | "period_end";
+  current: { plan: SaasPlanCode; interval: SaasInterval };
+  target: { plan: SaasPlanCode; interval: SaasInterval; planVersion: string };
+  currency: string;
+  chargeNowMinor: number;
+  creditNowMinor: number;
+  nextAmountMinor?: number | null;
+  nextPeriodEnd?: string | null;
+  taxMinor: number;
+  effectiveAt: string;
+  prorationDateUnix: number;
+  overLimitBlockers: Array<{
+    limitKey: string;
+    currentUsage: number;
+    targetLimit: number;
+  }>;
+};
 
 export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ");

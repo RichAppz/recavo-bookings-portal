@@ -10,9 +10,13 @@ import {
   usePaginatedQuery,
 } from "@/lib/api";
 import type {
+  AuditEvent,
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
+  Business,
+  BusinessConfiguration,
+  BusinessLifecycle,
   CatalogueService,
   ConnectAccount,
   ConsentRecord,
@@ -26,12 +30,21 @@ import type {
   EntitlementView,
   Invitation,
   LinkedRecord,
+  LinkedRecordDefinition,
+  LinkedRecordDefinitionBundle,
   Location,
+  Membership,
   Notification,
   Package,
   Payment,
+  PolicyDocument,
+  PolicyDocumentType,
+  PrivacyNotice,
   PublicCataloguePlan,
+  SaasInterval,
+  SaasPlanCode,
   Staff,
+  SubscriptionChangePreview,
 } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
@@ -371,6 +384,7 @@ export function useUpdateStaff() {
 
 export function useInviteStaff() {
   const businessId = useBusinessId();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (vars: {
       email: string;
@@ -382,6 +396,10 @@ export function useInviteStaff() {
         vars,
       );
       return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.invitations(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.memberships(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -1149,6 +1167,426 @@ export function useRemoveStaffTimeOff() {
   });
 }
 
+/* ---------------- Settings: business / config / team ---------------- */
+
+export function useUpdateBusiness() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      version: number;
+      body: {
+        legalName?: string;
+        tradingName?: string;
+        currency?: string;
+        defaultTimezone?: string;
+        locale?: string;
+      };
+    }) => {
+      const res = await api.patch<{ business: Business }>(
+        `/api/v1/businesses/${businessId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.business;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.business(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateConfiguration() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<BusinessConfiguration>) => {
+      const res = await api.patch<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/configuration`,
+        body,
+      );
+      return res.data.configuration;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useMemberships() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.memberships(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ memberships: Membership[] }>(
+        `/api/v1/businesses/${businessId}/memberships`,
+      );
+      return res.data.memberships;
+    },
+  });
+}
+
+export function useUpdateMembership() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      membershipId: string;
+      body: {
+        roleKeys?: string[];
+        locationScopeIds?: string[] | null;
+        status?: "invited" | "active" | "suspended";
+      };
+    }) => {
+      const res = await api.patch<{ membership: Membership }>(
+        `/api/v1/businesses/${businessId}/memberships/${vars.membershipId}`,
+        vars.body,
+      );
+      return res.data.membership;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.memberships(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useInvitations() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.invitations(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ invitations: Invitation[] }>(
+        `/api/v1/businesses/${businessId}/invitations`,
+      );
+      return res.data.invitations;
+    },
+  });
+}
+
+export function useAcceptInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const res = await api.post<{ membership?: Membership }>(
+        `/api/v1/invitations/${encodeURIComponent(token)}/accept`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Settings: policies / privacy / templates ---------------- */
+
+export function usePolicyDocuments() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.policyDocuments(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ documents: PolicyDocument[] }>(
+        `/api/v1/businesses/${businessId}/policy-documents`,
+      );
+      return res.data.documents;
+    },
+  });
+}
+
+export function useCurrentPolicyDocument(type: PolicyDocumentType | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.policyDocumentCurrent(businessId, type ?? ""),
+    enabled: Boolean(businessId && type),
+    queryFn: async () => {
+      const res = await api.get<{ document: PolicyDocument | null }>(
+        `/api/v1/businesses/${businessId}/policy-documents/current/${type}`,
+      );
+      return res.data.document;
+    },
+  });
+}
+
+export function useCreatePolicyDocument() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      type: PolicyDocumentType;
+      content?: string | null;
+      objectKey?: string | null;
+      effectiveAt?: string;
+      publish?: boolean;
+    }) => {
+      const res = await api.post<{ document: PolicyDocument }>(
+        `/api/v1/businesses/${businessId}/policy-documents`,
+        body,
+      );
+      return res.data.document;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function usePublishPolicyDocument() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { documentId: string; effectiveAt?: string }) => {
+      const res = await api.post<{ document: PolicyDocument }>(
+        `/api/v1/businesses/${businessId}/policy-documents/${vars.documentId}/publish`,
+        vars.effectiveAt ? { effectiveAt: vars.effectiveAt } : {},
+      );
+      return res.data.document;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSeedPolicyDefaults() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{
+        seedVersion: string;
+        published: PolicyDocument[];
+        skipped: string[];
+      }>(`/api/v1/businesses/${businessId}/policy-documents/seed-defaults`, {});
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useLatestPrivacyNotice() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.privacyNoticeLatest(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ notice: PrivacyNotice | null }>(
+        `/api/v1/businesses/${businessId}/privacy-notices/latest`,
+      );
+      return res.data.notice;
+    },
+  });
+}
+
+export function usePublishPrivacyNotice() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { title: string; body: string }) => {
+      const res = await api.post<{ notice: PrivacyNotice }>(
+        `/api/v1/businesses/${businessId}/privacy-notices`,
+        body,
+      );
+      return res.data.notice;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.privacyNoticeLatest(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateNotificationTemplate() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (body: { key: string; bodyRegion: string }) => {
+      await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
+      return body;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Settings: linked records / lifecycle / audit ---------------- */
+
+export function useLinkedRecordDefinition() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.linkedRecordDefinition(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ definition: LinkedRecordDefinitionBundle | null }>(
+        `/api/v1/businesses/${businessId}/linked-record-definition`,
+      );
+      return res.data.definition;
+    },
+  });
+}
+
+export function useCreateLinkedRecordDefinition() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      key: string;
+      singularLabel: string;
+      pluralLabel: string;
+      iconKey?: string | null;
+      description?: string | null;
+      settings?: Record<string, unknown>;
+    }) => {
+      const res = await api.post<{ definition: LinkedRecordDefinition }>(
+        `/api/v1/businesses/${businessId}/linked-record-definition`,
+        body,
+      );
+      return res.data.definition;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordDefinition(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useApplyLinkedRecordTemplate() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (templateKey: string) => {
+      const res = await api.post(
+        `/api/v1/businesses/${businessId}/linked-record-definition/apply-template`,
+        { templateKey },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordDefinition(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useAddLinkedRecordField() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      definitionId: string;
+      body: {
+        fieldKey: string;
+        label: string;
+        helpText?: string | null;
+        dataType:
+          | "short_text"
+          | "long_text"
+          | "integer"
+          | "decimal"
+          | "boolean"
+          | "date"
+          | "enum";
+      };
+    }) => {
+      const res = await api.post<{ field: Record<string, unknown> }>(
+        `/api/v1/businesses/${businessId}/linked-record-definition/${vars.definitionId}/fields`,
+        vars.body,
+      );
+      return res.data.field;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordDefinition(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useLifecycle() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.lifecycle(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ lifecycle: BusinessLifecycle }>(
+        `/api/v1/businesses/${businessId}/lifecycle`,
+      );
+      return res.data.lifecycle;
+    },
+  });
+}
+
+export function useLifecycleTransition() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      version: number;
+      status: "trial" | "active" | "past_due" | "restricted" | "suspended";
+      reason?: string | null;
+    }) => {
+      const res = await api.post<{ lifecycle: BusinessLifecycle }>(
+        `/api/v1/businesses/${businessId}/lifecycle/transitions`,
+        { status: vars.status, reason: vars.reason ?? null },
+        { ifMatch: vars.version },
+      );
+      return res.data.lifecycle;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.lifecycle(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.business(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCloseBusiness() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { version: number; reason?: string | null }) => {
+      const res = await api.post<{ lifecycle: BusinessLifecycle }>(
+        `/api/v1/businesses/${businessId}/lifecycle/close`,
+        { reason: vars.reason ?? null },
+        { ifMatch: vars.version },
+      );
+      return res.data.lifecycle;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.lifecycle(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.business(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useAuditEvents() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.auditEvents(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ events: AuditEvent[] }>(
+        `/api/v1/businesses/${businessId}/audit-events`,
+      );
+      const events = res.data.events ?? [];
+      return [...events].sort(
+        (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
+      );
+    },
+  });
+}
+
 /* ---------------- Platform / SaaS billing ---------------- */
 
 export type BusinessSubscription = {
@@ -1186,6 +1624,18 @@ export function usePlans() {
   });
 }
 
+export function useBillingCatalogue() {
+  return useQuery({
+    queryKey: queryKeys.billingCatalogue(),
+    queryFn: async () => {
+      const res = await api.get<{ plans: PublicCataloguePlan[] }>("/api/v1/billing/catalogue", {
+        public: true,
+      });
+      return res.data.plans;
+    },
+  });
+}
+
 export function useSubscription() {
   const businessId = useBusinessId();
   return useQuery({
@@ -1205,11 +1655,8 @@ export function useStartCheckout() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (
-        body: { plan: "solo" | "business" | "growth"; interval: "month" | "year" },
-        idempotencyKey: string,
-      ) => {
-        const res = await api.post<{ url?: string; checkoutUrl?: string }>(
+      async (body: { plan: SaasPlanCode; interval: SaasInterval }, idempotencyKey: string) => {
+        const res = await api.post<{ checkoutUrl: string; url?: string }>(
           `/api/v1/businesses/${businessId}/subscription/checkout`,
           body,
           { idempotencyKey },
@@ -1221,17 +1668,77 @@ export function useStartCheckout() {
   });
 }
 
+export function useReconcileCheckout() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        body: { stripeCheckoutSessionId?: string; checkoutAttemptId?: string },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{
+          subscription: BusinessSubscription | null;
+          plan?: PublicCataloguePlan | null;
+        }>(`/api/v1/businesses/${businessId}/subscription/checkout/reconcile`, body, {
+          idempotencyKey,
+        });
+        return res.data;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useBillingPortal() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
-      const res = await api.post<{ url?: string; portalUrl?: string }>(
+      const res = await api.post<{ portalUrl: string; url?: string }>(
         `/api/v1/businesses/${businessId}/subscription/portal`,
         {},
         { idempotencyKey },
       );
       return res.data;
     }),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSubscriptionChangePreview() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (body: { plan: SaasPlanCode; interval: SaasInterval }) => {
+      const res = await api.post<SubscriptionChangePreview>(
+        `/api/v1/businesses/${businessId}/subscription/change-preview`,
+        body,
+      );
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSubscriptionChangeApply() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: { previewToken: string }, idempotencyKey: string) => {
+        const res = await api.post(
+          `/api/v1/businesses/${businessId}/subscription/change-apply`,
+          body,
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    },
     onError: (err) => toastApiError(err),
   });
 }
@@ -1243,6 +1750,25 @@ export function useCancelSubscription() {
     mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
       const res = await api.post(
         `/api/v1/businesses/${businessId}/subscription/cancel`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useResumeSubscription() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
+      const res = await api.post(
+        `/api/v1/businesses/${businessId}/subscription/resume`,
         {},
         { idempotencyKey },
       );
