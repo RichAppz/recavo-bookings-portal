@@ -17,14 +17,26 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId] as const,
   bookingHistory: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "history"] as const,
+  bookingPayments: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "payments"] as const,
 
   availability: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "availability", filters ?? {}] as const,
 
   customers: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "customers", filters ?? {}] as const,
+  customersInfinite: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "customers", "infinite", filters ?? {}] as const,
   customer: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId] as const,
+  customerTagsCatalogue: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "customer-tags", filters ?? {}] as const,
+  customerAssignedTags: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "tags"] as const,
+  customerConsents: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "consents"] as const,
+  customerLinkedRecords: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "linked-records"] as const,
 
   services: (businessId: string) => ["biz", businessId, "services"] as const,
   service: (businessId: string, serviceId: string) =>
