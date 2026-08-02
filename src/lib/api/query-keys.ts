@@ -98,7 +98,18 @@ export const queryKeys = {
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
 
-  portalMe: () => ["portal", "me"] as const,
-  portalBookings: (filters?: Record<string, unknown>) =>
-    ["portal", "bookings", filters ?? {}] as const,
+  portalMe: (businessId: string) => ["portal", businessId, "me"] as const,
+  portalBookings: (businessId: string) => ["portal", businessId, "bookings"] as const,
+  portalBooking: (businessId: string, bookingId: string) =>
+    ["portal", businessId, "bookings", bookingId] as const,
+  portalConversation: (businessId: string) => ["portal", businessId, "conversation"] as const,
+  portalMessages: (businessId: string) =>
+    ["portal", businessId, "conversation", "messages"] as const,
+  portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
+  portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
+  portalLinkedRecords: (businessId: string) => ["portal", businessId, "linked-records"] as const,
+
+  // Platform admin: cross-tenant billing (RECA-509)
+  platformBilling: (businessId: string) => ["platform", businessId, "billing"] as const,
+  platformOverrides: (businessId: string) => ["platform", businessId, "overrides"] as const,
 } as const;

@@ -8,6 +8,7 @@ import {
   newIdempotencyKey,
   parseProblemDetails,
   queryKeys,
+  request,
   toastApiError,
   usePaginatedQuery,
 } from "@/lib/api";
@@ -35,6 +36,7 @@ import type {
   FailedJob,
   FileResource,
   Invitation,
+  LinkedRecord,
   Location,
   Membership,
   Notification,
@@ -2351,6 +2353,505 @@ export function useRunFilesRetention() {
         {},
       );
       return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Public booking journey (RECA-507) ---------------- */
+/** All calls here pass `public: true` — no bearer token is ever sent (spec §9). */
+
+export function usePublicServices(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicServices(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ services: CatalogueService[] }>(
+        `/api/v1/public/businesses/${businessId}/services`,
+        { public: true },
+      );
+      return res.data.services.filter((s) => s.active);
+    },
+  });
+}
+
+export function usePublicLocations(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicLocations(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ locations: Location[] }>(
+        `/api/v1/public/businesses/${businessId}/locations`,
+        { public: true },
+      );
+      return res.data.locations.filter((l) => l.active);
+    },
+  });
+}
+
+/** Half-open UTC window `[from, to)`. Each slot carries a signed, expiring `slotToken`. */
+export function usePublicAvailability(
+  businessId: string | undefined,
+  filters: {
+    serviceId?: string;
+    locationId?: string;
+    from?: string;
+    to?: string;
+    enabled?: boolean;
+  },
+) {
+  const ready =
+    Boolean(businessId && filters.serviceId && filters.locationId && filters.from && filters.to) &&
+    filters.enabled !== false;
+  const query = {
+    serviceId: filters.serviceId!,
+    locationId: filters.locationId!,
+    from: filters.from!,
+    to: filters.to!,
+  };
+  return useQuery({
+    queryKey: queryKeys.publicAvailability(businessId ?? "", query),
+    enabled: ready,
+    queryFn: async () => {
+      const res = await api.get<{ slots: AvailabilitySlot[] }>(
+        `/api/v1/public/businesses/${businessId}/availability`,
+        { public: true, query },
+      );
+      return res.data.slots;
+    },
+  });
+}
+
+/**
+ * Holds a slot for the configured hold window. The response's
+ * `booking.holdExpiresAt` drives the client-side countdown — if it lapses
+ * before `useConfirmPublicBooking` succeeds, the caller must send the
+ * customer back to reselect a time (the hold is not renewable). Errors are
+ * left for the caller: field errors (problem+json `errors[]`) map onto the
+ * contact form, and `BOOKING_CONFLICT` means the slot was taken — refetch
+ * availability and prompt a reselect.
+ */
+export function useCreatePublicBookingHold(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        body: {
+          slotToken: string;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          notesCustomer?: string | null;
+          marketingConsent?: boolean;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ booking: Booking; holdToken: string }>(
+          `/api/v1/public/businesses/${businessId}/booking-holds`,
+          body,
+          { public: true, idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+  });
+}
+
+/** Confirms a held booking. Left to the caller to handle `BOOKING_CONFLICT` (409) by refetching availability. */
+export function useConfirmPublicBooking(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; holdToken: string }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/public/businesses/${businessId}/bookings/confirm`,
+          vars,
+          { public: true, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+  });
+}
+
+/* ---------------- Customer portal (RECA-81 / RECA-508) ---------------- */
+/**
+ * `businessId` is always sent as a query param, never a path segment, and
+ * the API never accepts a client-supplied customer id — the authorised
+ * customer is resolved server-side from the authenticated portal user's
+ * link (spec RECA-81). Every hook below follows that contract.
+ */
+
+export type PortalCustomer = {
+  id: string;
+  businessId: string;
+  firstName: string;
+  lastName: string | null;
+  emailDisplay: string | null;
+  phoneDisplay: string | null;
+  status?: "active" | "archived" | "anonymised";
+} & Record<string, unknown>;
+
+export function usePortalMe(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalMe(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ customer: PortalCustomer }>("/api/v1/portal/me", {
+        query: { businessId },
+      });
+      return res.data.customer;
+    },
+  });
+}
+
+export function usePortalBookings(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalBookings(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ bookings: Booking[] }>("/api/v1/portal/bookings", {
+        query: { businessId },
+      });
+      return res.data.bookings;
+    },
+  });
+}
+
+export function usePortalBooking(businessId: string | undefined, bookingId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalBooking(businessId ?? "", bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ booking: Booking }>(`/api/v1/portal/bookings/${bookingId}`, {
+        query: { businessId },
+      });
+      return res.data.booking;
+    },
+  });
+}
+
+/** Requires `Idempotency-Key`; concurrent same-key requests execute once (RECA-81). */
+export function useCancelPortalBooking(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; reason?: string | null }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/cancel`,
+          vars.reason ? { reason: vars.reason } : {},
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Reschedules to a slot proven by a signed `slotToken` — sourced from the
+ * same public availability search used by the booking journey (RECA-507),
+ * scoped to the booking's own service/location. Requires `Idempotency-Key`.
+ */
+export function useReschedulePortalBooking(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<Booking, ApiError, { bookingId: string; slotToken: string }>({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; slotToken: string }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/reschedule`,
+          { slotToken: vars.slotToken },
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: (_booking, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.portalBooking(businessId ?? "", vars.bookingId),
+      });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function usePortalConversation(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalConversation(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ conversation: Conversation | null }>(
+        "/api/v1/portal/conversations",
+        { query: { businessId } },
+      );
+      return res.data.conversation;
+    },
+  });
+}
+
+export function usePortalMessages(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalMessages(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ messages: ConversationMessage[] }>(
+        "/api/v1/portal/conversations/messages",
+        { query: { businessId } },
+      );
+      return res.data.messages;
+    },
+  });
+}
+
+/**
+ * Sends a message with optimistic UI, mirroring `useSendMessage` on the
+ * staff side: the draft appears immediately under a client-generated id and
+ * rolls back if the send fails (RECA-508).
+ */
+export function useSendPortalMessage(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<
+    ConversationMessage,
+    ApiError,
+    string,
+    { previous: ConversationMessage[] | undefined; optimisticId: string }
+  >({
+    mutationFn: async (body: string) => {
+      const res = await api.post<{ message: ConversationMessage }>(
+        "/api/v1/portal/conversations/messages",
+        { body },
+        { query: { businessId } },
+      );
+      return res.data.message;
+    },
+    onMutate: async (body) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<ConversationMessage[]>(key);
+      const optimisticId = `optimistic-${newIdempotencyKey()}`;
+      const optimisticMessage: ConversationMessage = {
+        id: optimisticId,
+        businessId: businessId ?? "",
+        conversationId: previous?.[0]?.conversationId ?? "",
+        senderType: "customer",
+        senderId: "me",
+        body,
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData<ConversationMessage[]>(key, (old) => [...(old ?? []), optimisticMessage]);
+      return { previous, optimisticId };
+    },
+    onError: (err, _body, context) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      if (context) qc.setQueryData<ConversationMessage[]>(key, context.previous);
+      toastApiError(err);
+    },
+    onSuccess: (message, _body, context) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      qc.setQueryData<ConversationMessage[]>(key, (old) =>
+        (old ?? []).map((m) => (m.id === context.optimisticId ? message : m)),
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.portalConversation(businessId ?? "") });
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalMessages(businessId ?? "") });
+    },
+  });
+}
+
+export function usePortalPayments(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalPayments(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ payments: Payment[] }>("/api/v1/portal/payments", {
+        query: { businessId },
+      });
+      return res.data.payments;
+    },
+  });
+}
+
+/** Customer-visible notes only (`visibility=customer`) — internal staff notes never reach the portal. */
+export function usePortalNotes(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalNotes(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ notes: CustomerNote[] }>("/api/v1/portal/notes", {
+        query: { businessId },
+      });
+      return res.data.notes;
+    },
+  });
+}
+
+/** Field values with `customerVisible=false` are already stripped server-side (RECA-81 / §8.3). */
+export function usePortalLinkedRecords(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalLinkedRecords(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ records: LinkedRecord[] }>("/api/v1/portal/linked-records", {
+        query: { businessId },
+      });
+      return res.data.records;
+    },
+  });
+}
+
+/* ---------------- Platform admin: cross-tenant billing (RECA-457 / RECA-509) ---------------- */
+/**
+ * Distinct from the tenant-scoped `/subscription` hooks above: these take an
+ * arbitrary target `businessId` looked up by a platform admin, never the
+ * caller's own tenant. Gated server-side by PLATFORM_ADMIN_USER_IDS
+ * allow-list membership (+ privileged MFA); the UI additionally hides the
+ * entry point behind `PERMISSIONS.PLATFORM_BILLING_ADMIN`, which no tenant
+ * role is ever granted (see `permissions.ts`), so normal tenants never see
+ * it even if they guess the route.
+ */
+
+export type PlatformOverride = {
+  id: string;
+  businessId?: string;
+  kind: "grant" | "deny" | "limit" | "billing_bypass" | "suspension";
+  featureKey?: string | null;
+  limitKey?: string | null;
+  limitValue?: number | null;
+  reason: string;
+  startsAt: string;
+  endsAt?: string | null;
+  revokedAt?: string | null;
+  revokedReason?: string | null;
+  createdAt?: string;
+} & Record<string, unknown>;
+
+/** Shape is intentionally loose — the API's admin billing view isn't a named schema (openapi.json leaves `content` unspecified). */
+export type PlatformBillingView = {
+  business?: { id: string; tradingName?: string | null; status?: string } | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  accessState?: string | null;
+  subscription?: BusinessSubscription | null;
+  plan?: PublicCataloguePlan | null;
+  usage?: Record<string, number> | null;
+  limits?: Record<string, number> | null;
+  overrides?: PlatformOverride[];
+} & Record<string, unknown>;
+
+/** Never returns secrets; not available to business owners (RECA-457 §13). */
+export function usePlatformBilling(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.platformBilling(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<PlatformBillingView>(
+        `/api/v1/platform/businesses/${businessId}/billing`,
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Fetches the Stripe subscription and reconciles the local projection. Idempotent + audited. */
+export function useReconcilePlatformBilling() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (businessId: string) => {
+      const res = await api.post<PlatformBillingView>(
+        `/api/v1/platform/businesses/${businessId}/billing/reconcile`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: (_data, businessId) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Cancels in Stripe immediately then reconciles. Requires a reason; always sends `confirmation: "CONFIRM"`. */
+export function useCancelPlatformBillingImmediate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { businessId: string; reason: string }) => {
+      const res = await api.post<PlatformBillingView>(
+        `/api/v1/platform/businesses/${vars.businessId}/billing/cancel-immediate`,
+        { reason: vars.reason, confirmation: "CONFIRM" },
+      );
+      return res.data;
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(vars.businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function usePlatformOverrides(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.platformOverrides(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ overrides: PlatformOverride[] }>(
+        `/api/v1/platform/businesses/${businessId}/overrides`,
+      );
+      return res.data.overrides ?? [];
+    },
+  });
+}
+
+/**
+ * `billing_bypass` requires `endsAt` + `confirmation: "CONFIRM"`; `suspension`
+ * requires `confirmation: "CONFIRM"`. Impersonated actors cannot create
+ * overrides (enforced server-side). Invalidates the effective-policy cache.
+ */
+export function useCreatePlatformOverride(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      kind: PlatformOverride["kind"];
+      featureKey?: string | null;
+      limitKey?: string | null;
+      limitValue?: number | null;
+      reason: string;
+      startsAt?: string;
+      endsAt?: string | null;
+      confirmation?: string;
+    }) => {
+      const res = await api.post<{ override: PlatformOverride }>(
+        `/api/v1/platform/businesses/${businessId}/overrides`,
+        body,
+      );
+      return res.data.override;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOverrides(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Soft-revokes an override; requires a reason. `api.delete` has no body param, so this uses `request` directly. */
+export function useRevokePlatformOverride(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { overrideId: string; reason: string }) => {
+      await request({
+        method: "DELETE",
+        path: `/api/v1/platform/businesses/${businessId}/overrides/${vars.overrideId}`,
+        body: { reason: vars.reason },
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOverrides(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId ?? "") });
     },
     onError: (err) => toastApiError(err),
   });

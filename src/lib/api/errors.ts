@@ -74,11 +74,7 @@ export class ApiError extends Error {
   }
 }
 
-export function parseProblemDetails(
-  body: unknown,
-  status: number,
-  requestId?: string,
-): ApiError {
+export function parseProblemDetails(body: unknown, status: number, requestId?: string): ApiError {
   if (body && typeof body === "object") {
     const p = body as ProblemDetails;
     return new ApiError({
@@ -86,8 +82,7 @@ export function parseProblemDetails(
       code: typeof p.code === "string" ? p.code : undefined,
       title: typeof p.title === "string" ? p.title : undefined,
       detail: typeof p.detail === "string" ? p.detail : undefined,
-      requestId:
-        (typeof p.requestId === "string" ? p.requestId : undefined) ?? requestId,
+      requestId: (typeof p.requestId === "string" ? p.requestId : undefined) ?? requestId,
       fieldErrors: Array.isArray(p.errors) ? p.errors : [],
       type: typeof p.type === "string" ? p.type : undefined,
     });
@@ -129,10 +124,7 @@ export function applyFormErrors(
 
 export function toastApiError(error: unknown, fallback = "Something went wrong") {
   if (error instanceof ApiError) {
-    const description = [
-      error.detail,
-      error.requestId ? `Ref: ${error.requestId}` : null,
-    ]
+    const description = [error.detail, error.requestId ? `Ref: ${error.requestId}` : null]
       .filter(Boolean)
       .join(" · ");
     toast.error(error.title || fallback, {
