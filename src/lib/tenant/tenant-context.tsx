@@ -83,7 +83,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const businesses = businessesQuery.data ?? [];
+  const businesses = useMemo(() => businessesQuery.data ?? [], [businessesQuery.data]);
 
   // Resolve / re-validate selected business against memberships.
   useEffect(() => {
@@ -96,9 +96,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [businesses, businessId]);
 
-  const activeBusinessId = businessId && businesses.some((b) => b.id === businessId)
-    ? businessId
-    : (businesses[0]?.id ?? null);
+  const activeBusinessId =
+    businessId && businesses.some((b) => b.id === businessId)
+      ? businessId
+      : (businesses[0]?.id ?? null);
 
   const summary = businesses.find((b) => b.id === activeBusinessId) ?? null;
 
@@ -106,9 +107,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     queryKey: queryKeys.business(activeBusinessId ?? ""),
     enabled: Boolean(activeBusinessId),
     queryFn: async () => {
-      const res = await api.get<{ business: Business }>(
-        `/api/v1/businesses/${activeBusinessId}`,
-      );
+      const res = await api.get<{ business: Business }>(`/api/v1/businesses/${activeBusinessId}`);
       return res.data.business;
     },
   });
@@ -146,7 +145,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const locations = locationsQuery.data ?? [];
+  const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
 
   useEffect(() => {
     if (currentLocationId === "all") return;
@@ -156,7 +155,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, currentLocationId]);
 
-  const roleKeys = summary?.roleKeys ?? [];
+  const roleKeys = useMemo(() => summary?.roleKeys ?? [], [summary]);
   const permissions = useMemo(() => permissionsForRoles(roleKeys), [roleKeys]);
 
   const can = useCallback(
@@ -190,9 +189,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // Prefer the current user's membership when available.
   const membership =
-    membershipsQuery.data?.find((m) => m.status === "active") ??
-    membershipsQuery.data?.[0] ??
-    null;
+    membershipsQuery.data?.find((m) => m.status === "active") ?? membershipsQuery.data?.[0] ?? null;
 
   const value = useMemo<TenantContextValue>(
     () => ({
@@ -291,9 +288,7 @@ export function RequirePermission({
     return (
       <div className="rounded-xl border bg-card p-6 text-center">
         <h2 className="text-base font-semibold">Permission denied</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You do not have access to this area.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">You do not have access to this area.</p>
       </div>
     );
   }

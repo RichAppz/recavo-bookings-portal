@@ -38,9 +38,7 @@ function LoginPage() {
         </div>
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Access your RECAVO staff console.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Access your RECAVO staff console.</p>
 
           <form
             className="mt-6 space-y-4"

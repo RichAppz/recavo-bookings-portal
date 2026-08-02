@@ -75,7 +75,12 @@ const NAV: Array<{
   },
   { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
   { to: "/services", label: "Services", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
-  { to: "/packages", label: "Packages", icon: Banknote, anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ] },
+  {
+    to: "/packages",
+    label: "Packages",
+    icon: Banknote,
+    anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
+  },
   {
     to: "/staff",
     label: "Staff",

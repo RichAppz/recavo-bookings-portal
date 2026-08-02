@@ -97,9 +97,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Overview — RECAVO" },
-      { name: "twitter:description", content: "Live business overview for RECAVO: today's sessions, revenue, attendance and tasks needing attention." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35c7a518-0e25-4d83-8590-3bc11e8933ad/id-preview-6896acfe--280f08fe-9297-43d6-bb8c-32b7972297c8.lovable.app-1785427138369.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35c7a518-0e25-4d83-8590-3bc11e8933ad/id-preview-6896acfe--280f08fe-9297-43d6-bb8c-32b7972297c8.lovable.app-1785427138369.png" },
+      {
+        name: "twitter:description",
+        content:
+          "Live business overview for RECAVO: today's sessions, revenue, attendance and tasks needing attention.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35c7a518-0e25-4d83-8590-3bc11e8933ad/id-preview-6896acfe--280f08fe-9297-43d6-bb8c-32b7972297c8.lovable.app-1785427138369.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35c7a518-0e25-4d83-8590-3bc11e8933ad/id-preview-6896acfe--280f08fe-9297-43d6-bb8c-32b7972297c8.lovable.app-1785427138369.png",
+      },
     ],
     links: [
       {

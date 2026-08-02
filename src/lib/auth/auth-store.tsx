@@ -173,7 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
+        redirectTo:
+          redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
       },
     });
     if (error) throw error;
@@ -200,8 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     const supabase = getSupabase();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo:
-        typeof window !== "undefined" ? `${window.location.origin}/reset` : undefined,
+      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset` : undefined,
     });
     if (error) throw error;
   }, []);

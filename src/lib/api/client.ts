@@ -116,8 +116,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     });
   }
 
-  const requestId =
-    res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
+  const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
   const parsed = await parseBody(res);
 
   if (!res.ok) {
@@ -149,11 +148,8 @@ export const api = {
     body?: unknown,
     opts?: Omit<RequestOptions, "method" | "path" | "body">,
   ) => request<T>({ ...opts, method: "POST", path, body }),
-  put: <T>(
-    path: string,
-    body?: unknown,
-    opts?: Omit<RequestOptions, "method" | "path" | "body">,
-  ) => request<T>({ ...opts, method: "PUT", path, body }),
+  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
+    request<T>({ ...opts, method: "PUT", path, body }),
   patch: <T>(
     path: string,
     body?: unknown,
