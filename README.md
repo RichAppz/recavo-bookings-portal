@@ -24,13 +24,13 @@ Point `VITE_API_BASE_URL` at a running RECAVO API (default `http://localhost:300
 
 ## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `npm run dev` | Local Vite/TanStack Start server |
-| `npm run build` | Production build |
+| Script            | Purpose                                  |
+| ----------------- | ---------------------------------------- |
+| `npm run dev`     | Local Vite/TanStack Start server         |
+| `npm run build`   | Production build                         |
 | `npm run gen:api` | Regenerate API types from `openapi.json` |
-| `npm test` | Unit tests (API client / problem+json) |
-| `npm run lint` | ESLint |
+| `npm test`        | Unit tests (API client / problem+json)   |
+| `npm run lint`    | ESLint                                   |
 
 ## Surfaces
 

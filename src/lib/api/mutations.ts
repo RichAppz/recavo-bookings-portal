@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   useMutation,
   useQueryClient,
@@ -45,7 +46,10 @@ export function useApiMutation<TData = unknown, TVariables = void>(
     ...rest
   } = config;
 
-  const intentKeyRef = { current: idempotent ? newIdempotencyKey() : undefined };
+  const intentKeyRef = useRef<string | undefined>(undefined);
+  if (idempotent && intentKeyRef.current === undefined) {
+    intentKeyRef.current = newIdempotencyKey();
+  }
 
   return useMutation<TData, ApiError, TVariables>({
     ...rest,
@@ -55,11 +59,7 @@ export function useApiMutation<TData = unknown, TVariables = void>(
       const opts: RequestOptions = {
         method,
         path: resolvedPath,
-        body: hasBody
-          ? body
-            ? body(variables)
-            : variables
-          : undefined,
+        body: hasBody ? (body ? body(variables) : variables) : undefined,
         idempotencyKey: intentKeyRef.current,
         ifMatch: ifMatch?.(variables),
         public: isPublic,
@@ -70,9 +70,7 @@ export function useApiMutation<TData = unknown, TVariables = void>(
     onSuccess: (data, variables, onMutateResult, context) => {
       if (idempotent) intentKeyRef.current = newIdempotencyKey();
       const keys =
-        typeof invalidate === "function"
-          ? invalidate(variables, data)
-          : (invalidate ?? []);
+        typeof invalidate === "function" ? invalidate(variables, data) : (invalidate ?? []);
       for (const key of keys) {
         void queryClient.invalidateQueries({ queryKey: key });
       }

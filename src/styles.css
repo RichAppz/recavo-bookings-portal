@@ -63,8 +63,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --shadow-card: 0 1px 2px oklch(0.22 0.02 260 / 0.04), 0 8px 24px -12px oklch(0.22 0.02 260 / 0.12);
-  --shadow-float: 0 2px 6px oklch(0.22 0.02 260 / 0.06), 0 24px 48px -24px oklch(0.22 0.02 260 / 0.28);
+  --shadow-card:
+    0 1px 2px oklch(0.22 0.02 260 / 0.04), 0 8px 24px -12px oklch(0.22 0.02 260 / 0.12);
+  --shadow-float:
+    0 2px 6px oklch(0.22 0.02 260 / 0.06), 0 24px 48px -24px oklch(0.22 0.02 260 / 0.28);
 }
 
 :root {

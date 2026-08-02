@@ -74,6 +74,7 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const customer = useCustomer(clientId);
   const bookings = useCustomerBookings(clientId);
@@ -107,7 +108,6 @@ function ClientProfile() {
   }
 
   const client = customer.data;
-  const [uploading, setUploading] = useState(false);
   const now = new Date().toISOString();
   const upcoming = (bookings.data ?? [])
     .filter(

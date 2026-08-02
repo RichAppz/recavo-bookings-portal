@@ -1,12 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildQueryString } from "./query-string.ts";
-import {
-  ApiError,
-  parseProblemDetails,
-  toFormErrors,
-  newIdempotencyKey,
-} from "./errors.ts";
+import { ApiError, parseProblemDetails, toFormErrors, newIdempotencyKey } from "./errors.ts";
 
 describe("buildQueryString", () => {
   it("omits nullish values", () => {

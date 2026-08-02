@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +26,11 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (status === "authenticated") {
-    void navigate({ to: redirect || "/" });
-  }
+  useEffect(() => {
+    if (status === "authenticated") {
+      void navigate({ to: redirect || "/" });
+    }
+  }, [status, redirect, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -38,9 +40,7 @@ function LoginPage() {
         </div>
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Access your RECAVO staff console.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Access your RECAVO staff console.</p>
 
           <form
             className="mt-6 space-y-4"

@@ -78,10 +78,7 @@
     "schemas": {
       "FieldError": {
         "type": "object",
-        "required": [
-          "field",
-          "code"
-        ],
+        "required": ["field", "code"],
         "additionalProperties": false,
         "properties": {
           "field": {
@@ -100,14 +97,7 @@
       },
       "ProblemDetails": {
         "type": "object",
-        "required": [
-          "type",
-          "title",
-          "status",
-          "code",
-          "requestId",
-          "errors"
-        ],
+        "required": ["type", "title", "status", "code", "requestId", "errors"],
         "additionalProperties": false,
         "properties": {
           "type": {
@@ -145,10 +135,7 @@
         }
       },
       "NextCursor": {
-        "type": [
-          "string",
-          "null"
-        ],
+        "type": ["string", "null"],
         "description": "Opaque cursor for the next page, or null when the list is exhausted. Pass as `cursor` on the subsequent request."
       },
       "Dashboard": {
@@ -183,10 +170,7 @@
               },
               "dateBasis": {
                 "type": "string",
-                "enum": [
-                  "payment_date",
-                  "service_date"
-                ]
+                "enum": ["payment_date", "service_date"]
               },
               "includesRefundedRevenue": {
                 "type": "boolean",
@@ -200,12 +184,7 @@
           },
           "revenue": {
             "type": "object",
-            "required": [
-              "grossMinor",
-              "refundedMinor",
-              "disputedMinor",
-              "netMinor"
-            ],
+            "required": ["grossMinor", "refundedMinor", "disputedMinor", "netMinor"],
             "properties": {
               "grossMinor": {
                 "type": "integer"
@@ -224,10 +203,7 @@
           },
           "bookings": {
             "type": "object",
-            "required": [
-              "count",
-              "valueMinor"
-            ],
+            "required": ["count", "valueMinor"],
             "properties": {
               "count": {
                 "type": "integer"
@@ -239,11 +215,7 @@
           },
           "attendance": {
             "type": "object",
-            "required": [
-              "attended",
-              "noShow",
-              "cancelled"
-            ],
+            "required": ["attended", "noShow", "cancelled"],
             "properties": {
               "attended": {
                 "type": "integer"
@@ -258,11 +230,7 @@
           },
           "occupancy": {
             "type": "object",
-            "required": [
-              "seats",
-              "capacity",
-              "rate"
-            ],
+            "required": ["seats", "capacity", "rate"],
             "properties": {
               "seats": {
                 "type": "integer"
@@ -277,9 +245,7 @@
           },
           "packages": {
             "type": "object",
-            "required": [
-              "salesMinor"
-            ],
+            "required": ["salesMinor"],
             "properties": {
               "salesMinor": {
                 "type": "integer"
@@ -288,12 +254,7 @@
           },
           "credits": {
             "type": "object",
-            "required": [
-              "issued",
-              "expired",
-              "redeemed",
-              "outstanding"
-            ],
+            "required": ["issued", "expired", "redeemed", "outstanding"],
             "properties": {
               "issued": {
                 "type": "integer"
@@ -333,11 +294,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "customers",
-              "bookings",
-              "dsar"
-            ]
+            "enum": ["customers", "bookings", "dsar"]
           },
           "rowCount": {
             "type": "integer"
@@ -388,17 +345,11 @@
             "type": "string"
           },
           "variantId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "variantName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "durationMinutes": {
             "type": "integer"
@@ -417,11 +368,7 @@
           },
           "bookingMode": {
             "type": "string",
-            "enum": [
-              "individual",
-              "lead_pays_party",
-              "group"
-            ]
+            "enum": ["individual", "lead_pays_party", "group"]
           },
           "priceMinor": {
             "type": "integer"
@@ -432,30 +379,15 @@
           },
           "taxBehaviour": {
             "type": "string",
-            "enum": [
-              "inclusive",
-              "exclusive",
-              "none"
-            ]
+            "enum": ["inclusive", "exclusive", "none"]
           },
           "requiredResourceType": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "room",
-              "bay",
-              "chair",
-              "equipment",
-              null
-            ]
+            "type": ["string", "null"],
+            "enum": ["room", "bay", "chair", "equipment", null]
           },
           "cancellationPolicy": {
             "type": "object",
-            "required": [
-              "windowHours"
-            ],
+            "required": ["windowHours"],
             "properties": {
               "windowHours": {
                 "type": "integer"
@@ -531,17 +463,11 @@
             "format": "uuid"
           },
           "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "occurrenceId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "start": {
@@ -565,10 +491,7 @@
             "format": "uuid"
           },
           "linkedRecordId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Linked record (vehicle/pet/etc.) for this booking (RECA-90). Required when the service has `requiresLinkedRecord` or the active definition has `settings.requireForBooking`. Soft-archiving the record never clears this id — historical bookings remain readable via GET …/linked-records/{recordId}."
           },
@@ -577,12 +500,7 @@
             "description": "Booking attendees (RECA-111). lead_pays_party requires exactly two: one lead customer and one guest name with customerId null (guest is not a portal customer).",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "name",
-                "isLead",
-                "customerId"
-              ],
+              "required": ["id", "name", "isLead", "customerId"],
               "properties": {
                 "id": {
                   "type": "string",
@@ -595,10 +513,7 @@
                   "type": "boolean"
                 },
                 "customerId": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": ["string", "null"],
                   "format": "uuid"
                 }
               }
@@ -631,31 +546,15 @@
           },
           "paymentMethod": {
             "type": "string",
-            "enum": [
-              "none",
-              "credit"
-            ]
+            "enum": ["none", "credit"]
           },
           "attendanceStatus": {
             "type": "string",
-            "enum": [
-              "unknown",
-              "attended",
-              "no_show"
-            ]
+            "enum": ["unknown", "attended", "no_show"]
           },
           "cancellation": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "required": [
-              "deadline",
-              "timely",
-              "policyWindowHours",
-              "cancelledBy",
-              "decidedAt"
-            ],
+            "type": ["object", "null"],
+            "required": ["deadline", "timely", "policyWindowHours", "cancelledBy", "decidedAt"],
             "properties": {
               "deadline": {
                 "type": "string",
@@ -669,10 +568,7 @@
               },
               "cancelledBy": {
                 "type": "string",
-                "enum": [
-                  "customer",
-                  "business"
-                ]
+                "enum": ["customer", "business"]
               },
               "decidedAt": {
                 "type": "string",
@@ -681,10 +577,7 @@
             }
           },
           "holdExpiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "source": {
@@ -694,16 +587,10 @@
             "type": "string"
           },
           "notesCustomer": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "notesInternal": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "applicablePolicyDocumentIds": {
             "type": "object",
@@ -834,60 +721,34 @@
             "format": "uuid"
           },
           "userId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "firstName": {
             "type": "string"
           },
           "lastName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "emailNormalised": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "emailDisplay": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "phoneNormalised": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "phoneDisplay": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "contactPreferences": {
             "type": "object",
-            "required": [
-              "preferredChannel",
-              "operationalNotifications"
-            ],
+            "required": ["preferredChannel", "operationalNotifications"],
             "properties": {
               "preferredChannel": {
                 "type": "string",
-                "enum": [
-                  "email",
-                  "phone",
-                  "sms",
-                  "none"
-                ],
+                "enum": ["email", "phone", "sms", "none"],
                 "description": "Preferred contact channel. Create/update reject `sms` until SMS delivery ships (RECA-468 / ADR 0018); historical rows may still store `sms`. Writable values: `email` | `phone` | `none`."
               },
               "operationalNotifications": {
@@ -897,37 +758,23 @@
           },
           "marketingConsent": {
             "type": "object",
-            "required": [
-              "granted",
-              "updatedAt",
-              "source"
-            ],
+            "required": ["granted", "updatedAt", "source"],
             "properties": {
               "granted": {
                 "type": "boolean"
               },
               "updatedAt": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time"
               },
               "source": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               }
             }
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "archived",
-              "anonymised"
-            ]
+            "enum": ["active", "archived", "anonymised"]
           },
           "tags": {
             "type": "array",
@@ -940,10 +787,7 @@
             "type": "string"
           },
           "acquisitionSource": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "version": {
             "type": "integer"
@@ -986,10 +830,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "archived"
-            ]
+            "enum": ["active", "archived"]
           },
           "createdAt": {
             "type": "string",
@@ -1026,29 +867,16 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "cancellation",
-              "terms",
-              "privacy",
-              "consent_text",
-              "package_terms",
-              "dpa"
-            ]
+            "enum": ["cancellation", "terms", "privacy", "consent_text", "package_terms", "dpa"]
           },
           "version": {
             "type": "integer"
           },
           "content": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "objectKey": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "effectiveAt": {
             "type": "string",
@@ -1056,11 +884,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "published",
-              "superseded"
-            ]
+            "enum": ["draft", "published", "superseded"]
           },
           "createdAt": {
             "type": "string",
@@ -1098,17 +922,11 @@
             "format": "uuid"
           },
           "userId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "customerId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "acceptedAt": {
@@ -1116,16 +934,10 @@
             "format": "date-time"
           },
           "ipHash": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "uaHash": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
@@ -1145,40 +957,21 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "trial",
-              "active",
-              "past_due",
-              "restricted",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["trial", "active", "past_due", "restricted", "suspended", "closed"]
           },
           "statusReason": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "closedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "closureExportUntil": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "deletionScheduledAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "allowsOperationalCreates": {
@@ -1258,16 +1051,10 @@
             "type": "string"
           },
           "iconKey": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "settings": {
             "$ref": "#/components/schemas/LinkedRecordSettings"
@@ -1277,10 +1064,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "archived"
-            ]
+            "enum": ["active", "archived"]
           },
           "createdAt": {
             "type": "string",
@@ -1338,10 +1122,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "archived"
-            ],
+            "enum": ["active", "archived"],
             "description": "Soft-archive only. Archived records stay readable for booking history and keep booking.linkedRecordId intact (RECA-90)."
           },
           "createdBy": {
@@ -1394,12 +1175,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "physical",
-              "mobile",
-              "customer_address",
-              "service_area"
-            ]
+            "enum": ["physical", "mobile", "customer_address", "service_area"]
           },
           "timezone": {
             "type": "string",
@@ -1409,11 +1185,7 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "dayOfWeek",
-                "openMinute",
-                "closeMinute"
-              ],
+              "required": ["dayOfWeek", "openMinute", "closeMinute"],
               "properties": {
                 "dayOfWeek": {
                   "type": "integer",
@@ -1482,26 +1254,17 @@
             "format": "uuid"
           },
           "userId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "displayName": {
             "type": "string"
           },
           "title": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "bio": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "locationIds": {
             "type": "array",
@@ -1521,12 +1284,7 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "dayOfWeek",
-                "startMinute",
-                "endMinute",
-                "locationId"
-              ],
+              "required": ["dayOfWeek", "startMinute", "endMinute", "locationId"],
               "properties": {
                 "dayOfWeek": {
                   "type": "integer",
@@ -1544,10 +1302,7 @@
                   "maximum": 1440
                 },
                 "locationId": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": ["string", "null"],
                   "format": "uuid"
                 }
               }
@@ -1563,18 +1318,11 @@
             "type": "boolean"
           },
           "calendarColour": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "invited",
-              "suspended"
-            ]
+            "enum": ["active", "invited", "suspended"]
           },
           "version": {
             "type": "integer"
@@ -1591,13 +1339,7 @@
       },
       "BlockedPeriod": {
         "type": "object",
-        "required": [
-          "id",
-          "start",
-          "end",
-          "originatingTimezone",
-          "reason"
-        ],
+        "required": ["id", "start", "end", "originatingTimezone", "reason"],
         "properties": {
           "id": {
             "type": "string",
@@ -1616,10 +1358,7 @@
             "example": "Europe/London"
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
@@ -1670,16 +1409,10 @@
             "type": "string"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "category": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "durationMinutes": {
             "type": "integer"
@@ -1698,11 +1431,7 @@
           },
           "bookingMode": {
             "type": "string",
-            "enum": [
-              "individual",
-              "lead_pays_party",
-              "group"
-            ]
+            "enum": ["individual", "lead_pays_party", "group"]
           },
           "basePriceMinor": {
             "type": "integer"
@@ -1713,17 +1442,10 @@
           },
           "taxBehaviour": {
             "type": "string",
-            "enum": [
-              "inclusive",
-              "exclusive",
-              "none"
-            ]
+            "enum": ["inclusive", "exclusive", "none"]
           },
           "depositMinor": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "description": "Offline/manual deposit amount only. Never charged, held, or included in booking ServiceSnapshot / PaymentIntent amounts (RECA-467 / ADR 0018). Create/update reject values > 0 until an online deposit charge path ships; historical rows may still store a positive value. Writable values: omit | null | 0."
           },
           "eligibleStaffIds": {
@@ -1741,17 +1463,8 @@
             }
           },
           "requiredResourceType": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "room",
-              "bay",
-              "chair",
-              "equipment",
-              null
-            ]
+            "type": ["string", "null"],
+            "enum": ["room", "bay", "chair", "equipment", null]
           },
           "bookingNoticeMinutes": {
             "type": "integer"
@@ -1761,9 +1474,7 @@
           },
           "cancellationPolicy": {
             "type": "object",
-            "required": [
-              "windowHours"
-            ],
+            "required": ["windowHours"],
             "properties": {
               "windowHours": {
                 "type": "integer"
@@ -1778,13 +1489,7 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "id",
-                "name",
-                "durationMinutes",
-                "priceMinor",
-                "requiredResourceType"
-              ],
+              "required": ["id", "name", "durationMinutes", "priceMinor", "requiredResourceType"],
               "properties": {
                 "id": {
                   "type": "string",
@@ -1794,29 +1499,14 @@
                   "type": "string"
                 },
                 "durationMinutes": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
+                  "type": ["integer", "null"]
                 },
                 "priceMinor": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
+                  "type": ["integer", "null"]
                 },
                 "requiredResourceType": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "enum": [
-                    "room",
-                    "bay",
-                    "chair",
-                    "equipment",
-                    null
-                  ]
+                  "type": ["string", "null"],
+                  "enum": ["room", "bay", "chair", "equipment", null]
                 }
               }
             }
@@ -1828,10 +1518,7 @@
             "type": "boolean"
           },
           "colour": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "displayOrder": {
             "type": "integer"
@@ -1876,18 +1563,10 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "room",
-              "bay",
-              "chair",
-              "equipment"
-            ]
+            "enum": ["room", "bay", "chair", "equipment"]
           },
           "locationId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "active": {
@@ -1945,31 +1624,19 @@
             "format": "uuid"
           },
           "customerId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "bookingId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "packagePurchaseId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "packageId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Sellable package for package-checkout payments; null for booking payments."
           },
@@ -1978,10 +1645,7 @@
             "example": "stripe"
           },
           "providerPaymentId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "amountMinor": {
             "type": "integer"
@@ -2013,51 +1677,31 @@
             "type": "string"
           },
           "receiptUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "receiptNumber": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "sellerLegalName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "sellerVatNumber": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "sellerVatRegistered": {
             "type": "boolean"
           },
           "sellerAddressSnapshot": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "taxTreatment": {
             "type": "string",
-            "enum": [
-              "vat_registered",
-              "not_vat_registered"
-            ],
+            "enum": ["vat_registered", "not_vat_registered"],
             "description": "Tax treatment snapshotted at purchase (RECA-142 / ADR 0017; VAT registration only)"
           },
           "documentKind": {
             "type": "string",
-            "enum": [
-              "receipt"
-            ],
+            "enum": ["receipt"],
             "description": "Connect customer documents are receipts only at launch (ADR 0017)"
           },
           "createdAt": {
@@ -2112,44 +1756,24 @@
             "minimum": 0
           },
           "checksum": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "SHA-256 hex digest registered on upload complete (RECA-82)."
           },
           "scanStatus": {
             "type": "string",
-            "enum": [
-              "pending",
-              "clean",
-              "infected",
-              "failed"
-            ],
+            "enum": ["pending", "clean", "infected", "failed"],
             "description": "Malware scan outcome (RECA-84 gate)."
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending_upload",
-              "uploaded",
-              "available",
-              "rejected",
-              "deleted"
-            ]
+            "enum": ["pending_upload", "uploaded", "available", "rejected", "deleted"]
           },
           "ownerType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional provenance for ACL hooks (RECA-83): customer|booking|linked_record|business."
           },
           "ownerId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "createdBy": {
@@ -2160,10 +1784,7 @@
             "format": "date-time"
           },
           "deletedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Set when status=deleted after retention soft-delete (RECA-83)."
           }
@@ -2202,21 +1823,14 @@
             "example": "stripe"
           },
           "providerRefundId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "amountMinor": {
             "type": "integer"
           },
           "state": {
             "type": "string",
-            "enum": [
-              "pending",
-              "succeeded",
-              "failed"
-            ]
+            "enum": ["pending", "succeeded", "failed"]
           },
           "reasonCode": {
             "type": "string"
@@ -2235,14 +1849,7 @@
       },
       "Conversation": {
         "type": "object",
-        "required": [
-          "id",
-          "businessId",
-          "customerId",
-          "bookingId",
-          "createdAt",
-          "lastMessageAt"
-        ],
+        "required": ["id", "businessId", "customerId", "bookingId", "createdAt", "lastMessageAt"],
         "properties": {
           "id": {
             "type": "string",
@@ -2257,10 +1864,7 @@
             "format": "uuid"
           },
           "bookingId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "createdAt": {
@@ -2268,10 +1872,7 @@
             "format": "date-time"
           },
           "lastMessageAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -2303,20 +1904,14 @@
           },
           "recipientType": {
             "type": "string",
-            "enum": [
-              "customer",
-              "user"
-            ]
+            "enum": ["customer", "user"]
           },
           "recipientId": {
             "type": "string"
           },
           "channel": {
             "type": "string",
-            "enum": [
-              "email",
-              "in_app"
-            ]
+            "enum": ["email", "in_app"]
           },
           "templateKey": {
             "type": "string"
@@ -2331,17 +1926,11 @@
             "type": "string"
           },
           "bookingId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "readAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "createdAt": {
@@ -2365,11 +1954,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "enum": [
-              "solo",
-              "business",
-              "growth"
-            ]
+            "enum": ["solo", "business", "growth"]
           },
           "name": {
             "type": "string",
@@ -2412,17 +1997,11 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "interval",
-                "amountMinor"
-              ],
+              "required": ["interval", "amountMinor"],
               "properties": {
                 "interval": {
                   "type": "string",
-                  "enum": [
-                    "month",
-                    "year"
-                  ]
+                  "enum": ["month", "year"]
                 },
                 "amountMinor": {
                   "type": "integer",
@@ -2435,44 +2014,27 @@
       },
       "User": {
         "type": "object",
-        "required": [
-          "id",
-          "email",
-          "emailVerified",
-          "status"
-        ],
+        "required": ["id", "email", "emailVerified", "status"],
         "properties": {
           "id": {
             "type": "string",
             "format": "uuid"
           },
           "email": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "emailVerified": {
             "type": "boolean"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "suspended",
-              "deleted"
-            ]
+            "enum": ["active", "suspended", "deleted"]
           }
         }
       },
       "BusinessSummary": {
         "type": "object",
-        "required": [
-          "id",
-          "slug",
-          "tradingName",
-          "roleKeys"
-        ],
+        "required": ["id", "slug", "tradingName", "roleKeys"],
         "description": "Business the authenticated user has an active membership in.",
         "properties": {
           "id": {
@@ -2540,44 +2102,25 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "trial",
-              "active",
-              "past_due",
-              "restricted",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["trial", "active", "past_due", "restricted", "suspended", "closed"]
           },
           "onboardingState": {
             "type": "string"
           },
           "closedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "closureExportUntil": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "deletionScheduledAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "statusReason": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "version": {
             "type": "integer"
@@ -2637,10 +2180,7 @@
                 "type": "boolean"
               },
               "vatNumber": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               }
             }
           },
@@ -2652,37 +2192,25 @@
                 "minimum": 1
               },
               "fileRetentionDays": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "minimum": 1
               }
             }
           },
           "legalAddress": {
-            "type": [
-              "object",
-              "null"
-            ],
+            "type": ["object", "null"],
             "properties": {
               "line1": {
                 "type": "string"
               },
               "line2": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "city": {
                 "type": "string"
               },
               "region": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "postalCode": {
                 "type": "string"
@@ -2698,14 +2226,7 @@
       },
       "Membership": {
         "type": "object",
-        "required": [
-          "id",
-          "businessId",
-          "userId",
-          "status",
-          "roleKeys",
-          "locationScopeIds"
-        ],
+        "required": ["id", "businessId", "userId", "status", "roleKeys", "locationScopeIds"],
         "properties": {
           "id": {
             "type": "string",
@@ -2720,19 +2241,12 @@
             "format": "uuid"
           },
           "staffId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "invited",
-              "active",
-              "suspended"
-            ]
+            "enum": ["invited", "active", "suspended"]
           },
           "roleKeys": {
             "type": "array",
@@ -2741,10 +2255,7 @@
             }
           },
           "locationScopeIds": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "type": "string",
               "format": "uuid"
@@ -2752,10 +2263,7 @@
             "description": "null = access to all locations; otherwise the restricted set."
           },
           "joinedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "createdAt": {
@@ -2770,13 +2278,7 @@
       },
       "Invitation": {
         "type": "object",
-        "required": [
-          "id",
-          "email",
-          "roleKeys",
-          "status",
-          "expiresAt"
-        ],
+        "required": ["id", "email", "roleKeys", "status", "expiresAt"],
         "properties": {
           "id": {
             "type": "string",
@@ -2792,10 +2294,7 @@
             }
           },
           "locationScopeIds": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "type": "string",
               "format": "uuid"
@@ -2843,10 +2342,7 @@
             "type": "string"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "priceMinor": {
             "type": "integer",
@@ -2860,11 +2356,7 @@
           },
           "taxBehaviour": {
             "type": "string",
-            "enum": [
-              "inclusive",
-              "exclusive",
-              "none"
-            ]
+            "enum": ["inclusive", "exclusive", "none"]
           },
           "creditsIssued": {
             "type": "integer",
@@ -2880,17 +2372,11 @@
           },
           "validity": {
             "type": "object",
-            "required": [
-              "kind",
-              "amount"
-            ],
+            "required": ["kind", "amount"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "calendar_months",
-                  "days"
-                ]
+                "enum": ["calendar_months", "days"]
               },
               "amount": {
                 "type": "integer",
@@ -2961,10 +2447,7 @@
             "maxLength": 3
           },
           "paymentRef": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "purchasedAt": {
             "type": "string",
@@ -3022,10 +2505,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "active",
-              "expired"
-            ]
+            "enum": ["active", "expired"]
           },
           "createdAt": {
             "type": "string",
@@ -3075,10 +2555,7 @@
       },
       "EntitlementView": {
         "type": "object",
-        "required": [
-          "entitlement",
-          "balance"
-        ],
+        "required": ["entitlement", "balance"],
         "properties": {
           "entitlement": {
             "$ref": "#/components/schemas/Entitlement"
@@ -3144,25 +2621,16 @@
             "type": "string"
           },
           "bookingRef": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "paymentRef": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "actorId": {
             "type": "string"
           },
           "idempotencyKey": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "occurredAt": {
             "type": "string",
@@ -3239,11 +2707,7 @@
           },
           "senderType": {
             "type": "string",
-            "enum": [
-              "staff",
-              "customer",
-              "system"
-            ]
+            "enum": ["staff", "customer", "system"]
           },
           "senderId": {
             "type": "string"
@@ -3259,17 +2723,11 @@
             "format": "date-time"
           },
           "readByCustomerAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "readByStaffAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -3307,10 +2765,7 @@
           },
           "visibility": {
             "type": "string",
-            "enum": [
-              "internal",
-              "customer"
-            ]
+            "enum": ["internal", "customer"]
           },
           "createdAt": {
             "type": "string",
@@ -3356,10 +2811,7 @@
             "type": "boolean"
           },
           "source": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "recordedAt": {
             "type": "string",
@@ -3369,14 +2821,7 @@
       },
       "PrivacyNotice": {
         "type": "object",
-        "required": [
-          "id",
-          "businessId",
-          "version",
-          "title",
-          "body",
-          "publishedAt"
-        ],
+        "required": ["id", "businessId", "version", "title", "body", "publishedAt"],
         "properties": {
           "id": {
             "type": "string",
@@ -3407,11 +2852,7 @@
       },
       "PaymentReceipt": {
         "type": "object",
-        "required": [
-          "amountMinor",
-          "currency",
-          "documentKind"
-        ],
+        "required": ["amountMinor", "currency", "documentKind"],
         "properties": {
           "amountMinor": {
             "type": "integer"
@@ -3422,22 +2863,13 @@
             "maxLength": 3
           },
           "receiptUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "receiptNumber": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "vatNumber": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "vatRegistered": {
             "type": "boolean"
@@ -3446,16 +2878,10 @@
             "type": "string"
           },
           "legalName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "businessAddressSnapshot": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "documentKind": {
             "type": "string"
@@ -3479,10 +2905,7 @@
             "format": "uuid"
           },
           "businessId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "actorType": {
@@ -3492,10 +2915,7 @@
             "type": "string"
           },
           "impersonatorId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "action": {
             "type": "string"
@@ -3521,14 +2941,7 @@
       },
       "OutboxEvent": {
         "type": "object",
-        "required": [
-          "id",
-          "eventType",
-          "aggregateType",
-          "aggregateId",
-          "attempts",
-          "occurredAt"
-        ],
+        "required": ["id", "eventType", "aggregateType", "aggregateId", "attempts", "occurredAt"],
         "properties": {
           "id": {
             "type": "string",
@@ -3554,13 +2967,7 @@
       },
       "FailedJob": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "attempts",
-          "runAt",
-          "status"
-        ],
+        "required": ["id", "name", "attempts", "runAt", "status"],
         "properties": {
           "id": {
             "type": "string",
@@ -4986,10 +4393,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "email",
-                  "password"
-                ],
+                "required": ["email", "password"],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -5017,9 +4421,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "user"
-                  ],
+                  "required": ["user"],
                   "properties": {
                     "user": {
                       "$ref": "#/components/schemas/User"
@@ -5190,10 +4592,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "email",
-                  "password"
-                ],
+                "required": ["email", "password"],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -5216,9 +4615,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "user"
-                  ],
+                  "required": ["user"],
                   "properties": {
                     "user": {
                       "$ref": "#/components/schemas/User"
@@ -5563,9 +4960,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "email"
-                ],
+                "required": ["email"],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -5755,10 +5150,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "token",
-                  "password"
-                ],
+                "required": ["token", "password"],
                 "properties": {
                   "token": {
                     "type": "string"
@@ -5949,9 +5341,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "user"
-                  ],
+                  "required": ["user"],
                   "properties": {
                     "user": {
                       "$ref": "#/components/schemas/User"
@@ -6141,9 +5531,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "services"
-                  ],
+                  "required": ["services"],
                   "properties": {
                     "services": {
                       "type": "array",
@@ -6336,9 +5724,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "locations"
-                  ],
+                  "required": ["locations"],
                   "properties": {
                     "locations": {
                       "type": "array",
@@ -6590,9 +5976,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "slots"
-                  ],
+                  "required": ["slots"],
                   "properties": {
                     "slots": {
                       "type": "array",
@@ -6793,10 +6177,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "slotToken",
-                  "firstName"
-                ],
+                "required": ["slotToken", "firstName"],
                 "properties": {
                   "slotToken": {
                     "type": "string",
@@ -6807,28 +6188,16 @@
                     "minLength": 1
                   },
                   "lastName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "email": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "phone": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "notesCustomer": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "marketingConsent": {
                     "type": "boolean"
@@ -6853,10 +6222,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking",
-                    "holdToken"
-                  ],
+                  "required": ["booking", "holdToken"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -7049,10 +6415,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "bookingId",
-                  "holdToken"
-                ],
+                "required": ["bookingId", "holdToken"],
                 "properties": {
                   "bookingId": {
                     "type": "string",
@@ -7073,9 +6436,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -7272,9 +6633,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer"
-                  ],
+                  "required": ["customer"],
                   "properties": {
                     "customer": {
                       "type": "object",
@@ -7302,22 +6661,13 @@
                           "type": "string"
                         },
                         "lastName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "emailDisplay": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "phoneDisplay": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "contactPreferences": {
                           "type": "object"
@@ -7327,11 +6677,7 @@
                         },
                         "status": {
                           "type": "string",
-                          "enum": [
-                            "active",
-                            "archived",
-                            "anonymised"
-                          ]
+                          "enum": ["active", "archived", "anonymised"]
                         }
                       }
                     }
@@ -8087,9 +7433,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -8305,10 +7649,7 @@
                 "type": "object",
                 "properties": {
                   "reason": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -8523,9 +7864,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "slotToken"
-                ],
+                "required": ["slotToken"],
                 "properties": {
                   "slotToken": {
                     "type": "string",
@@ -9094,9 +8433,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "messages"
-                  ],
+                  "required": ["messages"],
                   "properties": {
                     "messages": {
                       "type": "array",
@@ -9293,9 +8630,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "body"
-                ],
+                "required": ["body"],
                 "properties": {
                   "body": {
                     "type": "string",
@@ -9484,10 +8819,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "legalName",
-                  "industryTemplateKey"
-                ],
+                "required": ["legalName", "industryTemplateKey"],
                 "properties": {
                   "legalName": {
                     "type": "string",
@@ -9695,9 +9027,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "businesses"
-                  ],
+                  "required": ["businesses"],
                   "properties": {
                     "businesses": {
                       "type": "array",
@@ -9895,9 +9225,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "business"
-                  ],
+                  "required": ["business"],
                   "properties": {
                     "business": {
                       "$ref": "#/components/schemas/Business"
@@ -10314,9 +9642,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "configuration"
-                  ],
+                  "required": ["configuration"],
                   "properties": {
                     "configuration": {
                       "$ref": "#/components/schemas/BusinessConfiguration"
@@ -10551,10 +9877,7 @@
                         "type": "boolean"
                       },
                       "vatNumber": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       }
                     }
                   },
@@ -10566,37 +9889,25 @@
                         "minimum": 1
                       },
                       "fileRetentionDays": {
-                        "type": [
-                          "integer",
-                          "null"
-                        ],
+                        "type": ["integer", "null"],
                         "minimum": 1
                       }
                     }
                   },
                   "legalAddress": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
+                    "type": ["object", "null"],
                     "properties": {
                       "line1": {
                         "type": "string"
                       },
                       "line2": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "city": {
                         "type": "string"
                       },
                       "region": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
+                        "type": ["string", "null"]
                       },
                       "postalCode": {
                         "type": "string"
@@ -10620,9 +9931,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "configuration"
-                  ],
+                  "required": ["configuration"],
                   "properties": {
                     "configuration": {
                       "$ref": "#/components/schemas/BusinessConfiguration"
@@ -10818,9 +10127,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "lifecycle"
-                  ],
+                  "required": ["lifecycle"],
                   "properties": {
                     "lifecycle": {
                       "$ref": "#/components/schemas/BusinessLifecycle"
@@ -11024,19 +10331,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "status"
-                ],
+                "required": ["status"],
                 "properties": {
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "trial",
-                      "active",
-                      "past_due",
-                      "restricted",
-                      "suspended"
-                    ]
+                    "enum": ["trial", "active", "past_due", "restricted", "suspended"]
                   },
                   "reason": {
                     "type": "string",
@@ -11055,9 +10354,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "lifecycle"
-                  ],
+                  "required": ["lifecycle"],
                   "properties": {
                     "lifecycle": {
                       "$ref": "#/components/schemas/BusinessLifecycle"
@@ -11279,9 +10576,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "lifecycle"
-                  ],
+                  "required": ["lifecycle"],
                   "properties": {
                     "lifecycle": {
                       "$ref": "#/components/schemas/BusinessLifecycle"
@@ -11476,9 +10771,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "memberships"
-                  ],
+                  "required": ["memberships"],
                   "properties": {
                     "memberships": {
                       "type": "array",
@@ -11692,10 +10985,7 @@
                     }
                   },
                   "locationScopeIds": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
+                    "type": ["array", "null"],
                     "items": {
                       "type": "string",
                       "format": "uuid"
@@ -11703,11 +10993,7 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "invited",
-                      "active",
-                      "suspended"
-                    ]
+                    "enum": ["invited", "active", "suspended"]
                   }
                 }
               }
@@ -11721,9 +11007,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "membership"
-                  ],
+                  "required": ["membership"],
                   "properties": {
                     "membership": {
                       "$ref": "#/components/schemas/Membership"
@@ -11919,9 +11203,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "invitations"
-                  ],
+                  "required": ["invitations"],
                   "properties": {
                     "invitations": {
                       "type": "array",
@@ -11951,10 +11233,7 @@
                             }
                           },
                           "locationScopeIds": {
-                            "type": [
-                              "array",
-                              "null"
-                            ],
+                            "type": ["array", "null"],
                             "items": {
                               "type": "string",
                               "format": "uuid"
@@ -11962,9 +11241,7 @@
                           },
                           "status": {
                             "type": "string",
-                            "enum": [
-                              "pending"
-                            ]
+                            "enum": ["pending"]
                           },
                           "expiresAt": {
                             "type": "string",
@@ -12165,10 +11442,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "email",
-                  "roleKeys"
-                ],
+                "required": ["email", "roleKeys"],
                 "properties": {
                   "email": {
                     "type": "string"
@@ -12181,10 +11455,7 @@
                     "minItems": 1
                   },
                   "locationScopeIds": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
+                    "type": ["array", "null"],
                     "items": {
                       "type": "string",
                       "format": "uuid"
@@ -12210,10 +11481,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "invitation",
-                    "token"
-                  ],
+                  "required": ["invitation", "token"],
                   "properties": {
                     "invitation": {
                       "$ref": "#/components/schemas/Invitation"
@@ -12412,9 +11680,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "membership"
-                  ],
+                  "required": ["membership"],
                   "properties": {
                     "membership": {
                       "$ref": "#/components/schemas/Membership"
@@ -12602,9 +11868,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "events"
-                  ],
+                  "required": ["events"],
                   "properties": {
                     "events": {
                       "type": "array",
@@ -12802,39 +12066,24 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "firstName"
-                ],
+                "required": ["firstName"],
                 "properties": {
                   "firstName": {
                     "type": "string",
                     "minLength": 1
                   },
                   "lastName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "email": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "phone": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "preferredChannel": {
                     "type": "string",
-                    "enum": [
-                      "email",
-                      "phone",
-                      "none"
-                    ],
+                    "enum": ["email", "phone", "none"],
                     "description": "Writable preferred contact channel. `sms` is refused with `preferredChannel` / `INVALID` until SMS delivery ships (RECA-468 / ADR 0018)."
                   },
                   "operationalNotifications": {
@@ -12844,10 +12093,7 @@
                     "type": "boolean"
                   },
                   "marketingConsentSource": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "tags": {
                     "type": "array",
@@ -12859,10 +12105,7 @@
                     "type": "string"
                   },
                   "acquisitionSource": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -12884,10 +12127,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer",
-                    "possibleDuplicates"
-                  ],
+                  "required": ["customer", "possibleDuplicates"],
                   "properties": {
                     "customer": {
                       "$ref": "#/components/schemas/Customer"
@@ -13086,11 +12326,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "archived",
-                "anonymised"
-              ]
+              "enum": ["active", "archived", "anonymised"]
             },
             "description": "Allow-listed filter: customer lifecycle status."
           },
@@ -13118,10 +12354,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "items",
-                    "nextCursor"
-                  ],
+                  "required": ["items", "nextCursor"],
                   "properties": {
                     "items": {
                       "type": "array",
@@ -13322,9 +12555,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name"
-                ],
+                "required": ["name"],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -13350,9 +12581,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -13536,10 +12765,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "archived"
-              ]
+              "enum": ["active", "archived"]
             }
           }
         ],
@@ -13550,9 +12776,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tags"
-                  ],
+                  "required": ["tags"],
                   "properties": {
                     "tags": {
                       "type": "array",
@@ -13759,9 +12983,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -13970,10 +13192,7 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "active",
-                      "archived"
-                    ]
+                    "enum": ["active", "archived"]
                   }
                 }
               }
@@ -13987,9 +13206,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -14192,9 +13409,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -14398,9 +13613,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "tagId"
-                ],
+                "required": ["tagId"],
                 "properties": {
                   "tagId": {
                     "type": "string",
@@ -14418,9 +13631,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -14441,9 +13652,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tag"
-                  ],
+                  "required": ["tag"],
                   "properties": {
                     "tag": {
                       "$ref": "#/components/schemas/CustomerTag"
@@ -14637,9 +13846,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "tags"
-                  ],
+                  "required": ["tags"],
                   "properties": {
                     "tags": {
                       "type": "array",
@@ -15047,9 +14254,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer"
-                  ],
+                  "required": ["customer"],
                   "properties": {
                     "customer": {
                       "$ref": "#/components/schemas/Customer"
@@ -15266,30 +14471,17 @@
                     "minLength": 1
                   },
                   "lastName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "email": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "phone": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "preferredChannel": {
                     "type": "string",
-                    "enum": [
-                      "email",
-                      "phone",
-                      "none"
-                    ],
+                    "enum": ["email", "phone", "none"],
                     "description": "Writable preferred contact channel. `sms` is refused with `preferredChannel` / `INVALID` until SMS delivery ships (RECA-468 / ADR 0018)."
                   },
                   "operationalNotifications": {
@@ -15299,18 +14491,11 @@
                     "type": "boolean"
                   },
                   "marketingConsentSource": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "active",
-                      "archived",
-                      "anonymised"
-                    ]
+                    "enum": ["active", "archived", "anonymised"]
                   },
                   "tags": {
                     "type": "array",
@@ -15330,9 +14515,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer"
-                  ],
+                  "required": ["customer"],
                   "properties": {
                     "customer": {
                       "$ref": "#/components/schemas/Customer"
@@ -15535,9 +14718,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "body"
-                ],
+                "required": ["body"],
                 "properties": {
                   "body": {
                     "type": "string",
@@ -15545,10 +14726,7 @@
                   },
                   "visibility": {
                     "type": "string",
-                    "enum": [
-                      "internal",
-                      "customer"
-                    ],
+                    "enum": ["internal", "customer"],
                     "default": "internal"
                   }
                 }
@@ -15571,9 +14749,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "note"
-                  ],
+                  "required": ["note"],
                   "properties": {
                     "note": {
                       "$ref": "#/components/schemas/CustomerNote"
@@ -15767,9 +14943,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notes"
-                  ],
+                  "required": ["notes"],
                   "properties": {
                     "notes": {
                       "type": "array",
@@ -15967,9 +15141,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "userId"
-                ],
+                "required": ["userId"],
                 "properties": {
                   "userId": {
                     "type": "string",
@@ -15987,9 +15159,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer"
-                  ],
+                  "required": ["customer"],
                   "properties": {
                     "customer": {
                       "$ref": "#/components/schemas/Customer"
@@ -16394,9 +15564,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "customer"
-                  ],
+                  "required": ["customer"],
                   "properties": {
                     "customer": {
                       "$ref": "#/components/schemas/Customer"
@@ -16590,10 +15758,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "title",
-                  "body"
-                ],
+                "required": ["title", "body"],
                 "properties": {
                   "title": {
                     "type": "string",
@@ -16623,9 +15788,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notice"
-                  ],
+                  "required": ["notice"],
                   "properties": {
                     "notice": {
                       "$ref": "#/components/schemas/PrivacyNotice"
@@ -16812,9 +15975,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notice"
-                  ],
+                  "required": ["notice"],
                   "properties": {
                     "notice": {
                       "oneOf": [
@@ -17024,10 +16185,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "channel",
-                  "granted"
-                ],
+                "required": ["channel", "granted"],
                 "properties": {
                   "channel": {
                     "type": "string",
@@ -17037,10 +16195,7 @@
                     "type": "boolean"
                   },
                   "source": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "noticeId": {
                     "type": "string",
@@ -17066,9 +16221,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "consent"
-                  ],
+                  "required": ["consent"],
                   "properties": {
                     "consent": {
                       "$ref": "#/components/schemas/ConsentRecord"
@@ -17262,9 +16415,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "consents"
-                  ],
+                  "required": ["consents"],
                   "properties": {
                     "consents": {
                       "type": "array",
@@ -17463,15 +16614,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "definition"
-                  ],
+                  "required": ["definition"],
                   "properties": {
                     "definition": {
-                      "type": [
-                        "object",
-                        "null"
-                      ],
+                      "type": ["object", "null"],
                       "properties": {
                         "definition": {
                           "$ref": "#/components/schemas/LinkedRecordDefinition"
@@ -17672,11 +16818,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "key",
-                  "singularLabel",
-                  "pluralLabel"
-                ],
+                "required": ["key", "singularLabel", "pluralLabel"],
                 "properties": {
                   "key": {
                     "type": "string"
@@ -17688,16 +16830,10 @@
                     "type": "string"
                   },
                   "iconKey": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "settings": {
                     "type": "object",
@@ -17739,9 +16875,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "definition"
-                  ],
+                  "required": ["definition"],
                   "properties": {
                     "definition": {
                       "$ref": "#/components/schemas/LinkedRecordDefinition"
@@ -17927,9 +17061,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "templateKey"
-                ],
+                "required": ["templateKey"],
                 "properties": {
                   "templateKey": {
                     "type": "string",
@@ -18156,16 +17288,10 @@
                     "minLength": 1
                   },
                   "iconKey": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "settings": {
                     "type": "object",
@@ -18199,9 +17325,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "definition"
-                  ],
+                  "required": ["definition"],
                   "properties": {
                     "definition": {
                       "$ref": "#/components/schemas/LinkedRecordDefinition"
@@ -18404,11 +17528,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "fieldKey",
-                  "label",
-                  "dataType"
-                ],
+                "required": ["fieldKey", "label", "dataType"],
                 "properties": {
                   "fieldKey": {
                     "type": "string",
@@ -18419,10 +17539,7 @@
                     "minLength": 1
                   },
                   "helpText": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "dataType": {
                     "type": "string",
@@ -18493,9 +17610,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "field"
-                  ],
+                  "required": ["field"],
                   "properties": {
                     "field": {
                       "type": "object",
@@ -18719,9 +17834,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "record"
-                  ],
+                  "required": ["record"],
                   "properties": {
                     "record": {
                       "$ref": "#/components/schemas/LinkedRecord"
@@ -18915,9 +18028,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "records"
-                  ],
+                  "required": ["records"],
                   "properties": {
                     "records": {
                       "type": "array",
@@ -19125,9 +18236,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "record"
-                  ],
+                  "required": ["record"],
                   "properties": {
                     "record": {
                       "$ref": "#/components/schemas/LinkedRecord"
@@ -19348,10 +18457,7 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "active",
-                      "archived"
-                    ]
+                    "enum": ["active", "archived"]
                   }
                 }
               }
@@ -19365,9 +18471,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "record"
-                  ],
+                  "required": ["record"],
                   "properties": {
                     "record": {
                       "$ref": "#/components/schemas/LinkedRecord"
@@ -19562,11 +18666,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "type",
-                  "timezone"
-                ],
+                "required": ["name", "type", "timezone"],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -19574,12 +18674,7 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "physical",
-                      "mobile",
-                      "customer_address",
-                      "service_area"
-                    ]
+                    "enum": ["physical", "mobile", "customer_address", "service_area"]
                   },
                   "timezone": {
                     "type": "string"
@@ -19588,11 +18683,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "dayOfWeek",
-                        "openMinute",
-                        "closeMinute"
-                      ],
+                      "required": ["dayOfWeek", "openMinute", "closeMinute"],
                       "properties": {
                         "dayOfWeek": {
                           "type": "integer",
@@ -19635,9 +18726,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "location"
-                  ],
+                  "required": ["location"],
                   "properties": {
                     "location": {
                       "$ref": "#/components/schemas/Location"
@@ -19823,9 +18912,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "locations"
-                  ],
+                  "required": ["locations"],
                   "properties": {
                     "locations": {
                       "type": "array",
@@ -20033,9 +19120,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "location"
-                  ],
+                  "required": ["location"],
                   "properties": {
                     "location": {
                       "$ref": "#/components/schemas/Location"
@@ -20257,11 +19342,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "dayOfWeek",
-                        "openMinute",
-                        "closeMinute"
-                      ],
+                      "required": ["dayOfWeek", "openMinute", "closeMinute"],
                       "properties": {
                         "dayOfWeek": {
                           "type": "integer",
@@ -20299,9 +19380,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "location"
-                  ],
+                  "required": ["location"],
                   "properties": {
                     "location": {
                       "$ref": "#/components/schemas/Location"
@@ -20496,32 +19575,21 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "displayName"
-                ],
+                "required": ["displayName"],
                 "properties": {
                   "displayName": {
                     "type": "string",
                     "minLength": 1
                   },
                   "userId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   },
                   "title": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "bio": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "locationIds": {
                     "type": "array",
@@ -20541,12 +19609,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "dayOfWeek",
-                        "startMinute",
-                        "endMinute",
-                        "locationId"
-                      ],
+                      "required": ["dayOfWeek", "startMinute", "endMinute", "locationId"],
                       "properties": {
                         "dayOfWeek": {
                           "type": "integer",
@@ -20564,10 +19627,7 @@
                           "maximum": 1440
                         },
                         "locationId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "format": "uuid"
                         }
                       }
@@ -20577,10 +19637,7 @@
                     "type": "boolean"
                   },
                   "calendarColour": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -20602,9 +19659,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "$ref": "#/components/schemas/Staff"
@@ -20790,9 +19845,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "type": "array",
@@ -21000,9 +20053,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "$ref": "#/components/schemas/Staff"
@@ -21218,23 +20269,14 @@
                     "minLength": 1
                   },
                   "userId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   },
                   "title": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "bio": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "locationIds": {
                     "type": "array",
@@ -21254,12 +20296,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "dayOfWeek",
-                        "startMinute",
-                        "endMinute",
-                        "locationId"
-                      ],
+                      "required": ["dayOfWeek", "startMinute", "endMinute", "locationId"],
                       "properties": {
                         "dayOfWeek": {
                           "type": "integer",
@@ -21277,10 +20314,7 @@
                           "maximum": 1440
                         },
                         "locationId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "format": "uuid"
                         }
                       }
@@ -21290,18 +20324,11 @@
                     "type": "boolean"
                   },
                   "calendarColour": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "active",
-                      "invited",
-                      "suspended"
-                    ]
+                    "enum": ["active", "invited", "suspended"]
                   }
                 }
               }
@@ -21315,9 +20342,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "$ref": "#/components/schemas/Staff"
@@ -21530,11 +20555,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "start",
-                  "end",
-                  "originatingTimezone"
-                ],
+                "required": ["start", "end", "originatingTimezone"],
                 "properties": {
                   "start": {
                     "type": "string",
@@ -21548,10 +20569,7 @@
                     "type": "string"
                   },
                   "reason": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -21573,9 +20591,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "$ref": "#/components/schemas/Staff"
@@ -21790,9 +20806,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "staff"
-                  ],
+                  "required": ["staff"],
                   "properties": {
                     "staff": {
                       "$ref": "#/components/schemas/Staff"
@@ -21986,10 +21000,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "type"
-                ],
+                "required": ["name", "type"],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -21997,18 +21008,10 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "room",
-                      "bay",
-                      "chair",
-                      "equipment"
-                    ]
+                    "enum": ["room", "bay", "chair", "equipment"]
                   },
                   "locationId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   }
                 }
@@ -22031,9 +21034,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "resource"
-                  ],
+                  "required": ["resource"],
                   "properties": {
                     "resource": {
                       "$ref": "#/components/schemas/Resource"
@@ -22218,9 +21219,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "resources"
-                  ],
+                  "required": ["resources"],
                   "properties": {
                     "resources": {
                       "type": "array",
@@ -22427,9 +21426,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "active"
-                ],
+                "required": ["active"],
                 "properties": {
                   "active": {
                     "type": "boolean"
@@ -22446,9 +21443,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "resource"
-                  ],
+                  "required": ["resource"],
                   "properties": {
                     "resource": {
                       "$ref": "#/components/schemas/Resource"
@@ -22642,28 +21637,17 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "durationMinutes",
-                  "basePriceMinor",
-                  "currency"
-                ],
+                "required": ["name", "durationMinutes", "basePriceMinor", "currency"],
                 "properties": {
                   "name": {
                     "type": "string",
                     "minLength": 1
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "category": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "durationMinutes": {
                     "type": "integer",
@@ -22687,11 +21671,7 @@
                   },
                   "bookingMode": {
                     "type": "string",
-                    "enum": [
-                      "individual",
-                      "lead_pays_party",
-                      "group"
-                    ]
+                    "enum": ["individual", "lead_pays_party", "group"]
                   },
                   "basePriceMinor": {
                     "type": "integer",
@@ -22704,17 +21684,10 @@
                   },
                   "taxBehaviour": {
                     "type": "string",
-                    "enum": [
-                      "inclusive",
-                      "exclusive",
-                      "none"
-                    ]
+                    "enum": ["inclusive", "exclusive", "none"]
                   },
                   "depositMinor": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
+                    "type": ["integer", "null"],
                     "minimum": 0,
                     "maximum": 0,
                     "description": "Offline/manual only — not charged online. Create rejects values > 0 with problem+json `depositMinor` / `TOO_BIG` until online deposit capture ships (RECA-467 / ADR 0018). Writable: omit | null | 0."
@@ -22734,17 +21707,8 @@
                     }
                   },
                   "requiredResourceType": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "room",
-                      "bay",
-                      "chair",
-                      "equipment",
-                      null
-                    ]
+                    "type": ["string", "null"],
+                    "enum": ["room", "bay", "chair", "equipment", null]
                   },
                   "bookingNoticeMinutes": {
                     "type": "integer",
@@ -22756,9 +21720,7 @@
                   },
                   "cancellationPolicy": {
                     "type": "object",
-                    "required": [
-                      "windowHours"
-                    ],
+                    "required": ["windowHours"],
                     "properties": {
                       "windowHours": {
                         "type": "integer",
@@ -22773,38 +21735,21 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "name"
-                      ],
+                      "required": ["name"],
                       "properties": {
                         "name": {
                           "type": "string",
                           "minLength": 1
                         },
                         "durationMinutes": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
+                          "type": ["integer", "null"]
                         },
                         "priceMinor": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
+                          "type": ["integer", "null"]
                         },
                         "requiredResourceType": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "enum": [
-                            "room",
-                            "bay",
-                            "chair",
-                            "equipment",
-                            null
-                          ]
+                          "type": ["string", "null"],
+                          "enum": ["room", "bay", "chair", "equipment", null]
                         }
                       }
                     }
@@ -22813,10 +21758,7 @@
                     "type": "boolean"
                   },
                   "colour": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "displayOrder": {
                     "type": "integer",
@@ -22842,9 +21784,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "service"
-                  ],
+                  "required": ["service"],
                   "properties": {
                     "service": {
                       "$ref": "#/components/schemas/CatalogueService"
@@ -23030,9 +21970,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "services"
-                  ],
+                  "required": ["services"],
                   "properties": {
                     "services": {
                       "type": "array",
@@ -23239,9 +22177,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "service"
-                  ],
+                  "required": ["service"],
                   "properties": {
                     "service": {
                       "$ref": "#/components/schemas/CatalogueService"
@@ -23457,16 +22393,10 @@
                     "minLength": 1
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "category": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "durationMinutes": {
                     "type": "integer",
@@ -23490,11 +22420,7 @@
                   },
                   "bookingMode": {
                     "type": "string",
-                    "enum": [
-                      "individual",
-                      "lead_pays_party",
-                      "group"
-                    ]
+                    "enum": ["individual", "lead_pays_party", "group"]
                   },
                   "basePriceMinor": {
                     "type": "integer",
@@ -23502,17 +22428,10 @@
                   },
                   "taxBehaviour": {
                     "type": "string",
-                    "enum": [
-                      "inclusive",
-                      "exclusive",
-                      "none"
-                    ]
+                    "enum": ["inclusive", "exclusive", "none"]
                   },
                   "depositMinor": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
+                    "type": ["integer", "null"],
                     "minimum": 0,
                     "maximum": 0,
                     "description": "Offline/manual only — not charged online. Update rejects values > 0 with problem+json `depositMinor` / `UNSUPPORTED` until online deposit capture ships (RECA-467 / ADR 0018). Writable: omit | null | 0."
@@ -23532,17 +22451,8 @@
                     }
                   },
                   "requiredResourceType": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "room",
-                      "bay",
-                      "chair",
-                      "equipment",
-                      null
-                    ]
+                    "type": ["string", "null"],
+                    "enum": ["room", "bay", "chair", "equipment", null]
                   },
                   "bookingNoticeMinutes": {
                     "type": "integer",
@@ -23554,9 +22464,7 @@
                   },
                   "cancellationPolicy": {
                     "type": "object",
-                    "required": [
-                      "windowHours"
-                    ],
+                    "required": ["windowHours"],
                     "properties": {
                       "windowHours": {
                         "type": "integer",
@@ -23571,38 +22479,21 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "name"
-                      ],
+                      "required": ["name"],
                       "properties": {
                         "name": {
                           "type": "string",
                           "minLength": 1
                         },
                         "durationMinutes": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
+                          "type": ["integer", "null"]
                         },
                         "priceMinor": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
+                          "type": ["integer", "null"]
                         },
                         "requiredResourceType": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "enum": [
-                            "room",
-                            "bay",
-                            "chair",
-                            "equipment",
-                            null
-                          ]
+                          "type": ["string", "null"],
+                          "enum": ["room", "bay", "chair", "equipment", null]
                         }
                       }
                     }
@@ -23614,10 +22505,7 @@
                     "type": "boolean"
                   },
                   "colour": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "displayOrder": {
                     "type": "integer",
@@ -23635,9 +22523,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "service"
-                  ],
+                  "required": ["service"],
                   "properties": {
                     "service": {
                       "$ref": "#/components/schemas/CatalogueService"
@@ -23868,10 +22754,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": ["string", "null"],
               "format": "uuid"
             }
           },
@@ -23880,10 +22763,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "type": ["string", "null"],
               "format": "uuid"
             }
           },
@@ -23904,9 +22784,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "slots"
-                  ],
+                  "required": ["slots"],
                   "properties": {
                     "slots": {
                       "type": "array",
@@ -24113,23 +22991,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "serviceId",
-                  "locationId",
-                  "staffId",
-                  "start",
-                  "leadCustomerId"
-                ],
+                "required": ["serviceId", "locationId", "staffId", "start", "leadCustomerId"],
                 "properties": {
                   "serviceId": {
                     "type": "string",
                     "format": "uuid"
                   },
                   "variantId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   },
                   "locationId": {
@@ -24149,10 +23018,7 @@
                     "format": "uuid"
                   },
                   "linkedRecordId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid",
                     "description": "Required when service.requiresLinkedRecord or definition.requireForBooking."
                   },
@@ -24160,18 +23026,13 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "name"
-                      ],
+                      "required": ["name"],
                       "properties": {
                         "name": {
                           "type": "string"
                         },
                         "customerId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "format": "uuid"
                         },
                         "isLead": {
@@ -24184,26 +23045,17 @@
                     "type": "integer"
                   },
                   "notesCustomer": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "notesInternal": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "source": {
                     "type": "string"
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "none",
-                      "credit"
-                    ]
+                    "enum": ["none", "credit"]
                   }
                 }
               }
@@ -24225,9 +23077,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -24480,10 +23330,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "bookings",
-                    "nextCursor"
-                  ],
+                  "required": ["bookings", "nextCursor"],
                   "properties": {
                     "bookings": {
                       "type": "array",
@@ -24692,23 +23539,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "serviceId",
-                  "locationId",
-                  "staffId",
-                  "start",
-                  "leadCustomerId"
-                ],
+                "required": ["serviceId", "locationId", "staffId", "start", "leadCustomerId"],
                 "properties": {
                   "serviceId": {
                     "type": "string",
                     "format": "uuid"
                   },
                   "variantId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   },
                   "locationId": {
@@ -24731,19 +23569,14 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "name"
-                      ],
+                      "required": ["name"],
                       "properties": {
                         "name": {
                           "type": "string",
                           "minLength": 1
                         },
                         "customerId": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "format": "uuid"
                         },
                         "isLead": {
@@ -24757,33 +23590,21 @@
                     "minimum": 1
                   },
                   "linkedRecordId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   },
                   "notesCustomer": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "notesInternal": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "source": {
                     "type": "string"
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "none",
-                      "credit"
-                    ]
+                    "enum": ["none", "credit"]
                   }
                 }
               }
@@ -24805,9 +23626,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -25012,9 +23831,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -25226,22 +24043,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "by"
-                ],
+                "required": ["by"],
                 "properties": {
                   "by": {
                     "type": "string",
-                    "enum": [
-                      "customer",
-                      "business"
-                    ]
+                    "enum": ["customer", "business"]
                   },
                   "reason": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   }
                 }
               }
@@ -25255,9 +24064,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -25469,9 +24276,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "start"
-                ],
+                "required": ["start"],
                 "properties": {
                   "start": {
                     "type": "string",
@@ -25493,9 +24298,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -25707,9 +24510,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "attended"
-                ],
+                "required": ["attended"],
                 "properties": {
                   "attended": {
                     "type": "boolean"
@@ -25726,9 +24527,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -25933,9 +24732,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "booking"
-                  ],
+                  "required": ["booking"],
                   "properties": {
                     "booking": {
                       "$ref": "#/components/schemas/Booking"
@@ -26139,9 +24936,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "history"
-                  ],
+                  "required": ["history"],
                   "properties": {
                     "history": {
                       "type": "array",
@@ -26350,9 +25145,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "bookings"
-                  ],
+                  "required": ["bookings"],
                   "properties": {
                     "bookings": {
                       "type": "array",
@@ -26549,23 +25342,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "priceMinor",
-                  "currency",
-                  "creditsIssued",
-                  "validity"
-                ],
+                "required": ["name", "priceMinor", "currency", "creditsIssued", "validity"],
                 "properties": {
                   "name": {
                     "type": "string",
                     "minLength": 1
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "priceMinor": {
                     "type": "integer",
@@ -26578,11 +25362,7 @@
                   },
                   "taxBehaviour": {
                     "type": "string",
-                    "enum": [
-                      "inclusive",
-                      "exclusive",
-                      "none"
-                    ]
+                    "enum": ["inclusive", "exclusive", "none"]
                   },
                   "creditsIssued": {
                     "type": "integer",
@@ -26597,17 +25377,11 @@
                   },
                   "validity": {
                     "type": "object",
-                    "required": [
-                      "kind",
-                      "amount"
-                    ],
+                    "required": ["kind", "amount"],
                     "properties": {
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "calendar_months",
-                          "days"
-                        ]
+                        "enum": ["calendar_months", "days"]
                       },
                       "amount": {
                         "type": "integer",
@@ -26641,9 +25415,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "package"
-                  ],
+                  "required": ["package"],
                   "properties": {
                     "package": {
                       "$ref": "#/components/schemas/Package"
@@ -26828,9 +25600,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "packages"
-                  ],
+                  "required": ["packages"],
                   "properties": {
                     "packages": {
                       "type": "array",
@@ -27051,10 +25821,7 @@
                     "minLength": 1
                   },
                   "description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "priceMinor": {
                     "type": "integer",
@@ -27073,17 +25840,11 @@
                   },
                   "validity": {
                     "type": "object",
-                    "required": [
-                      "kind",
-                      "amount"
-                    ],
+                    "required": ["kind", "amount"],
                     "properties": {
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "calendar_months",
-                          "days"
-                        ]
+                        "enum": ["calendar_months", "days"]
                       },
                       "amount": {
                         "type": "integer",
@@ -27112,9 +25873,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "package"
-                  ],
+                  "required": ["package"],
                   "properties": {
                     "package": {
                       "$ref": "#/components/schemas/Package"
@@ -27318,12 +26077,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "customerId",
-                  "packageId",
-                  "paymentRef",
-                  "providerEventId"
-                ],
+                "required": ["customerId", "packageId", "paymentRef", "providerEventId"],
                 "properties": {
                   "customerId": {
                     "type": "string",
@@ -27361,10 +26115,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "purchase",
-                    "entitlement"
-                  ],
+                  "required": ["purchase", "entitlement"],
                   "properties": {
                     "purchase": {
                       "$ref": "#/components/schemas/PackagePurchase"
@@ -27563,9 +26314,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "credits"
-                  ],
+                  "required": ["credits"],
                   "properties": {
                     "credits": {
                       "type": "array",
@@ -27772,9 +26521,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "entries"
-                  ],
+                  "required": ["entries"],
                   "properties": {
                     "entries": {
                       "type": "array",
@@ -27989,10 +26736,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "signedUnits",
-                  "reasonCode"
-                ],
+                "required": ["signedUnits", "reasonCode"],
                 "properties": {
                   "signedUnits": {
                     "type": "integer",
@@ -28025,9 +26769,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "entry"
-                  ],
+                  "required": ["entry"],
                   "properties": {
                     "entry": {
                       "$ref": "#/components/schemas/CreditLedgerEntry"
@@ -28214,9 +26956,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "expired"
-                  ],
+                  "required": ["expired"],
                   "properties": {
                     "expired": {
                       "type": "array",
@@ -28424,10 +27164,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "account",
-                    "onboardingUrl"
-                  ],
+                  "required": ["account", "onboardingUrl"],
                   "properties": {
                     "account": {
                       "$ref": "#/components/schemas/ConnectAccount"
@@ -28615,9 +27352,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "account"
-                  ],
+                  "required": ["account"],
                   "properties": {
                     "account": {
                       "oneOf": [
@@ -28819,9 +27554,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "account"
-                  ],
+                  "required": ["account"],
                   "properties": {
                     "account": {
                       "$ref": "#/components/schemas/ConnectAccount"
@@ -29042,18 +27775,13 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "payment"
-                  ],
+                  "required": ["payment"],
                   "properties": {
                     "payment": {
                       "$ref": "#/components/schemas/Payment"
                     },
                     "clientSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     }
                   }
                 }
@@ -29245,10 +27973,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "customerId",
-                  "packageId"
-                ],
+                "required": ["customerId", "packageId"],
                 "properties": {
                   "customerId": {
                     "type": "string",
@@ -29278,24 +28003,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "payment"
-                  ],
+                  "required": ["payment"],
                   "properties": {
                     "payment": {
                       "$ref": "#/components/schemas/Payment"
                     },
                     "clientSecret": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "packagePurchaseId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "format": "uuid"
                     }
                   }
@@ -29536,10 +28253,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "payments",
-                    "nextCursor"
-                  ],
+                  "required": ["payments", "nextCursor"],
                   "properties": {
                     "payments": {
                       "type": "array",
@@ -29750,9 +28464,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "payment"
-                  ],
+                  "required": ["payment"],
                   "properties": {
                     "payment": {
                       "$ref": "#/components/schemas/Payment"
@@ -29957,9 +28669,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "receipt"
-                  ],
+                  "required": ["receipt"],
                   "properties": {
                     "receipt": {
                       "type": "object",
@@ -29984,50 +28694,30 @@
                           "example": "GBP"
                         },
                         "receiptUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "receiptNumber": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "vatNumber": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "vatRegistered": {
                           "type": "boolean"
                         },
                         "taxTreatment": {
                           "type": "string",
-                          "enum": [
-                            "vat_registered",
-                            "not_vat_registered"
-                          ]
+                          "enum": ["vat_registered", "not_vat_registered"]
                         },
                         "legalName": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "businessAddressSnapshot": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "documentKind": {
                           "type": "string",
-                          "enum": [
-                            "receipt"
-                          ]
+                          "enum": ["receipt"]
                         }
                       }
                     }
@@ -30230,9 +28920,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "payments"
-                  ],
+                  "required": ["payments"],
                   "properties": {
                     "payments": {
                       "type": "array",
@@ -30439,10 +29127,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "paymentId",
-                  "reasonCode"
-                ],
+                "required": ["paymentId", "reasonCode"],
                 "properties": {
                   "paymentId": {
                     "type": "string",
@@ -30476,9 +29161,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "refund"
-                  ],
+                  "required": ["refund"],
                   "properties": {
                     "refund": {
                       "$ref": "#/components/schemas/Refund"
@@ -30856,9 +29539,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "plans"
-                  ],
+                  "required": ["plans"],
                   "properties": {
                     "plans": {
                       "type": "array",
@@ -31041,9 +29722,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "plans"
-                  ],
+                  "required": ["plans"],
                   "properties": {
                     "plans": {
                       "type": "array",
@@ -31242,10 +29921,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "subscription",
-                    "plan"
-                  ],
+                  "required": ["subscription", "plan"],
                   "properties": {
                     "subscription": {
                       "nullable": true,
@@ -31318,11 +29994,7 @@
                         },
                         "limitCompliance": {
                           "type": "string",
-                          "enum": [
-                            "ok",
-                            "over_limit",
-                            "grace_over_limit"
-                          ]
+                          "enum": ["ok", "over_limit", "grace_over_limit"]
                         },
                         "stripeSubscriptionId": {
                           "type": "string",
@@ -31551,25 +30223,15 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "plan",
-                  "interval"
-                ],
+                "required": ["plan", "interval"],
                 "properties": {
                   "plan": {
                     "type": "string",
-                    "enum": [
-                      "solo",
-                      "business",
-                      "growth"
-                    ]
+                    "enum": ["solo", "business", "growth"]
                   },
                   "interval": {
                     "type": "string",
-                    "enum": [
-                      "month",
-                      "year"
-                    ]
+                    "enum": ["month", "year"]
                   }
                 }
               }
@@ -31591,9 +30253,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "checkoutUrl"
-                  ],
+                  "required": ["checkoutUrl"],
                   "properties": {
                     "checkoutUrl": {
                       "type": "string",
@@ -31804,10 +30464,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "subscription",
-                    "plan"
-                  ],
+                  "required": ["subscription", "plan"],
                   "properties": {
                     "subscription": {
                       "nullable": true,
@@ -31880,11 +30537,7 @@
                         },
                         "limitCompliance": {
                           "type": "string",
-                          "enum": [
-                            "ok",
-                            "over_limit",
-                            "grace_over_limit"
-                          ]
+                          "enum": ["ok", "over_limit", "grace_over_limit"]
                         },
                         "stripeSubscriptionId": {
                           "type": "string",
@@ -32108,9 +30761,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "portalUrl"
-                  ],
+                  "required": ["portalUrl"],
                   "properties": {
                     "portalUrl": {
                       "type": "string",
@@ -32308,10 +30959,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "subscription",
-                    "plan"
-                  ],
+                  "required": ["subscription", "plan"],
                   "properties": {
                     "subscription": {
                       "nullable": true,
@@ -32384,11 +31032,7 @@
                         },
                         "limitCompliance": {
                           "type": "string",
-                          "enum": [
-                            "ok",
-                            "over_limit",
-                            "grace_over_limit"
-                          ]
+                          "enum": ["ok", "over_limit", "grace_over_limit"]
                         },
                         "stripeSubscriptionId": {
                           "type": "string",
@@ -32618,10 +31262,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "subscription",
-                    "plan"
-                  ],
+                  "required": ["subscription", "plan"],
                   "properties": {
                     "subscription": {
                       "nullable": true,
@@ -32694,11 +31335,7 @@
                         },
                         "limitCompliance": {
                           "type": "string",
-                          "enum": [
-                            "ok",
-                            "over_limit",
-                            "grace_over_limit"
-                          ]
+                          "enum": ["ok", "over_limit", "grace_over_limit"]
                         },
                         "stripeSubscriptionId": {
                           "type": "string",
@@ -32918,25 +31555,15 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "plan",
-                  "interval"
-                ],
+                "required": ["plan", "interval"],
                 "properties": {
                   "plan": {
                     "type": "string",
-                    "enum": [
-                      "solo",
-                      "business",
-                      "growth"
-                    ]
+                    "enum": ["solo", "business", "growth"]
                   },
                   "interval": {
                     "type": "string",
-                    "enum": [
-                      "month",
-                      "year"
-                    ]
+                    "enum": ["month", "year"]
                   }
                 }
               }
@@ -32975,65 +31602,37 @@
                     },
                     "changeKind": {
                       "type": "string",
-                      "enum": [
-                        "upgrade",
-                        "downgrade",
-                        "interval_switch"
-                      ]
+                      "enum": ["upgrade", "downgrade", "interval_switch"]
                     },
                     "timing": {
                       "type": "string",
-                      "enum": [
-                        "immediate",
-                        "period_end"
-                      ]
+                      "enum": ["immediate", "period_end"]
                     },
                     "current": {
                       "type": "object",
-                      "required": [
-                        "plan",
-                        "interval"
-                      ],
+                      "required": ["plan", "interval"],
                       "properties": {
                         "plan": {
                           "type": "string",
-                          "enum": [
-                            "solo",
-                            "business",
-                            "growth"
-                          ]
+                          "enum": ["solo", "business", "growth"]
                         },
                         "interval": {
                           "type": "string",
-                          "enum": [
-                            "month",
-                            "year"
-                          ]
+                          "enum": ["month", "year"]
                         }
                       }
                     },
                     "target": {
                       "type": "object",
-                      "required": [
-                        "plan",
-                        "interval",
-                        "planVersion"
-                      ],
+                      "required": ["plan", "interval", "planVersion"],
                       "properties": {
                         "plan": {
                           "type": "string",
-                          "enum": [
-                            "solo",
-                            "business",
-                            "growth"
-                          ]
+                          "enum": ["solo", "business", "growth"]
                         },
                         "interval": {
                           "type": "string",
-                          "enum": [
-                            "month",
-                            "year"
-                          ]
+                          "enum": ["month", "year"]
                         },
                         "planVersion": {
                           "type": "string"
@@ -33050,16 +31649,10 @@
                       "type": "integer"
                     },
                     "nextAmountMinor": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ]
+                      "type": ["integer", "null"]
                     },
                     "nextPeriodEnd": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "format": "date-time"
                     },
                     "taxMinor": {
@@ -33076,11 +31669,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "limitKey",
-                          "currentUsage",
-                          "targetLimit"
-                        ],
+                        "required": ["limitKey", "currentUsage", "targetLimit"],
                         "properties": {
                           "limitKey": {
                             "type": "string"
@@ -33279,9 +31868,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "previewToken"
-                ],
+                "required": ["previewToken"],
                 "properties": {
                   "previewToken": {
                     "type": "string"
@@ -33309,44 +31896,27 @@
                   "properties": {
                     "outcome": {
                       "type": "string",
-                      "enum": [
-                        "applied_immediate",
-                        "scheduled",
-                        "pending_payment"
-                      ]
+                      "enum": ["applied_immediate", "scheduled", "pending_payment"]
                     },
                     "changeKind": {
                       "type": "string",
-                      "enum": [
-                        "upgrade",
-                        "downgrade",
-                        "interval_switch"
-                      ]
+                      "enum": ["upgrade", "downgrade", "interval_switch"]
                     },
                     "timing": {
                       "type": "string",
-                      "enum": [
-                        "immediate",
-                        "period_end"
-                      ]
+                      "enum": ["immediate", "period_end"]
                     },
                     "effectiveAt": {
                       "type": "string",
                       "format": "date-time"
                     },
                     "scheduledChangeId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "format": "uuid"
                     },
                     "subscription": {
                       "type": "object",
-                      "required": [
-                        "subscription",
-                        "plan"
-                      ],
+                      "required": ["subscription", "plan"],
                       "properties": {
                         "subscription": {
                           "nullable": true,
@@ -33419,11 +31989,7 @@
                             },
                             "limitCompliance": {
                               "type": "string",
-                              "enum": [
-                                "ok",
-                                "over_limit",
-                                "grace_over_limit"
-                              ]
+                              "enum": ["ok", "over_limit", "grace_over_limit"]
                             },
                             "stripeSubscriptionId": {
                               "type": "string",
@@ -34179,38 +32745,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "kind",
-                  "reason"
-                ],
+                "required": ["kind", "reason"],
                 "properties": {
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "grant",
-                      "deny",
-                      "limit",
-                      "billing_bypass",
-                      "suspension"
-                    ]
+                    "enum": ["grant", "deny", "limit", "billing_bypass", "suspension"]
                   },
                   "featureKey": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "limitKey": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "limitValue": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
+                    "type": ["integer", "null"],
                     "minimum": 0
                   },
                   "reason": {
@@ -34222,10 +32770,7 @@
                     "format": "date-time"
                   },
                   "endsAt": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "date-time"
                   },
                   "confirmation": {
@@ -34427,9 +32972,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "reason"
-                ],
+                "required": ["reason"],
                 "properties": {
                   "reason": {
                     "type": "string",
@@ -34791,10 +33334,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "reason",
-                  "confirmation"
-                ],
+                "required": ["reason", "confirmation"],
                 "properties": {
                   "reason": {
                     "type": "string",
@@ -34802,9 +33342,7 @@
                   },
                   "confirmation": {
                     "type": "string",
-                    "enum": [
-                      "CONFIRM"
-                    ]
+                    "enum": ["CONFIRM"]
                   }
                 }
               }
@@ -35002,9 +33540,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notifications"
-                  ],
+                  "required": ["notifications"],
                   "properties": {
                     "notifications": {
                       "type": "array",
@@ -35203,9 +33739,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notifications"
-                  ],
+                  "required": ["notifications"],
                   "properties": {
                     "notifications": {
                       "type": "array",
@@ -35412,9 +33946,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "notification"
-                  ],
+                  "required": ["notification"],
                   "properties": {
                     "notification": {
                       "$ref": "#/components/schemas/Notification"
@@ -35608,10 +34140,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "key",
-                  "bodyRegion"
-                ],
+                "required": ["key", "bodyRegion"],
                 "properties": {
                   "key": {
                     "type": "string",
@@ -36022,10 +34551,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "conversations",
-                    "nextCursor"
-                  ],
+                  "required": ["conversations", "nextCursor"],
                   "properties": {
                     "conversations": {
                       "type": "array",
@@ -36223,19 +34749,14 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "customerId"
-                ],
+                "required": ["customerId"],
                 "properties": {
                   "customerId": {
                     "type": "string",
                     "format": "uuid"
                   },
                   "bookingId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   }
                 }
@@ -36258,9 +34779,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "conversation"
-                  ],
+                  "required": ["conversation"],
                   "properties": {
                     "conversation": {
                       "$ref": "#/components/schemas/Conversation"
@@ -36456,9 +34975,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "messages"
-                  ],
+                  "required": ["messages"],
                   "properties": {
                     "messages": {
                       "type": "array",
@@ -36662,9 +35179,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "body"
-                ],
+                "required": ["body"],
                 "properties": {
                   "body": {
                     "type": "string",
@@ -36690,9 +35205,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
+                  "required": ["message"],
                   "properties": {
                     "message": {
                       "$ref": "#/components/schemas/ConversationMessage"
@@ -36878,10 +35391,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "customerIds",
-                  "body"
-                ],
+                "required": ["customerIds", "body"],
                 "properties": {
                   "customerIds": {
                     "type": "array",
@@ -36896,10 +35406,7 @@
                     "minLength": 1
                   },
                   "bookingId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid"
                   }
                 }
@@ -37136,9 +35643,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "dashboard"
-                  ],
+                  "required": ["dashboard"],
                   "properties": {
                     "dashboard": {
                       "$ref": "#/components/schemas/Dashboard"
@@ -37332,10 +35837,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "customers",
-                "bookings"
-              ],
+              "enum": ["customers", "bookings"],
               "default": "customers"
             }
           },
@@ -37364,10 +35866,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "export",
-                    "downloadUrl"
-                  ],
+                  "required": ["export", "downloadUrl"],
                   "properties": {
                     "export": {
                       "$ref": "#/components/schemas/ExportRequest"
@@ -37777,10 +36276,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "contentType",
-                  "sizeBytes"
-                ],
+                "required": ["contentType", "sizeBytes"],
                 "properties": {
                   "contentType": {
                     "type": "string",
@@ -37793,12 +36289,7 @@
                   },
                   "ownerType": {
                     "type": "string",
-                    "enum": [
-                      "customer",
-                      "booking",
-                      "linked_record",
-                      "business"
-                    ]
+                    "enum": ["customer", "booking", "linked_record", "business"]
                   },
                   "ownerId": {
                     "type": "string",
@@ -37824,10 +36315,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "file",
-                    "uploadUrl"
-                  ],
+                  "required": ["file", "uploadUrl"],
                   "properties": {
                     "file": {
                       "$ref": "#/components/schemas/File"
@@ -38027,9 +36515,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "checksum"
-                ],
+                "required": ["checksum"],
                 "properties": {
                   "checksum": {
                     "type": "string",
@@ -38048,9 +36534,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "file"
-                  ],
+                  "required": ["file"],
                   "properties": {
                     "file": {
                       "$ref": "#/components/schemas/File"
@@ -38255,9 +36739,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "file"
-                  ],
+                  "required": ["file"],
                   "properties": {
                     "file": {
                       "$ref": "#/components/schemas/File"
@@ -38462,11 +36944,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "downloadUrl",
-                    "expiresInSeconds",
-                    "expiresAt"
-                  ],
+                  "required": ["downloadUrl", "expiresInSeconds", "expiresAt"],
                   "properties": {
                     "downloadUrl": {
                       "type": "string",
@@ -38670,14 +37148,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "cancellation",
-                "terms",
-                "privacy",
-                "consent_text",
-                "package_terms",
-                "dpa"
-              ]
+              "enum": ["cancellation", "terms", "privacy", "consent_text", "package_terms", "dpa"]
             }
           },
           {
@@ -38686,11 +37157,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "draft",
-                "published",
-                "superseded"
-              ]
+              "enum": ["draft", "published", "superseded"]
             }
           }
         ],
@@ -38701,9 +37168,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "documents"
-                  ],
+                  "required": ["documents"],
                   "properties": {
                     "documents": {
                       "type": "array",
@@ -38899,9 +37364,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -38915,16 +37378,10 @@
                     ]
                   },
                   "content": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "objectKey": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": ["string", "null"]
                   },
                   "effectiveAt": {
                     "type": "string",
@@ -38954,9 +37411,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "document"
-                  ],
+                  "required": ["document"],
                   "properties": {
                     "document": {
                       "$ref": "#/components/schemas/PolicyDocument"
@@ -39142,14 +37597,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "cancellation",
-                "terms",
-                "privacy",
-                "consent_text",
-                "package_terms",
-                "dpa"
-              ]
+              "enum": ["cancellation", "terms", "privacy", "consent_text", "package_terms", "dpa"]
             }
           }
         ],
@@ -39160,9 +37608,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "document"
-                  ],
+                  "required": ["document"],
                   "properties": {
                     "document": {
                       "oneOf": [
@@ -39365,11 +37811,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "seedVersion",
-                    "published",
-                    "skipped"
-                  ],
+                  "required": ["seedVersion", "published", "skipped"],
                   "properties": {
                     "seedVersion": {
                       "type": "string"
@@ -39384,13 +37826,7 @@
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "enum": [
-                          "terms",
-                          "privacy",
-                          "cancellation",
-                          "package_terms",
-                          "dpa"
-                        ]
+                        "enum": ["terms", "privacy", "cancellation", "package_terms", "dpa"]
                       }
                     }
                   }
@@ -39592,9 +38028,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "document"
-                  ],
+                  "required": ["document"],
                   "properties": {
                     "document": {
                       "$ref": "#/components/schemas/PolicyDocument"
@@ -39815,9 +38249,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "document"
-                  ],
+                  "required": ["document"],
                   "properties": {
                     "document": {
                       "$ref": "#/components/schemas/PolicyDocument"
@@ -40012,9 +38444,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "policyDocumentId"
-                ],
+                "required": ["policyDocumentId"],
                 "properties": {
                   "policyDocumentId": {
                     "type": "string",
@@ -40040,10 +38470,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "acceptance",
-                    "created"
-                  ],
+                  "required": ["acceptance", "created"],
                   "properties": {
                     "acceptance": {
                       "$ref": "#/components/schemas/PolicyAcceptance"
@@ -40067,10 +38494,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "acceptance",
-                    "created"
-                  ],
+                  "required": ["acceptance", "created"],
                   "properties": {
                     "acceptance": {
                       "$ref": "#/components/schemas/PolicyAcceptance"
@@ -40270,9 +38694,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "acceptances"
-                  ],
+                  "required": ["acceptances"],
                   "properties": {
                     "acceptances": {
                       "type": "array",
@@ -40489,9 +38911,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "events"
-                  ],
+                  "required": ["events"],
                   "properties": {
                     "events": {
                       "type": "array",
@@ -40708,9 +39128,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "events"
-                  ],
+                  "required": ["events"],
                   "properties": {
                     "events": {
                       "type": "array",
@@ -40907,9 +39325,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "eventIds"
-                ],
+                "required": ["eventIds"],
                 "properties": {
                   "eventIds": {
                     "type": "array",
@@ -41341,9 +39757,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "jobs"
-                  ],
+                  "required": ["jobs"],
                   "properties": {
                     "jobs": {
                       "type": "array",
@@ -41741,10 +40155,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "from",
-                  "to"
-                ],
+                "required": ["from", "to"],
                 "properties": {
                   "from": {
                     "type": "string",
@@ -42149,11 +40560,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "requested",
-                    "softDeleted",
-                    "skipped"
-                  ],
+                  "required": ["requested", "softDeleted", "skipped"],
                   "properties": {
                     "requested": {
                       "type": "integer",

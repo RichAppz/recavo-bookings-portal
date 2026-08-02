@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,9 +19,11 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (status === "authenticated") {
-    void navigate({ to: "/" });
-  }
+  useEffect(() => {
+    if (status === "authenticated") {
+      void navigate({ to: "/" });
+    }
+  }, [status, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

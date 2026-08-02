@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
-import { api, queryKeys } from "@/lib/api";
+import { api, ApiError, queryKeys } from "@/lib/api";
 import type {
   Business,
   BusinessConfiguration,
@@ -19,6 +19,7 @@ import type {
 } from "@/lib/api/types";
 import { permissionsForRoles, type PermissionKey } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth/auth-store";
+import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 
 const BUSINESS_KEY = "recavo.activeBusinessId";
 const LOCATION_KEY = "recavo.activeLocationId";
@@ -83,7 +84,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const businesses = businessesQuery.data ?? [];
+  const businesses = useMemo(() => businessesQuery.data ?? [], [businessesQuery.data]);
 
   // Resolve / re-validate selected business against memberships.
   useEffect(() => {
@@ -96,9 +97,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [businesses, businessId]);
 
-  const activeBusinessId = businessId && businesses.some((b) => b.id === businessId)
-    ? businessId
-    : (businesses[0]?.id ?? null);
+  const activeBusinessId =
+    businessId && businesses.some((b) => b.id === businessId)
+      ? businessId
+      : (businesses[0]?.id ?? null);
 
   const summary = businesses.find((b) => b.id === activeBusinessId) ?? null;
 
@@ -106,9 +108,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     queryKey: queryKeys.business(activeBusinessId ?? ""),
     enabled: Boolean(activeBusinessId),
     queryFn: async () => {
-      const res = await api.get<{ business: Business }>(
-        `/api/v1/businesses/${activeBusinessId}`,
-      );
+      const res = await api.get<{ business: Business }>(`/api/v1/businesses/${activeBusinessId}`);
       return res.data.business;
     },
   });
@@ -146,7 +146,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const locations = locationsQuery.data ?? [];
+  const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
 
   useEffect(() => {
     if (currentLocationId === "all") return;
@@ -156,7 +156,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, currentLocationId]);
 
-  const roleKeys = summary?.roleKeys ?? [];
+  const roleKeys = useMemo(() => summary?.roleKeys ?? [], [summary]);
   const permissions = useMemo(() => permissionsForRoles(roleKeys), [roleKeys]);
 
   const can = useCallback(
@@ -190,9 +190,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // Prefer the current user's membership when available.
   const membership =
-    membershipsQuery.data?.find((m) => m.status === "active") ??
-    membershipsQuery.data?.[0] ??
-    null;
+    membershipsQuery.data?.find((m) => m.status === "active") ?? membershipsQuery.data?.[0] ?? null;
 
   const value = useMemo<TenantContextValue>(
     () => ({
@@ -235,17 +233,30 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
+  if (status === "authenticated" && businessesQuery.isError) {
+    const err = businessesQuery.error;
+    const detail =
+      err instanceof ApiError
+        ? err.detail || err.title
+        : "The portal couldn't reach the API. Check your connection or the API URL.";
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="max-w-md space-y-2 text-center">
-          <h1 className="text-lg font-semibold">No business membership</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account is signed in but is not a member of any business yet.
-          </p>
+        <div className="max-w-md space-y-3 text-center">
+          <h1 className="text-lg font-semibold">Couldn't load your businesses</h1>
+          <p className="text-sm text-muted-foreground">{detail}</p>
+          <button
+            onClick={() => void businessesQuery.refetch()}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );
+  }
+
+  if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
+    return <CreateFirstBusiness />;
   }
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
@@ -291,9 +302,7 @@ export function RequirePermission({
     return (
       <div className="rounded-xl border bg-card p-6 text-center">
         <h2 className="text-base font-semibold">Permission denied</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You do not have access to this area.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">You do not have access to this area.</p>
       </div>
     );
   }

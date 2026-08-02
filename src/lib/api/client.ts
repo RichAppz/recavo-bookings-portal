@@ -36,6 +36,11 @@ export function setMfaHandler(handler: ((error: ApiError) => Promise<boolean>) |
 }
 
 export function getApiBaseUrl(): string {
+  // In the browser during dev, use a relative base so requests hit the Vite
+  // dev proxy (same-origin "/api/*") and avoid the API's missing CORS headers.
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    return "";
+  }
   const raw = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (!raw) {
     // Dev-friendly default; production must set VITE_API_BASE_URL.
@@ -116,8 +121,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     });
   }
 
-  const requestId =
-    res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
+  const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
   const parsed = await parseBody(res);
 
   if (!res.ok) {
@@ -149,11 +153,8 @@ export const api = {
     body?: unknown,
     opts?: Omit<RequestOptions, "method" | "path" | "body">,
   ) => request<T>({ ...opts, method: "POST", path, body }),
-  put: <T>(
-    path: string,
-    body?: unknown,
-    opts?: Omit<RequestOptions, "method" | "path" | "body">,
-  ) => request<T>({ ...opts, method: "PUT", path, body }),
+  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
+    request<T>({ ...opts, method: "PUT", path, body }),
   patch: <T>(
     path: string,
     body?: unknown,
