@@ -1,16 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { ArrowLeft, Check, MapPin } from "lucide-react";
+import { ArrowLeft, Check, Clock, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Wordmark } from "@/components/Wordmark";
-import { api, newIdempotencyKey, toastApiError } from "@/lib/api";
-import type { AvailabilitySlot, Booking, CatalogueService, Location } from "@/lib/api/types";
+import { ApiError } from "@/lib/api";
+import {
+  useConfirmPublicBooking,
+  useCreatePublicBookingHold,
+  usePublicAvailability,
+  usePublicLocations,
+  usePublicServices,
+} from "@/lib/api/hooks";
+import type { AvailabilitySlot, Booking } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { toast } from "sonner";
 
 const searchSchema = z.object({
   businessId: z.string().optional(),
@@ -36,7 +44,8 @@ export const Route = createFileRoute("/book")({
   component: BookingJourney,
 });
 
-const STEPS = ["Service", "Location", "Time", "Details", "Confirmed"];
+const STEPS = ["Service", "Location", "Time", "Details", "Review", "Confirmed"];
+const HOLD_WARNING_SECONDS = 60;
 
 function addDays(base: Date, days: number) {
   const d = new Date(base);
@@ -63,6 +72,45 @@ function BookingJourney() {
   return <BookingFlow businessId={businessId} />;
 }
 
+/** Live mm:ss countdown to an ISO instant; fires `onExpire` once when it lapses. */
+function useCountdown(targetIso: string | null, onExpire: () => void) {
+  const [msLeft, setMsLeft] = useState<number | null>(
+    targetIso ? new Date(targetIso).getTime() - Date.now() : null,
+  );
+  const expiredRef = useRef(false);
+
+  useEffect(() => {
+    expiredRef.current = false;
+    if (!targetIso) {
+      setMsLeft(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = new Date(targetIso).getTime() - Date.now();
+      setMsLeft(remaining);
+      if (remaining <= 0 && !expiredRef.current) {
+        expiredRef.current = true;
+        onExpire();
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetIso]);
+
+  return msLeft;
+}
+
+function formatCountdown(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+type Hold = { booking: Booking; holdToken: string };
+
 function BookingFlow({ businessId }: { businessId: string }) {
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState<string | null>(null);
@@ -74,29 +122,13 @@ function BookingFlow({ businessId }: { businessId: string }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
 
-  const services = useQuery({
-    queryKey: ["public", "services", businessId],
-    queryFn: async () => {
-      const res = await api.get<{ services: CatalogueService[] }>(
-        `/api/v1/public/businesses/${businessId}/services`,
-        { public: true },
-      );
-      return res.data.services.filter((s) => s.active);
-    },
-  });
-
-  const locations = useQuery({
-    queryKey: ["public", "locations", businessId],
-    queryFn: async () => {
-      const res = await api.get<{ locations: Location[] }>(
-        `/api/v1/public/businesses/${businessId}/locations`,
-        { public: true },
-      );
-      return res.data.locations.filter((l) => l.active);
-    },
-  });
+  const services = usePublicServices(businessId);
+  const locations = usePublicLocations(businessId);
 
   const service = services.data?.find((s) => s.id === serviceId) ?? null;
   const location = locations.data?.find((l) => l.id === locationId) ?? null;
@@ -104,24 +136,12 @@ function BookingFlow({ businessId }: { businessId: string }) {
   const dayStart = new Date(`${date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-  const availability = useQuery({
-    queryKey: ["public", "availability", businessId, serviceId, locationId, date],
-    enabled: Boolean(serviceId && locationId && step === 2),
-    queryFn: async () => {
-      const res = await api.get<{ slots: AvailabilitySlot[] }>(
-        `/api/v1/public/businesses/${businessId}/availability`,
-        {
-          public: true,
-          query: {
-            serviceId: serviceId!,
-            locationId: locationId!,
-            from: dayStart.toISOString(),
-            to: dayEnd.toISOString(),
-          },
-        },
-      );
-      return res.data.slots;
-    },
+  const availability = usePublicAvailability(businessId, {
+    serviceId: serviceId ?? undefined,
+    locationId: locationId ?? undefined,
+    from: dayStart.toISOString(),
+    to: dayEnd.toISOString(),
+    enabled: step === 2,
   });
 
   const slots = useMemo(
@@ -129,40 +149,101 @@ function BookingFlow({ businessId }: { businessId: string }) {
     [availability.data],
   );
 
-  const bookMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedSlot) throw new Error("No slot selected");
-      const holdRes = await api.post<{ booking: Booking; holdToken: string }>(
-        `/api/v1/public/businesses/${businessId}/booking-holds`,
-        {
-          slotToken: selectedSlot.slotToken,
-          firstName,
-          lastName: lastName || null,
-          email: email || null,
-          phone: phone || null,
-          notesCustomer: notes || null,
+  const reselect = (message: string) => {
+    toast.error(message);
+    setHold(null);
+    setSelectedSlot(null);
+    setStep(2);
+    void availability.refetch();
+  };
+
+  const holdMutation = useCreatePublicBookingHold(businessId);
+  const confirmMutation = useConfirmPublicBooking(businessId);
+
+  const msLeft = useCountdown(hold?.booking.holdExpiresAt ?? null, () =>
+    reselect("Your held time has expired — please choose a new time."),
+  );
+
+  const submitDetails = () => {
+    if (!selectedSlot) return;
+    setFieldErrors({});
+    holdMutation.mutate(
+      {
+        slotToken: selectedSlot.slotToken,
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || null,
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        notesCustomer: notes.trim() || null,
+        marketingConsent,
+      },
+      {
+        onSuccess: ({ booking, holdToken }) => {
+          setHold({ booking, holdToken });
+          setStep(4);
         },
-        { public: true, idempotencyKey: newIdempotencyKey() },
-      );
-      const confirmRes = await api.post<{ booking: Booking }>(
-        `/api/v1/public/businesses/${businessId}/bookings/confirm`,
-        { bookingId: holdRes.data.booking.id, holdToken: holdRes.data.holdToken },
-        { public: true, idempotencyKey: newIdempotencyKey() },
-      );
-      return confirmRes.data.booking;
-    },
-    onSuccess: (booking) => {
-      setConfirmedBooking(booking);
-      setStep(4);
-    },
-    onError: (err) => toastApiError(err),
-  });
+        onError: (err) => {
+          if (err instanceof ApiError) {
+            if (err.code === "BOOKING_CONFLICT" || err.isConflict) {
+              reselect("That time was just taken — please choose another.");
+              return;
+            }
+            if (err.fieldErrors.length > 0) {
+              const next: Record<string, string> = {};
+              for (const fe of err.fieldErrors) {
+                if (fe.field) next[fe.field] = fe.message || fe.code || "Invalid";
+              }
+              setFieldErrors(next);
+              toast.error(err.title || "Please check your details");
+              return;
+            }
+          }
+          toast.error(err instanceof ApiError ? err.title : "Something went wrong");
+        },
+      },
+    );
+  };
+
+  const submitConfirm = () => {
+    if (!hold) return;
+    confirmMutation.mutate(
+      { bookingId: hold.booking.id, holdToken: hold.holdToken },
+      {
+        onSuccess: (booking) => {
+          setConfirmedBooking(booking);
+          setStep(5);
+        },
+        onError: (err) => {
+          if (err instanceof ApiError && (err.code === "BOOKING_CONFLICT" || err.isConflict)) {
+            reselect("That time is no longer available — please choose another.");
+            return;
+          }
+          toast.error(err instanceof ApiError ? err.title : "Something went wrong");
+        },
+      },
+    );
+  };
+
+  // No public business/profile endpoint yet — brand from the selected/first location name.
+  const studioName = location?.name ?? locations.data?.[0]?.name ?? null;
+  const needsPayment =
+    (hold?.booking.priceMinor ?? confirmedBooking?.priceMinor ?? selectedSlot?.priceMinor ?? 0) > 0;
+  const paymentPending =
+    confirmedBooking?.status === "awaiting_payment" || hold?.booking.status === "awaiting_payment";
 
   return (
     <main className="min-h-screen bg-background">
       <header className="border-b bg-nav text-nav-foreground">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
-          <Wordmark />
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
+          <div className="min-w-0">
+            {studioName ? (
+              <p className="truncate text-base font-semibold tracking-tight">{studioName}</p>
+            ) : (
+              <Wordmark />
+            )}
+            <p className="text-xs text-nav-foreground/70">Online booking</p>
+          </div>
+          <Wordmark compact />
         </div>
       </header>
 
@@ -191,7 +272,9 @@ function BookingFlow({ businessId }: { businessId: string }) {
 
         {step === 0 ? (
           <section className="space-y-3">
-            <h1 className="text-2xl font-semibold tracking-tight">Choose a session</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {studioName ? `Book at ${studioName}` : "Choose a session"}
+            </h1>
             {services.isLoading ? (
               <p className="text-sm text-muted-foreground">Loading services…</p>
             ) : services.isError ? (
@@ -312,21 +395,29 @@ function BookingFlow({ businessId }: { businessId: string }) {
                 No availability on this date. Try another day.
               </p>
             ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {slots.map((s) => (
-                  <button
-                    key={`${s.start}-${s.staffId}`}
-                    onClick={() => setSelectedSlot(s)}
-                    className={`rounded-xl border py-2.5 text-sm tabular-nums ${
-                      s.start === selectedSlot?.start && s.staffId === selectedSlot?.staffId
-                        ? "border-primary bg-primary-soft text-primary"
-                        : "hover:bg-secondary"
-                    }`}
-                  >
-                    {formatInTz(s.start, s.displayTimezone, { hour: "2-digit", minute: "2-digit" })}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {slots.map((s) => (
+                    <button
+                      key={`${s.start}-${s.staffId}`}
+                      onClick={() => setSelectedSlot(s)}
+                      className={`rounded-xl border py-2.5 text-sm tabular-nums ${
+                        s.start === selectedSlot?.start && s.staffId === selectedSlot?.staffId
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "hover:bg-secondary"
+                      }`}
+                    >
+                      {formatInTz(s.start, s.displayTimezone, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Times shown in {slots[0]?.displayTimezone}.
+                </p>
+              </>
             )}
             <Button className="w-full" disabled={!selectedSlot} onClick={() => setStep(3)}>
               Continue
@@ -346,7 +437,11 @@ function BookingFlow({ businessId }: { businessId: string }) {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Jamie"
+                  aria-invalid={Boolean(fieldErrors.firstName)}
                 />
+                {fieldErrors.firstName ? (
+                  <p className="text-xs text-destructive">{fieldErrors.firstName}</p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="b-lname">Last name</Label>
@@ -355,7 +450,11 @@ function BookingFlow({ businessId }: { businessId: string }) {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Ellis"
+                  aria-invalid={Boolean(fieldErrors.lastName)}
                 />
+                {fieldErrors.lastName ? (
+                  <p className="text-xs text-destructive">{fieldErrors.lastName}</p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="b-email">Email</Label>
@@ -365,7 +464,11 @@ function BookingFlow({ businessId }: { businessId: string }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="jamie@example.co.uk"
+                  aria-invalid={Boolean(fieldErrors.email)}
                 />
+                {fieldErrors.email ? (
+                  <p className="text-xs text-destructive">{fieldErrors.email}</p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="b-phone">Mobile</Label>
@@ -374,7 +477,11 @@ function BookingFlow({ businessId }: { businessId: string }) {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="07700 900000"
+                  aria-invalid={Boolean(fieldErrors.phone)}
                 />
+                {fieldErrors.phone ? (
+                  <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="b-notes">Anything we should know?</Label>
@@ -385,6 +492,16 @@ function BookingFlow({ businessId }: { businessId: string }) {
                   placeholder="Optional"
                 />
               </div>
+              <label className="flex items-start gap-2.5 pt-1 text-sm">
+                <Checkbox
+                  checked={marketingConsent}
+                  onCheckedChange={(v) => setMarketingConsent(v === true)}
+                  className="mt-0.5"
+                />
+                <span className="text-muted-foreground">
+                  Keep me updated with offers and news from this studio. You can opt out anytime.
+                </span>
+              </label>
             </div>
             {service && selectedSlot && location ? (
               <Summary
@@ -397,23 +514,90 @@ function BookingFlow({ businessId }: { businessId: string }) {
             ) : null}
             <Button
               className="w-full"
-              disabled={!firstName.trim() || bookMutation.isPending}
-              onClick={() => bookMutation.mutate()}
+              disabled={!firstName.trim() || holdMutation.isPending}
+              onClick={submitDetails}
             >
-              {bookMutation.isPending ? "Confirming…" : "Confirm booking"}
+              {holdMutation.isPending ? "Holding your slot…" : "Continue"}
             </Button>
           </section>
         ) : null}
 
-        {step === 4 && confirmedBooking ? (
+        {step === 4 && hold ? (
+          <section className="space-y-4">
+            <button
+              onClick={() => reselect("Your hold was released — please choose a new time.")}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" /> Change time
+            </button>
+            <h1 className="text-2xl font-semibold tracking-tight">Review &amp; confirm</h1>
+            {msLeft !== null ? (
+              <div
+                className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+                  msLeft < HOLD_WARNING_SECONDS * 1000
+                    ? "border-destructive/40 bg-destructive-soft text-destructive"
+                    : "border-warning/40 bg-warning-soft text-warning-foreground"
+                }`}
+              >
+                <Clock className="size-4 shrink-0" />
+                We're holding this time for you — complete your booking within{" "}
+                <span className="font-semibold tabular-nums">{formatCountdown(msLeft)}</span>.
+              </div>
+            ) : null}
+            {service && location ? (
+              <Summary
+                serviceName={service.name}
+                locationName={location.name}
+                start={hold.booking.start}
+                timezone={hold.booking.timezone}
+                price={formatMoney(hold.booking.priceMinor, hold.booking.currency)}
+              />
+            ) : null}
+            {needsPayment ? (
+              <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm">
+                {paymentPending ? (
+                  <p>
+                    Payment is required before this booking is fully confirmed. Online card checkout
+                    isn't available on this booking link yet — the studio will contact you to take
+                    payment, or you can pay at the venue.
+                  </p>
+                ) : (
+                  <p>
+                    This session costs {formatMoney(hold.booking.priceMinor, hold.booking.currency)}
+                    . Confirm to reserve your time — payment is arranged with the studio (online
+                    pay-before-confirm isn't enabled for this business).
+                  </p>
+                )}
+              </div>
+            ) : null}
+            <Button
+              className="w-full"
+              disabled={confirmMutation.isPending || (msLeft ?? 0) <= 0}
+              onClick={submitConfirm}
+            >
+              {confirmMutation.isPending
+                ? "Confirming…"
+                : needsPayment
+                  ? "Reserve & continue"
+                  : "Confirm booking"}
+            </Button>
+          </section>
+        ) : null}
+
+        {step === 5 && confirmedBooking ? (
           <section className="space-y-4 text-center">
             <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
               <Check className="size-7" />
             </span>
-            <h1 className="text-2xl font-semibold tracking-tight">You're booked in</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {confirmedBooking.status === "awaiting_payment"
+                ? "Almost there — payment needed"
+                : "You're booked in"}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              We've reserved your session. Bring along anything your trainer asked for and arrive a
-              few minutes early.
+              {confirmedBooking.status === "awaiting_payment"
+                ? "Your slot is reserved, but payment is still required. The studio will follow up to take payment — online card capture isn't available on this public booking link yet."
+                : "We've reserved your session. Bring along anything your trainer asked for and arrive a few minutes early."}
             </p>
             {service && location ? (
               <Summary
@@ -423,6 +607,14 @@ function BookingFlow({ businessId }: { businessId: string }) {
                 timezone={confirmedBooking.timezone}
                 price={formatMoney(confirmedBooking.priceMinor, confirmedBooking.currency)}
               />
+            ) : null}
+            {confirmedBooking.reference ? (
+              <p className="text-xs text-muted-foreground">
+                Booking reference{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {confirmedBooking.reference}
+                </span>
+              </p>
             ) : null}
           </section>
         ) : null}

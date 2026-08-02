@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
+  ApiError,
   createIdempotentMutationFn,
   newIdempotencyKey,
   queryKeys,
+  request,
   toastApiError,
 } from "@/lib/api";
 import type {
@@ -17,11 +19,15 @@ import type {
   Customer,
   CustomerNote,
   Dashboard,
+  Entitlement,
   EntitlementView,
+  FileResource,
   Invitation,
+  LinkedRecord,
   Location,
   Notification,
   Package,
+  PackagePurchase,
   Payment,
   PublicCataloguePlan,
   Staff,
@@ -700,8 +706,31 @@ export function useEntitlementLedger(entitlementId: string | undefined) {
         entries: CreditLedgerEntry[];
         nextCursor?: string | null;
       }>(`/api/v1/businesses/${businessId}/entitlements/${entitlementId}/ledger`);
-      return res.data;
+      return {
+        ...res.data,
+        entries: [...res.data.entries].sort((a, b) => b.seq - a.seq),
+      };
     },
+  });
+}
+
+/** Runs the credit-expiry sweep for this business (`POST …/credits/expire`). */
+export function useExpireCredits() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ expired: string[] }>(
+        `/api/v1/businesses/${businessId}/credits/expire`,
+        {},
+      );
+      return { expired: res.data.expired, requestId: res.requestId };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "entitlements"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.creditLedger(businessId) });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
@@ -722,6 +751,39 @@ export function useStartPackagePurchase() {
         return res.data;
       },
     ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Directly issues a package purchase + entitlement for an already-verified
+ * payment. `paymentRef` and `providerEventId` are both required by the API.
+ */
+export function useIssuePackagePurchase() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: {
+          customerId: string;
+          packageId: string;
+          paymentRef: string;
+          providerEventId: string;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ purchase: PackagePurchase; entitlement: Entitlement }>(
+          `/api/v1/businesses/${businessId}/package-purchases`,
+          vars,
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "entitlements"] });
+    },
     onError: (err) => toastApiError(err),
   });
 }
@@ -865,39 +927,22 @@ export function useCancelSubscription() {
 
 /* ---------------- Files / exports / ops ---------------- */
 
+export type FileOwner = {
+  ownerType: "customer" | "booking" | "linked_record" | "business";
+  ownerId: string;
+};
+
 export function useCreateFileUploadIntent() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
       async (
-        body: {
-          contentType: string;
-          sizeBytes: number;
-          ownerType?: "customer" | "booking" | "linked_record" | "business";
-          ownerId?: string;
-        },
+        body: { contentType: string; sizeBytes: number } & Partial<FileOwner>,
         idempotencyKey: string,
       ) => {
-        const res = await api.post<{
-          file: { id: string };
-          uploadUrl?: string;
-          upload?: { url: string; headers?: Record<string, string> };
-        }>(`/api/v1/businesses/${businessId}/files`, body, { idempotencyKey });
-        return res.data;
-      },
-    ),
-    onError: (err) => toastApiError(err),
-  });
-}
-
-export function useCompleteFileUpload() {
-  const businessId = useBusinessId();
-  return useMutation({
-    mutationFn: createIdempotentMutationFn(
-      async (vars: { fileId: string }, idempotencyKey: string) => {
-        const res = await api.post(
-          `/api/v1/businesses/${businessId}/files/${vars.fileId}/complete`,
-          {},
+        const res = await api.post<{ file: FileResource; uploadUrl: string }>(
+          `/api/v1/businesses/${businessId}/files`,
+          body,
           { idempotencyKey },
         );
         return res.data;
@@ -907,31 +952,93 @@ export function useCompleteFileUpload() {
   });
 }
 
+/** `checksum` is the SHA-256 hex digest — the API rejects `complete` without it. */
+export function useCompleteFileUpload() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { fileId: string; checksum: string }, idempotencyKey: string) => {
+        const res = await api.post<{ file: FileResource }>(
+          `/api/v1/businesses/${businessId}/files/${vars.fileId}/complete`,
+          { checksum: vars.checksum },
+          { idempotencyKey },
+        );
+        return res.data.file;
+      },
+    ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Metadata for a single file; polls while malware scan is pending. */
+export function useBusinessFile(fileId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.file(businessId, fileId ?? ""),
+    enabled: Boolean(businessId && fileId),
+    queryFn: async () => {
+      const res = await api.get<{ file: FileResource }>(
+        `/api/v1/businesses/${businessId}/files/${fileId}`,
+      );
+      return res.data.file;
+    },
+    refetchInterval: (query) => (query.state.data?.scanStatus === "pending" ? 3000 : false),
+  });
+}
+
+/** Issues a short-lived signed download URL — never cache/reuse the result. */
 export function useFileDownloadUrl() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: async (fileId: string) => {
-      const res = await api.post<{ url?: string; downloadUrl?: string }>(
-        `/api/v1/businesses/${businessId}/files/${fileId}/download-url`,
-        {},
-      );
+      const res = await api.post<{
+        downloadUrl: string;
+        expiresInSeconds: number;
+        expiresAt: string;
+      }>(`/api/v1/businesses/${businessId}/files/${fileId}/download-url`, {});
       return res.data;
     },
     onError: (err) => toastApiError(err),
   });
 }
 
-/** Upload a browser File via signed intent → PUT → complete. */
+async function sha256Hex(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** PUT with upload progress via XHR (Fetch has no upload progress event). */
+function putFileWithProgress(url: string, file: File, onProgress?: (pct: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (onProgress && e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed — check your connection and try again."));
+    xhr.send(file);
+  });
+}
+
+/**
+ * Upload a browser File via signed intent → PUT (with progress) → complete
+ * (with checksum). Returns the completed `File` resource.
+ */
 export async function uploadFileViaIntent(
   businessId: string,
   file: File,
-  owner?: { ownerType: "customer" | "booking" | "linked_record" | "business"; ownerId: string },
-) {
-  const intent = await api.post<{
-    file: { id: string };
-    uploadUrl?: string;
-    upload?: { url: string; headers?: Record<string, string> };
-  }>(
+  owner?: FileOwner,
+  onProgress?: (pct: number) => void,
+): Promise<FileResource> {
+  const intent = await api.post<{ file: FileResource; uploadUrl: string }>(
     `/api/v1/businesses/${businessId}/files`,
     {
       contentType: file.type || "application/octet-stream",
@@ -941,25 +1048,15 @@ export async function uploadFileViaIntent(
     { idempotencyKey: newIdempotencyKey() },
   );
 
-  const uploadUrl = intent.data.uploadUrl ?? intent.data.upload?.url;
-  if (!uploadUrl) throw new Error("Upload URL missing from intent response");
+  await putFileWithProgress(intent.data.uploadUrl, file, onProgress);
+  const checksum = await sha256Hex(file);
 
-  const put = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      ...(intent.data.upload?.headers ?? {}),
-    },
-    body: file,
-  });
-  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-
-  await api.post(
+  const completed = await api.post<{ file: FileResource }>(
     `/api/v1/businesses/${businessId}/files/${intent.data.file.id}/complete`,
-    {},
+    { checksum },
     { idempotencyKey: newIdempotencyKey() },
   );
-  return intent.data.file;
+  return completed.data.file;
 }
 
 export function useRequestExport() {
@@ -1018,11 +1115,463 @@ export function useReplayOutbox() {
           body ?? {},
           { idempotencyKey },
         );
-        return res.data;
+        return { data: res.data, requestId: res.requestId };
       },
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "outbox"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Public booking journey (RECA-507) ---------------- */
+
+export function usePublicServices(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicServices(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ services: CatalogueService[] }>(
+        `/api/v1/public/businesses/${businessId}/services`,
+        { public: true },
+      );
+      return res.data.services.filter((s) => s.active);
+    },
+  });
+}
+
+export function usePublicLocations(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicLocations(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ locations: Location[] }>(
+        `/api/v1/public/businesses/${businessId}/locations`,
+        { public: true },
+      );
+      return res.data.locations.filter((l) => l.active);
+    },
+  });
+}
+
+/** Half-open UTC window `[from, to)`. Each slot carries a signed, expiring `slotToken`. */
+export function usePublicAvailability(
+  businessId: string | undefined,
+  filters: {
+    serviceId?: string;
+    locationId?: string;
+    from?: string;
+    to?: string;
+    enabled?: boolean;
+  },
+) {
+  const ready =
+    Boolean(businessId && filters.serviceId && filters.locationId && filters.from && filters.to) &&
+    filters.enabled !== false;
+  const query = {
+    serviceId: filters.serviceId!,
+    locationId: filters.locationId!,
+    from: filters.from!,
+    to: filters.to!,
+  };
+  return useQuery({
+    queryKey: queryKeys.publicAvailability(businessId ?? "", query),
+    enabled: ready,
+    queryFn: async () => {
+      const res = await api.get<{ slots: AvailabilitySlot[] }>(
+        `/api/v1/public/businesses/${businessId}/availability`,
+        { public: true, query },
+      );
+      return res.data.slots;
+    },
+  });
+}
+
+export function useCreatePublicBookingHold(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        body: {
+          slotToken: string;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          notesCustomer?: string | null;
+          marketingConsent?: boolean;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ booking: Booking; holdToken: string }>(
+          `/api/v1/public/businesses/${businessId}/booking-holds`,
+          body,
+          { public: true, idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+  });
+}
+
+export function useConfirmPublicBooking(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; holdToken: string }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/public/businesses/${businessId}/bookings/confirm`,
+          vars,
+          { public: true, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+  });
+}
+
+/* ---------------- Customer portal (RECA-508) ---------------- */
+
+export type PortalCustomer = {
+  id: string;
+  businessId: string;
+  firstName: string;
+  lastName: string | null;
+  emailDisplay: string | null;
+  phoneDisplay: string | null;
+  status?: "active" | "archived" | "anonymised";
+} & Record<string, unknown>;
+
+export function usePortalMe(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalMe(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ customer: PortalCustomer }>("/api/v1/portal/me", {
+        query: { businessId },
+      });
+      return res.data.customer;
+    },
+  });
+}
+
+export function usePortalBookings(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalBookings(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ bookings: Booking[] }>("/api/v1/portal/bookings", {
+        query: { businessId },
+      });
+      return res.data.bookings;
+    },
+  });
+}
+
+export function usePortalBooking(businessId: string | undefined, bookingId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalBooking(businessId ?? "", bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ booking: Booking }>(`/api/v1/portal/bookings/${bookingId}`, {
+        query: { businessId },
+      });
+      return res.data.booking;
+    },
+  });
+}
+
+export function useCancelPortalBooking(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; reason?: string | null }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/cancel`,
+          vars.reason ? { reason: vars.reason } : {},
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useReschedulePortalBooking(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<Booking, ApiError, { bookingId: string; slotToken: string }>({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; slotToken: string }, idempotencyKey: string) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/reschedule`,
+          { slotToken: vars.slotToken },
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: (_booking, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.portalBooking(businessId ?? "", vars.bookingId),
+      });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function usePortalConversation(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalConversation(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ conversation: Conversation | null }>(
+        "/api/v1/portal/conversations",
+        { query: { businessId } },
+      );
+      return res.data.conversation;
+    },
+  });
+}
+
+export function usePortalMessages(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalMessages(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ messages: ConversationMessage[] }>(
+        "/api/v1/portal/conversations/messages",
+        { query: { businessId } },
+      );
+      return res.data.messages;
+    },
+  });
+}
+
+export function useSendPortalMessage(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<
+    ConversationMessage,
+    ApiError,
+    string,
+    { previous: ConversationMessage[] | undefined; optimisticId: string }
+  >({
+    mutationFn: async (body: string) => {
+      const res = await api.post<{ message: ConversationMessage }>(
+        "/api/v1/portal/conversations/messages",
+        { body },
+        { query: { businessId } },
+      );
+      return res.data.message;
+    },
+    onMutate: async (body) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<ConversationMessage[]>(key);
+      const optimisticId = `optimistic-${newIdempotencyKey()}`;
+      const optimisticMessage: ConversationMessage = {
+        id: optimisticId,
+        businessId: businessId ?? "",
+        conversationId: previous?.[0]?.conversationId ?? "",
+        senderType: "customer",
+        senderId: "me",
+        body,
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData<ConversationMessage[]>(key, (old) => [...(old ?? []), optimisticMessage]);
+      return { previous, optimisticId };
+    },
+    onError: (err, _body, context) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      if (context) qc.setQueryData<ConversationMessage[]>(key, context.previous);
+      toastApiError(err);
+    },
+    onSuccess: (message, _body, context) => {
+      const key = queryKeys.portalMessages(businessId ?? "");
+      qc.setQueryData<ConversationMessage[]>(key, (old) =>
+        (old ?? []).map((m) => (m.id === context.optimisticId ? message : m)),
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.portalConversation(businessId ?? "") });
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalMessages(businessId ?? "") });
+    },
+  });
+}
+
+export function usePortalPayments(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalPayments(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ payments: Payment[] }>("/api/v1/portal/payments", {
+        query: { businessId },
+      });
+      return res.data.payments;
+    },
+  });
+}
+
+export function usePortalNotes(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalNotes(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ notes: CustomerNote[] }>("/api/v1/portal/notes", {
+        query: { businessId },
+      });
+      return res.data.notes;
+    },
+  });
+}
+
+export function usePortalLinkedRecords(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalLinkedRecords(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ records: LinkedRecord[] }>("/api/v1/portal/linked-records", {
+        query: { businessId },
+      });
+      return res.data.records;
+    },
+  });
+}
+
+/* ---------------- Platform admin: cross-tenant billing (RECA-509) ---------------- */
+
+export type PlatformOverride = {
+  id: string;
+  businessId?: string;
+  kind: "grant" | "deny" | "limit" | "billing_bypass" | "suspension";
+  featureKey?: string | null;
+  limitKey?: string | null;
+  limitValue?: number | null;
+  reason: string;
+  startsAt: string;
+  endsAt?: string | null;
+  revokedAt?: string | null;
+  revokedReason?: string | null;
+  createdAt?: string;
+} & Record<string, unknown>;
+
+/** Shape is intentionally loose — openapi leaves the admin billing view content unspecified. */
+export type PlatformBillingView = {
+  business?: { id: string; tradingName?: string | null; status?: string } | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  accessState?: string | null;
+  subscription?: Record<string, unknown> | null;
+  plan?: PublicCataloguePlan | null;
+  usage?: Record<string, number> | null;
+  limits?: Record<string, number> | null;
+  overrides?: PlatformOverride[];
+} & Record<string, unknown>;
+
+export function usePlatformBilling(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.platformBilling(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<PlatformBillingView>(
+        `/api/v1/platform/businesses/${businessId}/billing`,
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useReconcilePlatformBilling() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (businessId: string) => {
+      const res = await api.post<PlatformBillingView>(
+        `/api/v1/platform/businesses/${businessId}/billing/reconcile`,
+        {},
+      );
+      return { data: res.data, requestId: res.requestId };
+    },
+    onSuccess: (_result, businessId) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCancelPlatformBillingImmediate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { businessId: string; reason: string }) => {
+      const res = await api.post<PlatformBillingView>(
+        `/api/v1/platform/businesses/${vars.businessId}/billing/cancel-immediate`,
+        { reason: vars.reason, confirmation: "CONFIRM" },
+      );
+      return { data: res.data, requestId: res.requestId };
+    },
+    onSuccess: (_result, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(vars.businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function usePlatformOverrides(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.platformOverrides(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ overrides: PlatformOverride[] }>(
+        `/api/v1/platform/businesses/${businessId}/overrides`,
+      );
+      return res.data.overrides ?? [];
+    },
+  });
+}
+
+export function useCreatePlatformOverride(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      kind: PlatformOverride["kind"];
+      featureKey?: string | null;
+      limitKey?: string | null;
+      limitValue?: number | null;
+      reason: string;
+      startsAt?: string;
+      endsAt?: string | null;
+      confirmation?: string;
+    }) => {
+      const res = await api.post<{ override: PlatformOverride }>(
+        `/api/v1/platform/businesses/${businessId}/overrides`,
+        body,
+      );
+      return { override: res.data.override, requestId: res.requestId };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOverrides(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRevokePlatformOverride(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { overrideId: string; reason: string }) => {
+      const res = await request({
+        method: "DELETE",
+        path: `/api/v1/platform/businesses/${businessId}/overrides/${vars.overrideId}`,
+        body: { reason: vars.reason },
+      });
+      return { requestId: res.requestId };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.platformOverrides(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.platformBilling(businessId ?? "") });
     },
     onError: (err) => toastApiError(err),
   });

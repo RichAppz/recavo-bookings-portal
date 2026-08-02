@@ -13,6 +13,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { FileAttachments } from "@/components/FileAttachments";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   useAddCustomerNote,
   useAdjustEntitlement,
@@ -35,7 +37,6 @@ import {
   usePayments,
   useSendMessage,
   useUpdateCustomerStatus,
-  uploadFileViaIntent,
 } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName, type EntitlementView } from "@/lib/api/types";
@@ -74,7 +75,6 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [uploading, setUploading] = useState(false);
 
   const customer = useCustomer(clientId);
   const bookings = useCustomerBookings(clientId);
@@ -152,33 +152,6 @@ function ClientProfile() {
           <Button variant="outline" onClick={() => setQuick("package")}>
             <Package className="size-4" /> Sell package
           </Button>
-          <label className="inline-flex">
-            <input
-              type="file"
-              className="sr-only"
-              disabled={uploading || !tenant.businessId}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file || !tenant.businessId) return;
-                setUploading(true);
-                try {
-                  await uploadFileViaIntent(tenant.businessId, file, {
-                    ownerType: "customer",
-                    ownerId: client.id,
-                  });
-                  toast.success("File uploaded");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Upload failed");
-                } finally {
-                  setUploading(false);
-                }
-              }}
-            />
-            <Button variant="outline" asChild disabled={uploading}>
-              <span>{uploading ? "Uploading…" : "Upload file"}</span>
-            </Button>
-          </label>
           <Button onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
@@ -205,6 +178,7 @@ function ClientProfile() {
           <TabsTrigger value="packages">Packages and credits</TabsTrigger>
           <TabsTrigger value="payments">Payment history</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
@@ -378,6 +352,19 @@ function ClientProfile() {
                 />
               ) : null}
             </ul>
+          </SectionCard>
+        </TabsContent>
+
+        <TabsContent value="files" className="mt-4">
+          <SectionCard
+            title="Attachments"
+            description="Photos, waivers and other documents held against this client."
+          >
+            <FileAttachments
+              ownerType="customer"
+              ownerId={client.id}
+              canUpload={tenant.can(PERMISSIONS.CUSTOMER_UPDATE)}
+            />
           </SectionCard>
         </TabsContent>
 
