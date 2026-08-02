@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Clock, MapPin, Plus, Users } from "lucide-react";
+import { Clock, Plus, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatusBadge } from "@/components/ui-bits";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useDemo } from "@/lib/demo-store";
-import { gbp } from "@/lib/format";
-import type { Service } from "@/lib/demo-data";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
+import {
+  useCreateService,
+  useLocationsList,
+  useServices,
+  useStaffList,
+  useUpdateService,
+} from "@/lib/api/hooks";
+import { formatMoney } from "@/lib/format";
+import type { CatalogueService } from "@/lib/api/types";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/services")({
@@ -31,19 +38,31 @@ export const Route = createFileRoute("/services")({
           "Manage bookable services: duration, price, capacity, assigned trainers, locations and cancellation rules.",
       },
       { property: "og:title", content: "RECAVO Services" },
-      { property: "og:description", content: "One-to-one, two-to-one and group services with full booking rules." },
+      {
+        property: "og:description",
+        content: "One-to-one, two-to-one and group services with full booking rules.",
+      },
     ],
   }),
-  component: ServicesPage,
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <ServicesPage />
+      </AppShell>
+    </RequireAuth>
+  ),
 });
 
 function ServicesPage() {
-  const demo = useDemo();
-  const [editing, setEditing] = useState<Service | null>(null);
+  const services = useServices();
+  const staff = useStaffList();
+  const locations = useLocationsList();
+  const updateService = useUpdateService();
+  const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title="Services"
         description="What clients can book, how long it takes and what it costs."
@@ -54,46 +73,100 @@ function ServicesPage() {
         }
       />
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {demo.services.map((s) => (
-          <article key={s.id} className="surface-card flex flex-col p-5">
-            <div className="flex items-start justify-between gap-3">
-              <span className="size-2.5 rounded-full" style={{ backgroundColor: s.colour }} />
-              <StatusBadge status={s.active ? "active" : "inactive"} />
-            </div>
-            <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-
-            <div className="mt-4 flex flex-wrap gap-4 text-sm">
-              <span className="flex items-center gap-1.5"><Clock className="size-4 text-muted-foreground" />{s.duration} min</span>
-              <span className="flex items-center gap-1.5 font-semibold">{gbp(s.price)}{s.capacity > 2 ? " pp" : ""}</span>
-              <span className="flex items-center gap-1.5"><Users className="size-4 text-muted-foreground" />{s.capacity} {s.capacity === 1 ? "place" : "places"}</span>
-            </div>
-
-            <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-              <Row label="Trainers" value={s.staff.map((id) => demo.staffById(id).name.split(" ")[0]).join(", ")} />
-              <Row label="Locations" value={s.locations.map((id) => demo.locationById(id).name).join(", ")} />
-              <Row label="Booking notice" value={s.bookingNotice} />
-              <Row label="Cancellation" value={s.cancellationPeriod} />
-              <Row label="Buffer" value={s.buffer} />
-            </dl>
-
-            <div className="mt-5 flex items-center justify-between">
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Switch
-                  checked={s.active}
-                  onCheckedChange={(v) => {
-                    demo.updateService(s.id, { active: v });
-                    toast.success(v ? "Service activated" : "Service paused");
-                  }}
+      {services.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading services…</p>
+      ) : services.isError ? (
+        <EmptyState title="Couldn't load services" description="Please try again shortly." />
+      ) : (services.data ?? []).length === 0 ? (
+        <EmptyState
+          title="No services yet"
+          description="Create your first bookable service to start taking bookings."
+          action={<Button onClick={() => setCreating(true)}>Create service</Button>}
+        />
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {(services.data ?? []).map((s) => (
+            <article key={s.id} className="surface-card flex flex-col p-5">
+              <div className="flex items-start justify-between gap-3">
+                <span
+                  className="size-2.5 rounded-full"
+                  style={{ backgroundColor: s.colour ?? "var(--color-chart-2)" }}
                 />
-                {s.active ? "Bookable" : "Hidden"}
-              </span>
-              <Button variant="outline" size="sm" onClick={() => setEditing(s)}>Edit service</Button>
-            </div>
-          </article>
-        ))}
-      </div>
+                <StatusBadge status={s.active ? "active" : "inactive"} />
+              </div>
+              <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
+
+              <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="size-4 text-muted-foreground" />
+                  {s.durationMinutes} min
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  {formatMoney(s.basePriceMinor, s.currency)}
+                  {s.capacityMax > 1 ? " pp" : ""}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Users className="size-4 text-muted-foreground" />
+                  {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
+                </span>
+              </div>
+
+              <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                <Row
+                  label="Trainers"
+                  value={
+                    s.eligibleStaffIds
+                      .map((id) => staff.data?.find((m) => m.id === id)?.displayName)
+                      .filter(Boolean)
+                      .join(", ") || "Any"
+                  }
+                />
+                <Row
+                  label="Locations"
+                  value={
+                    s.locationIds
+                      .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                      .filter(Boolean)
+                      .join(", ") || "All"
+                  }
+                />
+                <Row
+                  label="Booking notice"
+                  value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
+                />
+                <Row label="Cancellation" value={`${s.cancellationPolicy.windowHours} hours`} />
+                <Row
+                  label="Buffer"
+                  value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
+                />
+              </dl>
+
+              <div className="mt-5 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Switch
+                    checked={s.active}
+                    disabled={updateService.isPending}
+                    onCheckedChange={(v) => {
+                      updateService.mutate(
+                        { serviceId: s.id, version: s.version, body: { active: v } },
+                        {
+                          onSuccess: () =>
+                            toast.success(v ? "Service activated" : "Service paused"),
+                        },
+                      );
+                    }}
+                  />
+                  {s.active ? "Bookable" : "Hidden"}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                  Edit service
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
 
       <ServiceDialog
         open={creating || editing !== null}
@@ -103,7 +176,7 @@ function ServicesPage() {
           setEditing(null);
         }}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -122,16 +195,19 @@ function ServiceDialog({
   onClose,
 }: {
   open: boolean;
-  service: Service | null;
+  service: CatalogueService | null;
   onClose: () => void;
 }) {
-  const demo = useDemo();
+  const createService = useCreateService();
+  const updateService = useUpdateService();
   const [name, setName] = useState(service?.name ?? "");
-  const [price, setPrice] = useState(String(service?.price ?? 50));
-  const [duration, setDuration] = useState(String(service?.duration ?? 60));
-  const [capacity, setCapacity] = useState(String(service?.capacity ?? 1));
+  const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
+  const [duration, setDuration] = useState(String(service?.durationMinutes ?? 60));
+  const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
   const [description, setDescription] = useState(service?.description ?? "");
   const [active, setActive] = useState(service?.active ?? true);
+
+  const submitting = createService.isPending || updateService.isPending;
 
   return (
     <Dialog
@@ -140,9 +216,9 @@ function ServiceDialog({
         if (!o) onClose();
         else {
           setName(service?.name ?? "");
-          setPrice(String(service?.price ?? 50));
-          setDuration(String(service?.duration ?? 60));
-          setCapacity(String(service?.capacity ?? 1));
+          setPrice(String(service ? service.basePriceMinor / 100 : 50));
+          setDuration(String(service?.durationMinutes ?? 60));
+          setCapacity(String(service?.capacityMax ?? 1));
           setDescription(service?.description ?? "");
           setActive(service?.active ?? true);
         }
@@ -158,11 +234,20 @@ function ServiceDialog({
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="s-name">Name</Label>
-            <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="1-to-1 Personal Training" />
+            <Input
+              id="s-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="1-to-1 Personal Training"
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="s-desc">Description</Label>
-            <Textarea id="s-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Textarea
+              id="s-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
@@ -178,36 +263,6 @@ function ServiceDialog({
               <Input id="s-cap" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="s-notice">Minimum booking notice</Label>
-              <Input id="s-notice" defaultValue={service?.bookingNotice ?? "12 hours"} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="s-cancel">Cancellation deadline</Label>
-              <Input id="s-cancel" defaultValue={service?.cancellationPeriod ?? "24 hours"} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="s-buffer">Booking buffer</Label>
-              <Input id="s-buffer" defaultValue={service?.buffer ?? "10 minutes"} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="s-pkg">Eligible packages</Label>
-              <Input id="s-pkg" defaultValue="Monthly 1-to-1 Package" />
-            </div>
-          </div>
-          <div className="rounded-xl border p-3 text-sm">
-            <p className="mb-2 font-medium">Assigned trainers and locations</p>
-            <p className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {demo.staff.map((s) => (
-                <span key={s.id} className="rounded-full bg-secondary px-2.5 py-1">{s.name}</span>
-              ))}
-              <MapPin className="size-3.5" />
-              {demo.locations.map((l) => (
-                <span key={l.id} className="rounded-full bg-secondary px-2.5 py-1">{l.name}</span>
-              ))}
-            </p>
-          </div>
           <div className="flex items-center justify-between rounded-xl border p-3">
             <div>
               <p className="text-sm font-medium">Active</p>
@@ -217,36 +272,41 @@ function ServiceDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
-            onClick={() => {
+            disabled={submitting}
+            onClick={async () => {
+              if (!name.trim()) return toast.error("Give the service a name");
+              const durationMinutes = Number(duration) || 60;
+              const basePriceMinor = Math.round((Number(price) || 0) * 100);
+              const capacityMax = Number(capacity) || 1;
               if (service) {
-                demo.updateService(service.id, {
-                  name,
-                  description,
-                  price: Number(price) || service.price,
-                  duration: Number(duration) || service.duration,
-                  capacity: Number(capacity) || service.capacity,
-                  active,
+                await updateService.mutateAsync({
+                  serviceId: service.id,
+                  version: service.version,
+                  body: {
+                    name,
+                    description: description || null,
+                    durationMinutes,
+                    basePriceMinor,
+                    capacityMax,
+                    active,
+                  },
                 });
                 toast.success("Service updated");
               } else {
-                if (!name.trim()) return toast.error("Give the service a name");
-                demo.addService({
-                  id: `sv${Math.random().toString(36).slice(2, 6)}`,
+                await createService.mutateAsync({
                   name,
-                  description,
-                  duration: Number(duration) || 60,
-                  price: Number(price) || 0,
-                  capacity: Number(capacity) || 1,
-                  staff: ["s1"],
-                  locations: ["l1"],
-                  bookingNotice: "12 hours",
-                  cancellationPeriod: "24 hours",
-                  buffer: "10 minutes",
-                  active,
-                  colour: "var(--color-chart-2)",
+                  description: description || null,
+                  durationMinutes,
+                  basePriceMinor,
+                  currency: "GBP",
+                  capacityMax,
+                  capacityMin: 1,
                 });
+                toast.success("Service created");
               }
               onClose();
             }}

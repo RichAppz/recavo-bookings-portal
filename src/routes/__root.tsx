@@ -11,7 +11,9 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { DemoProvider } from "@/lib/demo-store";
+import { AuthProvider } from "@/lib/auth/auth-store";
+import { TenantProvider } from "@/lib/tenant/tenant-context";
+import { MfaDialog } from "@/components/MfaDialog";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
 
@@ -140,11 +142,14 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-      <DemoProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-        <Toaster position="top-right" richColors />
-      </DemoProvider>
+        <AuthProvider>
+          <TenantProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+            <Toaster position="top-right" richColors />
+            <MfaDialog />
+          </TenantProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

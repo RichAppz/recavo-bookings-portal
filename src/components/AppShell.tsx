@@ -13,12 +13,11 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Layers,
+  LogOut,
   MapPin,
   MessageSquare,
   Menu,
   Plus,
-  PlayCircle,
-  RotateCcw,
   Search,
   Settings,
   Users,
@@ -44,44 +43,55 @@ import {
 } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PersonAvatar } from "@/components/ui-bits";
+import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { useDemo } from "@/lib/demo-store";
+import { useCustomers, useNotifications } from "@/lib/api/hooks";
+import { customerDisplayName } from "@/lib/api/types";
+import { PERMISSIONS } from "@/lib/permissions";
+import { useTenant } from "@/lib/tenant/tenant-context";
+import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { to: "/", label: "Overview", icon: LayoutDashboard },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/bookings", label: "Bookings", icon: ClipboardList },
-  { to: "/clients", label: "Clients", icon: Users },
-  { to: "/services", label: "Services", icon: Layers },
-  { to: "/packages", label: "Packages", icon: Banknote },
-  { to: "/staff", label: "Staff", icon: UserRound },
-  { to: "/locations", label: "Locations", icon: MapPin },
-  { to: "/messages", label: "Messages", icon: MessageSquare },
-  { to: "/payments", label: "Payments", icon: CreditCard },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/settings", label: "Settings", icon: Settings },
-] as const;
-
-export function Wordmark({ compact }: { compact?: boolean }) {
-  return (
-    <span className="flex items-center gap-2.5">
-      <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-        <CalendarDays className="size-4.5" strokeWidth={2.4} />
-      </span>
-      {!compact ? (
-        <span className="text-[19px] font-semibold tracking-tight text-sidebar-accent-foreground">
-          RECAVO
-        </span>
-      ) : null}
-    </span>
-  );
-}
+const NAV: Array<{
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  anyOf: string[];
+}> = [
+  { to: "/", label: "Overview", icon: LayoutDashboard, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  {
+    to: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+  },
+  {
+    to: "/bookings",
+    label: "Bookings",
+    icon: ClipboardList,
+    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+  },
+  { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+  { to: "/services", label: "Services", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  { to: "/packages", label: "Packages", icon: Banknote, anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ] },
+  {
+    to: "/staff",
+    label: "Staff",
+    icon: UserRound,
+    anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
+  },
+  { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  { to: "/messages", label: "Messages", icon: MessageSquare, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+  { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
+  { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
+  { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const demo = useDemo();
+  const tenant = useTenant();
+  const { user, signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -91,10 +101,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => setMobileNav(false), [pathname]);
 
-  const unread = demo.conversations.reduce((n, c) => n + c.unread, 0);
-  const results = search.trim()
-    ? demo.clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 5)
-    : [];
+  const searchQuery = useCustomers({ search: search.trim(), enabled: search.trim().length > 1 });
+  const results = search.trim().length > 1 ? (searchQuery.data?.items ?? []).slice(0, 5) : [];
+
+  const notifications = useNotifications();
+  const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
+  const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
 
   return (
     <div className="min-h-screen bg-background">
@@ -125,8 +137,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3">
-          {NAV.map((item) => {
+          {NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const label =
+              item.to === "/clients"
+                ? `${tenant.terminology.client}s`
+                : item.to === "/staff"
+                  ? tenant.terminology.staff
+                  : item.to === "/services"
+                    ? `${tenant.terminology.service}s`
+                    : item.to === "/bookings" || item.to === "/calendar"
+                      ? item.to === "/bookings"
+                        ? `${tenant.terminology.booking}s`
+                        : item.label
+                      : item.label;
             return (
               <Link
                 key={item.to}
@@ -139,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
               >
                 <item.icon className={cn("size-4.5", active && "text-sidebar-primary")} />
-                {item.label}
+                {label}
                 {item.label === "Messages" && unread > 0 ? (
                   <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
                     {unread}
@@ -151,12 +175,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="space-y-1 border-t border-sidebar-border p-3">
-          <Link
-            to="/platform"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-          >
-            <Building2 className="size-4.5" /> Platform view
-          </Link>
+          {canViewPlatform ? (
+            <Link
+              to="/platform"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            >
+              <Building2 className="size-4.5" /> Platform view
+            </Link>
+          ) : null}
           <button
             onClick={() => setTourOpen(true)}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
@@ -168,50 +194,62 @@ export function AppShell({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <button className="mt-1 flex w-full items-center gap-3 rounded-xl bg-sidebar-accent/70 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent">
                 <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
-                  RE
+                  {(tenant.business?.tradingName ?? "RE").slice(0, 2).toUpperCase()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    RECAVO
+                    {tenant.business?.tradingName ?? "Loading…"}
                   </span>
-                  <span className="block text-[11px] text-sidebar-foreground/70">Growth plan</span>
+                  <span className="block text-[11px] text-sidebar-foreground/70">
+                    {tenant.membership?.roleKeys.join(", ") || "Member"}
+                  </span>
                 </span>
                 <ChevronsUpDown className="size-4 text-sidebar-foreground/60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-60">
               <DropdownMenuLabel>Switch business</DropdownMenuLabel>
-              <DropdownMenuItem>RECAVO</DropdownMenuItem>
-              <DropdownMenuItem>Northside Tutors</DropdownMenuItem>
-              <DropdownMenuItem>Studio Eight Beauty</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/platform">Platform owner view</Link>
-              </DropdownMenuItem>
+              {tenant.businesses.map((b) => (
+                <DropdownMenuItem key={b.id} onClick={() => tenant.switchBusiness(b.id)}>
+                  {b.tradingName}
+                </DropdownMenuItem>
+              ))}
+              {canViewPlatform ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/platform">Platform owner view</Link>
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent/60">
-                <PersonAvatar name="Alex Morgan" src="https://i.pravatar.cc/160?img=13" size={32} />
+                <PersonAvatar name={user?.email ?? "?"} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    Alex Morgan
+                    {user?.email ?? "Signed in"}
                   </span>
                   <span className="block text-[11px] text-sidebar-foreground/70">
-                    Owner and Head Coach
+                    {tenant.membership?.roleKeys.join(", ") || "Team member"}
                   </span>
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem asChild><Link to="/settings">Account settings</Link></DropdownMenuItem>
-              <DropdownMenuItem onClick={() => demo.resetDemo()}>
-                <RotateCcw className="size-4" /> Reset demo data
+              <DropdownMenuItem asChild>
+                <Link to="/settings">Account settings</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><Link to="/book">Open client booking page</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/book">Open client booking page</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void signOut()}>
+                <LogOut className="size-4" /> Sign out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -235,7 +273,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search clients, bookings, payments"
+                placeholder="Search clients"
                 className="bg-card pl-9"
               />
               {results.length > 0 ? (
@@ -248,8 +286,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                       onClick={() => setSearch("")}
                       className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-secondary"
                     >
-                      <PersonAvatar name={c.name} src={c.avatar} size={28} />
-                      {c.name}
+                      <PersonAvatar name={customerDisplayName(c)} size={28} />
+                      {customerDisplayName(c)}
                     </Link>
                   ))}
                 </div>
@@ -257,22 +295,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="hidden sm:inline-flex"
-                onClick={() => setTourOpen(true)}
-              >
-                <PlayCircle className="size-4" /> Demo tour
-              </Button>
-
-              <Select value={demo.currentLocation} onValueChange={demo.setCurrentLocation}>
+              <Select value={tenant.currentLocationId} onValueChange={tenant.setCurrentLocationId}>
                 <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All locations</SelectItem>
-                  {demo.locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  {tenant.locations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -281,27 +313,29 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="relative" aria-label="Notifications">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="relative"
+                    aria-label="Notifications"
+                  >
                     <Bell className="size-4" />
-                    <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning" />
+                    {unread > 0 ? (
+                      <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning" />
+                    ) : null}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <DropdownMenuItem className="flex-col items-start gap-0.5">
-                    <span className="text-sm font-medium">Failed Stripe payment</span>
-                    <span className="text-xs text-muted-foreground">
-                      Lucas Green — £35.00 Fitness Assessment
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex-col items-start gap-0.5">
-                    <span className="text-sm font-medium">3 packages expire this week</span>
-                    <span className="text-xs text-muted-foreground">James Wilson and 2 others</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex-col items-start gap-0.5">
-                    <span className="text-sm font-medium">2 unread client messages</span>
-                    <span className="text-xs text-muted-foreground">James Wilson</span>
-                  </DropdownMenuItem>
+                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => (
+                    <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
+                      <span className="text-sm font-medium">{n.subject}</span>
+                      <span className="text-xs text-muted-foreground">{n.body}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  {(notifications.data?.notifications ?? []).length === 0 ? (
+                    <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -313,17 +347,27 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem onClick={() => setBookingOpen(true)}>Add booking</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setBookingOpen(true)}>
+                    Add booking
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("client")}>Add client</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("group")}>Create group session</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("block")}>Block availability</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("package")}>Sell package</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("message")}>Send message</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setQuick("group")}>
+                    Create group session
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setQuick("block")}>
+                    Block availability
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setQuick("package")}>
+                    Sell package
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setQuick("message")}>
+                    Send message
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <Button variant="outline" asChild className="hidden xl:inline-flex">
-                <Link to="/book">
+                <Link to="/book" search={{ businessId: tenant.businessId }}>
                   View booking page <ExternalLink className="size-3.5" />
                 </Link>
               </Button>

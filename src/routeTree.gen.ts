@@ -14,11 +14,15 @@ import { Route as BookRouteImport } from './routes/book'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as LocationsRouteImport } from './routes/locations'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as MessagesRouteImport } from './routes/messages'
 import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PlatformRouteImport } from './routes/platform'
+import { Route as PortalRouteImport } from './routes/portal'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ResetRouteImport } from './routes/reset'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffRouteImport } from './routes/staff'
@@ -50,6 +54,11 @@ const LocationsRoute = LocationsRouteImport.update({
   path: '/locations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MessagesRoute = MessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
@@ -70,9 +79,24 @@ const PlatformRoute = PlatformRouteImport.update({
   path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalRoute = PortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetRoute = ResetRouteImport.update({
+  id: '/reset',
+  path: '/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicesRoute = ServicesRouteImport.update({
@@ -107,11 +131,15 @@ export interface FileRoutesByFullPath {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/locations': typeof LocationsRoute
+  '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
+  '/portal': typeof PortalRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
@@ -124,11 +152,15 @@ export interface FileRoutesByTo {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/locations': typeof LocationsRoute
+  '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
+  '/portal': typeof PortalRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
@@ -142,11 +174,15 @@ export interface FileRoutesById {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/locations': typeof LocationsRoute
+  '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
+  '/portal': typeof PortalRoute
+  '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
+  '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
@@ -161,11 +197,15 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/locations'
+    | '/login'
     | '/messages'
     | '/packages'
     | '/payments'
     | '/platform'
+    | '/portal'
+    | '/register'
     | '/reports'
+    | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
@@ -178,11 +218,15 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/locations'
+    | '/login'
     | '/messages'
     | '/packages'
     | '/payments'
     | '/platform'
+    | '/portal'
+    | '/register'
     | '/reports'
+    | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
@@ -195,11 +239,15 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/locations'
+    | '/login'
     | '/messages'
     | '/packages'
     | '/payments'
     | '/platform'
+    | '/portal'
+    | '/register'
     | '/reports'
+    | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
@@ -213,11 +261,15 @@ export interface RootRouteChildren {
   BookingsRoute: typeof BookingsRoute
   CalendarRoute: typeof CalendarRoute
   LocationsRoute: typeof LocationsRoute
+  LoginRoute: typeof LoginRoute
   MessagesRoute: typeof MessagesRoute
   PackagesRoute: typeof PackagesRoute
   PaymentsRoute: typeof PaymentsRoute
   PlatformRoute: typeof PlatformRoute
+  PortalRoute: typeof PortalRoute
+  RegisterRoute: typeof RegisterRoute
   ReportsRoute: typeof ReportsRoute
+  ResetRoute: typeof ResetRoute
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
   StaffRoute: typeof StaffRoute
@@ -262,6 +314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LocationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/messages': {
       id: '/messages'
       path: '/messages'
@@ -290,11 +349,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portal': {
+      id: '/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof PortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reports': {
       id: '/reports'
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset': {
+      id: '/reset'
+      path: '/reset'
+      fullPath: '/reset'
+      preLoaderRoute: typeof ResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/services': {
@@ -341,11 +421,15 @@ const rootRouteChildren: RootRouteChildren = {
   BookingsRoute: BookingsRoute,
   CalendarRoute: CalendarRoute,
   LocationsRoute: LocationsRoute,
+  LoginRoute: LoginRoute,
   MessagesRoute: MessagesRoute,
   PackagesRoute: PackagesRoute,
   PaymentsRoute: PaymentsRoute,
   PlatformRoute: PlatformRoute,
+  PortalRoute: PortalRoute,
+  RegisterRoute: RegisterRoute,
   ReportsRoute: ReportsRoute,
+  ResetRoute: ResetRoute,
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
   StaffRoute: StaffRoute,
