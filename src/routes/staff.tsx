@@ -1,13 +1,30 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarOff, Mail, Phone, Plus } from "lucide-react";
+import { CalendarOff, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
-import { PageHeader, PersonAvatar, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import {
+  EmptyState,
+  PageHeader,
+  PersonAvatar,
+  SectionCard,
+  StatCard,
+  StatusBadge,
+} from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { useDemo } from "@/lib/demo-store";
-import { gbp, ukDate } from "@/lib/format";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useInviteStaff, useLocationsList, useServices, useStaffList } from "@/lib/api/hooks";
+import { formatInTz, ukDate } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -20,31 +37,41 @@ export const Route = createFileRoute("/staff")({
           "Trainer profiles, weekly availability, assigned services and locations, permissions and performance.",
       },
       { property: "og:title", content: "RECAVO Staff" },
-      { property: "og:description", content: "Manage trainers, availability patterns and permissions." },
+      {
+        property: "og:description",
+        content: "Manage trainers, availability patterns and permissions.",
+      },
     ],
   }),
-  component: StaffPage,
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <StaffPage />
+      </AppShell>
+    </RequireAuth>
+  ),
 });
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const PATTERN: Record<string, string> = {
-  Mon: "06:00 – 14:00",
-  Tue: "06:00 – 14:00",
-  Wed: "10:00 – 19:00",
-  Thu: "06:00 – 14:00",
-  Fri: "06:00 – 13:00",
-  Sat: "08:00 – 12:00",
-  Sun: "Unavailable",
-};
+
+function minutesLabel(mins: number) {
+  return `${Math.floor(mins / 60)}`.padStart(2, "0") + ":" + `${mins % 60}`.padStart(2, "0");
+}
 
 function StaffPage() {
-  const demo = useDemo();
-  const [selected, setSelected] = useState(demo.staff[0].id);
+  const staff = useStaffList();
+  const services = useServices();
+  const locations = useLocationsList();
+  const [selected, setSelected] = useState<string | null>(null);
   const [quick, setQuick] = useState<QuickAction>(null);
-  const member = demo.staffById(selected);
+  const [inviting, setInviting] = useState(false);
+
+  const list = staff.data ?? [];
+  const selectedId = selected ?? list[0]?.id ?? null;
+  const member = list.find((m) => m.id === selectedId) ?? null;
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title="Staff"
         description="Who works where, what they deliver and when they're available."
@@ -53,139 +80,221 @@ function StaffPage() {
             <Button variant="outline" onClick={() => setQuick("block")}>
               <CalendarOff className="size-4" /> Block time
             </Button>
-            <Button onClick={() => toast.success("Invite sent to new team member")}>
+            <Button onClick={() => setInviting(true)}>
               <Plus className="size-4" /> Invite staff
             </Button>
           </>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Team members" value={String(demo.staff.length)} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard label="Team members" value={String(list.length)} />
+        <StatCard label="Active" value={String(list.filter((s) => s.status === "active").length)} />
         <StatCard
-          label="Sessions this week"
-          value={String(demo.staff.reduce((s, m) => s + m.weeklyBookings, 0))}
-          change={5.6}
-        />
-        <StatCard label="Team revenue" value={gbp(demo.staff.reduce((s, m) => s + m.revenue, 0))} change={8.3} />
-        <StatCard
-          label="Availability gaps"
-          value={String(demo.staff.filter((s) => !s.availabilityComplete).length)}
-          hint="profiles to complete"
+          label="Pending invitations"
+          value={String(list.filter((s) => s.status === "invited").length)}
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <SectionCard title="Team" bodyClassName="p-0">
-          <ul className="divide-y">
-            {demo.staff.map((m) => (
-              <li key={m.id}>
-                <button
-                  onClick={() => setSelected(m.id)}
-                  className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-                    m.id === selected ? "bg-primary-soft" : "hover:bg-secondary/60"
-                  }`}
-                >
-                  <PersonAvatar name={m.name} src={m.avatar} size={40} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{m.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{m.role}</span>
-                  </span>
-                  {!m.availabilityComplete ? <StatusBadge status="incomplete" /> : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
+      {staff.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading team…</p>
+      ) : staff.isError ? (
+        <EmptyState title="Couldn't load staff" description="Please try again shortly." />
+      ) : list.length === 0 ? (
+        <EmptyState
+          title="No staff yet"
+          description="Invite your first team member to start assigning bookings."
+          action={<Button onClick={() => setInviting(true)}>Invite staff</Button>}
+        />
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+          <SectionCard title="Team" bodyClassName="p-0">
+            <ul className="divide-y">
+              {list.map((m) => (
+                <li key={m.id}>
+                  <button
+                    onClick={() => setSelected(m.id)}
+                    className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                      m.id === selectedId ? "bg-primary-soft" : "hover:bg-secondary/60"
+                    }`}
+                  >
+                    <PersonAvatar name={m.displayName} size={40} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{m.displayName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {m.title ?? "Team member"}
+                      </span>
+                    </span>
+                    {m.status !== "active" ? <StatusBadge status={m.status} /> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
 
-        <div className="space-y-5">
-          <SectionCard>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <PersonAvatar name={member.name} src={member.avatar} size={64} />
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold">{member.name}</h2>
-                <p className="text-sm text-muted-foreground">{member.role} · {member.permission}</p>
-                <p className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><Mail className="size-3.5" />{member.email}</span>
-                  <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{member.phone}</span>
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{member.weeklyBookings}</p>
-                  <p className="text-xs text-muted-foreground">sessions / week</p>
+          {member ? (
+            <div className="space-y-5">
+              <SectionCard>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <PersonAvatar name={member.displayName} size={64} />
+                  <div className="flex-1">
+                    <h2 className="text-xl font-semibold">{member.displayName}</h2>
+                    <p className="text-sm text-muted-foreground">{member.title ?? "Team member"}</p>
+                  </div>
+                  <StatusBadge status={member.status} />
                 </div>
-                <div>
-                  <p className="text-2xl font-semibold tabular-nums">{gbp(member.revenue)}</p>
-                  <p className="text-xs text-muted-foreground">revenue / month</p>
-                </div>
+                {member.bio ? (
+                  <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">{member.bio}</p>
+                ) : null}
+              </SectionCard>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <SectionCard title="Services delivered">
+                  {member.eligibleServiceIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No services assigned yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {member.eligibleServiceIds.map((id) => {
+                        const svc = services.data?.find((s) => s.id === id);
+                        return (
+                          <li
+                            key={id}
+                            className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm"
+                          >
+                            <span>{svc?.name ?? id}</span>
+                            {svc ? (
+                              <span className="text-xs text-muted-foreground">
+                                {svc.durationMinutes} min
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </SectionCard>
+
+                <SectionCard title="Locations">
+                  {member.locationIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Available at all locations.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {member.locationIds.map((id) => {
+                        const loc = locations.data?.find((l) => l.id === id);
+                        return (
+                          <li key={id} className="rounded-xl border px-3 py-2 text-sm">
+                            <p className="font-medium">{loc?.name ?? id}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </SectionCard>
               </div>
+
+              <SectionCard
+                title="Weekly availability"
+                description="Recurring working pattern used by the booking page"
+              >
+                {member.workingRules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No working hours configured yet.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {DAYS.map((day, i) => {
+                      const rules = member.workingRules.filter((r) => r.dayOfWeek === i);
+                      return (
+                        <li key={day} className="flex items-center justify-between py-3">
+                          <span className="w-16 text-sm font-medium">{day}</span>
+                          <span className="flex-1 text-sm text-muted-foreground">
+                            {rules.length === 0
+                              ? "Unavailable"
+                              : rules
+                                  .map(
+                                    (r) =>
+                                      `${minutesLabel(r.startMinute)} – ${minutesLabel(r.endMinute)}`,
+                                  )
+                                  .join(", ")}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </SectionCard>
+
+              <SectionCard title="Time off and blocks" bodyClassName="p-0">
+                <ul className="divide-y">
+                  {member.timeOff.map((b) => (
+                    <li key={b.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                      <span>{b.reason ?? "Blocked"}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatInTz(b.start, b.originatingTimezone, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}{" "}
+                        – {formatInTz(b.end, b.originatingTimezone, { timeStyle: "short" })}
+                      </span>
+                    </li>
+                  ))}
+                  {member.timeOff.length === 0 ? (
+                    <li className="px-5 py-6 text-center text-sm text-muted-foreground">
+                      No time off booked.
+                    </li>
+                  ) : null}
+                </ul>
+              </SectionCard>
             </div>
-            <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">{member.bio}</p>
-          </SectionCard>
-
-          <div className="grid gap-5 md:grid-cols-2">
-            <SectionCard title="Services delivered">
-              <ul className="space-y-2">
-                {member.services.map((id) => (
-                  <li key={id} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm">
-                    <span>{demo.serviceById(id).name}</span>
-                    <span className="text-xs text-muted-foreground">{demo.serviceById(id).duration} min</span>
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-
-            <SectionCard title="Locations">
-              <ul className="space-y-2">
-                {member.locations.map((id) => (
-                  <li key={id} className="rounded-xl border px-3 py-2 text-sm">
-                    <p className="font-medium">{demo.locationById(id).name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {demo.locationById(id).address}, {demo.locationById(id).postcode}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-          </div>
-
-          <SectionCard
-            title="Weekly availability"
-            description="Recurring working pattern used by the booking page"
-            action={<Button variant="outline" size="sm" onClick={() => toast.success("Availability saved")}>Save pattern</Button>}
-          >
-            <ul className="divide-y">
-              {DAYS.map((day) => (
-                <li key={day} className="flex items-center justify-between py-3">
-                  <span className="w-16 text-sm font-medium">{day}</span>
-                  <span className="flex-1 text-sm text-muted-foreground">{PATTERN[day]}</span>
-                  <Switch
-                    defaultChecked={PATTERN[day] !== "Unavailable"}
-                    onCheckedChange={(v) => toast.success(`${day} ${v ? "enabled" : "disabled"} for ${member.name.split(" ")[0]}`)}
-                  />
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-
-          <SectionCard title="Time off and blocks" bodyClassName="p-0">
-            <ul className="divide-y">
-              {demo.blockedTimes.filter((b) => b.staffId === member.id).map((b) => (
-                <li key={b.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                  <span>{b.reason}</span>
-                  <span className="text-xs text-muted-foreground">{ukDate(b.date)} · {b.time} · {b.duration} min</span>
-                </li>
-              ))}
-              {demo.blockedTimes.filter((b) => b.staffId === member.id).length === 0 ? (
-                <li className="px-5 py-6 text-center text-sm text-muted-foreground">No time off booked.</li>
-              ) : null}
-            </ul>
-          </SectionCard>
+          ) : null}
         </div>
-      </div>
+      )}
 
+      <InviteStaffDialog open={inviting} onClose={() => setInviting(false)} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
-    </AppShell>
+    </>
+  );
+}
+
+function InviteStaffDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const invite = useInviteStaff();
+  const [email, setEmail] = useState("");
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Invite staff</DialogTitle>
+          <DialogDescription>
+            Send an invitation to join your team as a staff member.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2">
+          <Label htmlFor="invite-email">Email</Label>
+          <Input
+            id="invite-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="new.trainer@example.co.uk"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={invite.isPending}
+            onClick={async () => {
+              if (!email.trim()) return toast.error("Enter an email address");
+              await invite.mutateAsync({ email, roleKeys: ["staff"] });
+              toast.success("Invitation sent");
+              setEmail("");
+              onClose();
+            }}
+          >
+            Send invitation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

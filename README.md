@@ -1,29 +1,43 @@
-# Welcome to your Lovable project
+# RECAVO Portal
 
-This project was built with [Lovable](https://lovable.dev).
+Staff console, public booking flow, and customer portal for [RECAVO](https://linear.app/richappz/project/recavo-web-console-booking-and-portal-ec7494ce56b9), built on TanStack Start and wired to the RECAVO API.
 
-## Build with Lovable
+## Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+- TanStack Start + React 19 + TypeScript
+- TanStack Router (file-based) + TanStack Query
+- Tailwind CSS v4 + shadcn/ui
+- Supabase Auth (JWT bearer to the API)
+- OpenAPI-generated types (`npm run gen:api`)
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Setup
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
 npm i
+cp .env.example .env
+# fill VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+npm run gen:api   # regenerates src/lib/api/schema.d.ts from ./openapi.json
 npm run dev
 ```
 
-## Built with
+Point `VITE_API_BASE_URL` at a running RECAVO API (default `http://localhost:3000`). The committed `openapi.json` is a snapshot of `recavo-api/documents/openapi.json`.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Local Vite/TanStack Start server |
+| `npm run build` | Production build |
+| `npm run gen:api` | Regenerate API types from `openapi.json` |
+| `npm test` | Unit tests (API client / problem+json) |
+| `npm run lint` | ESLint |
+
+## Surfaces
+
+- **Staff console** (`/`, `/calendar`, `/bookings`, …) — authenticated, business + location scoped
+- **Public booking** (`/book?businessId=…`) — unauthenticated `/api/v1/public/…`
+- **Customer portal** (`/portal?businessId=…`) — authenticated `/api/v1/portal/…`
+
+## Lovable
+
+This project is connected to [Lovable](https://lovable.dev). Avoid rewriting published git history on the connected branch.

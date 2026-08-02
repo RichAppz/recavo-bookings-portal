@@ -8,6 +8,70 @@ export const gbp = (value: number, opts: { decimals?: boolean } = {}) =>
 
 export const gbpExact = (value: number) => gbp(value, { decimals: true });
 
+/** Format integer minor units + ISO-4217 currency for display. Never float-math money. */
+export function formatMoney(
+  minor: number,
+  currency = "GBP",
+  opts: { locale?: string; compact?: boolean } = {},
+): string {
+  const locale = opts.locale ?? "en-GB";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: opts.compact ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100);
+}
+
+/** Parse a user-entered decimal amount into integer minor units. */
+export function parseMoneyToMinor(input: string | number): number {
+  if (typeof input === "number") {
+    if (!Number.isFinite(input)) throw new Error("Invalid amount");
+    return Math.round(input * 100);
+  }
+  const cleaned = input.replace(/[^0-9.-]/g, "").trim();
+  if (!cleaned) throw new Error("Invalid amount");
+  const value = Number(cleaned);
+  if (!Number.isFinite(value)) throw new Error("Invalid amount");
+  return Math.round(value * 100);
+}
+
+/** Format an RFC 3339 UTC instant in a target IANA timezone. */
+export function formatInTz(
+  iso: string,
+  timeZone: string,
+  opts: Intl.DateTimeFormatOptions = {
+    dateStyle: "medium",
+    timeStyle: "short",
+  },
+  locale = "en-GB",
+): string {
+  return new Intl.DateTimeFormat(locale, { ...opts, timeZone }).format(new Date(iso));
+}
+
+/** Format time-only in a timezone. */
+export function formatTimeInTz(iso: string, timeZone: string, locale = "en-GB"): string {
+  return formatInTz(iso, timeZone, { hour: "2-digit", minute: "2-digit", hour12: false }, locale);
+}
+
+/** Half-open interval helpers: [start, end). */
+export function intervalContains(startIso: string, endIso: string, instantIso: string): boolean {
+  const t = new Date(instantIso).getTime();
+  return t >= new Date(startIso).getTime() && t < new Date(endIso).getTime();
+}
+
+export function intervalsOverlap(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+): boolean {
+  return (
+    new Date(aStart).getTime() < new Date(bEnd).getTime() &&
+    new Date(bStart).getTime() < new Date(aEnd).getTime()
+  );
+}
+
 /** Base "today" for the demo. UTC-derived so SSR and the browser agree. */
 export const demoToday = () => {
   const now = new Date();

@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Search, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
-import { PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
+import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useDemo } from "@/lib/demo-store";
-import { demoToday, gbp, parseIso, relativeDay, ukDate } from "@/lib/format";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useCustomers } from "@/lib/api/hooks";
+import { customerDisplayName } from "@/lib/api/types";
+import { ukDate } from "@/lib/format";
 
 export const Route = createFileRoute("/clients/")({
   head: () => ({
@@ -19,31 +28,38 @@ export const Route = createFileRoute("/clients/")({
           "Client records with credits, lifetime spend, attendance and upcoming bookings for RECAVO.",
       },
       { property: "og:title", content: "RECAVO Clients" },
-      { property: "og:description", content: "Every client, credit balance and booking history in one place." },
+      {
+        property: "og:description",
+        content: "Every client, credit balance and booking history in one place.",
+      },
     ],
   }),
-  component: ClientsPage,
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <ClientsPage />
+      </AppShell>
+    </RequireAuth>
+  ),
 });
 
 function ClientsPage() {
-  const demo = useDemo();
   const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
   const [quick, setQuick] = useState<QuickAction>(null);
 
-  const rows = demo.clients.filter((c) =>
-    c.name.toLowerCase().includes(query.toLowerCase().trim()),
-  );
-  const expiringSoon = demo.clientPackages.filter(
-    (p) =>
-      p.status === "active" &&
-      (parseIso(p.expires).getTime() - demoToday().getTime()) / 86_400_000 <= 7,
-  ).length;
+  const customers = useCustomers({
+    search: query.trim(),
+    status: status !== "all" ? status : undefined,
+  });
+  const rows = useMemo(() => customers.data?.items ?? [], [customers.data]);
+  const activeCount = rows.filter((c) => c.status === "active").length;
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title="Clients"
-        description="Everyone training with RECAVO."
+        description="Everyone booking with your business."
         actions={
           <Button onClick={() => setQuick("client")}>
             <UserPlus className="size-4" /> Add client
@@ -51,46 +67,64 @@ function ClientsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total clients" value={String(demo.clients.length)} change={6.4} />
-        <StatCard
-          label="Active clients"
-          value={String(demo.clients.filter((c) => c.status === "active").length)}
-          change={4.2}
-        />
-        <StatCard label="New this month" value="9" change={12.5} />
-        <StatCard label="Expiring packages" value={String(expiringSoon)} hint="within 7 days" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard label="Clients matching filters" value={String(rows.length)} />
+        <StatCard label="Active" value={String(activeCount)} />
+        <StatCard label="Archived or anonymised" value={String(rows.length - activeCount)} />
       </div>
 
       <div className="surface-card overflow-hidden">
-        <div className="border-b p-4">
-          <div className="relative max-w-sm">
+        <div className="flex flex-wrap gap-3 border-b p-4">
+          <div className="relative max-w-sm flex-1">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="Search clients"
+              placeholder="Search clients by name, email or phone"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="anonymised">Anonymised</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/60 text-xs text-muted-foreground">
-              <tr>
-                {["Client", "Contact", "Last session", "Next booking", "Credits", "Lifetime spend", "Status"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((c) => {
-                const theirs = demo.bookings.filter((b) => b.clientIds.includes(c.id));
-                const past = theirs.filter((b) => parseIso(b.date) < demoToday()).slice(-1)[0];
-                const next = theirs
-                  .filter((b) => parseIso(b.date) >= demoToday() && b.status === "confirmed")
-                  .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))[0];
-                return (
+
+        {customers.isLoading ? (
+          <p className="p-6 text-sm text-muted-foreground">Loading clients…</p>
+        ) : customers.isError ? (
+          <div className="p-6">
+            <EmptyState title="Couldn't load clients" description="Please try again shortly." />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              title="No clients found"
+              description="Try a different search, or add your first client."
+              action={<Button onClick={() => setQuick("client")}>Add client</Button>}
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-xs text-muted-foreground">
+                <tr>
+                  {["Client", "Contact", "Tags", "Client since", "Status"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((c) => (
                   <tr key={c.id} className="transition-colors hover:bg-secondary/50">
                     <td className="px-4 py-3">
                       <Link
@@ -98,30 +132,32 @@ function ClientsPage() {
                         params={{ clientId: c.id }}
                         className="flex items-center gap-3 font-medium"
                       >
-                        <PersonAvatar name={c.name} src={c.avatar} />
-                        {c.name}
+                        <PersonAvatar name={customerDisplayName(c)} />
+                        {customerDisplayName(c)}
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs">{c.email}</p>
-                      <p className="text-xs text-muted-foreground">{c.phone}</p>
+                      <p className="text-xs">{c.emailDisplay ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground">{c.phoneDisplay ?? ""}</p>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{past ? ukDate(past.date) : "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {c.tags.length > 0 ? c.tags.join(", ") : "—"}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {next ? `${relativeDay(next.date)} ${next.time}` : "—"}
+                      {ukDate(c.createdAt.slice(0, 10))}
                     </td>
-                    <td className="px-4 py-3 tabular-nums">{demo.creditsFor(c.id)}</td>
-                    <td className="px-4 py-3 tabular-nums">{gbp(c.lifetimeSpend)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={c.status} />
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
-    </AppShell>
+    </>
   );
 }

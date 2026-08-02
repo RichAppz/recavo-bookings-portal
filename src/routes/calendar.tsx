@@ -14,16 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useDemo } from "@/lib/demo-store";
-import type { Booking } from "@/lib/demo-data";
-import {
-  addDays,
-  demoToday,
-  isoDate,
-  startOfWeek,
-  timeToMinutes,
-  ukDateLong,
-} from "@/lib/format";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useBookings, useServices, useStaffList } from "@/lib/api/hooks";
+import { addDays, formatInTz, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -36,10 +30,19 @@ export const Route = createFileRoute("/calendar")({
           "Day, week and month scheduling with trainer, location and service filters, group occupancy and blocked time.",
       },
       { property: "og:title", content: "RECAVO Calendar" },
-      { property: "og:description", content: "Weekly scheduling for trainers, locations and group sessions." },
+      {
+        property: "og:description",
+        content: "Weekly scheduling for trainers, locations and group sessions.",
+      },
     ],
   }),
-  component: CalendarPage,
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <CalendarPage />
+      </AppShell>
+    </RequireAuth>
+  ),
 });
 
 const START_HOUR = 6;
@@ -47,49 +50,67 @@ const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
 function CalendarPage() {
-  const demo = useDemo();
-  const [view, setView] = useState<"day" | "week" | "month">("week");
-  const [anchor, setAnchor] = useState(() => demoToday());
+  const tenant = useTenant();
+  const [view, setView] = useState<"day" | "week">("week");
+  const [anchor, setAnchor] = useState(() => new Date());
   const [staffFilter, setStaffFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
-  const [selected, setSelected] = useState<Booking | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+
+  const services = useServices();
+  const staff = useStaffList();
 
   const days = useMemo(() => {
     if (view === "day") return [anchor];
-    if (view === "week")
-      return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
-    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-    return Array.from({ length: 35 }, (_, i) => addDays(startOfWeek(first), i));
+    return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
   }, [view, anchor]);
 
-  const filtered = demo.bookings.filter(
-    (b) =>
-      (staffFilter === "all" || b.staffId === staffFilter) &&
-      (locationFilter === "all" || b.locationId === locationFilter) &&
-      (serviceFilter === "all" || b.serviceId === serviceFilter) &&
-      (demo.currentLocation === "all" || b.locationId === demo.currentLocation),
+  const rangeStart = days[0];
+  const rangeEnd = addDays(days[days.length - 1], 1);
+
+  const bookings = useBookings({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    staffId: staffFilter !== "all" ? staffFilter : undefined,
+  });
+
+  const filtered = (bookings.data?.bookings ?? []).filter(
+    (b) => serviceFilter === "all" || b.serviceSnapshot.serviceId === serviceFilter,
   );
 
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  const todayIso = isoDate(demoToday());
+  const todayIso = isoDate(new Date());
 
-  const shift = (dir: number) =>
-    setAnchor((a) => addDays(a, view === "day" ? dir : view === "week" ? dir * 7 : dir * 28));
+  const shift = (dir: number) => setAnchor((a) => addDays(a, view === "day" ? dir : dir * 7));
 
   const range =
-    view === "month"
-      ? anchor.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
-      : view === "day"
-        ? ukDateLong(isoDate(anchor))
-        : `${ukDateLong(isoDate(days[0]))} – ${ukDateLong(isoDate(days[6]))}`;
+    view === "day"
+      ? ukDateLong(isoDate(anchor))
+      : `${ukDateLong(isoDate(days[0]))} – ${ukDateLong(isoDate(days[6]))}`;
+
+  const minutesOf = (iso: string, tz: string) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: tz,
+    }).formatToParts(new Date(iso));
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    return h * 60 + m;
+  };
+
+  const isoDateInTz = (iso: string, tz: string) => {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
+  };
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title="Calendar"
-        description="Drag sessions to reschedule, click any booking for the full detail panel."
+        description="Click any booking for the full detail panel. Use the top bar to filter by location."
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <CalendarPlus className="size-4" /> Add booking
@@ -105,85 +126,54 @@ function CalendarPage() {
           <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
             <ChevronRight className="size-4" />
           </Button>
-          <Button variant="ghost" onClick={() => setAnchor(demoToday())}>Today</Button>
+          <Button variant="ghost" onClick={() => setAnchor(new Date())}>
+            Today
+          </Button>
         </div>
         <p className="text-sm font-semibold">{range}</p>
-        <Tabs value={view} onValueChange={(v) => setView(v as typeof view)} className="w-full sm:ml-auto sm:w-auto">
+        <Tabs
+          value={view}
+          onValueChange={(v) => setView(v as typeof view)}
+          className="w-full sm:ml-auto sm:w-auto"
+        >
           <TabsList>
             <TabsTrigger value="day">Day</TabsTrigger>
             <TabsTrigger value="week">Week</TabsTrigger>
-            <TabsTrigger value="month">Month</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Select value={staffFilter} onValueChange={setStaffFilter}>
-            <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Trainer" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectValue placeholder="Trainer" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All trainers</SelectItem>
-              {demo.staff.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-            </SelectContent>
-          </Select>
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className="w-full sm:w-[190px]"><SelectValue placeholder="Location" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All locations</SelectItem>
-              {demo.locations.map((l) => (<SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>))}
+              {(staff.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.displayName}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={serviceFilter} onValueChange={setServiceFilter}>
-            <SelectTrigger className="w-full sm:w-[190px]"><SelectValue placeholder="Service" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[190px]">
+              <SelectValue placeholder="Service" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All services</SelectItem>
-              {demo.services.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+              {(services.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {view === "month" ? (
-        <div className="surface-card overflow-x-auto">
-          <div className="grid min-w-[640px] grid-cols-7 border-b bg-secondary/50 text-xs font-medium text-muted-foreground">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <div key={d} className="px-3 py-2">{d}</div>
-            ))}
-          </div>
-          <div className="grid min-w-[640px] grid-cols-7">
-            {days.map((day) => {
-              const iso = isoDate(day);
-              const dayBookings = filtered.filter((b) => b.date === iso);
-              return (
-                <div
-                  key={iso}
-                  className={cn(
-                    "min-h-28 border-r border-b p-2 last:border-r-0",
-                    day.getMonth() !== anchor.getMonth() && "bg-secondary/30 text-muted-foreground",
-                  )}
-                >
-                  <p className={cn("text-xs font-semibold", iso === todayIso && "text-primary")}>
-                    {day.getDate()}
-                  </p>
-                  <div className="mt-1 space-y-1">
-                    {dayBookings.slice(0, 3).map((b) => (
-                      <button
-                        key={b.id}
-                        onClick={() => setSelected(b)}
-                        className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium"
-                        style={{
-                          backgroundColor: "color-mix(in oklab, " + demo.serviceById(b.serviceId).colour + " 16%, transparent)",
-                          color: demo.serviceById(b.serviceId).colour,
-                        }}
-                      >
-                        {b.time} {demo.serviceById(b.serviceId).name}
-                      </button>
-                    ))}
-                    {dayBookings.length > 3 ? (
-                      <p className="text-[11px] text-muted-foreground">+{dayBookings.length - 3} more</p>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {bookings.isError ? (
+        <div className="surface-card p-6 text-sm text-destructive">
+          Couldn't load bookings for this range.
         </div>
       ) : (
         <div className="surface-card overflow-x-auto">
@@ -220,17 +210,16 @@ function CalendarPage() {
 
               {days.map((day) => {
                 const iso = isoDate(day);
-                const dayBookings = filtered.filter((b) => b.date === iso);
-                const blocks = demo.blockedTimes.filter(
-                  (b) => b.date === iso && (staffFilter === "all" || b.staffId === staffFilter),
-                );
+                const dayBookings = filtered.filter((b) => isoDateInTz(b.start, timezone) === iso);
                 return (
                   <div key={iso} className="relative flex-1 border-l">
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
                       <div key={i} className="border-b" style={{ height: HOUR_HEIGHT }} />
                     ))}
 
-                    {iso === todayIso && nowMinutes > START_HOUR * 60 && nowMinutes < END_HOUR * 60 ? (
+                    {iso === todayIso &&
+                    nowMinutes > START_HOUR * 60 &&
+                    nowMinutes < END_HOUR * 60 ? (
                       <div
                         className="pointer-events-none absolute inset-x-0 z-20 border-t-2 border-destructive"
                         style={{ top: ((nowMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT }}
@@ -239,45 +228,34 @@ function CalendarPage() {
                       </div>
                     ) : null}
 
-                    {blocks.map((b) => (
-                      <div
-                        key={b.id}
-                        className="absolute inset-x-1 z-10 rounded-lg border border-dashed bg-secondary/80 px-2 py-1 text-[11px] text-muted-foreground"
-                        style={{
-                          top: ((timeToMinutes(b.time) - START_HOUR * 60) / 60) * HOUR_HEIGHT,
-                          height: (b.duration / 60) * HOUR_HEIGHT - 4,
-                        }}
-                      >
-                        {b.reason}
-                      </div>
-                    ))}
-
                     {dayBookings.map((b) => {
-                      const svc = demo.serviceById(b.serviceId);
-                      const cancelled = b.status === "cancelled" || b.status === "late_cancellation";
+                      const cancelled =
+                        b.status === "cancelled_by_customer" ||
+                        b.status === "cancelled_by_business" ||
+                        b.status === "late_cancelled";
+                      const startMin = minutesOf(b.start, timezone);
+                      const trainer = staff.data?.find((s) => s.id === b.staffId);
                       return (
                         <button
                           key={b.id}
-                          onClick={() => setSelected(b)}
+                          onClick={() => setSelectedBookingId(b.id)}
                           className={cn(
-                            "absolute inset-x-1 z-10 cursor-grab overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left transition-shadow hover:shadow-float active:cursor-grabbing",
+                            "absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] border-primary bg-primary-soft px-2 py-1 text-left transition-shadow hover:shadow-float",
                             cancelled && "opacity-45 line-through",
                           )}
                           style={{
-                            top: ((timeToMinutes(b.time) - START_HOUR * 60) / 60) * HOUR_HEIGHT,
-                            height: (svc.duration / 60) * HOUR_HEIGHT - 4,
-                            borderLeftColor: svc.colour,
-                            backgroundColor: `color-mix(in oklab, ${svc.colour} 12%, var(--color-card))`,
+                            top: ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
+                            height: (b.serviceSnapshot.durationMinutes / 60) * HOUR_HEIGHT - 4,
                           }}
                         >
-                          <p className="truncate text-[11px] font-semibold">{b.time} {svc.name}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {b.capacity > 2
-                              ? `${b.booked}/${b.capacity} booked`
-                              : b.clientIds.map((id) => demo.clientById(id)?.name).join(", ")}
+                          <p className="truncate text-[11px] font-semibold">
+                            {formatInTz(b.start, timezone, { hour: "2-digit", minute: "2-digit" })}{" "}
+                            {b.serviceSnapshot.name}
                           </p>
                           <p className="truncate text-[11px] text-muted-foreground">
-                            {demo.staffById(b.staffId).name}
+                            {b.attendees.length > 1
+                              ? `${b.seatCount}/${b.attendees.length} booked`
+                              : trainer?.displayName}
                           </p>
                         </button>
                       );
@@ -291,16 +269,19 @@ function CalendarPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        {demo.services.map((s) => (
+        {(services.data ?? []).map((s) => (
           <span key={s.id} className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full" style={{ backgroundColor: s.colour }} />
+            <span
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
+            />
             {s.name}
           </span>
         ))}
       </div>
 
       <AddBookingModal open={addOpen} onOpenChange={setAddOpen} />
-      <BookingPanel booking={selected} onClose={() => setSelected(null)} />
-    </AppShell>
+      <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
+    </>
   );
 }

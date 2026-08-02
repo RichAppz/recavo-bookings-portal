@@ -1,19 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDownToLine, CreditCard, Search } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CreditCard, ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,18 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useDemo } from "@/lib/demo-store";
-import { revenueSeries } from "@/lib/demo-data";
-import { gbp, ukDate } from "@/lib/format";
-import { toast } from "sonner";
+import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useConnectAccount, useCustomers, usePayments } from "@/lib/api/hooks";
+import { customerDisplayName } from "@/lib/api/types";
+import { useTenant } from "@/lib/tenant/tenant-context";
+import { formatInTz, formatMoney } from "@/lib/format";
 
 export const Route = createFileRoute("/payments")({
   head: () => ({
@@ -40,184 +23,202 @@ export const Route = createFileRoute("/payments")({
       { title: "Payments — RECAVO" },
       {
         name: "description",
-        content:
-          "Card payments, package sales, refunds, processing fees and payouts for your booking business.",
+        content: "Payment history, refunds and payout connectivity for your business.",
       },
       { property: "og:title", content: "RECAVO Payments" },
-      { property: "og:description", content: "Revenue, refunds and payouts with full transaction history." },
+      {
+        property: "og:description",
+        content: "Track every charge, refund and payout in one place.",
+      },
     ],
   }),
-  component: PaymentsPage,
+  component: () => (
+    <RequireAuth>
+      <AppShell>
+        <PaymentsPage />
+      </AppShell>
+    </RequireAuth>
+  ),
 });
 
+const STATES = [
+  "all",
+  "succeeded",
+  "processing",
+  "requires_action",
+  "failed",
+  "refunded",
+  "partially_refunded",
+  "disputed",
+  "cancelled",
+] as const;
+
 function PaymentsPage() {
-  const demo = useDemo();
-  const [status, setStatus] = useState("all");
-  const [query, setQuery] = useState("");
-  const [refundId, setRefundId] = useState<string | null>(null);
-  const [refundAmount, setRefundAmount] = useState("");
+  const tenant = useTenant();
+  const [state, setState] = useState<string>("all");
+  const payments = usePayments(state === "all" ? {} : { state });
+  const customers = useCustomers();
+  const connect = useConnectAccount();
 
-  const rows = demo.payments.filter((p) => {
-    const client = demo.clientById(p.clientId)?.name ?? "";
-    const matches = `${client} ${p.ref} ${p.description}`.toLowerCase().includes(query.toLowerCase().trim());
-    return matches && (status === "all" || p.status === status);
-  });
+  const currency = tenant.business?.currency ?? "GBP";
+  const paymentsData = payments.data?.payments;
+  const list = paymentsData ?? [];
 
-  const gross = demo.payments.filter((p) => p.status !== "failed").reduce((s, p) => s + p.amount, 0);
-  const fees = demo.payments.filter((p) => p.status !== "failed").reduce((s, p) => s + p.fee, 0);
-  const refunded = demo.payments.reduce((s, p) => s + (p.refunded ?? 0), 0);
-  const refundTarget = demo.payments.find((p) => p.id === refundId);
+  const totals = useMemo(() => {
+    const rows = paymentsData ?? [];
+    const succeeded = rows.filter(
+      (p) => p.state === "succeeded" || p.state === "partially_refunded",
+    );
+    const gross = succeeded.reduce((s, p) => s + p.amountMinor, 0);
+    const refunded = rows.reduce((s, p) => s + p.amountRefundedMinor, 0);
+    return { gross, refunded, count: rows.length };
+  }, [paymentsData]);
+
+  const nameFor = (customerId: string | null) => {
+    if (!customerId) return "—";
+    const c = customers.data?.items.find((x) => x.id === customerId);
+    return c ? customerDisplayName(c) : "Client";
+  };
 
   return (
-    <AppShell>
-      <PageHeader
-        title="Payments"
-        description="Card takings, refunds and payouts, powered by Stripe."
-        actions={
-          <Button variant="outline" onClick={() => toast.success("CSV export ready to download")}>
-            <ArrowDownToLine className="size-4" /> Export CSV
-          </Button>
-        }
-      />
+    <>
+      <PageHeader title="Payments" description="Charges taken across bookings and package sales." />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Gross volume" value={gbp(gross)} change={9.7} icon={<CreditCard className="size-4" />} />
-        <StatCard label="Processing fees" value={gbp(fees, { decimals: true })} hint="1.5% + 20p" />
-        <StatCard label="Refunded" value={gbp(refunded)} change={-2.1} />
-        <StatCard label="Next payout" value={gbp(1284)} hint="arrives Friday" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Gross (shown)" value={formatMoney(totals.gross, currency)} />
+        <StatCard label="Refunded (shown)" value={formatMoney(totals.refunded, currency)} />
+        <StatCard label="Transactions (shown)" value={String(totals.count)} />
       </div>
 
-      <SectionCard title="Revenue trend" description="Gross card volume over the last six months">
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={revenueSeries} margin={{ left: -18, right: 8, top: 8 }}>
-              <defs>
-                <linearGradient id="payGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} tickFormatter={(v) => `£${v / 1000}k`} />
-              <Tooltip
-                formatter={(v: number) => gbp(v)}
-                contentStyle={{
-                  borderRadius: 12,
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-card)",
-                  fontSize: 12,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="var(--color-primary)"
-                strokeWidth={2.5}
-                fill="url(#payGradient)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+      <SectionCard
+        title="Payout account"
+        description="Where your takings are sent"
+        action={
+          connect.data?.onboardingState === "complete" ? (
+            <StatusBadge status="active" />
+          ) : (
+            <Button size="sm" variant="outline">
+              <ExternalLink className="size-4" /> Finish onboarding
+            </Button>
+          )
+        }
+      >
+        {connect.isLoading ? (
+          <p className="text-sm text-muted-foreground">Checking payout account…</p>
+        ) : connect.isError || !connect.data ? (
+          <EmptyState
+            icon={<CreditCard className="size-6" />}
+            title="No payout account connected"
+            description="Connect a payment provider to start taking card payments."
+          />
+        ) : (
+          <div className="flex flex-wrap gap-6 text-sm">
+            <span>
+              <span className="text-muted-foreground">Provider: </span>
+              {connect.data.provider}
+            </span>
+            <span>
+              <span className="text-muted-foreground">Charges: </span>
+              {connect.data.chargesEnabled ? "Enabled" : "Disabled"}
+            </span>
+            <span>
+              <span className="text-muted-foreground">Payouts: </span>
+              {connect.data.payoutsEnabled ? "Enabled" : "Disabled"}
+            </span>
+            {connect.data.requirementsDue.length > 0 ? (
+              <span className="text-amber-600">
+                {connect.data.requirementsDue.length} outstanding requirement(s)
+              </span>
+            ) : null}
+          </div>
+        )}
       </SectionCard>
 
-      <SectionCard title="Transactions" bodyClassName="p-0">
-        <div className="flex flex-wrap gap-3 border-b p-4">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search client, reference or description"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+      <SectionCard
+        title="Transactions"
+        bodyClassName="p-0"
+        action={
+          <Select value={state} onValueChange={setState}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-              <SelectItem value="partially_refunded">Partially refunded</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
+              {STATES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s === "all" ? "All statuses" : s.replace(/_/g, " ")}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/60 text-xs text-muted-foreground">
-              <tr>
-                {["Reference", "Client", "Description", "Type", "Method", "Amount", "Fee", "Net", "Date", "Status", ""].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((p) => (
-                <tr key={p.id} className="hover:bg-secondary/50">
-                  <td className="px-4 py-3 font-mono text-xs">{p.ref}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{demo.clientById(p.clientId)?.name}</td>
-                  <td className="px-4 py-3">{p.description}</td>
-                  <td className="px-4 py-3">{p.type}</td>
-                  <td className="px-4 py-3">{p.method}</td>
-                  <td className="px-4 py-3 tabular-nums">{gbp(p.amount, { decimals: true })}</td>
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground">{gbp(p.fee, { decimals: true })}</td>
-                  <td className="px-4 py-3 tabular-nums">{gbp(p.amount - p.fee - (p.refunded ?? 0), { decimals: true })}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{ukDate(p.date)}</td>
-                  <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                  <td className="px-4 py-3 text-right">
-                    {p.status === "paid" || p.status === "partially_refunded" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setRefundId(p.id);
-                          setRefundAmount(String(p.amount - (p.refunded ?? 0)));
-                        }}
-                      >
-                        Refund
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      <Dialog open={refundId !== null} onOpenChange={(o) => !o && setRefundId(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Issue refund</DialogTitle>
-            <DialogDescription>
-              {refundTarget
-                ? `Refunding ${demo.clientById(refundTarget.clientId)?.name} for ${refundTarget.description}.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium" htmlFor="refund-amt">Amount (£)</label>
-            <Input id="refund-amt" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} />
-            <p className="text-xs text-muted-foreground">
-              Refunds settle back to the client's card within 5–10 working days. Stripe fees are not returned.
-            </p>
+        }
+      >
+        {payments.isLoading ? (
+          <p className="p-6 text-sm text-muted-foreground">Loading payments…</p>
+        ) : payments.isError ? (
+          <div className="p-6">
+            <EmptyState title="Couldn't load payments" description="Please try again shortly." />
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRefundId(null)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (refundId) demo.refundPayment(refundId, Number(refundAmount) || undefined);
-                setRefundId(null);
-              }}
-            >
-              Refund {gbp(Number(refundAmount) || 0, { decimals: true })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AppShell>
+        ) : list.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              title="No payments yet"
+              description="Payments will appear here once clients start paying online."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-xs text-muted-foreground">
+                <tr>
+                  {["Date", "Client", "Amount", "Refunded", "Status", "Receipt"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {list.map((p) => (
+                  <tr key={p.id} className="hover:bg-secondary/50">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                      {formatInTz(p.createdAt, "Europe/London", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </td>
+                    <td className="px-4 py-3">{nameFor(p.customerId)}</td>
+                    <td className="px-4 py-3 tabular-nums font-medium">
+                      {formatMoney(p.amountMinor, p.currency)}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                      {p.amountRefundedMinor > 0
+                        ? formatMoney(p.amountRefundedMinor, p.currency)
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={p.state} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.receiptUrl ? (
+                        <a
+                          href={p.receiptUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+    </>
   );
 }
