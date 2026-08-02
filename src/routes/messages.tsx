@@ -56,7 +56,8 @@ export const Route = createFileRoute("/messages")({
 
 function messageBubbleClass(senderType: string) {
   if (senderType === "staff") return "ml-auto bg-primary text-primary-foreground";
-  if (senderType === "system") return "mx-auto max-w-[90%] bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100";
+  if (senderType === "system")
+    return "mx-auto max-w-[90%] bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100";
   return "bg-secondary";
 }
 

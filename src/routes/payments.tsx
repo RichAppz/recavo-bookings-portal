@@ -220,8 +220,18 @@ function PaymentsPage() {
         bodyClassName="p-0"
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-36" />
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-36" />
+            <Input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="w-36"
+            />
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-36"
+            />
             <Select value={customerId} onValueChange={setCustomerId}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Client" />
@@ -418,11 +428,11 @@ function RefundDialog({ payment, onClose }: { payment: Payment | null; onClose: 
             disabled={createRefund.isPending || !payment}
             onClick={async () => {
               if (!payment) return;
-              const amountMinor =
-                mode === "full"
-                  ? undefined
-                  : Math.round(Number(amount) * 100);
-              if (mode === "partial" && (!amountMinor || amountMinor <= 0 || amountMinor > maxRefundable)) {
+              const amountMinor = mode === "full" ? undefined : Math.round(Number(amount) * 100);
+              if (
+                mode === "partial" &&
+                (!amountMinor || amountMinor <= 0 || amountMinor > maxRefundable)
+              ) {
                 return toast.error("Enter a valid partial amount");
               }
               await createRefund.mutateAsync({
@@ -442,13 +452,7 @@ function RefundDialog({ payment, onClose }: { payment: Payment | null; onClose: 
   );
 }
 
-function ReceiptDialog({
-  paymentId,
-  onClose,
-}: {
-  paymentId: string | null;
-  onClose: () => void;
-}) {
+function ReceiptDialog({ paymentId, onClose }: { paymentId: string | null; onClose: () => void }) {
   const receipt = usePaymentReceipt(paymentId ?? undefined);
 
   return (

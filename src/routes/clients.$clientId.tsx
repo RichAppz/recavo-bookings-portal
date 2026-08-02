@@ -16,6 +16,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { FileAttachments } from "@/components/FileAttachments";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
 import {
@@ -70,7 +71,6 @@ import {
   useUnassignCustomerTag,
   useUpdateCustomer,
   useUpdateCustomerStatus,
-  uploadFileViaIntent,
 } from "@/lib/api/hooks";
 import { customerDisplayName, type Customer, type EntitlementView } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -110,7 +110,6 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [uploading, setUploading] = useState(false);
   const [confirmDsar, setConfirmDsar] = useState(false);
   const [confirmAnonymise, setConfirmAnonymise] = useState(false);
 
@@ -216,33 +215,6 @@ function ClientProfile() {
           <Button variant="outline" disabled={anonymised} onClick={() => setQuick("package")}>
             <Package className="size-4" /> Sell package
           </Button>
-          <label className="inline-flex">
-            <input
-              type="file"
-              className="sr-only"
-              disabled={uploading || anonymised || !tenant.businessId}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file || !tenant.businessId) return;
-                setUploading(true);
-                try {
-                  await uploadFileViaIntent(tenant.businessId, file, {
-                    ownerType: "customer",
-                    ownerId: client.id,
-                  });
-                  toast.success("File uploaded");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Upload failed");
-                } finally {
-                  setUploading(false);
-                }
-              }}
-            />
-            <Button variant="outline" asChild disabled={uploading || anonymised}>
-              <span>{uploading ? "Uploading…" : "Upload file"}</span>
-            </Button>
-          </label>
           <Button disabled={anonymised} onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
@@ -275,6 +247,7 @@ function ClientProfile() {
           <TabsTrigger value="linked">Linked records</TabsTrigger>
           <TabsTrigger value="portal">Portal link</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
@@ -505,6 +478,19 @@ function ClientProfile() {
           </SectionCard>
         </TabsContent>
 
+        <TabsContent value="files" className="mt-4">
+          <SectionCard
+            title="Attachments"
+            description="Photos, waivers and other documents held against this client."
+          >
+            <FileAttachments
+              ownerType="customer"
+              ownerId={client.id}
+              canUpload={tenant.can(PERMISSIONS.CUSTOMER_UPDATE)}
+            />
+          </SectionCard>
+        </TabsContent>
+
         <TabsContent value="messages" className="mt-4">
           <ClientMessages customerId={client.id} disabled={anonymised} />
         </TabsContent>
@@ -694,7 +680,9 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
           {fieldErrors.preferredChannel ? (
             <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
           ) : null}
-          <p className="text-xs text-muted-foreground">SMS is not available until delivery ships.</p>
+          <p className="text-xs text-muted-foreground">
+            SMS is not available until delivery ships.
+          </p>
         </div>
         <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
           <div>
@@ -771,13 +759,7 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   );
 }
 
-function CustomerConsentsTab({
-  customerId,
-  disabled,
-}: {
-  customerId: string;
-  disabled: boolean;
-}) {
+function CustomerConsentsTab({ customerId, disabled }: { customerId: string; disabled: boolean }) {
   const consents = useCustomerConsents(customerId);
   const record = useRecordCustomerConsent(customerId);
   const [channel, setChannel] = useState("email");
@@ -790,7 +772,11 @@ function CustomerConsentsTab({
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
           <div className="grid gap-2">
             <Label>Channel</Label>
-            <Input value={channel} disabled={disabled} onChange={(e) => setChannel(e.target.value)} />
+            <Input
+              value={channel}
+              disabled={disabled}
+              onChange={(e) => setChannel(e.target.value)}
+            />
           </div>
           <div className="grid gap-2">
             <Label>Source</Label>
@@ -987,7 +973,10 @@ function CustomerLinkedRecordsTab({
       {records.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading linked records…</p>
       ) : (records.data ?? []).length === 0 ? (
-        <EmptyState title="No linked records" description="Add a record when one is needed for booking." />
+        <EmptyState
+          title="No linked records"
+          description="Add a record when one is needed for booking."
+        />
       ) : (
         <ul className="divide-y rounded-xl border">
           {(records.data ?? []).map((r) => (

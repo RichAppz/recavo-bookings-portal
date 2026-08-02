@@ -285,9 +285,7 @@ function Overview() {
                           width={72}
                         />
                         <Tooltip
-                          formatter={(v: number) =>
-                            formatMoney(v, dashboard.data!.basis.currency)
-                          }
+                          formatter={(v: number) => formatMoney(v, dashboard.data!.basis.currency)}
                         />
                         <Bar dataKey="value" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
                       </BarChart>
@@ -295,10 +293,7 @@ function Overview() {
                   </div>
                 )}
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                  <Metric
-                    label="Credits issued"
-                    value={String(dashboard.data.credits.issued)}
-                  />
+                  <Metric label="Credits issued" value={String(dashboard.data.credits.issued)} />
                   <Metric
                     label="Credits redeemed"
                     value={String(dashboard.data.credits.redeemed)}
@@ -307,10 +302,7 @@ function Overview() {
                     label="Credits outstanding"
                     value={String(dashboard.data.credits.outstanding)}
                   />
-                  <Metric
-                    label="Credits expired"
-                    value={String(dashboard.data.credits.expired)}
-                  />
+                  <Metric label="Credits expired" value={String(dashboard.data.credits.expired)} />
                 </dl>
               </SectionCard>
 

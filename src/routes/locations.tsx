@@ -145,9 +145,7 @@ function OpeningHoursEditor({
             <label className="flex w-16 items-center gap-2 text-sm">
               <Switch
                 checked={row.enabled}
-                onCheckedChange={(enabled) =>
-                  onChange({ ...days, [day]: { ...row, enabled } })
-                }
+                onCheckedChange={(enabled) => onChange({ ...days, [day]: { ...row, enabled } })}
               />
               {DAY_NAMES[day]}
             </label>
@@ -284,7 +282,9 @@ function LocationCard({
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <MapPin className="size-4" /> {l.timezone}
         {!l.publicVisible ? (
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">Hidden from booking page</span>
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">
+            Hidden from booking page
+          </span>
         ) : null}
       </p>
 
@@ -578,7 +578,9 @@ function EditLocationDialog({
             <div className="flex items-center justify-between rounded-xl border p-3">
               <div>
                 <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-muted-foreground">Inactive locations are hidden from scheduling</p>
+                <p className="text-xs text-muted-foreground">
+                  Inactive locations are hidden from scheduling
+                </p>
               </div>
               <Switch checked={active} onCheckedChange={setActive} />
             </div>

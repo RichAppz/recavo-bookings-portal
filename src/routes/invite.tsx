@@ -76,7 +76,9 @@ function InvitePage() {
     <Centered>
       <h1 className="text-lg font-semibold">{done ? "Invite accepted" : "Accepting invite…"}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {done ? "Redirecting you to the console." : "Please wait while we join you to the business."}
+        {done
+          ? "Redirecting you to the console."
+          : "Please wait while we join you to the business."}
       </p>
     </Centered>
   );

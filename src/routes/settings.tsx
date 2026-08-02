@@ -175,17 +175,39 @@ function SettingsPage() {
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="billing">SaaS billing</TabsTrigger>
           </TabsList>
-          <TabsContent value="business" className="mt-4"><BusinessProfileTab /></TabsContent>
-          <TabsContent value="configuration" className="mt-4"><ConfigurationTab /></TabsContent>
-          <TabsContent value="team" className="mt-4"><TeamTab /></TabsContent>
-          <TabsContent value="policies" className="mt-4"><PoliciesTab /></TabsContent>
-          <TabsContent value="privacy" className="mt-4"><PrivacyTab /></TabsContent>
-          <TabsContent value="notifications" className="mt-4"><NotificationTemplatesTab /></TabsContent>
-          <TabsContent value="records" className="mt-4"><LinkedRecordsTab /></TabsContent>
-          <TabsContent value="lifecycle" className="mt-4"><LifecycleTab /></TabsContent>
-          <TabsContent value="audit" className="mt-4"><AuditTab /></TabsContent>
-          <TabsContent value="payments" className="mt-4 grid gap-5 xl:grid-cols-2"><PaymentsTab /></TabsContent>
-          <TabsContent value="billing" className="mt-4"><BillingTab /></TabsContent>
+          <TabsContent value="business" className="mt-4">
+            <BusinessProfileTab />
+          </TabsContent>
+          <TabsContent value="configuration" className="mt-4">
+            <ConfigurationTab />
+          </TabsContent>
+          <TabsContent value="team" className="mt-4">
+            <TeamTab />
+          </TabsContent>
+          <TabsContent value="policies" className="mt-4">
+            <PoliciesTab />
+          </TabsContent>
+          <TabsContent value="privacy" className="mt-4">
+            <PrivacyTab />
+          </TabsContent>
+          <TabsContent value="notifications" className="mt-4">
+            <NotificationTemplatesTab />
+          </TabsContent>
+          <TabsContent value="records" className="mt-4">
+            <LinkedRecordsTab />
+          </TabsContent>
+          <TabsContent value="lifecycle" className="mt-4">
+            <LifecycleTab />
+          </TabsContent>
+          <TabsContent value="audit" className="mt-4">
+            <AuditTab />
+          </TabsContent>
+          <TabsContent value="payments" className="mt-4 grid gap-5 xl:grid-cols-2">
+            <PaymentsTab />
+          </TabsContent>
+          <TabsContent value="billing" className="mt-4">
+            <BillingTab />
+          </TabsContent>
         </Tabs>
       )}
     </>
@@ -243,7 +265,10 @@ function BusinessProfileTab() {
             <StatusBadge status={business.status} /> · industry{" "}
             <span className="font-medium">{business.industryTemplateKey}</span>
           </p>
-          <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}>
+          <Can
+            permission={PERMISSIONS.BUSINESS_UPDATE}
+            fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
+          >
             <Button
               className="w-fit"
               disabled={update.isPending}
@@ -296,10 +321,14 @@ function ConfigurationTab() {
   const [bookingTerm, setBookingTerm] = useState(config?.terminology?.booking ?? "Booking");
   const [linkedTerm, setLinkedTerm] = useState(config?.terminology?.linkedRecord ?? "Record");
   const [holdMinutes, setHoldMinutes] = useState(String(config?.booking?.defaultHoldMinutes ?? 10));
-  const [cancelHours, setCancelHours] = useState(String(config?.booking?.cancellationWindowHours ?? 24));
+  const [cancelHours, setCancelHours] = useState(
+    String(config?.booking?.cancellationWindowHours ?? 24),
+  );
   const [vatRegistered, setVatRegistered] = useState(Boolean(config?.tax?.vatRegistered));
   const [vatNumber, setVatNumber] = useState(config?.tax?.vatNumber ?? "");
-  const [closureDays, setClosureDays] = useState(String(config?.retention?.closureWindowDays ?? 30));
+  const [closureDays, setClosureDays] = useState(
+    String(config?.retention?.closureWindowDays ?? 30),
+  );
   const [line1, setLine1] = useState(config?.legalAddress?.line1 ?? "");
   const [line2, setLine2] = useState(config?.legalAddress?.line2 ?? "");
   const [city, setCity] = useState(config?.legalAddress?.city ?? "");
@@ -337,8 +366,18 @@ function ConfigurationTab() {
       </SectionCard>
       <SectionCard title="Booking rules">
         <div className="grid gap-4">
-          <Field label="Default hold (minutes)" value={holdMinutes} onChange={setHoldMinutes} type="number" />
-          <Field label="Cancellation window (hours)" value={cancelHours} onChange={setCancelHours} type="number" />
+          <Field
+            label="Default hold (minutes)"
+            value={holdMinutes}
+            onChange={setHoldMinutes}
+            type="number"
+          />
+          <Field
+            label="Cancellation window (hours)"
+            value={cancelHours}
+            onChange={setCancelHours}
+            type="number"
+          />
         </div>
       </SectionCard>
       <SectionCard title="Tax">
@@ -358,11 +397,19 @@ function ConfigurationTab() {
           <Field label="Region" value={region} onChange={setRegion} />
           <Field label="Postal code" value={postalCode} onChange={setPostalCode} />
           <Field label="Country (ISO-2)" value={country} onChange={setCountry} />
-          <Field label="Closure export window (days)" value={closureDays} onChange={setClosureDays} type="number" />
+          <Field
+            label="Closure export window (days)"
+            value={closureDays}
+            onChange={setClosureDays}
+            type="number"
+          />
         </div>
       </SectionCard>
       <div className="xl:col-span-2">
-        <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}>
+        <Can
+          permission={PERMISSIONS.BUSINESS_UPDATE}
+          fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
+        >
           <Button
             disabled={update.isPending}
             onClick={async () => {
@@ -422,21 +469,30 @@ function TeamTab() {
               <li key={m.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{m.userId}</p>
-                  <p className="text-xs text-muted-foreground">{(m.roleKeys ?? []).join(", ") || "No roles"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(m.roleKeys ?? []).join(", ") || "No roles"}
+                  </p>
                 </div>
                 <StatusBadge status={m.status} />
                 <Can permission={PERMISSIONS.TEAM_MANAGE_PERMISSIONS}>
                   <Select
                     value={m.roleKeys[0] ?? SYSTEM_ROLES.STAFF}
                     onValueChange={async (value) => {
-                      await updateMembership.mutateAsync({ membershipId: m.id, body: { roleKeys: [value] } });
+                      await updateMembership.mutateAsync({
+                        membershipId: m.id,
+                        body: { roleKeys: [value] },
+                      });
                       toast.success("Role updated");
                     }}
                   >
-                    <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {INVITE_ROLES.map((r) => (
-                        <SelectItem key={r} value={r}>{r.replaceAll("_", " ")}</SelectItem>
+                        <SelectItem key={r} value={r}>
+                          {r.replaceAll("_", " ")}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -448,16 +504,23 @@ function TeamTab() {
       </SectionCard>
       <div className="space-y-5">
         <SectionCard title="Invite teammate">
-          <Can permission={PERMISSIONS.TEAM_INVITE} fallback={<p className="text-sm text-muted-foreground">Requires team.invite</p>}>
+          <Can
+            permission={PERMISSIONS.TEAM_INVITE}
+            fallback={<p className="text-sm text-muted-foreground">Requires team.invite</p>}
+          >
             <div className="grid gap-4">
               <Field label="Email" value={email} onChange={setEmail} type="email" />
               <div className="grid gap-2">
                 <Label>Role</Label>
                 <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {INVITE_ROLES.map((r) => (
-                      <SelectItem key={r} value={r}>{r.replaceAll("_", " ")}</SelectItem>
+                      <SelectItem key={r} value={r}>
+                        {r.replaceAll("_", " ")}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -466,7 +529,10 @@ function TeamTab() {
                 className="w-fit"
                 disabled={invite.isPending || !email.trim()}
                 onClick={async () => {
-                  const result = await invite.mutateAsync({ email: email.trim(), roleKeys: [role] });
+                  const result = await invite.mutateAsync({
+                    email: email.trim(),
+                    roleKeys: [role],
+                  });
                   const link = `${window.location.origin}/invite?token=${encodeURIComponent(result.token)}`;
                   await navigator.clipboard.writeText(link);
                   toast.success("Invitation created", { description: "Invite link copied." });
@@ -488,7 +554,8 @@ function TeamTab() {
                   <div>
                     <p className="text-sm font-medium">{inv.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {(inv.roleKeys ?? []).join(", ")} · expires {new Date(inv.expiresAt).toLocaleDateString("en-GB")}
+                      {(inv.roleKeys ?? []).join(", ")} · expires{" "}
+                      {new Date(inv.expiresAt).toLocaleDateString("en-GB")}
                     </p>
                   </div>
                   <StatusBadge status={inv.status} />
@@ -518,10 +585,19 @@ function PoliciesTab() {
         title="Policy documents"
         action={
           <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-            <Button size="sm" variant="outline" disabled={seed.isPending} onClick={async () => {
-              const result = await seed.mutateAsync();
-              toast.success("Defaults seeded", { description: `Published ${result.published.length}, skipped ${result.skipped.length}.` });
-            }}>Seed defaults</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={seed.isPending}
+              onClick={async () => {
+                const result = await seed.mutateAsync();
+                toast.success("Defaults seeded", {
+                  description: `Published ${result.published.length}, skipped ${result.skipped.length}.`,
+                });
+              }}
+            >
+              Seed defaults
+            </Button>
           </Can>
         }
       >
@@ -532,17 +608,28 @@ function PoliciesTab() {
             {(docs.data ?? []).map((doc) => (
               <li key={doc.id} className="flex items-start justify-between gap-3 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{doc.type} · v{doc.version}</p>
-                  <p className="truncate text-xs text-muted-foreground">{doc.content?.slice(0, 120) || "No content"}</p>
+                  <p className="text-sm font-medium">
+                    {doc.type} · v{doc.version}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {doc.content?.slice(0, 120) || "No content"}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={doc.status} />
                   {doc.status === "draft" ? (
                     <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-                      <Button size="sm" variant="outline" disabled={publishDoc.isPending} onClick={async () => {
-                        await publishDoc.mutateAsync({ documentId: doc.id });
-                        toast.success("Policy published");
-                      }}>Publish</Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={publishDoc.isPending}
+                        onClick={async () => {
+                          await publishDoc.mutateAsync({ documentId: doc.id });
+                          toast.success("Policy published");
+                        }}
+                      >
+                        Publish
+                      </Button>
                     </Can>
                   ) : null}
                 </div>
@@ -553,14 +640,23 @@ function PoliciesTab() {
       </SectionCard>
       <div className="space-y-5">
         <SectionCard title="Create draft">
-          <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}>
+          <Can
+            permission={PERMISSIONS.BUSINESS_UPDATE}
+            fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+          >
             <div className="grid gap-4">
               <div className="grid gap-2">
                 <Label>Type</Label>
                 <Select value={type} onValueChange={(v) => setType(v as PolicyDocumentType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {POLICY_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {POLICY_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -569,11 +665,21 @@ function PoliciesTab() {
                 <p className="text-sm font-medium">Publish immediately</p>
                 <Switch checked={publishNow} onCheckedChange={setPublishNow} />
               </div>
-              <Button className="w-fit" disabled={createDoc.isPending || !content.trim()} onClick={async () => {
-                await createDoc.mutateAsync({ type, content: content.trim(), publish: publishNow });
-                toast.success(publishNow ? "Policy published" : "Draft created");
-                setContent("");
-              }}>Create</Button>
+              <Button
+                className="w-fit"
+                disabled={createDoc.isPending || !content.trim()}
+                onClick={async () => {
+                  await createDoc.mutateAsync({
+                    type,
+                    content: content.trim(),
+                    publish: publishNow,
+                  });
+                  toast.success(publishNow ? "Policy published" : "Draft created");
+                  setContent("");
+                }}
+              >
+                Create
+              </Button>
             </div>
           </Can>
         </SectionCard>
@@ -582,8 +688,12 @@ function PoliciesTab() {
             <p className="text-sm text-muted-foreground">No published document.</p>
           ) : (
             <div className="space-y-2 text-sm">
-              <p>v{current.data.version} · <StatusBadge status={current.data.status} /></p>
-              <p className="whitespace-pre-wrap text-muted-foreground">{current.data.content || "—"}</p>
+              <p>
+                v{current.data.version} · <StatusBadge status={current.data.status} />
+              </p>
+              <p className="whitespace-pre-wrap text-muted-foreground">
+                {current.data.content || "—"}
+              </p>
             </div>
           )}
         </SectionCard>
@@ -604,23 +714,36 @@ function PrivacyTab() {
           <EmptyState title="No privacy notice" />
         ) : (
           <div className="space-y-2 text-sm">
-            <p className="font-medium">{latest.data.title} · v{latest.data.version}</p>
-            <p className="text-xs text-muted-foreground">Published {new Date(latest.data.publishedAt).toLocaleString("en-GB")}</p>
+            <p className="font-medium">
+              {latest.data.title} · v{latest.data.version}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Published {new Date(latest.data.publishedAt).toLocaleString("en-GB")}
+            </p>
             <p className="whitespace-pre-wrap text-muted-foreground">{latest.data.body}</p>
           </div>
         )}
       </SectionCard>
       <SectionCard title="Publish new notice">
-        <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}>
+        <Can
+          permission={PERMISSIONS.BUSINESS_UPDATE}
+          fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+        >
           <div className="grid gap-4">
             <Field label="Title" value={title} onChange={setTitle} />
             <Textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} />
-            <Button className="w-fit" disabled={publish.isPending || !title.trim() || !body.trim()} onClick={async () => {
-              await publish.mutateAsync({ title: title.trim(), body: body.trim() });
-              toast.success("Privacy notice published");
-              setTitle("");
-              setBody("");
-            }}>Publish</Button>
+            <Button
+              className="w-fit"
+              disabled={publish.isPending || !title.trim() || !body.trim()}
+              onClick={async () => {
+                await publish.mutateAsync({ title: title.trim(), body: body.trim() });
+                toast.success("Privacy notice published");
+                setTitle("");
+                setBody("");
+              }}
+            >
+              Publish
+            </Button>
           </div>
         </Can>
       </SectionCard>
@@ -634,20 +757,45 @@ function NotificationTemplatesTab() {
     Object.fromEntries(NOTIFICATION_TEMPLATE_KEYS.map((t) => [t.key, t.placeholder])),
   );
   return (
-    <SectionCard title="Message templates" description="API exposes PUT only — edit known template keys.">
-      <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}>
+    <SectionCard
+      title="Message templates"
+      description="API exposes PUT only — edit known template keys."
+    >
+      <Can
+        permission={PERMISSIONS.BUSINESS_UPDATE}
+        fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+      >
         <div className="grid gap-5">
           {NOTIFICATION_TEMPLATE_KEYS.map((tpl) => (
             <div key={tpl.key} className="grid gap-2">
-              <Label htmlFor={tpl.key}>{tpl.label} <span className="font-normal text-muted-foreground">({tpl.key})</span></Label>
-              <Textarea id={tpl.key} rows={3} value={bodies[tpl.key] ?? ""} onChange={(e) => setBodies((p) => ({ ...p, [tpl.key]: e.target.value }))} />
-              <Button size="sm" className="w-fit" disabled={update.isPending || !(bodies[tpl.key] ?? "").trim()} onClick={async () => {
-                await update.mutateAsync({ key: tpl.key, bodyRegion: (bodies[tpl.key] ?? "").trim() });
-                toast.success(`${tpl.label} saved`);
-              }}>Save {tpl.label}</Button>
+              <Label htmlFor={tpl.key}>
+                {tpl.label} <span className="font-normal text-muted-foreground">({tpl.key})</span>
+              </Label>
+              <Textarea
+                id={tpl.key}
+                rows={3}
+                value={bodies[tpl.key] ?? ""}
+                onChange={(e) => setBodies((p) => ({ ...p, [tpl.key]: e.target.value }))}
+              />
+              <Button
+                size="sm"
+                className="w-fit"
+                disabled={update.isPending || !(bodies[tpl.key] ?? "").trim()}
+                onClick={async () => {
+                  await update.mutateAsync({
+                    key: tpl.key,
+                    bodyRegion: (bodies[tpl.key] ?? "").trim(),
+                  });
+                  toast.success(`${tpl.label} saved`);
+                }}
+              >
+                Save {tpl.label}
+              </Button>
             </div>
           ))}
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Globe className="size-3.5" /> Merge tags are replaced automatically.</p>
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Globe className="size-3.5" /> Merge tags are replaced automatically.
+          </p>
         </div>
       </Can>
     </SectionCard>
@@ -665,7 +813,9 @@ function LinkedRecordsTab() {
   const [plural, setPlural] = useState("Vehicles");
   const [fieldKey, setFieldKey] = useState("registration");
   const [fieldLabel, setFieldLabel] = useState("Registration");
-  const [dataType, setDataType] = useState<"short_text" | "long_text" | "integer" | "boolean">("short_text");
+  const [dataType, setDataType] = useState<"short_text" | "long_text" | "integer" | "boolean">(
+    "short_text",
+  );
   const definition = def.data?.definition;
   const fields = def.data?.fields ?? [];
 
@@ -676,17 +826,24 @@ function LinkedRecordsTab() {
           <EmptyState title="No linked-record definition" />
         ) : (
           <div className="space-y-3 text-sm">
-            <p className="font-medium">{definition.singularLabel} / {definition.pluralLabel} <StatusBadge status={definition.status} /></p>
+            <p className="font-medium">
+              {definition.singularLabel} / {definition.pluralLabel}{" "}
+              <StatusBadge status={definition.status} />
+            </p>
             <p className="text-xs text-muted-foreground">key: {definition.key}</p>
             <ul className="divide-y rounded-xl border">
               {fields.length === 0 ? (
                 <li className="px-3 py-2 text-xs text-muted-foreground">No fields yet</li>
-              ) : fields.map((f, i) => (
-                <li key={String(f.id ?? f.fieldKey ?? i)} className="px-3 py-2 text-xs">
-                  <span className="font-medium">{String(f.label ?? f.fieldKey)}</span>{" "}
-                  <span className="text-muted-foreground">({String(f.dataType ?? f.type ?? "field")})</span>
-                </li>
-              ))}
+              ) : (
+                fields.map((f, i) => (
+                  <li key={String(f.id ?? f.fieldKey ?? i)} className="px-3 py-2 text-xs">
+                    <span className="font-medium">{String(f.label ?? f.fieldKey)}</span>{" "}
+                    <span className="text-muted-foreground">
+                      ({String(f.dataType ?? f.type ?? "field")})
+                    </span>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         )}
@@ -696,10 +853,16 @@ function LinkedRecordsTab() {
           <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
             <div className="grid gap-3">
               <Field label="Template key" value={templateKey} onChange={setTemplateKey} />
-              <Button className="w-fit" disabled={applyTemplate.isPending || !templateKey.trim()} onClick={async () => {
-                await applyTemplate.mutateAsync(templateKey.trim());
-                toast.success("Template applied");
-              }}>Apply template</Button>
+              <Button
+                className="w-fit"
+                disabled={applyTemplate.isPending || !templateKey.trim()}
+                onClick={async () => {
+                  await applyTemplate.mutateAsync(templateKey.trim());
+                  toast.success("Template applied");
+                }}
+              >
+                Apply template
+              </Button>
             </div>
           </Can>
         </SectionCard>
@@ -710,10 +873,20 @@ function LinkedRecordsTab() {
                 <Field label="Key" value={key} onChange={setKey} />
                 <Field label="Singular" value={singular} onChange={setSingular} />
                 <Field label="Plural" value={plural} onChange={setPlural} />
-                <Button className="w-fit" disabled={createDef.isPending} onClick={async () => {
-                  await createDef.mutateAsync({ key: key.trim(), singularLabel: singular.trim(), pluralLabel: plural.trim() });
-                  toast.success("Definition created");
-                }}>Create</Button>
+                <Button
+                  className="w-fit"
+                  disabled={createDef.isPending}
+                  onClick={async () => {
+                    await createDef.mutateAsync({
+                      key: key.trim(),
+                      singularLabel: singular.trim(),
+                      pluralLabel: plural.trim(),
+                    });
+                    toast.success("Definition created");
+                  }}
+                >
+                  Create
+                </Button>
               </div>
             </Can>
           </SectionCard>
@@ -724,7 +897,9 @@ function LinkedRecordsTab() {
                 <Field label="Field key" value={fieldKey} onChange={setFieldKey} />
                 <Field label="Label" value={fieldLabel} onChange={setFieldLabel} />
                 <Select value={dataType} onValueChange={(v) => setDataType(v as typeof dataType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="short_text">short_text</SelectItem>
                     <SelectItem value="long_text">long_text</SelectItem>
@@ -732,13 +907,19 @@ function LinkedRecordsTab() {
                     <SelectItem value="boolean">boolean</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button className="w-fit" disabled={addField.isPending} onClick={async () => {
-                  await addField.mutateAsync({
-                    definitionId: definition.id,
-                    body: { fieldKey: fieldKey.trim(), label: fieldLabel.trim(), dataType },
-                  });
-                  toast.success("Field added");
-                }}>Add field</Button>
+                <Button
+                  className="w-fit"
+                  disabled={addField.isPending}
+                  onClick={async () => {
+                    await addField.mutateAsync({
+                      definitionId: definition.id,
+                      body: { fieldKey: fieldKey.trim(), label: fieldLabel.trim(), dataType },
+                    });
+                    toast.success("Field added");
+                  }}
+                >
+                  Add field
+                </Button>
               </div>
             </Can>
           </SectionCard>
@@ -752,44 +933,76 @@ function LifecycleTab() {
   const lifecycle = useLifecycle();
   const transition = useLifecycleTransition();
   const close = useCloseBusiness();
-  const [status, setStatus] = useState<"trial" | "active" | "past_due" | "restricted" | "suspended">("active");
+  const [status, setStatus] = useState<
+    "trial" | "active" | "past_due" | "restricted" | "suspended"
+  >("active");
   const [reason, setReason] = useState("");
   const tz = useTenant().business?.defaultTimezone ?? "Europe/London";
   const data = lifecycle.data;
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Lifecycle state" action={data ? <StatusBadge status={data.status} /> : null}>
+      <SectionCard
+        title="Lifecycle state"
+        action={data ? <StatusBadge status={data.status} /> : null}
+      >
         {!data ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <div className="space-y-2 text-sm">
             <p>Operational creates: {data.allowsOperationalCreates ? "allowed" : "blocked"}</p>
             <p>Export access: {data.allowsExportAccess ? "allowed" : "blocked"}</p>
-            {data.closureExportUntil ? <p className="text-amber-700">Export until {formatInTz(data.closureExportUntil, tz)}</p> : null}
+            {data.closureExportUntil ? (
+              <p className="text-amber-700">
+                Export until {formatInTz(data.closureExportUntil, tz)}
+              </p>
+            ) : null}
           </div>
         )}
       </SectionCard>
       <SectionCard title="Transitions">
-        <Can permission={PERMISSIONS.BUSINESS_UPDATE} fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}>
+        <Can
+          permission={PERMISSIONS.BUSINESS_UPDATE}
+          fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+        >
           <div className="grid gap-4">
             <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {(["trial", "active", "past_due", "restricted", "suspended"] as const).map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Field label="Reason (optional)" value={reason} onChange={setReason} />
-            <Button className="w-fit" disabled={transition.isPending || !data || data.status === "closed"} onClick={async () => {
-              if (!data) return;
-              await transition.mutateAsync({ version: data.version, status, reason: reason.trim() || null });
-              toast.success(`Lifecycle moved to ${status}`);
-            }}>Apply transition</Button>
+            <Button
+              className="w-fit"
+              disabled={transition.isPending || !data || data.status === "closed"}
+              onClick={async () => {
+                if (!data) return;
+                await transition.mutateAsync({
+                  version: data.version,
+                  status,
+                  reason: reason.trim() || null,
+                });
+                toast.success(`Lifecycle moved to ${status}`);
+              }}
+            >
+              Apply transition
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-fit" disabled={!data || data.status === "closed" || close.isPending}>Close business</Button>
+                <Button
+                  variant="destructive"
+                  className="w-fit"
+                  disabled={!data || data.status === "closed" || close.isPending}
+                >
+                  Close business
+                </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -800,13 +1013,22 @@ function LifecycleTab() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={async () => {
-                    if (!data) return;
-                    const result = await close.mutateAsync({ version: data.version, reason: reason.trim() || null });
-                    toast.success("Business closed", {
-                      description: result.closureExportUntil ? `Export until ${formatInTz(result.closureExportUntil, tz)}` : undefined,
-                    });
-                  }}>Confirm close</AlertDialogAction>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      if (!data) return;
+                      const result = await close.mutateAsync({
+                        version: data.version,
+                        reason: reason.trim() || null,
+                      });
+                      toast.success("Business closed", {
+                        description: result.closureExportUntil
+                          ? `Export until ${formatInTz(result.closureExportUntil, tz)}`
+                          : undefined,
+                      });
+                    }}
+                  >
+                    Confirm close
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -826,7 +1048,10 @@ function AuditTab() {
   const slice = all.slice(page * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE + AUDIT_PAGE_SIZE);
 
   return (
-    <Can permission={PERMISSIONS.AUDIT_READ} fallback={<EmptyState title="Permission denied" description="Requires audit.read." />}>
+    <Can
+      permission={PERMISSIONS.AUDIT_READ}
+      fallback={<EmptyState title="Permission denied" description="Requires audit.read." />}
+    >
       <SectionCard title="Audit trail" description="Newest first">
         {slice.length === 0 ? (
           <EmptyState title="No audit events" />
@@ -839,14 +1064,32 @@ function AuditTab() {
                     <p className="font-medium">{e.action}</p>
                     <p className="text-xs text-muted-foreground">{formatInTz(e.occurredAt, tz)}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{e.actorType}:{e.actorId} → {e.targetType}:{e.targetId}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {e.actorType}:{e.actorId} → {e.targetType}:{e.targetId}
+                  </p>
                 </li>
               ))}
             </ul>
             <div className="mt-4 flex items-center justify-between">
-              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Previous</Button>
-              <p className="text-xs text-muted-foreground">Page {page + 1} of {pageCount}</p>
-              <Button size="sm" variant="outline" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Page {page + 1} of {pageCount}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page + 1 >= pageCount}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
             </div>
           </>
         )}
@@ -859,23 +1102,37 @@ function PaymentsTab() {
   const connect = useConnectAccount();
   return (
     <>
-      <SectionCard title="Payment processing" action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}>
+      <SectionCard
+        title="Payment processing"
+        action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}
+      >
         {!connect.data ? (
-          <EmptyState icon={<CreditCard className="size-6" />} title="No payout account connected" description="Connect a payment provider to take card payments." />
+          <EmptyState
+            icon={<CreditCard className="size-6" />}
+            title="No payout account connected"
+            description="Connect a payment provider to take card payments."
+          />
         ) : (
           <div className="flex items-start gap-4 rounded-xl border p-4">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary"><CreditCard className="size-5" /></span>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+              <CreditCard className="size-5" />
+            </span>
             <div>
-              <p className="text-sm font-medium">{connect.data.provider} · {connect.data.accountId}</p>
+              <p className="text-sm font-medium">
+                {connect.data.provider} · {connect.data.accountId}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts {connect.data.payoutsEnabled ? "enabled" : "disabled"}
+                Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
+                {connect.data.payoutsEnabled ? "enabled" : "disabled"}
               </p>
             </div>
           </div>
         )}
       </SectionCard>
       <SectionCard title="Invoicing and tax">
-        <p className="text-sm text-muted-foreground">VAT and legal address are managed under Configuration.</p>
+        <p className="text-sm text-muted-foreground">
+          VAT and legal address are managed under Configuration.
+        </p>
       </SectionCard>
     </>
   );
@@ -914,44 +1171,81 @@ function BillingTab() {
   }, [search.session_id, search.checkoutAttemptId]);
 
   return (
-    <Can permission={PERMISSIONS.BILLING_MANAGE} fallback={<EmptyState title="Permission denied" description="Requires billing.manage." />}>
+    <Can
+      permission={PERMISSIONS.BILLING_MANAGE}
+      fallback={<EmptyState title="Permission denied" description="Requires billing.manage." />}
+    >
       <div className="grid gap-5 xl:grid-cols-2">
-        <SectionCard title="Subscription" action={current?.status ? <StatusBadge status={current.status} /> : null}>
+        <SectionCard
+          title="Subscription"
+          action={current?.status ? <StatusBadge status={current.status} /> : null}
+        >
           {!current ? (
-            <EmptyState title="No plan selected" description="Choose a plan below to start Checkout." />
+            <EmptyState
+              title="No plan selected"
+              description="Choose a plan below to start Checkout."
+            />
           ) : (
             <div className="space-y-3 text-sm">
-              <p>Plan: <span className="font-medium">{plan?.name ?? current.planId ?? "—"}</span></p>
-              <p>Access: <span className="font-medium capitalize">{current.accessState ?? "—"}</span></p>
-              {current.currentPeriodEnd ? <p>Period ends: {formatInTz(current.currentPeriodEnd, tz)}</p> : null}
-              {current.cancelAtPeriodEnd ? <p className="text-amber-700">Cancels at period end</p> : null}
+              <p>
+                Plan: <span className="font-medium">{plan?.name ?? current.planId ?? "—"}</span>
+              </p>
+              <p>
+                Access: <span className="font-medium capitalize">{current.accessState ?? "—"}</span>
+              </p>
+              {current.currentPeriodEnd ? (
+                <p>Period ends: {formatInTz(current.currentPeriodEnd, tz)}</p>
+              ) : null}
+              {current.cancelAtPeriodEnd ? (
+                <p className="text-amber-700">Cancels at period end</p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={portal.isPending} onClick={async () => {
-                  const result = await portal.mutateAsync();
-                  const url = result.portalUrl ?? result.url;
-                  if (url) window.location.assign(url);
-                }}>Manage in Stripe</Button>
+                <Button
+                  variant="outline"
+                  disabled={portal.isPending}
+                  onClick={async () => {
+                    const result = await portal.mutateAsync();
+                    const url = result.portalUrl ?? result.url;
+                    if (url) window.location.assign(url);
+                  }}
+                >
+                  Manage in Stripe
+                </Button>
                 {current.cancelAtPeriodEnd ? (
-                  <Button variant="outline" disabled={resume.isPending} onClick={async () => {
-                    await resume.mutateAsync();
-                    toast.success("Subscription resumed");
-                  }}>Resume</Button>
+                  <Button
+                    variant="outline"
+                    disabled={resume.isPending}
+                    onClick={async () => {
+                      await resume.mutateAsync();
+                      toast.success("Subscription resumed");
+                    }}
+                  >
+                    Resume
+                  </Button>
                 ) : (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="outline" disabled={cancel.isPending}>Cancel at period end</Button>
+                      <Button variant="outline" disabled={cancel.isPending}>
+                        Cancel at period end
+                      </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
-                        <AlertDialogDescription>Access continues until the current period ends.</AlertDialogDescription>
+                        <AlertDialogDescription>
+                          Access continues until the current period ends.
+                        </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Keep plan</AlertDialogCancel>
-                        <AlertDialogAction onClick={async () => {
-                          await cancel.mutateAsync();
-                          toast.success("Cancellation scheduled");
-                        }}>Confirm cancel</AlertDialogAction>
+                        <AlertDialogAction
+                          onClick={async () => {
+                            await cancel.mutateAsync();
+                            toast.success("Cancellation scheduled");
+                          }}
+                        >
+                          Confirm cancel
+                        </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -964,7 +1258,9 @@ function BillingTab() {
           title="Available plans"
           action={
             <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
-              <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="month">Monthly</SelectItem>
                 <SelectItem value="year">Yearly</SelectItem>
@@ -977,27 +1273,50 @@ function BillingTab() {
               const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
               const isCurrent = plan?.code === p.code || current?.planId === p.code;
               return (
-                <div key={p.code} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                <div
+                  key={p.code}
+                  className="flex items-center justify-between gap-3 rounded-xl border p-3"
+                >
                   <div>
-                    <p className="text-sm font-medium">{p.name} {isCurrent ? <StatusBadge status="active" /> : null}</p>
+                    <p className="text-sm font-medium">
+                      {p.name} {isCurrent ? <StatusBadge status="active" /> : null}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {price ? `${formatMoney(price.amountMinor, p.currency)} / ${price.interval}` : "—"}
+                      {price
+                        ? `${formatMoney(price.amountMinor, p.currency)} / ${price.interval}`
+                        : "—"}
                     </p>
                   </div>
                   {!current ? (
-                    <Button size="sm" disabled={checkout.isPending} onClick={async () => {
-                      const result = await checkout.mutateAsync({ plan: p.code, interval: price?.interval ?? interval });
-                      const url = result.checkoutUrl ?? result.url;
-                      if (url) window.location.assign(url);
-                    }}>Checkout</Button>
+                    <Button
+                      size="sm"
+                      disabled={checkout.isPending}
+                      onClick={async () => {
+                        const result = await checkout.mutateAsync({
+                          plan: p.code,
+                          interval: price?.interval ?? interval,
+                        });
+                        const url = result.checkoutUrl ?? result.url;
+                        if (url) window.location.assign(url);
+                      }}
+                    >
+                      Checkout
+                    </Button>
                   ) : !isCurrent ? (
-                    <Button size="sm" variant="outline" disabled={preview.isPending} onClick={async () => {
-                      const result = await preview.mutateAsync({
-                        plan: p.code as SaasPlanCode,
-                        interval: (price?.interval ?? interval) as SaasInterval,
-                      });
-                      setPreviewResult(result);
-                    }}>Preview change</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={preview.isPending}
+                      onClick={async () => {
+                        const result = await preview.mutateAsync({
+                          plan: p.code as SaasPlanCode,
+                          interval: (price?.interval ?? interval) as SaasInterval,
+                        });
+                        setPreviewResult(result);
+                      }}
+                    >
+                      Preview change
+                    </Button>
                   ) : null}
                 </div>
               );
@@ -1007,7 +1326,10 @@ function BillingTab() {
         {previewResult ? (
           <SectionCard title="Change preview" className="xl:col-span-2">
             <div className="space-y-3 text-sm">
-              <p>{previewResult.changeKind} · {previewResult.timing} · effective {formatInTz(previewResult.effectiveAt, tz)}</p>
+              <p>
+                {previewResult.changeKind} · {previewResult.timing} · effective{" "}
+                {formatInTz(previewResult.effectiveAt, tz)}
+              </p>
               <p>
                 Charge now: {formatMoney(previewResult.chargeNowMinor, previewResult.currency)} ·
                 Credit now: {formatMoney(previewResult.creditNowMinor, previewResult.currency)} ·
@@ -1015,16 +1337,26 @@ function BillingTab() {
               </p>
               {previewResult.overLimitBlockers.length > 0 ? (
                 <p className="text-amber-700">
-                  Blockers: {previewResult.overLimitBlockers.map((b) => `${b.limitKey} (${b.currentUsage}/${b.targetLimit})`).join(", ")}
+                  Blockers:{" "}
+                  {previewResult.overLimitBlockers
+                    .map((b) => `${b.limitKey} (${b.currentUsage}/${b.targetLimit})`)
+                    .join(", ")}
                 </p>
               ) : null}
               <div className="flex gap-2">
-                <Button disabled={apply.isPending || previewResult.overLimitBlockers.length > 0} onClick={async () => {
-                  await apply.mutateAsync({ previewToken: previewResult.previewToken });
-                  setPreviewResult(null);
-                  toast.success("Plan change applied");
-                }}>Apply change</Button>
-                <Button variant="outline" onClick={() => setPreviewResult(null)}>Dismiss</Button>
+                <Button
+                  disabled={apply.isPending || previewResult.overLimitBlockers.length > 0}
+                  onClick={async () => {
+                    await apply.mutateAsync({ previewToken: previewResult.previewToken });
+                    setPreviewResult(null);
+                    toast.success("Plan change applied");
+                  }}
+                >
+                  Apply change
+                </Button>
+                <Button variant="outline" onClick={() => setPreviewResult(null)}>
+                  Dismiss
+                </Button>
               </div>
             </div>
           </SectionCard>

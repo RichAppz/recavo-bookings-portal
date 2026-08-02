@@ -107,7 +107,9 @@ function ReportsPage() {
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(defaultTo);
   const [locationId, setLocationId] = useState<string>("all");
-  const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>([]);
+  const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>(
+    [],
+  );
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const range = useMemo(() => toIsoRange(fromDate, toDate), [fromDate, toDate]);
@@ -353,7 +355,10 @@ function ReportsPage() {
                 )}
               </SectionCard>
 
-              <SectionCard title="Attendance" description="Attended, no-show and cancelled sessions">
+              <SectionCard
+                title="Attendance"
+                description="Attended, no-show and cancelled sessions"
+              >
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={attendanceBreakdown} margin={{ left: -20, right: 8, top: 8 }}>
@@ -363,7 +368,12 @@ function ReportsPage() {
                         vertical={false}
                       />
                       <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
-                      <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        fontSize={12}
+                        allowDecimals={false}
+                      />
                       <Tooltip
                         contentStyle={{
                           borderRadius: 12,
@@ -444,7 +454,9 @@ function ReportsPage() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Credits redeemed</dt>
-                    <dd className="mt-1 text-lg font-semibold">{dashboard.data.credits.redeemed}</dd>
+                    <dd className="mt-1 text-lg font-semibold">
+                      {dashboard.data.credits.redeemed}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Credits expired</dt>

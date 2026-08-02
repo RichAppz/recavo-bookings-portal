@@ -82,8 +82,7 @@ export function AddBookingModal({
     [availability.data],
   );
 
-  const selectedSlot =
-    slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
+  const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
 
   const handleConflict = () => {
