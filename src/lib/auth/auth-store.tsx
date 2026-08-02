@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
-import { api, setAccessToken, setMfaHandler, queryKeys } from "@/lib/api";
+import { api, setAccessToken, setMfaHandler, queryKeys, ApiError, toastApiError } from "@/lib/api";
 import type { User } from "@/lib/api/types";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -68,10 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me);
         setStatus("authenticated");
         void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
-      } catch {
-        // Token present but /me failed — still treat as signed-in at Supabase layer.
+      } catch (err) {
+        if (err instanceof ApiError && err.isUnauthenticated) {
+          // The API rejected the token — treat as signed out.
+          setAccessToken(null);
+          setUser(null);
+          setStatus("unauthenticated");
+          return;
+        }
+        // Network/connection error (e.g. API unreachable or CORS): the Supabase
+        // session is valid, but we couldn't load the profile. Surface it rather
+        // than silently pretending everything is fine.
         setUser(null);
         setStatus("authenticated");
+        toastApiError(err, "Couldn't reach the API — check your connection or API URL.");
       }
     },
     [queryClient],

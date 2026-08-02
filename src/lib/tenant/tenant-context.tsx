@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
-import { api, queryKeys } from "@/lib/api";
+import { api, ApiError, queryKeys } from "@/lib/api";
 import type {
   Business,
   BusinessConfiguration,
@@ -231,6 +231,28 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       terminology,
     ],
   );
+
+  if (status === "authenticated" && businessesQuery.isError) {
+    const err = businessesQuery.error;
+    const detail =
+      err instanceof ApiError
+        ? err.detail || err.title
+        : "The portal couldn't reach the API. Check your connection or the API URL.";
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md space-y-3 text-center">
+          <h1 className="text-lg font-semibold">Couldn't load your businesses</h1>
+          <p className="text-sm text-muted-foreground">{detail}</p>
+          <button
+            onClick={() => void businessesQuery.refetch()}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
     return (

@@ -36,6 +36,11 @@ export function setMfaHandler(handler: ((error: ApiError) => Promise<boolean>) |
 }
 
 export function getApiBaseUrl(): string {
+  // In the browser during dev, use a relative base so requests hit the Vite
+  // dev proxy (same-origin "/api/*") and avoid the API's missing CORS headers.
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    return "";
+  }
   const raw = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (!raw) {
     // Dev-friendly default; production must set VITE_API_BASE_URL.
