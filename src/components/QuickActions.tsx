@@ -18,13 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ApiError } from "@/lib/api";
+import { ApiError, newIdempotencyKey } from "@/lib/api";
 import {
   useAddStaffTimeOff,
   useConversations,
   useCreateBooking,
   useCreateCustomer,
   useCustomers,
+  useIssuePackagePurchase,
   useLocationsList,
   usePackages,
   useSendMessage,
@@ -263,30 +264,67 @@ function SellPackageDialog({
 }) {
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [packageId, setPackageId] = useState("");
+  const [mode, setMode] = useState<"checkout" | "record">("checkout");
+  const [paymentRef, setPaymentRef] = useState("");
   const customers = useCustomers();
   const packages = usePackages();
   const startPurchase = useStartPackagePurchase();
+  const issuePurchase = useIssuePackagePurchase();
   const def = packages.data?.find((p) => p.id === packageId);
+
+  const reset = () => {
+    setMode("checkout");
+    setPaymentRef("");
+  };
 
   return (
     <Shell
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        onClose();
+        reset();
+      }}
       title="Sell package"
-      description="Start a package checkout. Credits are issued once payment succeeds."
-      submitLabel={def ? `Charge ${formatMoney(def.priceMinor, def.currency)}` : "Start checkout"}
-      disabled={!customerId || !packageId}
+      description={
+        mode === "checkout"
+          ? "Start a card checkout. Credits are issued once payment succeeds."
+          : "Issue credits immediately for a payment already taken outside RECAVO (cash, terminal, etc)."
+      }
+      submitLabel={
+        mode === "checkout"
+          ? def
+            ? `Charge ${formatMoney(def.priceMinor, def.currency)}`
+            : "Start checkout"
+          : "Issue credits"
+      }
+      disabled={!customerId || !packageId || (mode === "record" && !paymentRef.trim())}
       onSubmit={async () => {
         if (!customerId || !packageId) {
           toast.error("Choose a client and package");
           return;
         }
-        const result = await startPurchase.mutateAsync({ customerId, packageId });
-        toast.success("Checkout started", {
-          description: result.clientSecret
-            ? "Payment intent created — complete checkout to issue credits."
-            : "Payment recorded.",
-        });
+        if (mode === "checkout") {
+          const result = await startPurchase.mutateAsync({ customerId, packageId });
+          toast.success("Checkout started", {
+            description: result.clientSecret
+              ? "Payment intent created — complete checkout to issue credits."
+              : "Payment recorded.",
+          });
+        } else {
+          if (!paymentRef.trim()) {
+            toast.error("Enter the payment reference");
+            throw new Error("validation");
+          }
+          await issuePurchase.mutateAsync({
+            customerId,
+            packageId,
+            paymentRef: paymentRef.trim(),
+            providerEventId: newIdempotencyKey(),
+          });
+          toast.success("Credits issued", {
+            description: `Recorded against payment reference ${paymentRef.trim()}.`,
+          });
+        }
       }}
     >
       <div className="grid gap-2">
@@ -326,7 +364,35 @@ function SellPackageDialog({
             {def.validity.kind.replace("_", " ")}
           </p>
           <p className="mt-1 text-muted-foreground">
-            Recorded in the client credit ledger once payment is confirmed.
+            {mode === "checkout"
+              ? "Recorded in the client credit ledger once payment is confirmed."
+              : "Credits are issued straight away against the payment reference below."}
+          </p>
+        </div>
+      ) : null}
+      <div className="grid gap-2">
+        <Label>How was this paid?</Label>
+        <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="checkout">Card checkout (via RECAVO)</SelectItem>
+            <SelectItem value="record">Already paid (cash / terminal / other)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {mode === "record" ? (
+        <div className="grid gap-2">
+          <Label htmlFor="pp-payment-ref">Payment reference</Label>
+          <Input
+            id="pp-payment-ref"
+            value={paymentRef}
+            onChange={(e) => setPaymentRef(e.target.value)}
+            placeholder="Terminal receipt no., cash log ref, etc."
+          />
+          <p className="text-xs text-muted-foreground">
+            Required — ties the issued credits to proof of payment for reconciliation.
           </p>
         </div>
       ) : null}

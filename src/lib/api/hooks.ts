@@ -22,15 +22,21 @@ import type {
   CustomerNote,
   CustomerTag,
   Dashboard,
+  Entitlement,
   EntitlementView,
   Invitation,
   Location,
   Notification,
   Package,
+  PackagePurchase,
   Payment,
+  PaymentReceipt,
   PublicCataloguePlan,
+  Refund,
+  Resource,
   Staff,
 } from "@/lib/api/types";
+import { useAuth } from "@/lib/auth/auth-store";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 export function useBusinessId() {
@@ -324,6 +330,26 @@ export function useStaffList() {
   });
 }
 
+/**
+ * Creates an active staff seat directly (as distinct from `useInviteStaff`,
+ * which sends an email invitation). Reserves `staff.active` plan capacity —
+ * 409 PLAN_LIMIT_EXCEEDED / 402 BILLING_ACCESS_REQUIRED surface via toast.
+ */
+export function useCreateStaff() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await api.post<{ staff: Staff }>(`/api/v1/businesses/${businessId}/staff`, body);
+      return res.data.staff;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useUpdateStaff() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -392,6 +418,93 @@ export function useCreateLocation() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateLocation() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      locationId: string;
+      version: number;
+      body: Record<string, unknown>;
+    }) => {
+      const res = await api.patch<{ location: Location }>(
+        `/api/v1/businesses/${businessId}/locations/${vars.locationId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.location;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Bookable resources (rooms/bays/chairs/equipment). A service's
+ * `requiredResourceType` (if set) must match a resource's `type` for that
+ * resource to satisfy the service's booking requirement.
+ */
+export function useResources() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.resources(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ resources: Resource[] }>(
+        `/api/v1/businesses/${businessId}/resources`,
+      );
+      return res.data.resources;
+    },
+  });
+}
+
+export function useCreateResource() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { name: string; type: string; locationId?: string | null }) => {
+      const res = await api.post<{ resource: Resource }>(
+        `/api/v1/businesses/${businessId}/resources`,
+        body,
+      );
+      return res.data.resource;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.resources(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Activates/deactivates a resource. Note: unlike most write endpoints this
+ * one does not take an If-Match header (the API's body is `{ active }` only).
+ */
+export function useUpdateResource() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { resourceId: string; active: boolean }) => {
+      const res = await api.patch<{ resource: Resource }>(
+        `/api/v1/businesses/${businessId}/resources/${vars.resourceId}`,
+        { active: vars.active },
+      );
+      return res.data.resource;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.resources(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -797,6 +910,58 @@ export function usePayments(filters: Record<string, string | undefined> = {}) {
   });
 }
 
+/**
+ * Cursor-paginated payments list (RECA-500). Allow-listed filters mirror the
+ * API: `from`/`to` (half-open UTC on createdAt), `state`, `customerId`.
+ */
+export function usePaymentsInfinite(
+  filters: { from?: string; to?: string; state?: string; customerId?: string } = {},
+) {
+  const businessId = useBusinessId();
+  const query = Object.fromEntries(Object.entries(filters).filter(([, v]) => Boolean(v))) as Record<
+    string,
+    string
+  >;
+  return usePaginatedQuery<Payment, "payments">({
+    queryKey: [...queryKeys.payments(businessId, query), "infinite"],
+    path: `/api/v1/businesses/${businessId}/payments`,
+    listKey: "payments",
+    query,
+    limit: 25,
+    enabled: Boolean(businessId),
+  });
+}
+
+/** Single payment detail (RECA-448) — kept fresh after refunds via invalidation. */
+export function usePayment(paymentId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.payment(businessId, paymentId ?? ""),
+    enabled: Boolean(businessId && paymentId),
+    queryFn: async () => {
+      const res = await api.get<{ payment: Payment }>(
+        `/api/v1/businesses/${businessId}/payments/${paymentId}`,
+      );
+      return res.data.payment;
+    },
+  });
+}
+
+/** Purchase-time receipt snapshot (RECA-142) — seller/tax/amount only, no card data. */
+export function usePaymentReceipt(paymentId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.paymentReceipt(businessId, paymentId ?? ""),
+    enabled: Boolean(businessId && paymentId),
+    queryFn: async () => {
+      const res = await api.get<{ receipt: PaymentReceipt }>(
+        `/api/v1/businesses/${businessId}/payments/${paymentId}/receipt`,
+      );
+      return res.data.receipt;
+    },
+  });
+}
+
 export function useConnectAccount() {
   const businessId = useBusinessId();
   return useQuery({
@@ -808,6 +973,71 @@ export function useConnectAccount() {
       );
       return res.data.account;
     },
+  });
+}
+
+/** Creates (or resyncs) the Stripe Connect account and returns a hosted onboarding URL. */
+export function useConnectOnboard() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ account: ConnectAccount; onboardingUrl: string }>(
+        `/api/v1/businesses/${businessId}/connect/account`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.connectAccount(businessId), data.account);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Resyncs Connect account status (charges/payouts enabled, requirements) from Stripe. */
+export function useConnectSync() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ account: ConnectAccount }>(
+        `/api/v1/businesses/${businessId}/connect/sync`,
+        {},
+      );
+      return res.data.account;
+    },
+    onSuccess: (account) => {
+      qc.setQueryData(queryKeys.connectAccount(businessId), account);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Full or partial refund. Requires payment.refund; server enforces Idempotency-Key. */
+export function useCreateRefund() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Refund,
+      { paymentId: string; amountMinor?: number; reasonCode: string }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ refund: Refund }>(
+        `/api/v1/businesses/${businessId}/refunds`,
+        vars,
+        { idempotencyKey },
+      );
+      return res.data.refund;
+    }),
+    onSuccess: (_refund, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.payment(businessId, vars.paymentId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.paymentReceipt(businessId, vars.paymentId),
+      });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
@@ -882,10 +1112,23 @@ export function useMessages(conversationId: string | undefined) {
   });
 }
 
+type MessagePage = { messages: ConversationMessage[]; nextCursor?: string | null };
+
+/**
+ * Sends a message with optimistic UI: the draft appears immediately under a
+ * client-generated id, and rolls back to the pre-send state if the request
+ * fails (e.g. permission denied, rate limited).
+ */
 export function useSendMessage(conversationId: string | undefined) {
   const businessId = useBusinessId();
   const qc = useQueryClient();
-  return useMutation({
+  const { user } = useAuth();
+  return useMutation<
+    ConversationMessage,
+    ApiError,
+    string,
+    { previous: MessagePage | undefined; optimisticId: string }
+  >({
     mutationFn: async (body: string) => {
       const res = await api.post<{ message: ConversationMessage }>(
         `/api/v1/businesses/${businessId}/conversations/${conversationId}/messages`,
@@ -893,10 +1136,65 @@ export function useSendMessage(conversationId: string | undefined) {
       );
       return res.data.message;
     },
+    onMutate: async (body) => {
+      const key = queryKeys.messages(businessId, conversationId ?? "");
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<MessagePage>(key);
+      const optimisticId = `optimistic-${newIdempotencyKey()}`;
+      const optimisticMessage: ConversationMessage = {
+        id: optimisticId,
+        businessId,
+        conversationId: conversationId ?? "",
+        senderType: "staff",
+        senderId: user?.id ?? "me",
+        body,
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData<MessagePage>(key, (old) => ({
+        messages: [...(old?.messages ?? []), optimisticMessage],
+        nextCursor: old?.nextCursor ?? null,
+      }));
+      return { previous, optimisticId };
+    },
+    onError: (err, _body, context) => {
+      const key = queryKeys.messages(businessId, conversationId ?? "");
+      if (context) qc.setQueryData<MessagePage>(key, context.previous);
+      toastApiError(err);
+    },
+    onSuccess: (message, _body, context) => {
+      const key = queryKeys.messages(businessId, conversationId ?? "");
+      qc.setQueryData<MessagePage>(key, (old) => ({
+        messages: (old?.messages ?? []).map((m) => (m.id === context.optimisticId ? message : m)),
+        nextCursor: old?.nextCursor ?? null,
+      }));
+      void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.messages(businessId, conversationId ?? "") });
+    },
+  });
+}
+
+/**
+ * Bulk announcement fan-out (RECA-501): posts one message per attendee's own
+ * conversation. Requires customer.update — gate the trigger UI with `Can`.
+ */
+export function useCreateAnnouncement() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      customerIds: string[];
+      body: string;
+      bookingId?: string | null;
+    }) => {
+      const res = await api.post<{ recipients: number; messageIds: string[] }>(
+        `/api/v1/businesses/${businessId}/announcements`,
+        vars,
+      );
+      return res.data;
+    },
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: queryKeys.messages(businessId, conversationId ?? ""),
-      });
       void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
     },
     onError: (err) => toastApiError(err),
@@ -914,6 +1212,39 @@ export function useNotifications() {
         nextCursor?: string | null;
       }>(`/api/v1/businesses/${businessId}/notifications`);
       return res.data;
+    },
+  });
+}
+
+/** Marks a single staff notification read; optimistically stamps `readAt` for an instant badge update. */
+export function useMarkNotificationRead() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await api.post<{ notification: Notification }>(
+        `/api/v1/businesses/${businessId}/notifications/${notificationId}/read`,
+        {},
+      );
+      return res.data.notification;
+    },
+    onMutate: async (notificationId) => {
+      const key = queryKeys.notifications(businessId);
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<{ notifications: Notification[] }>(key);
+      qc.setQueryData<{ notifications: Notification[] }>(key, (old) => ({
+        notifications: (old?.notifications ?? []).map((n) =>
+          n.id === notificationId ? { ...n, readAt: n.readAt ?? new Date().toISOString() } : n,
+        ),
+      }));
+      return { previous };
+    },
+    onError: (err, _id, context) => {
+      if (context?.previous) qc.setQueryData(queryKeys.notifications(businessId), context.previous);
+      toastApiError(err);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.notifications(businessId) });
     },
   });
 }
@@ -991,6 +1322,7 @@ export function useAdjustEntitlement() {
   });
 }
 
+/** Credit ledger for an entitlement, always newest-first by ledger `seq`. */
 export function useEntitlementLedger(entitlementId: string | undefined) {
   const businessId = useBusinessId();
   return useQuery({
@@ -1001,7 +1333,10 @@ export function useEntitlementLedger(entitlementId: string | undefined) {
         entries: CreditLedgerEntry[];
         nextCursor?: string | null;
       }>(`/api/v1/businesses/${businessId}/entitlements/${entitlementId}/ledger`);
-      return res.data;
+      return {
+        ...res.data,
+        entries: [...res.data.entries].sort((a, b) => b.seq - a.seq),
+      };
     },
   });
 }
@@ -1023,6 +1358,42 @@ export function useStartPackagePurchase() {
         return res.data;
       },
     ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Directly issues a package purchase + entitlement for an already-verified
+ * payment (e.g. cash, card terminal, or an external processor charge taken
+ * outside RECAVO checkout). `paymentRef` and `providerEventId` are both
+ * required by the API and, together, make repeat submissions idempotent
+ * server-side (spec §12.2) in addition to the Idempotency-Key header.
+ */
+export function useIssuePackagePurchase() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: {
+          customerId: string;
+          packageId: string;
+          paymentRef: string;
+          providerEventId: string;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ purchase: PackagePurchase; entitlement: Entitlement }>(
+          `/api/v1/businesses/${businessId}/package-purchases`,
+          vars,
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "entitlements"] });
+    },
     onError: (err) => toastApiError(err),
   });
 }
@@ -1055,6 +1426,30 @@ export function useAddStaffTimeOff() {
       void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/** Cancels a [start, end) time-off block by id; requires the staff row's current version. */
+export function useRemoveStaffTimeOff() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { staffId: string; timeOffId: string; version: number }) => {
+      const res = await api.delete<{ staff: Staff }>(
+        `/api/v1/businesses/${businessId}/staff/${vars.staffId}/time-off/${vars.timeOffId}`,
+        { ifMatch: vars.version },
+      );
+      return res.data.staff;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      }
+      toastApiError(err);
+    },
   });
 }
 

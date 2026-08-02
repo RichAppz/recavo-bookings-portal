@@ -51,6 +51,8 @@ export const queryKeys = {
     ["biz", businessId, "payments", filters ?? {}] as const,
   payment: (businessId: string, paymentId: string) =>
     ["biz", businessId, "payments", paymentId] as const,
+  paymentReceipt: (businessId: string, paymentId: string) =>
+    ["biz", businessId, "payments", paymentId, "receipt"] as const,
   connectAccount: (businessId: string) => ["biz", businessId, "connect"] as const,
 
   conversations: (businessId: string, filters?: Record<string, unknown>) =>
