@@ -5,6 +5,7 @@ import {
   BadgePoundSterling,
   CalendarPlus,
   CalendarX,
+  Lock,
   MessageSquarePlus,
   Package,
   TrendingUp,
@@ -80,6 +81,14 @@ function todayRange() {
   return { from: start.toISOString(), to: end.toISOString() };
 }
 
+/** Dashboard requires REPORT_READ *and* plan feature `reports.basic` (RECA-157). */
+function isPlanGated(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.status === 402 || (error.status === 403 && error.code === "FEATURE_NOT_AVAILABLE"))
+  );
+}
+
 function Overview() {
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
@@ -126,14 +135,28 @@ function Overview() {
             ))}
           </div>
         ) : dashboard.isError ? (
-          <EmptyState
-            title="Couldn't load dashboard"
-            description={
-              dashboard.error instanceof ApiError
-                ? dashboard.error.detail || dashboard.error.title
-                : "Please try again shortly."
-            }
-          />
+          isPlanGated(dashboard.error) ? (
+            <EmptyState
+              icon={<Lock className="size-5" />}
+              title="Upgrade your plan for reports"
+              description="Revenue, attendance and occupancy reporting isn't included on your current plan."
+              action={
+                <Button variant="outline" asChild>
+                  <Link to="/platform">View plans</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="Couldn't load dashboard"
+              description={
+                dashboard.error instanceof ApiError
+                  ? dashboard.error.detail || dashboard.error.title
+                  : "Please try again shortly."
+              }
+              action={<Button onClick={() => dashboard.refetch()}>Try again</Button>}
+            />
+          )
         ) : dashboard.data ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard

@@ -25,7 +25,7 @@ import {
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
-import { toastApiError } from "@/lib/api";
+import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -107,7 +107,15 @@ export function AddBookingModal({
       reset();
       onOpenChange(false);
     } catch (err) {
-      toastApiError(err);
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        toast.error("That slot was just taken", {
+          description: "Availability has been refreshed — pick another time.",
+        });
+        setSlotStart(null);
+        void availability.refetch();
+      } else {
+        toastApiError(err);
+      }
     }
   };
 
