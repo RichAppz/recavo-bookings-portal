@@ -1,11 +1,15 @@
 import { Navigate, useRouterState } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "./auth-store";
 
 /** Redirect unauthenticated users to /login, preserving the intended destination. */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
-  const pathname = useRouterState({ select: (s) => s.location.href });
+  const currentHref = useRouterState({ select: (s) => s.location.href });
+  // Capture the intended destination once at mount. Reading the live href on
+  // every render feeds the growing /login?redirect=… URL back into itself and
+  // causes an infinite navigation loop during the router transition.
+  const [redirectTo] = useState(currentHref);
 
   if (status === "loading") {
     return (
@@ -30,7 +34,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (status !== "authenticated") {
-    return <Navigate to="/login" search={{ redirect: pathname }} replace />;
+    return <Navigate to="/login" search={{ redirect: redirectTo }} replace />;
   }
 
   return <>{children}</>;
