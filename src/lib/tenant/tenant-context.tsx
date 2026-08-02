@@ -19,6 +19,7 @@ import type {
 } from "@/lib/api/types";
 import { permissionsForRoles, type PermissionKey } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth/auth-store";
+import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 
 const BUSINESS_KEY = "recavo.activeBusinessId";
 const LOCATION_KEY = "recavo.activeLocationId";
@@ -255,16 +256,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }
 
   if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="max-w-md space-y-2 text-center">
-          <h1 className="text-lg font-semibold">No business membership</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account is signed in but is not a member of any business yet.
-          </p>
-        </div>
-      </div>
-    );
+    return <CreateFirstBusiness />;
   }
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
