@@ -47,7 +47,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { useCustomers, useNotifications } from "@/lib/api/hooks";
+import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -105,7 +105,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const results = search.trim().length > 1 ? (searchQuery.data?.items ?? []).slice(0, 5) : [];
 
   const notifications = useNotifications();
-  const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
+  const markNotificationRead = useMarkNotificationRead();
+  const unreadNotifications = (notifications.data?.notifications ?? []).filter((n) => !n.readAt);
+  const unread = unreadNotifications.length;
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
 
   return (
@@ -321,15 +323,42 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     <Bell className="size-4" />
                     {unread > 0 ? (
-                      <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning" />
+                      <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-warning text-[10px] font-semibold text-warning-foreground">
+                        {unread > 9 ? "9+" : unread}
+                      </span>
                     ) : null}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
+                    {unread > 0 ? (
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          for (const n of unreadNotifications) {
+                            markNotificationRead.mutate(n.id);
+                          }
+                        }}
+                      >
+                        Mark all as read
+                      </button>
+                    ) : null}
+                  </div>
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => (
-                    <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
-                      <span className="text-sm font-medium">{n.subject}</span>
+                    <DropdownMenuItem
+                      key={n.id}
+                      className="flex-col items-start gap-0.5"
+                      onSelect={() => {
+                        if (!n.readAt) markNotificationRead.mutate(n.id);
+                      }}
+                    >
+                      <span className="flex w-full items-center gap-1.5 text-sm font-medium">
+                        {!n.readAt ? <span className="size-1.5 shrink-0 rounded-full bg-warning" /> : null}
+                        {n.subject}
+                      </span>
                       <span className="text-xs text-muted-foreground">{n.body}</span>
                     </DropdownMenuItem>
                   ))}
