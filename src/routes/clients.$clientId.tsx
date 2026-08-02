@@ -32,7 +32,7 @@ import {
   useMessages,
   useOpenConversation,
   usePackages,
-  usePayments,
+  usePaymentsList,
   useSendMessage,
   useUpdateCustomerStatus,
   uploadFileViaIntent,
@@ -80,7 +80,7 @@ function ClientProfile() {
   const bookings = useCustomerBookings(clientId);
   const credits = useCustomerCredits(clientId);
   const packages = usePackages();
-  const payments = usePayments({ customerId: clientId });
+  const payments = usePaymentsList({ customerId: clientId });
   const notes = useCustomerNotes(clientId);
   const addNote = useAddCustomerNote(clientId);
   const updateStatus = useUpdateCustomerStatus();
@@ -120,7 +120,7 @@ function ClientProfile() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + e.balance.available, 0);
-  const lifetimeSpendMinor = (payments.data?.payments ?? [])
+  const lifetimeSpendMinor = (payments.payments ?? [])
     .filter((p) => p.state === "succeeded" || p.state === "partially_refunded")
     .reduce((sum, p) => sum + p.amountMinor - p.amountRefundedMinor, 0);
 
@@ -284,7 +284,7 @@ function ClientProfile() {
           <SectionCard bodyClassName="p-0">
             {payments.isLoading ? (
               <p className="p-6 text-sm text-muted-foreground">Loading payments…</p>
-            ) : (payments.data?.payments ?? []).length === 0 ? (
+            ) : (payments.payments ?? []).length === 0 ? (
               <div className="p-6">
                 <EmptyState title="No payments recorded" />
               </div>
@@ -302,7 +302,7 @@ function ClientProfile() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {(payments.data?.payments ?? []).map((p) => (
+                  {(payments.payments ?? []).map((p) => (
                     <tr key={p.id}>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {ukDate(p.createdAt.slice(0, 10))}

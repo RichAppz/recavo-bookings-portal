@@ -7,6 +7,8 @@ export const queryKeys = {
   business: (businessId: string) => ["biz", businessId, "business"] as const,
   configuration: (businessId: string) => ["biz", businessId, "configuration"] as const,
   locations: (businessId: string) => ["biz", businessId, "locations"] as const,
+  location: (businessId: string, locationId: string) =>
+    ["biz", businessId, "locations", locationId] as const,
   memberships: (businessId: string) => ["biz", businessId, "memberships"] as const,
 
   bookings: (businessId: string, filters?: Record<string, unknown>) =>
@@ -44,6 +46,8 @@ export const queryKeys = {
     ["biz", businessId, "payments", filters ?? {}] as const,
   payment: (businessId: string, paymentId: string) =>
     ["biz", businessId, "payments", paymentId] as const,
+  paymentReceipt: (businessId: string, paymentId: string) =>
+    ["biz", businessId, "payments", paymentId, "receipt"] as const,
   connectAccount: (businessId: string) => ["biz", businessId, "connect"] as const,
 
   conversations: (businessId: string, filters?: Record<string, unknown>) =>
@@ -59,11 +63,21 @@ export const queryKeys = {
     ["biz", businessId, "reports", "dashboard", filters ?? {}] as const,
   reports: (businessId: string, report: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "reports", report, filters ?? {}] as const,
+  exports: (businessId: string) => ["biz", businessId, "exports"] as const,
+  export: (businessId: string, exportId: string) =>
+    ["biz", businessId, "exports", exportId] as const,
 
   subscription: (businessId: string) => ["biz", businessId, "subscription"] as const,
   plans: () => ["plans"] as const,
 
   resources: (businessId: string) => ["biz", businessId, "resources"] as const,
+
+  failedJobs: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "jobs", "failed", filters ?? {}] as const,
+  failedOutbox: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "outbox", "failed", filters ?? {}] as const,
+  deadLetterOutbox: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "outbox", "dead-letter", filters ?? {}] as const,
 
   // Public / portal surfaces
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,

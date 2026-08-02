@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Megaphone, Send } from "lucide-react";
+import { Check, Megaphone, Send } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, PersonAvatar, SectionCard } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useConversations, useCustomers, useMessages, useSendMessage } from "@/lib/api/hooks";
+import { Can } from "@/lib/tenant/tenant-context";
+import { PERMISSIONS } from "@/lib/permissions";
+import {
+  useConversations,
+  useCreateAnnouncement,
+  useCustomers,
+  useMessages,
+  useSendMessage,
+} from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz } from "@/lib/format";
 import { toast } from "sonner";
@@ -45,6 +54,26 @@ export const Route = createFileRoute("/messages")({
   ),
 });
 
+function messageBubbleClass(senderType: string) {
+  if (senderType === "staff") return "ml-auto bg-primary text-primary-foreground";
+  if (senderType === "system") return "mx-auto max-w-[90%] bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100";
+  return "bg-secondary";
+}
+
+function readMarker(m: {
+  senderType: string;
+  readByCustomerAt?: string | null;
+  readByStaffAt?: string | null;
+}) {
+  if (m.senderType === "staff" && m.readByCustomerAt) {
+    return `Read by client · ${formatInTz(m.readByCustomerAt, "Europe/London", { timeStyle: "short" })}`;
+  }
+  if (m.senderType === "customer" && m.readByStaffAt) {
+    return `Read by team · ${formatInTz(m.readByStaffAt, "Europe/London", { timeStyle: "short" })}`;
+  }
+  return null;
+}
+
 function MessagesPage() {
   const conversations = useConversations();
   const customers = useCustomers();
@@ -65,15 +94,30 @@ function MessagesPage() {
     return c ? customerDisplayName(c) : "Client";
   };
 
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    const saved = draft;
+    setDraft("");
+    try {
+      await sendMessage.mutateAsync(text);
+      toast.success("Message sent");
+    } catch {
+      setDraft(saved);
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Messages"
         description="Every client conversation in one inbox."
         actions={
-          <Button variant="outline" onClick={() => setAnnounce(true)}>
-            <Megaphone className="size-4" /> Send announcement
-          </Button>
+          <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+            <Button variant="outline" onClick={() => setAnnounce(true)}>
+              <Megaphone className="size-4" /> Send announcement
+            </Button>
+          </Can>
         }
       />
 
@@ -137,24 +181,38 @@ function MessagesPage() {
           ) : (
             <>
               <ul className="flex-1 space-y-3 overflow-y-auto p-5">
-                {(messages.data?.messages ?? []).map((m) => (
-                  <li
-                    key={m.id}
-                    className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${
-                      m.senderType === "staff"
-                        ? "ml-auto bg-primary text-primary-foreground"
-                        : "bg-secondary"
-                    }`}
-                  >
-                    <p>{m.body}</p>
-                    <p className="mt-1 text-[11px] opacity-70">
-                      {formatInTz(m.createdAt, "Europe/London", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </p>
-                  </li>
-                ))}
+                {(messages.data?.messages ?? []).map((m) => {
+                  const marker = readMarker(m);
+                  return (
+                    <li
+                      key={m.id}
+                      className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm ${messageBubbleClass(m.senderType)}`}
+                    >
+                      {m.senderType === "system" ? (
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                          System
+                        </p>
+                      ) : null}
+                      {m.isAnnouncement ? (
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                          Announcement
+                        </p>
+                      ) : null}
+                      <p>{m.body}</p>
+                      <p className="mt-1 text-[11px] opacity-70">
+                        {formatInTz(m.createdAt, "Europe/London", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                      {marker ? (
+                        <p className="mt-0.5 flex items-center gap-1 text-[10px] opacity-60">
+                          <Check className="size-3" /> {marker}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
                 {(messages.data?.messages ?? []).length === 0 && !messages.isLoading ? (
                   <EmptyState
                     title="No messages yet"
@@ -168,21 +226,13 @@ function MessagesPage() {
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Write a message…"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && draft.trim()) {
-                      void sendMessage.mutateAsync(draft);
-                      setDraft("");
+                    if (e.key === "Enter" && !e.shiftKey && draft.trim()) {
+                      e.preventDefault();
+                      void handleSend();
                     }
                   }}
                 />
-                <Button
-                  disabled={sendMessage.isPending}
-                  onClick={async () => {
-                    if (!draft.trim()) return;
-                    await sendMessage.mutateAsync(draft);
-                    setDraft("");
-                    toast.success("Message sent");
-                  }}
-                >
+                <Button disabled={sendMessage.isPending} onClick={() => void handleSend()}>
                   <Send className="size-4" /> Send
                 </Button>
               </div>
@@ -191,27 +241,110 @@ function MessagesPage() {
         </SectionCard>
       </div>
 
-      <Dialog open={announce} onOpenChange={setAnnounce}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send announcement</DialogTitle>
-            <DialogDescription>
-              Bulk announcements aren't available from the console yet — reach clients individually
-              from their profile.
-            </DialogDescription>
-          </DialogHeader>
+      <AnnouncementDialog open={announce} onClose={() => setAnnounce(false)} />
+    </>
+  );
+}
+
+function AnnouncementDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const customers = useCustomers();
+  const createAnnouncement = useCreateAnnouncement();
+  const [body, setBody] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+
+  const clientList = customers.data?.items ?? [];
+
+  const toggleAll = (checked: boolean) => {
+    setSelectAll(checked);
+    setSelectedIds(checked ? new Set(clientList.map((c) => c.id)) : new Set());
+  };
+
+  const toggleOne = (id: string, checked: boolean) => {
+    const next = new Set(selectedIds);
+    if (checked) next.add(id);
+    else next.delete(id);
+    setSelectedIds(next);
+    setSelectAll(next.size === clientList.length && clientList.length > 0);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setBody("");
+          setSelectedIds(new Set());
+          setSelectAll(false);
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Send announcement</DialogTitle>
+          <DialogDescription>
+            Broadcast a message to selected clients. Each recipient gets their own conversation
+            thread.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
           <Textarea
             rows={5}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
             placeholder="Studio closed on Bank Holiday Monday — Saturday classes run as normal."
-            disabled
           />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setAnnounce(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          <div>
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <Checkbox checked={selectAll} onCheckedChange={(v) => toggleAll(Boolean(v))} />
+              Select all clients ({clientList.length})
+            </label>
+            <ul className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
+              {customers.isLoading ? (
+                <li className="text-sm text-muted-foreground">Loading clients…</li>
+              ) : clientList.length === 0 ? (
+                <li className="text-sm text-muted-foreground">No clients yet</li>
+              ) : (
+                clientList.map((c) => (
+                  <li key={c.id}>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={selectedIds.has(c.id)}
+                        onCheckedChange={(v) => toggleOne(c.id, Boolean(v))}
+                      />
+                      {customerDisplayName(c)}
+                    </label>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={createAnnouncement.isPending}
+            onClick={async () => {
+              if (!body.trim()) return toast.error("Write a message first");
+              if (selectedIds.size === 0) return toast.error("Select at least one client");
+              await createAnnouncement.mutateAsync({
+                customerIds: [...selectedIds],
+                body: body.trim(),
+              });
+              toast.success(`Announcement sent to ${selectedIds.size} client(s)`);
+              setBody("");
+              setSelectedIds(new Set());
+              setSelectAll(false);
+              onClose();
+            }}
+          >
+            Send announcement
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

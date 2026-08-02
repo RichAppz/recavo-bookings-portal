@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDownToLine } from "lucide-react";
+import { ArrowDownToLine, Download, Loader2 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -15,12 +15,23 @@ import {
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
-import { Can } from "@/lib/tenant/tenant-context";
+import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useDashboard, useRequestExport } from "@/lib/api/hooks";
+import { downloadExportFile, useDashboard, useRequestExport } from "@/lib/api/hooks";
+import { ApiError } from "@/lib/api/errors";
+import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -30,8 +41,7 @@ export const Route = createFileRoute("/reports")({
       { title: "Reports — RECAVO" },
       {
         name: "description",
-        content:
-          "Revenue, attendance and occupancy analytics for the current month, compared with last month.",
+        content: "Revenue, attendance and occupancy analytics for a selected date range.",
       },
       { property: "og:title", content: "RECAVO Reports" },
       {
@@ -51,11 +61,29 @@ export const Route = createFileRoute("/reports")({
 
 const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
 
-function monthRange(offset = 0) {
+function defaultFrom() {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1);
-  return { from: from.toISOString(), to: to.toISOString() };
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+function defaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toIsoRange(fromDate: string, toDate: string) {
+  return {
+    from: new Date(`${fromDate}T00:00:00`).toISOString(),
+    to: new Date(`${toDate}T23:59:59`).toISOString(),
+  };
+}
+
+function previousRange(fromDate: string, toDate: string) {
+  const from = new Date(`${fromDate}T00:00:00`);
+  const to = new Date(`${toDate}T23:59:59`);
+  const ms = to.getTime() - from.getTime() + 1;
+  const prevTo = new Date(from.getTime() - 1);
+  const prevFrom = new Date(prevTo.getTime() - ms + 1);
+  return { from: prevFrom.toISOString(), to: prevTo.toISOString() };
 }
 
 function pctChange(current: number, previous: number) {
@@ -63,12 +91,41 @@ function pctChange(current: number, previous: number) {
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
+function planGateMessage(error: unknown) {
+  if (!(error instanceof ApiError)) return null;
+  if (error.code === "FEATURE_NOT_AVAILABLE") {
+    return "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics.";
+  }
+  if (error.code === "BILLING_ACCESS_REQUIRED") {
+    return "Your subscription needs attention before reports can be loaded. Visit Platform billing to resolve access.";
+  }
+  return null;
+}
+
 function ReportsPage() {
-  const thisMonth = useMemo(() => monthRange(0), []);
-  const lastMonth = useMemo(() => monthRange(-1), []);
-  const dashboard = useDashboard(thisMonth);
-  const previous = useDashboard(lastMonth);
+  const tenant = useTenant();
+  const [fromDate, setFromDate] = useState(defaultFrom);
+  const [toDate, setToDate] = useState(defaultTo);
+  const [locationId, setLocationId] = useState<string>("all");
+  const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>([]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const range = useMemo(() => toIsoRange(fromDate, toDate), [fromDate, toDate]);
+  const prevRange = useMemo(() => previousRange(fromDate, toDate), [fromDate, toDate]);
+
+  const dashboard = useDashboard({
+    from: range.from,
+    to: range.to,
+    locationId: locationId === "all" ? null : locationId,
+  });
+  const previous = useDashboard({
+    from: prevRange.from,
+    to: prevRange.to,
+    locationId: locationId === "all" ? null : locationId,
+  });
   const requestExport = useRequestExport();
+
+  const planGate = dashboard.isError ? planGateMessage(dashboard.error) : null;
 
   const revenueBreakdown = dashboard.data
     ? [
@@ -89,41 +146,110 @@ function ReportsPage() {
   const occupancy = dashboard.data
     ? [
         {
-          name: "This month",
+          name: "Selected range",
           booked: dashboard.data.occupancy.seats,
           capacity: dashboard.data.occupancy.capacity,
         },
       ]
     : [];
 
+  const handleExport = async (type: "bookings" | "customers") => {
+    try {
+      const result = await requestExport.mutateAsync({ type });
+      setExports((prev) => [{ export: result.export, downloadUrl: result.downloadUrl }, ...prev]);
+      toast.success("Export queued", {
+        description: "Download will be available once processing finishes.",
+      });
+    } catch (err) {
+      const gate = planGateMessage(err);
+      if (gate) toast.error("Export unavailable", { description: gate });
+    }
+  };
+
+  const handleDownload = async (exp: ExportRequest, downloadUrl?: string) => {
+    if (!tenant.businessId) return;
+    setDownloadingId(exp.id);
+    try {
+      await downloadExportFile({
+        businessId: tenant.businessId,
+        exportId: exp.id,
+        token: exp.downloadToken,
+        downloadUrl,
+        filename: `${exp.type}-${exp.id.slice(0, 8)}.csv`,
+      });
+      toast.success("Export downloaded");
+    } catch {
+      toast.error("Export not ready yet — try again in a moment");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Reports"
-        description="How the business performed this month, compared with last month."
+        description="Performance for your selected date range, compared with the previous period."
         actions={
-          <Button
-            variant="outline"
-            disabled={requestExport.isPending}
-            onClick={async () => {
-              try {
-                await requestExport.mutateAsync({
-                  type: "dashboard",
-                  from: thisMonth.from,
-                  to: thisMonth.to,
-                });
-                toast.success("Export requested", {
-                  description: "You'll be able to download it once processing finishes.",
-                });
-              } catch {
-                /* toasted by hook */
-              }
-            }}
-          >
-            <ArrowDownToLine className="size-4" /> Export report
-          </Button>
+          <Can permission={PERMISSIONS.REPORT_EXPORT}>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={requestExport.isPending}
+                onClick={() => void handleExport("bookings")}
+              >
+                <ArrowDownToLine className="size-4" /> Export bookings
+              </Button>
+              <Button
+                variant="outline"
+                disabled={requestExport.isPending}
+                onClick={() => void handleExport("customers")}
+              >
+                <ArrowDownToLine className="size-4" /> Export customers
+              </Button>
+            </div>
+          </Can>
         }
       />
+
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="report-from">From</Label>
+          <Input
+            id="report-from"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="w-40"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="report-to">To</Label>
+          <Input
+            id="report-to"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="w-40"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Location</Label>
+          <Select value={locationId} onValueChange={setLocationId}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All locations</SelectItem>
+              {tenant.locations.map((l) => (
+                <SelectItem key={l.id} value={l.id}>
+                  {l.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       <Can
         permission={PERMISSIONS.REPORT_READ}
@@ -134,7 +260,19 @@ function ReportsPage() {
           />
         }
       >
-        {dashboard.isLoading ? (
+        {planGate ? (
+          <EmptyState
+            title="Reports unavailable"
+            description={planGate}
+            action={
+              tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN) ? (
+                <Button asChild>
+                  <a href="/platform">Go to Platform billing</a>
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
               <div key={i} className="surface-card h-[124px] animate-pulse" />
@@ -146,7 +284,7 @@ function ReportsPage() {
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label="Revenue this month"
+                label="Revenue"
                 value={formatMoney(dashboard.data.revenue.netMinor, dashboard.data.basis.currency)}
                 change={
                   previous.data
@@ -155,7 +293,7 @@ function ReportsPage() {
                 }
               />
               <StatCard
-                label="Bookings this month"
+                label="Bookings"
                 value={String(dashboard.data.bookings.count)}
                 change={
                   previous.data
@@ -179,10 +317,10 @@ function ReportsPage() {
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard
                 title="Revenue breakdown"
-                description="Net, refunded and disputed for the current month"
+                description="Net, refunded and disputed for the selected range"
               >
                 {revenueBreakdown.length === 0 ? (
-                  <EmptyState title="No revenue yet this month" />
+                  <EmptyState title="No revenue in this range" />
                 ) : (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -215,10 +353,7 @@ function ReportsPage() {
                 )}
               </SectionCard>
 
-              <SectionCard
-                title="Attendance"
-                description="Attended, no-show and cancelled sessions"
-              >
+              <SectionCard title="Attendance" description="Attended, no-show and cancelled sessions">
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={attendanceBreakdown} margin={{ left: -20, right: 8, top: 8 }}>
@@ -228,12 +363,7 @@ function ReportsPage() {
                         vertical={false}
                       />
                       <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={12}
-                        allowDecimals={false}
-                      />
+                      <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
                       <Tooltip
                         contentStyle={{
                           borderRadius: 12,
@@ -254,10 +384,7 @@ function ReportsPage() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard
-                title="Occupancy"
-                description="Seats booked vs capacity across all locations"
-              >
+              <SectionCard title="Occupancy" description="Seats booked vs capacity">
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
@@ -273,7 +400,7 @@ function ReportsPage() {
                         tickLine={false}
                         axisLine={false}
                         fontSize={12}
-                        width={90}
+                        width={110}
                       />
                       <Tooltip
                         contentStyle={{
@@ -300,7 +427,7 @@ function ReportsPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Packages and credits" description="Prepaid activity this month">
+              <SectionCard title="Packages and credits" description="Prepaid activity in range">
                 <dl className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <dt className="text-xs text-muted-foreground">Package sales</dt>
@@ -317,9 +444,7 @@ function ReportsPage() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Credits redeemed</dt>
-                    <dd className="mt-1 text-lg font-semibold">
-                      {dashboard.data.credits.redeemed}
-                    </dd>
+                    <dd className="mt-1 text-lg font-semibold">{dashboard.data.credits.redeemed}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Credits expired</dt>
@@ -329,10 +454,40 @@ function ReportsPage() {
               </SectionCard>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Breakdowns by service, trainer and location, plus scheduled exports, are coming in a
-              future update.
-            </p>
+            <Can permission={PERMISSIONS.REPORT_EXPORT}>
+              {exports.length > 0 ? (
+                <SectionCard title="Recent exports" bodyClassName="p-0">
+                  <ul className="divide-y">
+                    {exports.map(({ export: exp, downloadUrl }) => (
+                      <li
+                        key={exp.id}
+                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"
+                      >
+                        <span>
+                          <span className="font-medium capitalize">{exp.type}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {exp.rowCount} rows · queued
+                          </span>
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={downloadingId === exp.id}
+                          onClick={() => void handleDownload(exp, downloadUrl)}
+                        >
+                          {downloadingId === exp.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Download className="size-4" />
+                          )}{" "}
+                          Download
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </SectionCard>
+              ) : null}
+            </Can>
           </>
         )}
       </Can>
