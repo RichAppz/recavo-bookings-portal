@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   api,
+  ApiError,
   createIdempotentMutationFn,
   flattenPages,
   newIdempotencyKey,
@@ -28,6 +29,8 @@ import type {
   CustomerTag,
   Dashboard,
   EntitlementView,
+  ExportRequest,
+  FailedJob,
   Invitation,
   LinkedRecord,
   LinkedRecordDefinition,
@@ -35,18 +38,28 @@ import type {
   Location,
   Membership,
   Notification,
+  OutboxEvent,
   Package,
   Payment,
+  PaymentReceipt,
   PolicyDocument,
   PolicyDocumentType,
   PrivacyNotice,
   PublicCataloguePlan,
+  Refund,
+  Resource,
   SaasInterval,
   SaasPlanCode,
   Staff,
   SubscriptionChangePreview,
 } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
+
+export type OpeningHourInput = {
+  dayOfWeek: number;
+  openMinute: number;
+  closeMinute: number;
+};
 
 export function useBusinessId() {
   const { businessId } = useTenant();
@@ -423,7 +436,14 @@ export function useCreateLocation() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
+    mutationFn: async (body: {
+      name: string;
+      type: Location["type"];
+      timezone: string;
+      openingHours?: OpeningHourInput[];
+      publicVisible?: boolean;
+      active?: boolean;
+    }) => {
       const res = await api.post<{ location: Location }>(
         `/api/v1/businesses/${businessId}/locations`,
         body,
@@ -432,6 +452,95 @@ export function useCreateLocation() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateLocation() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      locationId: string;
+      version: number;
+      body: {
+        name?: string;
+        timezone?: string;
+        openingHours?: OpeningHourInput[];
+        active?: boolean;
+        publicVisible?: boolean;
+      };
+    }) => {
+      const res = await api.patch<{ location: Location }>(
+        `/api/v1/businesses/${businessId}/locations/${vars.locationId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.location;
+    },
+    onSuccess: (location) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.location(businessId, location.id) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+export function useResources() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.resources(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ resources: Resource[] }>(
+        `/api/v1/businesses/${businessId}/resources`,
+      );
+      return res.data.resources;
+    },
+  });
+}
+
+export function useCreateResource() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      name: string;
+      type: Resource["type"];
+      locationId?: string | null;
+    }) => {
+      const res = await api.post<{ resource: Resource }>(
+        `/api/v1/businesses/${businessId}/resources`,
+        body,
+      );
+      return res.data.resource;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.resources(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateResource() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { resourceId: string; active: boolean }) => {
+      const res = await api.patch<{ resource: Resource }>(
+        `/api/v1/businesses/${businessId}/resources/${vars.resourceId}`,
+        { active: vars.active },
+      );
+      return res.data.resource;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.resources(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -863,21 +972,97 @@ export function useUpdatePackage() {
   });
 }
 
-export function usePayments(filters: Record<string, string | undefined> = {}) {
+export function usePayments(filters: {
+  from?: string;
+  to?: string;
+  state?: string;
+  customerId?: string;
+  enabled?: boolean;
+} = {}) {
   const businessId = useBusinessId();
-  const query = Object.fromEntries(
-    Object.entries(filters).filter(([, v]) => v !== undefined),
-  ) as Record<string, string>;
-  return useQuery({
+  const query = {
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+    ...(filters.state ? { state: filters.state } : {}),
+    ...(filters.customerId ? { customerId: filters.customerId } : {}),
+  };
+  return usePaginatedQuery<Payment, "payments">({
     queryKey: queryKeys.payments(businessId, query),
-    enabled: Boolean(businessId),
+    path: `/api/v1/businesses/${businessId}/payments`,
+    listKey: "payments",
+    query,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+}
+
+export function usePaymentsList(
+  filters: {
+    from?: string;
+    to?: string;
+    state?: string;
+    customerId?: string;
+    enabled?: boolean;
+  } = {},
+) {
+  const payments = usePayments(filters);
+  return {
+    ...payments,
+    payments: flattenPages(payments.data, "payments"),
+  };
+}
+
+export function usePayment(paymentId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.payment(businessId, paymentId ?? ""),
+    enabled: Boolean(businessId && paymentId),
     queryFn: async () => {
-      const res = await api.get<{ payments: Payment[]; nextCursor?: string | null }>(
-        `/api/v1/businesses/${businessId}/payments`,
-        { query },
+      const res = await api.get<{ payment: Payment }>(
+        `/api/v1/businesses/${businessId}/payments/${paymentId}`,
       );
-      return res.data;
+      return res.data.payment;
     },
+  });
+}
+
+export function usePaymentReceipt(paymentId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.paymentReceipt(businessId, paymentId ?? ""),
+    enabled: Boolean(businessId && paymentId),
+    queryFn: async () => {
+      const res = await api.get<{ receipt: PaymentReceipt }>(
+        `/api/v1/businesses/${businessId}/payments/${paymentId}/receipt`,
+      );
+      return res.data.receipt;
+    },
+  });
+}
+
+export function useCreateRefund() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Refund,
+      { paymentId: string; amountMinor?: number; reasonCode: string }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ refund: Refund }>(
+        `/api/v1/businesses/${businessId}/refunds`,
+        {
+          paymentId: vars.paymentId,
+          reasonCode: vars.reasonCode,
+          ...(vars.amountMinor !== undefined ? { amountMinor: vars.amountMinor } : {}),
+        },
+        { idempotencyKey },
+      );
+      return res.data.refund;
+    }),
+    onSuccess: (refund) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.payment(businessId, refund.paymentId) });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
@@ -887,7 +1072,7 @@ export function useConnectAccount() {
     queryKey: queryKeys.connectAccount(businessId),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ account: ConnectAccount }>(
+      const res = await api.get<{ account: ConnectAccount | null }>(
         `/api/v1/businesses/${businessId}/connect/account`,
       );
       return res.data.account;
@@ -895,9 +1080,53 @@ export function useConnectAccount() {
   });
 }
 
-export function useDashboard(filters: { from?: string; to?: string } = {}) {
+export function useStartConnectOnboarding() {
   const businessId = useBusinessId();
-  const locationId = useLocationFilter();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ account: ConnectAccount; onboardingUrl: string }>(
+        `/api/v1/businesses/${businessId}/connect/account`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.connectAccount(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSyncConnectAccount() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ account: ConnectAccount }>(
+        `/api/v1/businesses/${businessId}/connect/sync`,
+        {},
+      );
+      return res.data.account;
+    },
+    onSuccess: (account) => {
+      qc.setQueryData(queryKeys.connectAccount(businessId), account);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useDashboard(
+  filters: { from?: string; to?: string; locationId?: string | null } = {},
+) {
+  const businessId = useBusinessId();
+  const scopedLocationId = useLocationFilter();
+  const locationId =
+    filters.locationId === undefined
+      ? scopedLocationId
+      : filters.locationId === null || filters.locationId === "all"
+        ? undefined
+        : filters.locationId;
   const query = {
     ...(filters.from ? { from: filters.from } : {}),
     ...(filters.to ? { to: filters.to } : {}),
@@ -912,6 +1141,12 @@ export function useDashboard(filters: { from?: string; to?: string } = {}) {
         { query },
       );
       return res.data.dashboard;
+    },
+    retry: (count, err) => {
+      if (err instanceof ApiError && (err.code === "FEATURE_NOT_AVAILABLE" || err.isForbidden)) {
+        return false;
+      }
+      return count < 2;
     },
   });
 }
@@ -969,6 +1204,9 @@ export function useMessages(conversationId: string | undefined) {
 export function useSendMessage(conversationId: string | undefined) {
   const businessId = useBusinessId();
   const qc = useQueryClient();
+  type MessagesPage = { messages: ConversationMessage[]; nextCursor?: string | null };
+  const messagesKey = queryKeys.messages(businessId, conversationId ?? "");
+
   return useMutation({
     mutationFn: async (body: string) => {
       const res = await api.post<{ message: ConversationMessage }>(
@@ -977,10 +1215,55 @@ export function useSendMessage(conversationId: string | undefined) {
       );
       return res.data.message;
     },
+    onMutate: async (body) => {
+      if (!conversationId) return { previous: undefined as MessagesPage | undefined };
+      await qc.cancelQueries({ queryKey: messagesKey });
+      const previous = qc.getQueryData<MessagesPage>(messagesKey);
+      const optimistic: ConversationMessage = {
+        id: `optimistic-${crypto.randomUUID()}`,
+        businessId,
+        conversationId,
+        senderType: "staff",
+        senderId: "me",
+        body,
+        createdAt: new Date().toISOString(),
+        isAnnouncement: false,
+        readByCustomerAt: null,
+        readByStaffAt: new Date().toISOString(),
+      };
+      qc.setQueryData<MessagesPage>(messagesKey, (old) => ({
+        messages: [...(old?.messages ?? []), optimistic],
+        nextCursor: old?.nextCursor ?? null,
+      }));
+      return { previous };
+    },
+    onError: (err, _body, ctx) => {
+      if (ctx?.previous !== undefined) qc.setQueryData(messagesKey, ctx.previous);
+      toastApiError(err);
+    },
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: queryKeys.messages(businessId, conversationId ?? ""),
-      });
+      void qc.invalidateQueries({ queryKey: messagesKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
+    },
+  });
+}
+
+export function useCreateAnnouncement() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      customerIds: string[];
+      body: string;
+      bookingId?: string | null;
+    }) => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/announcements`,
+        vars,
+      );
+      return res.data;
+    },
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
     },
     onError: (err) => toastApiError(err),
@@ -998,6 +1281,44 @@ export function useNotifications() {
         nextCursor?: string | null;
       }>(`/api/v1/businesses/${businessId}/notifications`);
       return res.data;
+    },
+  });
+}
+
+export function useMarkNotificationRead() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await api.post<{ notification: Notification }>(
+        `/api/v1/businesses/${businessId}/notifications/${notificationId}/read`,
+        {},
+      );
+      return res.data.notification;
+    },
+    onMutate: async (notificationId) => {
+      await qc.cancelQueries({ queryKey: ["biz", businessId, "notifications"] });
+      const snapshots = qc.getQueriesData<{
+        notifications: Notification[];
+        nextCursor?: string | null;
+      }>({ queryKey: ["biz", businessId, "notifications"] });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData(key, {
+          ...data,
+          notifications: data.notifications.map((n) =>
+            n.id === notificationId ? { ...n, readAt: n.readAt ?? new Date().toISOString() } : n,
+          ),
+        });
+      }
+      return { snapshots };
+    },
+    onError: (err, _id, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
+      toastApiError(err);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
     },
   });
 }
@@ -1884,41 +2205,102 @@ export function useRequestExport() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (body: Record<string, unknown>, idempotencyKey: string) => {
-        const res = await api.post<{ export?: { id: string }; id?: string }>(
+      async (vars: { type: "customers" | "bookings" }, idempotencyKey: string) => {
+        const res = await api.post<{ export: ExportRequest; downloadUrl: string }>(
           `/api/v1/businesses/${businessId}/exports`,
-          body,
-          { idempotencyKey },
+          {},
+          { idempotencyKey, query: { type: vars.type } },
         );
         return res.data;
       },
     ),
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      if (!(err instanceof ApiError && err.code === "FEATURE_NOT_AVAILABLE")) {
+        toastApiError(err);
+      }
+    },
   });
 }
 
-export function useFailedOutbox() {
+/** Download a tokenised export; retries briefly while the file is not yet ready. */
+export async function downloadExportFile(opts: {
+  businessId: string;
+  exportId: string;
+  token: string;
+  downloadUrl?: string;
+  filename?: string;
+  maxAttempts?: number;
+}) {
+  const maxAttempts = opts.maxAttempts ?? 8;
+  const path =
+    opts.downloadUrl && opts.downloadUrl.startsWith("/")
+      ? opts.downloadUrl
+      : `/api/v1/businesses/${opts.businessId}/exports/${opts.exportId}/download`;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await api.get<string | Record<string, unknown>>(path, {
+        query: { token: opts.token },
+      });
+      const body = res.data;
+      const text =
+        typeof body === "string" ? body : body != null ? JSON.stringify(body, null, 2) : "";
+      if (typeof window !== "undefined") {
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = opts.filename ?? `export-${opts.exportId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      return;
+    } catch (err) {
+      lastError = err;
+      const retryable =
+        err instanceof ApiError && (err.status === 404 || err.status === 409 || err.status === 422);
+      if (!retryable || attempt === maxAttempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, 750 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+export function useFailedOutbox(filters: { minAttempts?: number; limit?: number } = {}) {
   const businessId = useBusinessId();
+  const query = {
+    ...(filters.minAttempts !== undefined ? { minAttempts: filters.minAttempts } : {}),
+    ...(filters.limit !== undefined ? { limit: filters.limit } : {}),
+  };
   return useQuery({
-    queryKey: ["biz", businessId, "admin", "outbox", "failed"] as const,
+    queryKey: queryKeys.failedOutbox(businessId, query),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ events: Array<Record<string, unknown>> }>(
+      const res = await api.get<{ events: OutboxEvent[] }>(
         `/api/v1/businesses/${businessId}/admin/outbox/failed`,
+        { query },
       );
       return res.data.events;
     },
   });
 }
 
-export function useDeadLetterOutbox() {
+export function useDeadLetterOutbox(filters: { minAttempts?: number; limit?: number } = {}) {
   const businessId = useBusinessId();
+  const query = {
+    ...(filters.minAttempts !== undefined ? { minAttempts: filters.minAttempts } : {}),
+    ...(filters.limit !== undefined ? { limit: filters.limit } : {}),
+  };
   return useQuery({
-    queryKey: ["biz", businessId, "admin", "outbox", "dead-letter"] as const,
+    queryKey: queryKeys.deadLetterOutbox(businessId, query),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ events: Array<Record<string, unknown>> }>(
+      const res = await api.get<{ events: OutboxEvent[] }>(
         `/api/v1/businesses/${businessId}/admin/outbox/dead-letter`,
+        { query },
       );
       return res.data.events;
     },
@@ -1930,17 +2312,109 @@ export function useReplayOutbox() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (body: Record<string, unknown> | void, idempotencyKey: string) => {
+      async (vars: { eventIds: string[] }, idempotencyKey: string) => {
         const res = await api.post(
           `/api/v1/businesses/${businessId}/admin/outbox/replay`,
-          body ?? {},
+          { eventIds: vars.eventIds },
           { idempotencyKey },
         );
-        return res.data;
+        return { data: res.data, requestId: res.requestId };
       },
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "outbox"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRepublishOutboxEvent() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await api.post(
+        `/api/v1/businesses/${businessId}/admin/outbox/${eventId}/republish`,
+        {},
+      );
+      return { data: res.data, requestId: res.requestId };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "outbox"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useFailedJobs(filters: { minAttempts?: number; limit?: number } = {}) {
+  const businessId = useBusinessId();
+  const query = {
+    ...(filters.minAttempts !== undefined ? { minAttempts: filters.minAttempts } : {}),
+    ...(filters.limit !== undefined ? { limit: filters.limit } : {}),
+  };
+  return useQuery({
+    queryKey: queryKeys.failedJobs(businessId, query),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ jobs: FailedJob[] }>(
+        `/api/v1/businesses/${businessId}/admin/jobs/failed`,
+        { query },
+      );
+      return res.data.jobs;
+    },
+  });
+}
+
+export function useResetFailedJob() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await api.post(`/api/v1/businesses/${businessId}/admin/jobs/${jobId}/reset`, {});
+      return { data: res.data, requestId: res.requestId };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "jobs"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useReconcilePayments() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (vars: { from: string; to: string }) => {
+      const res = await api.post(
+        `/api/v1/businesses/${businessId}/admin/payments/reconcile`,
+        vars,
+      );
+      return { data: res.data, requestId: res.requestId };
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRunRetention() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post(`/api/v1/businesses/${businessId}/admin/retention/run`, {});
+      return { data: res.data, requestId: res.requestId };
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRunFilesRetention() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{
+        requested: number;
+        softDeleted: number;
+        skipped: number;
+      }>(`/api/v1/businesses/${businessId}/admin/files/retention/run`, {});
+      return { data: res.data, requestId: res.requestId };
     },
     onError: (err) => toastApiError(err),
   });
