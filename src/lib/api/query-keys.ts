@@ -17,14 +17,26 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId] as const,
   bookingHistory: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "history"] as const,
+  bookingPayments: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "payments"] as const,
 
   availability: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "availability", filters ?? {}] as const,
 
   customers: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "customers", filters ?? {}] as const,
+  customersInfinite: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "customers", "infinite", filters ?? {}] as const,
   customer: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId] as const,
+  customerTagsCatalogue: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "customer-tags", filters ?? {}] as const,
+  customerAssignedTags: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "tags"] as const,
+  customerConsents: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "consents"] as const,
+  customerLinkedRecords: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "linked-records"] as const,
 
   services: (businessId: string) => ["biz", businessId, "services"] as const,
   service: (businessId: string, serviceId: string) =>
@@ -69,6 +81,18 @@ export const queryKeys = {
 
   subscription: (businessId: string) => ["biz", businessId, "subscription"] as const,
   plans: () => ["plans"] as const,
+  billingCatalogue: () => ["billing", "catalogue"] as const,
+
+  invitations: (businessId: string) => ["biz", businessId, "invitations"] as const,
+  policyDocuments: (businessId: string) => ["biz", businessId, "policy-documents"] as const,
+  policyDocumentCurrent: (businessId: string, type: string) =>
+    ["biz", businessId, "policy-documents", "current", type] as const,
+  privacyNoticeLatest: (businessId: string) =>
+    ["biz", businessId, "privacy-notices", "latest"] as const,
+  linkedRecordDefinition: (businessId: string) =>
+    ["biz", businessId, "linked-record-definition"] as const,
+  lifecycle: (businessId: string) => ["biz", businessId, "lifecycle"] as const,
+  auditEvents: (businessId: string) => ["biz", businessId, "audit-events"] as const,
 
   resources: (businessId: string) => ["biz", businessId, "resources"] as const,
 
