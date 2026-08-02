@@ -74,6 +74,24 @@ export const queryKeys = {
 
   resources: (businessId: string) => ["biz", businessId, "resources"] as const,
 
+  // Ops / platform admin (RECA-506)
+  outboxFailed: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "outbox", "failed", filters ?? {}] as const,
+  outboxDeadLetter: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "outbox", "dead-letter", filters ?? {}] as const,
+  failedJobs: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "admin", "jobs", "failed", filters ?? {}] as const,
+
+  invitations: (businessId: string) => ["biz", businessId, "invitations"] as const,
+  policyDocuments: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "policy-documents", filters ?? {}] as const,
+  policyDocumentCurrent: (businessId: string, type: string) =>
+    ["biz", businessId, "policy-documents", "current", type] as const,
+  lifecycle: (businessId: string) => ["biz", businessId, "lifecycle"] as const,
+  auditEvents: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "audit-events", filters ?? {}] as const,
+  file: (businessId: string, fileId: string) => ["biz", businessId, "files", fileId] as const,
+
   // Public / portal surfaces
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,

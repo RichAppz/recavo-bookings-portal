@@ -62,6 +62,16 @@ export class ApiError extends Error {
   get isConflict() {
     return this.status === 409;
   }
+
+  /** Subscription access_state blocks the action (RECA-157). Show an upgrade CTA, not a generic error. */
+  get isBillingRequired() {
+    return this.status === 402;
+  }
+
+  /** Plan doesn't include this feature (e.g. `exports.data`). Distinct from a plain permission denial. */
+  get isFeatureNotAvailable() {
+    return this.status === 403 && this.code === "FEATURE_NOT_AVAILABLE";
+  }
 }
 
 export function parseProblemDetails(

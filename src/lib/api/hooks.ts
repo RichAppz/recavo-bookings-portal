@@ -3,15 +3,22 @@ import {
   ApiError,
   api,
   createIdempotentMutationFn,
+  getAccessToken,
+  getApiBaseUrl,
   newIdempotencyKey,
+  parseProblemDetails,
   queryKeys,
   toastApiError,
   usePaginatedQuery,
 } from "@/lib/api";
 import type {
+  AuditEvent,
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
+  Business,
+  BusinessConfiguration,
+  BusinessLifecycle,
   CatalogueService,
   ConnectAccount,
   ConsentRecord,
@@ -24,13 +31,19 @@ import type {
   Dashboard,
   Entitlement,
   EntitlementView,
+  ExportRequest,
+  FailedJob,
+  FileResource,
   Invitation,
   Location,
+  Membership,
   Notification,
+  OutboxEvent,
   Package,
   PackagePurchase,
   Payment,
   PaymentReceipt,
+  PolicyDocument,
   PublicCataloguePlan,
   Refund,
   Resource,
@@ -47,6 +60,305 @@ export function useBusinessId() {
 export function useLocationFilter() {
   const { currentLocationId } = useTenant();
   return currentLocationId === "all" ? undefined : currentLocationId;
+}
+
+/* ---------------- Business profile & configuration (RECA-503) ---------------- */
+
+/** Shares `queryKeys.business` with `TenantProvider`, so a successful save refreshes the shell too. */
+export function useBusinessDetail() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.business(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ business: Business }>(`/api/v1/businesses/${businessId}`);
+      return res.data.business;
+    },
+  });
+}
+
+/** Optimistic concurrency via `If-Match`; refetches on 409 so the caller can retry with the latest version. */
+export function useUpdateBusiness() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { version: number; body: Record<string, unknown> }) => {
+      const res = await api.patch<{ business: Business }>(
+        `/api/v1/businesses/${businessId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.business;
+    },
+    onSuccess: (business) => {
+      qc.setQueryData(queryKeys.business(businessId), business);
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.business(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/** Shares `queryKeys.configuration` with `TenantProvider` (terminology labels used across the shell). */
+export function useConfiguration() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.configuration(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/configuration`,
+      );
+      return res.data.configuration;
+    },
+  });
+}
+
+/** Partial patch — pass only the section(s) being edited; omitted sections are unchanged server-side. */
+export function useUpdateConfiguration() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: Record<string, unknown>) => {
+      const res = await api.patch<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/configuration`,
+        patch,
+      );
+      return res.data.configuration;
+    },
+    onSuccess: (configuration) => {
+      qc.setQueryData(queryKeys.configuration(businessId), configuration);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Team: memberships & invitations (RECA-503) ---------------- */
+
+/** Shares `queryKeys.memberships` with `TenantProvider`. */
+export function useMembershipsList() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.memberships(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ memberships: Membership[] }>(
+        `/api/v1/businesses/${businessId}/memberships`,
+      );
+      return res.data.memberships;
+    },
+  });
+}
+
+/** Change a teammate's roles, location scope, or status (invited/active/suspended). Requires team.manage_permissions. */
+export function useUpdateMembership() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      membershipId: string;
+      body: {
+        roleKeys?: string[];
+        locationScopeIds?: string[] | null;
+        status?: Membership["status"];
+      };
+    }) => {
+      const res = await api.patch<{ membership: Membership }>(
+        `/api/v1/businesses/${businessId}/memberships/${vars.membershipId}`,
+        vars.body,
+      );
+      return res.data.membership;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.memberships(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Pending, unexpired invitations only — no token hashes are returned. Requires team.invite. */
+export function useInvitationsList() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.invitations(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ invitations: Invitation[] }>(
+        `/api/v1/businesses/${businessId}/invitations`,
+      );
+      return res.data.invitations;
+    },
+  });
+}
+
+/* ---------------- Policy documents (RECA-503) ---------------- */
+
+export function usePolicyDocuments(filters: { type?: string; status?: string } = {}) {
+  const businessId = useBusinessId();
+  const query = Object.fromEntries(Object.entries(filters).filter(([, v]) => Boolean(v))) as Record<
+    string,
+    string
+  >;
+  return useQuery({
+    queryKey: queryKeys.policyDocuments(businessId, query),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ documents: PolicyDocument[] }>(
+        `/api/v1/businesses/${businessId}/policy-documents`,
+        { query },
+      );
+      return res.data.documents;
+    },
+  });
+}
+
+/** The published document effective now (or `null`) for a given policy type. */
+export function useCurrentPolicyDocument(type: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.policyDocumentCurrent(businessId, type ?? ""),
+    enabled: Boolean(businessId && type),
+    queryFn: async () => {
+      const res = await api.get<{ document: PolicyDocument | null }>(
+        `/api/v1/businesses/${businessId}/policy-documents/current/${type}`,
+      );
+      return res.data.document;
+    },
+  });
+}
+
+/** Idempotent — publishes platform-template wording only for types with no documents yet. */
+export function useSeedPolicyDefaults() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{
+        seedVersion: string;
+        published: PolicyDocument[];
+        skipped: string[];
+      }>(`/api/v1/businesses/${businessId}/policy-documents/seed-defaults`, {});
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "policy-documents"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCreatePolicyDocument() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      type: PolicyDocument["type"];
+      content?: string | null;
+      objectKey?: string | null;
+      effectiveAt?: string;
+      publish?: boolean;
+    }) => {
+      const res = await api.post<{ document: PolicyDocument }>(
+        `/api/v1/businesses/${businessId}/policy-documents`,
+        body,
+      );
+      return res.data.document;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "policy-documents"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Draft → published; supersedes any prior published row of the same type. Concurrent publishes 409. */
+export function usePublishPolicyDocument() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { documentId: string; effectiveAt?: string }) => {
+      const res = await api.post<{ document: PolicyDocument }>(
+        `/api/v1/businesses/${businessId}/policy-documents/${vars.documentId}/publish`,
+        vars.effectiveAt ? { effectiveAt: vars.effectiveAt } : {},
+      );
+      return res.data.document;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "policy-documents"] });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: ["biz", businessId, "policy-documents"] });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/* ---------------- Tenant lifecycle (RECA-503) ---------------- */
+
+export function useLifecycle() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.lifecycle(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ lifecycle: BusinessLifecycle }>(
+        `/api/v1/businesses/${businessId}/lifecycle`,
+      );
+      return res.data.lifecycle;
+    },
+  });
+}
+
+/**
+ * Initiates tenant closure: preserves export access for the configured
+ * closure window, then schedules retention/anonymisation. Irreversible from
+ * the client — always confirm before calling. Requires business.update + If-Match.
+ */
+export function useCloseLifecycle() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { version: number; reason?: string | null }) => {
+      const res = await api.post<{ lifecycle: BusinessLifecycle }>(
+        `/api/v1/businesses/${businessId}/lifecycle/close`,
+        { reason: vars.reason ?? null },
+        { ifMatch: vars.version },
+      );
+      return res.data.lifecycle;
+    },
+    onSuccess: (lifecycle) => {
+      qc.setQueryData(queryKeys.lifecycle(businessId), lifecycle);
+      void qc.invalidateQueries({ queryKey: queryKeys.business(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.lifecycle(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/* ---------------- Audit events (RECA-503) ---------------- */
+
+/** Requires audit.read. Sorted newest-first by `occurredAt` for the settings log view. */
+export function useAuditEvents() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.auditEvents(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ events: AuditEvent[] }>(
+        `/api/v1/businesses/${businessId}/audit-events`,
+      );
+      return [...res.data.events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+    },
+  });
 }
 
 /* ---------------- Bookings ---------------- */
@@ -375,6 +687,7 @@ export function useUpdateStaff() {
 
 export function useInviteStaff() {
   const businessId = useBusinessId();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (vars: {
       email: string;
@@ -386,6 +699,9 @@ export function useInviteStaff() {
         vars,
       );
       return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.invitations(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -1478,17 +1794,59 @@ export type BusinessSubscription = {
   limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
 };
 
+/**
+ * Public plan catalogue. Prefers `/api/v1/saas/plans`, falling back to the
+ * equivalent `/api/v1/billing/catalogue` mirror if the primary route errors
+ * (e.g. rolling deploys) — both return the same sanitised `PublicCataloguePlan[]` shape.
+ */
 export function usePlans() {
   return useQuery({
     queryKey: queryKeys.plans(),
     queryFn: async () => {
-      const res = await api.get<{ plans: PublicCataloguePlan[] }>("/api/v1/saas/plans", {
-        public: true,
-      });
-      return res.data.plans;
+      try {
+        const res = await api.get<{ plans: PublicCataloguePlan[] }>("/api/v1/saas/plans", {
+          public: true,
+        });
+        return res.data.plans;
+      } catch {
+        const res = await api.get<{ plans: PublicCataloguePlan[] }>("/api/v1/billing/catalogue", {
+          public: true,
+        });
+        return res.data.plans;
+      }
     },
   });
 }
+
+export type PlanCode = "solo" | "business" | "growth";
+export type PlanInterval = "month" | "year";
+
+export type PlanChangePreview = {
+  previewToken: string;
+  expiresAt: string;
+  changeKind: "upgrade" | "downgrade" | "interval_switch";
+  timing: "immediate" | "period_end";
+  current: { plan: PlanCode; interval: PlanInterval };
+  target: { plan: PlanCode; interval: PlanInterval; planVersion: string };
+  currency: string;
+  chargeNowMinor: number;
+  creditNowMinor: number;
+  nextAmountMinor: number | null;
+  nextPeriodEnd: string | null;
+  taxMinor: number;
+  effectiveAt: string;
+  prorationDateUnix: number;
+  overLimitBlockers: Array<{ limitKey: string; currentUsage: number; targetLimit: number }>;
+};
+
+export type PlanChangeApplyResult = {
+  outcome: "applied_immediate" | "scheduled" | "pending_payment";
+  changeKind: "upgrade" | "downgrade" | "interval_switch";
+  timing: "immediate" | "period_end";
+  effectiveAt: string;
+  scheduledChangeId: string | null;
+  subscription: { subscription: BusinessSubscription | null; plan: PublicCataloguePlan | null };
+};
 
 export function useSubscription() {
   const businessId = useBusinessId();
@@ -1525,6 +1883,38 @@ export function useStartCheckout() {
   });
 }
 
+/**
+ * Success-page poll (RECA-461): exchanges the Stripe Checkout Session id
+ * (or an internal `checkoutAttemptId`) for the current subscription
+ * projection. Never grants access on its own — the API only reflects
+ * Stripe's verified state. Call once on return from Checkout, then drop the
+ * query params so a refresh doesn't re-trigger it.
+ */
+export function useReconcileCheckout() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: { stripeCheckoutSessionId?: string; checkoutAttemptId?: string },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{
+          subscription: BusinessSubscription | null;
+          plan?: PublicCataloguePlan | null;
+        }>(`/api/v1/businesses/${businessId}/subscription/checkout/reconcile`, vars, {
+          idempotencyKey,
+        });
+        return res.data;
+      },
+    ),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.subscription(businessId), data);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useBillingPortal() {
   const businessId = useBusinessId();
   return useMutation({
@@ -1545,15 +1935,74 @@ export function useCancelSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
-      const res = await api.post(
-        `/api/v1/businesses/${businessId}/subscription/cancel`,
-        {},
-        { idempotencyKey },
-      );
+      const res = await api.post<{
+        subscription: BusinessSubscription | null;
+        plan?: PublicCataloguePlan | null;
+      }>(`/api/v1/businesses/${businessId}/subscription/cancel`, {}, { idempotencyKey });
       return res.data;
     }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.subscription(businessId), data);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Clears `cancel_at_period_end` before the period ends (RECA-155). */
+export function useResumeSubscription() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
+      const res = await api.post<{
+        subscription: BusinessSubscription | null;
+        plan?: PublicCataloguePlan | null;
+      }>(`/api/v1/businesses/${businessId}/subscription/resume`, {}, { idempotencyKey });
+      return res.data;
+    }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.subscription(businessId), data);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Stripe-backed proration preview (RECA-456) for a plan/interval change.
+ * Returns an opaque, short-lived `previewToken` to pass to
+ * `useApplyPlanChange` — never mutates the subscription itself.
+ */
+export function usePreviewPlanChange() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (body: { plan: PlanCode; interval: PlanInterval }) => {
+      const res = await api.post<PlanChangePreview>(
+        `/api/v1/businesses/${businessId}/subscription/change-preview`,
+        body,
+      );
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Consumes a `previewToken` from `usePreviewPlanChange` (CAS'd against subscription version + expiry). */
+export function useApplyPlanChange() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { previewToken: string }, idempotencyKey: string) => {
+        const res = await api.post<PlanChangeApplyResult>(
+          `/api/v1/businesses/${businessId}/subscription/change-apply`,
+          vars,
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: (result: PlanChangeApplyResult) => {
+      qc.setQueryData(queryKeys.subscription(businessId), result.subscription);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1561,110 +2010,21 @@ export function useCancelSubscription() {
 
 /* ---------------- Files / exports / ops ---------------- */
 
+export type FileOwner = {
+  ownerType: "customer" | "booking" | "linked_record" | "business";
+  ownerId: string;
+};
+
 export function useCreateFileUploadIntent() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
       async (
-        body: {
-          contentType: string;
-          sizeBytes: number;
-          ownerType?: "customer" | "booking" | "linked_record" | "business";
-          ownerId?: string;
-        },
+        body: { contentType: string; sizeBytes: number } & Partial<FileOwner>,
         idempotencyKey: string,
       ) => {
-        const res = await api.post<{
-          file: { id: string };
-          uploadUrl?: string;
-          upload?: { url: string; headers?: Record<string, string> };
-        }>(`/api/v1/businesses/${businessId}/files`, body, { idempotencyKey });
-        return res.data;
-      },
-    ),
-    onError: (err) => toastApiError(err),
-  });
-}
-
-export function useCompleteFileUpload() {
-  const businessId = useBusinessId();
-  return useMutation({
-    mutationFn: createIdempotentMutationFn(
-      async (vars: { fileId: string }, idempotencyKey: string) => {
-        const res = await api.post(
-          `/api/v1/businesses/${businessId}/files/${vars.fileId}/complete`,
-          {},
-          { idempotencyKey },
-        );
-        return res.data;
-      },
-    ),
-    onError: (err) => toastApiError(err),
-  });
-}
-
-export function useFileDownloadUrl() {
-  const businessId = useBusinessId();
-  return useMutation({
-    mutationFn: async (fileId: string) => {
-      const res = await api.post<{ url?: string; downloadUrl?: string }>(
-        `/api/v1/businesses/${businessId}/files/${fileId}/download-url`,
-        {},
-      );
-      return res.data;
-    },
-    onError: (err) => toastApiError(err),
-  });
-}
-
-/** Upload a browser File via signed intent → PUT → complete. */
-export async function uploadFileViaIntent(
-  businessId: string,
-  file: File,
-  owner?: { ownerType: "customer" | "booking" | "linked_record" | "business"; ownerId: string },
-) {
-  const intent = await api.post<{
-    file: { id: string };
-    uploadUrl?: string;
-    upload?: { url: string; headers?: Record<string, string> };
-  }>(
-    `/api/v1/businesses/${businessId}/files`,
-    {
-      contentType: file.type || "application/octet-stream",
-      sizeBytes: file.size,
-      ...owner,
-    },
-    { idempotencyKey: newIdempotencyKey() },
-  );
-
-  const uploadUrl = intent.data.uploadUrl ?? intent.data.upload?.url;
-  if (!uploadUrl) throw new Error("Upload URL missing from intent response");
-
-  const put = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      ...(intent.data.upload?.headers ?? {}),
-    },
-    body: file,
-  });
-  if (!put.ok) throw new Error(`Upload failed (${put.status})`);
-
-  await api.post(
-    `/api/v1/businesses/${businessId}/files/${intent.data.file.id}/complete`,
-    {},
-    { idempotencyKey: newIdempotencyKey() },
-  );
-  return intent.data.file;
-}
-
-export function useRequestExport() {
-  const businessId = useBusinessId();
-  return useMutation({
-    mutationFn: createIdempotentMutationFn(
-      async (body: Record<string, unknown>, idempotencyKey: string) => {
-        const res = await api.post<{ export?: { id: string }; id?: string }>(
-          `/api/v1/businesses/${businessId}/exports`,
+        const res = await api.post<{ file: FileResource; uploadUrl: string }>(
+          `/api/v1/businesses/${businessId}/files`,
           body,
           { idempotencyKey },
         );
@@ -1675,50 +2035,322 @@ export function useRequestExport() {
   });
 }
 
-export function useFailedOutbox() {
+/** `checksum` is the SHA-256 hex digest of the uploaded bytes — the API rejects `complete` without it. */
+export function useCompleteFileUpload() {
   const businessId = useBusinessId();
-  return useQuery({
-    queryKey: ["biz", businessId, "admin", "outbox", "failed"] as const,
-    enabled: Boolean(businessId),
-    queryFn: async () => {
-      const res = await api.get<{ events: Array<Record<string, unknown>> }>(
-        `/api/v1/businesses/${businessId}/admin/outbox/failed`,
-      );
-      return res.data.events;
-    },
-  });
-}
-
-export function useDeadLetterOutbox() {
-  const businessId = useBusinessId();
-  return useQuery({
-    queryKey: ["biz", businessId, "admin", "outbox", "dead-letter"] as const,
-    enabled: Boolean(businessId),
-    queryFn: async () => {
-      const res = await api.get<{ events: Array<Record<string, unknown>> }>(
-        `/api/v1/businesses/${businessId}/admin/outbox/dead-letter`,
-      );
-      return res.data.events;
-    },
-  });
-}
-
-export function useReplayOutbox() {
-  const businessId = useBusinessId();
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (body: Record<string, unknown> | void, idempotencyKey: string) => {
-        const res = await api.post(
-          `/api/v1/businesses/${businessId}/admin/outbox/replay`,
-          body ?? {},
+      async (vars: { fileId: string; checksum: string }, idempotencyKey: string) => {
+        const res = await api.post<{ file: FileResource }>(
+          `/api/v1/businesses/${businessId}/files/${vars.fileId}/complete`,
+          { checksum: vars.checksum },
           { idempotencyKey },
+        );
+        return res.data.file;
+      },
+    ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Metadata for a single file; fails closed (422/403) until the malware scan clears (RECA-84). */
+export function useBusinessFile(fileId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.file(businessId, fileId ?? ""),
+    enabled: Boolean(businessId && fileId),
+    queryFn: async () => {
+      const res = await api.get<{ file: FileResource }>(
+        `/api/v1/businesses/${businessId}/files/${fileId}`,
+      );
+      return res.data.file;
+    },
+    // Poll while the async malware scan is still pending so status flips live.
+    refetchInterval: (query) => (query.state.data?.scanStatus === "pending" ? 3000 : false),
+  });
+}
+
+/**
+ * Issues a short-lived signed download URL. Never cache/reuse the result —
+ * call this again immediately before every download so the link is fresh
+ * and the access is freshly audited (file.download_url_issued).
+ */
+export function useFileDownloadUrl() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (fileId: string) => {
+      const res = await api.post<{
+        downloadUrl: string;
+        expiresInSeconds: number;
+        expiresAt: string;
+      }>(`/api/v1/businesses/${businessId}/files/${fileId}/download-url`, {});
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+async function sha256Hex(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** PUT with upload progress via XHR (the Fetch API has no upload progress event). */
+function putFileWithProgress(url: string, file: File, onProgress?: (pct: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (onProgress && e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed — check your connection and try again."));
+    xhr.send(file);
+  });
+}
+
+/**
+ * Upload a browser File via signed intent → PUT (with progress) → complete
+ * (with checksum). Returns the completed `File` resource — still
+ * `scanStatus: "pending"` until the async malware scan clears.
+ */
+export async function uploadFileViaIntent(
+  businessId: string,
+  file: File,
+  owner?: FileOwner,
+  onProgress?: (pct: number) => void,
+): Promise<FileResource> {
+  const intent = await api.post<{ file: FileResource; uploadUrl: string }>(
+    `/api/v1/businesses/${businessId}/files`,
+    {
+      contentType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+      ...owner,
+    },
+    { idempotencyKey: newIdempotencyKey() },
+  );
+
+  await putFileWithProgress(intent.data.uploadUrl, file, onProgress);
+  const checksum = await sha256Hex(file);
+
+  const completed = await api.post<{ file: FileResource }>(
+    `/api/v1/businesses/${businessId}/files/${intent.data.file.id}/complete`,
+    { checksum },
+    { idempotencyKey: newIdempotencyKey() },
+  );
+  return completed.data.file;
+}
+
+/** `type` is a query param, not a JSON body — see openapi.json `POST /exports`. */
+export function useRequestExport() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { type: "customers" | "bookings" }, idempotencyKey: string) => {
+        const res = await api.post<{ export: ExportRequest; downloadUrl: string }>(
+          `/api/v1/businesses/${businessId}/exports`,
+          undefined,
+          { idempotencyKey, query: { type: vars.type } },
         );
         return res.data;
       },
     ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Downloads an export's file body and saves it via a Blob URL. The download
+ * endpoint requires a real Bearer token — the `token` query param alone
+ * (already embedded in `downloadUrl`) is not sufficient authentication, so
+ * this can't be a plain `<a href>`.
+ */
+export async function downloadExportFile(downloadUrl: string, filenameFallback: string) {
+  const token = getAccessToken();
+  const absolute = /^https?:\/\//i.test(downloadUrl)
+    ? downloadUrl
+    : `${getApiBaseUrl()}${downloadUrl.startsWith("/") ? "" : "/"}${downloadUrl}`;
+
+  const res = await fetch(absolute, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => undefined);
+    throw parseProblemDetails(body, res.status);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^"]+)"?/i.exec(disposition)?.[1] ?? filenameFallback;
+
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+/* ---------------- Ops: outbox, jobs, reconciliation, retention (RECA-506) ---------------- */
+
+type OpsListFilters = { minAttempts?: number; limit?: number };
+
+export function useFailedOutbox(filters: OpsListFilters = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.outboxFailed(businessId, filters),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ events: OutboxEvent[] }>(
+        `/api/v1/businesses/${businessId}/admin/outbox/failed`,
+        { query: { minAttempts: filters.minAttempts, limit: filters.limit } },
+      );
+      return res.data.events;
+    },
+  });
+}
+
+export function useDeadLetterOutbox(filters: OpsListFilters = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.outboxDeadLetter(businessId, filters),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ events: OutboxEvent[] }>(
+        `/api/v1/businesses/${businessId}/admin/outbox/dead-letter`,
+        { query: { minAttempts: filters.minAttempts, limit: filters.limit } },
+      );
+      return res.data.events;
+    },
+  });
+}
+
+/** Requeues up to 100 named events by id. The API has no "replay all" — callers pass explicit ids. */
+export function useReplayOutbox() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventIds: string[]) => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/admin/outbox/replay`,
+        { eventIds },
+      );
+      return res.data;
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "outbox"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Republishes a single outbox event (failed or dead-lettered) by id. */
+export function useRepublishOutboxEvent() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/admin/outbox/${eventId}/republish`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "outbox"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Requires audit.read. Background jobs stuck in a failed state after exhausting retries. */
+export function useFailedJobs(filters: OpsListFilters = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.failedJobs(businessId, filters),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ jobs: FailedJob[] }>(
+        `/api/v1/businesses/${businessId}/admin/jobs/failed`,
+        { query: { minAttempts: filters.minAttempts, limit: filters.limit } },
+      );
+      return res.data.jobs;
+    },
+  });
+}
+
+/** Resets a failed job's attempt count so the scheduler retries it. */
+export function useResetFailedJob() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/admin/jobs/${jobId}/reset`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "admin", "jobs"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Requires audit.read. Re-runs payment reconciliation for a bounded window; never scans other businesses. */
+export function useReconcilePayments() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async (vars: { from: string; to: string }) => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/admin/payments/reconcile`,
+        vars,
+      );
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Requires customer.export. Runs retention/anonymisation for this business now, ahead of schedule. */
+export function useRunRetention() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/admin/retention/run`,
+        {},
+      );
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Requires customer.export. Soft-deletes files older than
+ * `retention.fileRetentionDays` and purges the underlying blobs (RECA-83).
+ */
+export function useRunFilesRetention() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ requested: number; softDeleted: number; skipped: number }>(
+        `/api/v1/businesses/${businessId}/admin/files/retention/run`,
+        {},
+      );
+      return res.data;
     },
     onError: (err) => toastApiError(err),
   });
