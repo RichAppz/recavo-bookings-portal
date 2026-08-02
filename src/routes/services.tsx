@@ -148,7 +148,7 @@ function ServiceDialog({
         }
       }}
     >
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{service ? "Edit service" : "Create service"}</DialogTitle>
           <DialogDescription>

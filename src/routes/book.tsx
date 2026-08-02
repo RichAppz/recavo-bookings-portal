@@ -124,17 +124,33 @@ function BookingJourney() {
           <section className="space-y-4">
             <Back onClick={() => setStep(1)} />
             <h1 className="text-2xl font-semibold tracking-tight">Choose a date and time</h1>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {Array.from({ length: 7 }, (_, i) => isoDate(addDays(demoToday(), i + 1))).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDate(d)}
-                  className={`surface-card shrink-0 px-4 py-3 text-center text-sm ${d === date ? "ring-2 ring-primary" : ""}`}
-                >
-                  {ukDateFull(d)}
-                </button>
-              ))}
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+              {Array.from({ length: 7 }, (_, i) => isoDate(addDays(demoToday(), i + 1))).map((d) => {
+                const dt = new Date(`${d}T00:00:00Z`);
+                const weekday = dt.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+                const dayNum = dt.toLocaleDateString("en-GB", { day: "numeric", timeZone: "UTC" });
+                const month = dt.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+                const selected = d === date;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setDate(d)}
+                    className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition ${
+                      selected
+                        ? "border-primary bg-primary-soft text-primary"
+                        : "bg-card hover:bg-secondary"
+                    }`}
+                  >
+                    <span className="text-xs text-muted-foreground">{weekday}</span>
+                    <span className="text-base font-semibold tabular-nums">{dayNum}</span>
+                    <span className="text-xs text-muted-foreground">{month}</span>
+                  </button>
+                );
+              })}
             </div>
+
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {TIMES.map((t) => (
                 <button
