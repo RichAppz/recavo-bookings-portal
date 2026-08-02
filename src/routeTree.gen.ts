@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MessagesRouteImport } from './routes/messages'
@@ -47,6 +48,11 @@ const BookingsRoute = BookingsRouteImport.update({
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LocationsRoute = LocationsRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/invite'
     | '/locations'
     | '/login'
     | '/messages'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/invite'
     | '/locations'
     | '/login'
     | '/messages'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/invite'
     | '/locations'
     | '/login'
     | '/messages'
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRoute
   BookingsRoute: typeof BookingsRoute
   CalendarRoute: typeof CalendarRoute
+  InviteRoute: typeof InviteRoute
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
   MessagesRoute: typeof MessagesRoute
@@ -305,6 +318,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/locations': {
@@ -420,6 +440,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookRoute: BookRoute,
   BookingsRoute: BookingsRoute,
   CalendarRoute: CalendarRoute,
+  InviteRoute: InviteRoute,
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,
   MessagesRoute: MessagesRoute,
