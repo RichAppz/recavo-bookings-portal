@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/ui-bits";
 import { ApiError } from "@/lib/api";
-import { useBusinessFile, useBusinessId, useFileDownloadUrl, uploadFileViaIntent, type FileOwner } from "@/lib/api/hooks";
+import {
+  useBusinessFile,
+  useBusinessId,
+  useFileDownloadUrl,
+  uploadFileViaIntent,
+  type FileOwner,
+} from "@/lib/api/hooks";
 import type { FileResource } from "@/lib/api/types";
 import { toast } from "sonner";
 
@@ -62,11 +68,8 @@ export function FileAttachments({
     setUploading(true);
     setProgress(0);
     try {
-      const uploaded = await uploadFileViaIntent(
-        businessId,
-        file,
-        { ownerType, ownerId },
-        (pct) => setProgress(pct),
+      const uploaded = await uploadFileViaIntent(businessId, file, { ownerType, ownerId }, (pct) =>
+        setProgress(pct),
       );
       setAttachments((prev) => [{ name: file.name, file: uploaded }, ...prev]);
       toast.success("File uploaded", {

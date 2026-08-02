@@ -239,7 +239,10 @@ function ReportsPage() {
                 value={String(dashboard.data.bookings.count)}
                 change={
                   previousDashboard.data
-                    ? pctChange(dashboard.data.bookings.count, previousDashboard.data.bookings.count)
+                    ? pctChange(
+                        dashboard.data.bookings.count,
+                        previousDashboard.data.bookings.count,
+                      )
                     : undefined
                 }
                 hint="vs. previous equal period"
@@ -381,7 +384,10 @@ function ReportsPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Packages and credits" description="Prepaid activity in this range">
+              <SectionCard
+                title="Packages and credits"
+                description="Prepaid activity in this range"
+              >
                 <dl className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <dt className="text-xs text-muted-foreground">Package sales</dt>
@@ -523,7 +529,8 @@ function ExportCard() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 text-sm">
           <div>
             <p className="font-medium">
-              {EXPORT_TYPES.find((t) => t.value === result.export.type)?.label ?? result.export.type}{" "}
+              {EXPORT_TYPES.find((t) => t.value === result.export.type)?.label ??
+                result.export.type}{" "}
               export — {result.export.rowCount} row(s)
             </p>
             <p className="text-xs text-muted-foreground">
