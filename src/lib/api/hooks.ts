@@ -2,23 +2,28 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   createIdempotentMutationFn,
+  flattenPages,
   newIdempotencyKey,
   queryKeys,
   toastApiError,
+  usePaginatedQuery,
 } from "@/lib/api";
 import type {
   AvailabilitySlot,
   Booking,
   CatalogueService,
   ConnectAccount,
+  ConsentRecord,
   Conversation,
   ConversationMessage,
   CreditLedgerEntry,
   Customer,
   CustomerNote,
+  CustomerTag,
   Dashboard,
   EntitlementView,
   Invitation,
+  LinkedRecord,
   Location,
   Notification,
   Package,
@@ -327,13 +332,35 @@ export function useCreateLocation() {
 
 /* ---------------- Customers ---------------- */
 
+export type CustomerUpdateBody = {
+  firstName?: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  preferredChannel?: "email" | "phone" | "none";
+  operationalNotifications?: boolean;
+  marketingConsent?: boolean;
+  marketingConsentSource?: string | null;
+  status?: "active" | "archived" | "anonymised";
+  tags?: string[];
+};
+
+function invalidateCustomerQueries(qc: ReturnType<typeof useQueryClient>, businessId: string, customerId?: string) {
+  void qc.invalidateQueries({ queryKey: ["biz", businessId, "customers"] });
+  if (customerId) {
+    void qc.invalidateQueries({ queryKey: queryKeys.customer(businessId, customerId) });
+  }
+}
+
+/** First page of customers — used by pickers / search. Envelope is `{ items }`. */
 export function useCustomers(
-  filters: { search?: string; status?: string; enabled?: boolean } = {},
+  filters: { search?: string; status?: string; tagIds?: string; enabled?: boolean } = {},
 ) {
   const businessId = useBusinessId();
   const query = {
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.tagIds ? { tagIds: filters.tagIds } : {}),
   };
   return useQuery({
     queryKey: queryKeys.customers(businessId, query),
@@ -346,6 +373,29 @@ export function useCustomers(
       return res.data;
     },
   });
+}
+
+/** Cursor-paginated customers list (`items` + `nextCursor`). */
+export function useCustomersInfinite(
+  filters: { search?: string; status?: string; tagIds?: string; enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  const query = {
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.tagIds ? { tagIds: filters.tagIds } : {}),
+  };
+  const q = usePaginatedQuery<Customer, "items">({
+    queryKey: queryKeys.customersInfinite(businessId, query),
+    path: `/api/v1/businesses/${businessId}/customers`,
+    listKey: "items",
+    query,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+  return {
+    ...q,
+    items: flattenPages(q.data, "items"),
+  };
 }
 
 export function useCustomer(customerId: string | undefined) {
@@ -391,31 +441,259 @@ export function useCreateCustomer() {
       },
     ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customers"] });
+      invalidateCustomerQueries(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
 }
 
-export function useUpdateCustomerStatus() {
+/** Full customer PATCH with If-Match. */
+export function useUpdateCustomer() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (vars: {
       customerId: string;
       version: number;
-      status: "active" | "archived" | "anonymised";
+      body: CustomerUpdateBody;
     }) => {
       const res = await api.patch<{ customer: Customer }>(
         `/api/v1/businesses/${businessId}/customers/${vars.customerId}`,
-        { status: vars.status },
+        vars.body,
         { ifMatch: vars.version },
       );
       return res.data.customer;
     },
     onSuccess: (customer) => {
-      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customers"] });
-      void qc.invalidateQueries({ queryKey: queryKeys.customer(businessId, customer.id) });
+      invalidateCustomerQueries(qc, businessId, customer.id);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateCustomerStatus() {
+  const update = useUpdateCustomer();
+  return useMutation({
+    mutationFn: async (vars: {
+      customerId: string;
+      version: number;
+      status: "active" | "archived" | "anonymised";
+    }) =>
+      update.mutateAsync({
+        customerId: vars.customerId,
+        version: vars.version,
+        body: { status: vars.status },
+      }),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCustomerTagsCatalogue(filters: { status?: "active" | "archived" } = {}) {
+  const businessId = useBusinessId();
+  const query = filters.status ? { status: filters.status } : {};
+  return useQuery({
+    queryKey: queryKeys.customerTagsCatalogue(businessId, query),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ tags: CustomerTag[] }>(
+        `/api/v1/businesses/${businessId}/customer-tags`,
+        { query },
+      );
+      return res.data.tags;
+    },
+  });
+}
+
+export function useCreateCustomerTag() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const res = await api.post<{ tag: CustomerTag }>(
+        `/api/v1/businesses/${businessId}/customer-tags`,
+        { name },
+      );
+      return res.data.tag;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customer-tags"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCustomerAssignedTags(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerAssignedTags(businessId, customerId ?? ""),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ tags: CustomerTag[] }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/tags`,
+      );
+      return res.data.tags;
+    },
+  });
+}
+
+export function useAssignCustomerTag(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tagId: string) => {
+      const res = await api.post<{ tag: CustomerTag }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/tags`,
+        { tagId },
+      );
+      return res.data.tag;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerAssignedTags(businessId, customerId ?? ""),
+      });
+      invalidateCustomerQueries(qc, businessId, customerId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUnassignCustomerTag(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tagId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/customers/${customerId}/tags/${tagId}`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerAssignedTags(businessId, customerId ?? ""),
+      });
+      invalidateCustomerQueries(qc, businessId, customerId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCustomerConsents(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerConsents(businessId, customerId ?? ""),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ consents: ConsentRecord[] }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/consents`,
+      );
+      return res.data.consents;
+    },
+  });
+}
+
+export function useRecordCustomerConsent(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      channel: string;
+      granted: boolean;
+      source?: string | null;
+      noticeId?: string;
+    }) => {
+      const res = await api.post<{ consent: ConsentRecord }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/consents`,
+        body,
+      );
+      return res.data.consent;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerConsents(businessId, customerId ?? ""),
+      });
+      invalidateCustomerQueries(qc, businessId, customerId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCustomerLinkedRecords(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerLinkedRecords(businessId, customerId ?? ""),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ records: LinkedRecord[] }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/linked-records`,
+      );
+      return res.data.records;
+    },
+  });
+}
+
+export function useCreateCustomerLinkedRecord(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { displayLabel?: string; values?: Record<string, unknown> }) => {
+      const res = await api.post<{ record: LinkedRecord }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/linked-records`,
+        body,
+      );
+      return res.data.record;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerLinkedRecords(businessId, customerId ?? ""),
+      });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Links a portal user (`userId`) to this customer — not a magic-link URL. */
+export function useLinkCustomerPortal(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await api.post<{ customer: Customer }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/portal-link`,
+        { userId },
+      );
+      return res.data.customer;
+    },
+    onSuccess: (customer) => {
+      invalidateCustomerQueries(qc, businessId, customer.id);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCustomerDsarExport(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<Record<string, unknown>>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/dsar-export`,
+        {},
+      );
+      return res.data;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useAnonymiseCustomer(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ customer: Customer }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/anonymise`,
+        {},
+      );
+      return res.data.customer;
+    },
+    onSuccess: (customer) => {
+      invalidateCustomerQueries(qc, businessId, customer.id);
     },
     onError: (err) => toastApiError(err),
   });

@@ -38,6 +38,7 @@ export type FailedJob = schemas["FailedJob"];
 export type PolicyDocument = schemas["PolicyDocument"];
 export type Invitation = schemas["Invitation"];
 export type LinkedRecord = schemas["LinkedRecord"];
+export type ConsentRecord = schemas["ConsentRecord"];
 export type AuditEvent = schemas["AuditEvent"];
 export type ProblemDetails = schemas["ProblemDetails"];
 
