@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ApiError } from "@/lib/api";
 import {
   useAddStaffTimeOff,
   useConversations,
@@ -98,6 +99,9 @@ function Shell({
               try {
                 await onSubmit();
                 onClose();
+              } catch {
+                // Errors are surfaced via toast (mutation onError or explicit
+                // validation toasts) — keep the dialog open so the user can fix it.
               } finally {
                 setSaving(false);
               }
@@ -116,31 +120,58 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [preferredChannel, setPreferredChannel] = useState<"email" | "phone" | "none">("email");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const createCustomer = useCreateCustomer();
+
+  const reset = () => {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+    setPreferredChannel("email");
+    setFieldErrors({});
+  };
 
   return (
     <Shell
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        onClose();
+        reset();
+      }}
       title="Add client"
       description="Create a client record. They can be invited to the booking page later."
       submitLabel="Add client"
       onSubmit={async () => {
         if (!firstName.trim()) {
+          setFieldErrors({ firstName: "A first name is required" });
           toast.error("A first name is required");
-          return;
+          throw new Error("validation");
         }
-        await createCustomer.mutateAsync({
-          firstName,
-          lastName: lastName || null,
-          email: email || null,
-          phone: phone || null,
-        });
+        setFieldErrors({});
+        try {
+          await createCustomer.mutateAsync({
+            firstName,
+            lastName: lastName || null,
+            email: email || null,
+            phone: phone || null,
+            preferredChannel,
+          });
+        } catch (err) {
+          if (err instanceof ApiError && err.fieldErrors.length > 0) {
+            setFieldErrors(
+              Object.fromEntries(
+                err.fieldErrors
+                  .filter((fe) => fe.field)
+                  .map((fe) => [fe.field, fe.message || fe.code || "Invalid"]),
+              ),
+            );
+          }
+          throw err;
+        }
         toast.success("Client added");
-        setFirstName("");
-        setLastName("");
-        setEmail("");
-        setPhone("");
+        reset();
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -151,7 +182,11 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             placeholder="Harriet"
+            aria-invalid={Boolean(fieldErrors.firstName)}
           />
+          {fieldErrors.firstName ? (
+            <p className="text-xs text-destructive">{fieldErrors.firstName}</p>
+          ) : null}
         </div>
         <div className="grid gap-2">
           <Label htmlFor="c-last">Last name</Label>
@@ -160,7 +195,11 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             placeholder="Cole"
+            aria-invalid={Boolean(fieldErrors.lastName)}
           />
+          {fieldErrors.lastName ? (
+            <p className="text-xs text-destructive">{fieldErrors.lastName}</p>
+          ) : null}
         </div>
       </div>
       <div className="grid gap-2">
@@ -171,16 +210,43 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="harriet.cole@example.co.uk"
+          aria-invalid={Boolean(fieldErrors.email)}
         />
+        {fieldErrors.email ? <p className="text-xs text-destructive">{fieldErrors.email}</p> : null}
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor="c-phone">Mobile</Label>
-        <Input
-          id="c-phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="07700 900123"
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="c-phone">Mobile</Label>
+          <Input
+            id="c-phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="07700 900123"
+            aria-invalid={Boolean(fieldErrors.phone)}
+          />
+          {fieldErrors.phone ? (
+            <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2">
+          <Label>Preferred contact</Label>
+          <Select
+            value={preferredChannel}
+            onValueChange={(v) => setPreferredChannel(v as "email" | "phone" | "none")}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+          {fieldErrors.preferredChannel ? (
+            <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
+          ) : null}
+        </div>
       </div>
     </Shell>
   );
@@ -481,11 +547,11 @@ function SendMessageDialog({ open, onClose }: { open: boolean; onClose: () => vo
       onSubmit={async () => {
         if (!conversationId) {
           toast.error("Choose a conversation");
-          return;
+          throw new Error("validation");
         }
         if (!body.trim()) {
           toast.error("Write a message first");
-          return;
+          throw new Error("validation");
         }
         await sendMessage.mutateAsync(body);
         toast.success("Message sent");

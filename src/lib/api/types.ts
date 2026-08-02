@@ -15,6 +15,7 @@ export type AvailabilitySlot = schemas["AvailabilitySlot"];
 export type Customer = schemas["Customer"];
 export type CustomerNote = schemas["CustomerNote"];
 export type CustomerTag = schemas["CustomerTag"];
+export type ConsentRecord = schemas["ConsentRecord"];
 export type Package = schemas["Package"];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
@@ -40,6 +41,27 @@ export type Invitation = schemas["Invitation"];
 export type LinkedRecord = schemas["LinkedRecord"];
 export type AuditEvent = schemas["AuditEvent"];
 export type ProblemDetails = schemas["ProblemDetails"];
+
+/**
+ * Booking status-history entry. The API returns freeform objects
+ * (`additionalProperties: true`), so field names are optional and we
+ * read whichever the backend populates (audit-log-shaped fields).
+ */
+export type BookingHistoryEntry = {
+  id?: string;
+  action?: string;
+  status?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  actorId?: string;
+  actorType?: string;
+  actorName?: string;
+  reason?: string;
+  occurredAt?: string;
+  createdAt?: string;
+  timestamp?: string;
+  metadata?: Record<string, unknown>;
+} & Record<string, unknown>;
 
 export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ");

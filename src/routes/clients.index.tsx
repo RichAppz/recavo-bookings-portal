@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, UserPlus } from "lucide-react";
+import { Loader2, Search, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useCustomers } from "@/lib/api/hooks";
+import { useCustomersInfinite } from "@/lib/api/hooks";
+import { flattenPages } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
 
@@ -43,16 +44,27 @@ export const Route = createFileRoute("/clients/")({
   ),
 });
 
+/** Debounce a fast-changing value so search doesn't refetch on every keystroke. */
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function ClientsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [quick, setQuick] = useState<QuickAction>(null);
+  const debouncedQuery = useDebounced(query.trim());
 
-  const customers = useCustomers({
-    search: query.trim(),
+  const customers = useCustomersInfinite({
+    search: debouncedQuery,
     status: status !== "all" ? status : undefined,
   });
-  const rows = useMemo(() => customers.data?.items ?? [], [customers.data]);
+  const rows = useMemo(() => flattenPages(customers.data, "items"), [customers.data]);
   const activeCount = rows.filter((c) => c.status === "active").length;
 
   return (
@@ -68,7 +80,7 @@ function ClientsPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Clients matching filters" value={String(rows.length)} />
+        <StatCard label="Clients loaded" value={String(rows.length)} />
         <StatCard label="Active" value={String(activeCount)} />
         <StatCard label="Archived or anonymised" value={String(rows.length - activeCount)} />
       </div>
@@ -101,7 +113,11 @@ function ClientsPage() {
           <p className="p-6 text-sm text-muted-foreground">Loading clients…</p>
         ) : customers.isError ? (
           <div className="p-6">
-            <EmptyState title="Couldn't load clients" description="Please try again shortly." />
+            <EmptyState
+              title="Couldn't load clients"
+              description="Please try again shortly."
+              action={<Button onClick={() => customers.refetch()}>Try again</Button>}
+            />
           </div>
         ) : rows.length === 0 ? (
           <div className="p-6">
@@ -112,48 +128,67 @@ function ClientsPage() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/60 text-xs text-muted-foreground">
-                <tr>
-                  {["Client", "Contact", "Tags", "Client since", "Status"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {rows.map((c) => (
-                  <tr key={c.id} className="transition-colors hover:bg-secondary/50">
-                    <td className="px-4 py-3">
-                      <Link
-                        to="/clients/$clientId"
-                        params={{ clientId: c.id }}
-                        className="flex items-center gap-3 font-medium"
-                      >
-                        <PersonAvatar name={customerDisplayName(c)} />
-                        {customerDisplayName(c)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs">{c.emailDisplay ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{c.phoneDisplay ?? ""}</p>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {c.tags.length > 0 ? c.tags.join(", ") : "—"}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {ukDate(c.createdAt.slice(0, 10))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={c.status} />
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/60 text-xs text-muted-foreground">
+                  <tr>
+                    {["Client", "Contact", "Tags", "Client since", "Status"].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y">
+                  {rows.map((c) => (
+                    <tr key={c.id} className="transition-colors hover:bg-secondary/50">
+                      <td className="px-4 py-3">
+                        <Link
+                          to="/clients/$clientId"
+                          params={{ clientId: c.id }}
+                          className="flex items-center gap-3 font-medium"
+                        >
+                          <PersonAvatar name={customerDisplayName(c)} />
+                          {customerDisplayName(c)}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-xs">{c.emailDisplay ?? "—"}</p>
+                        <p className="text-xs text-muted-foreground">{c.phoneDisplay ?? ""}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {c.tags.length > 0 ? c.tags.join(", ") : "—"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {ukDate(c.createdAt.slice(0, 10))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={c.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {customers.hasNextPage ? (
+              <div className="flex justify-center border-t p-4">
+                <Button
+                  variant="outline"
+                  disabled={customers.isFetchingNextPage}
+                  onClick={() => customers.fetchNextPage()}
+                >
+                  {customers.isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Loading…
+                    </>
+                  ) : (
+                    "Load more"
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
