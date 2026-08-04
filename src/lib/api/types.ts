@@ -3,6 +3,7 @@ import type { components } from "./schema";
 export type schemas = components["schemas"];
 
 export type User = schemas["User"];
+export type UserSummary = schemas["UserSummary"];
 export type Business = schemas["Business"];
 export type BusinessSummary = schemas["BusinessSummary"];
 export type BusinessConfiguration = schemas["BusinessConfiguration"];
@@ -95,4 +96,14 @@ export type SubscriptionChangePreview = {
 
 export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ");
+}
+
+/** Account / membership name; falls back to email when names are empty. */
+export function userDisplayName(
+  user: Pick<UserSummary, "firstName" | "lastName" | "email"> | null | undefined,
+  fallback = "Signed in",
+): string {
+  if (!user) return fallback;
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return name || user.email || fallback;
 }

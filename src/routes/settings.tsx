@@ -29,6 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useAuth } from "@/lib/auth/auth-store";
 import {
   useAddLinkedRecordField,
   useApplyLinkedRecordTemplate,
@@ -60,6 +61,7 @@ import {
   useSubscriptionChangePreview,
   useUpdateBusiness,
   useUpdateConfiguration,
+  useUpdateMe,
   useUpdateMembership,
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
@@ -69,10 +71,12 @@ import type {
   SaasPlanCode,
   SubscriptionChangePreview,
 } from "@/lib/api/types";
+import { userDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
+import { ApiError, toastApiError } from "@/lib/api";
 
 const searchSchema = z.object({
   tab: z.string().optional(),
@@ -162,19 +166,23 @@ function SettingsPage() {
         <EmptyState title="Couldn't load your business" description="Please try again shortly." />
       ) : (
         <Tabs defaultValue={defaultTab}>
-          <TabsList className="flex h-auto flex-wrap justify-start gap-1">
-            <TabsTrigger value="business">Business profile</TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="business">Business</TabsTrigger>
             <TabsTrigger value="configuration">Configuration</TabsTrigger>
-            <TabsTrigger value="team">Team & access</TabsTrigger>
-            <TabsTrigger value="policies">Policy documents</TabsTrigger>
-            <TabsTrigger value="privacy">Privacy notices</TabsTrigger>
-            <TabsTrigger value="notifications">Notification templates</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="policies">Policies</TabsTrigger>
+            <TabsTrigger value="privacy">Privacy</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="records">Linked records</TabsTrigger>
             <TabsTrigger value="lifecycle">Lifecycle</TabsTrigger>
-            <TabsTrigger value="audit">Audit trail</TabsTrigger>
+            <TabsTrigger value="audit">Audit</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="billing">SaaS billing</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
           </TabsList>
+          <TabsContent value="account" className="mt-4">
+            <AccountProfileTab />
+          </TabsContent>
           <TabsContent value="business" className="mt-4">
             <BusinessProfileTab />
           </TabsContent>
@@ -219,16 +227,83 @@ function Field({
   value,
   onChange,
   type = "text",
+  disabled,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="grid gap-2">
       <Label>{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        type={type}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function AccountProfileTab() {
+  const { user } = useAuth();
+  const updateMe = useUpdateMe();
+  const [firstName, setFirstName] = useState(user?.firstName ?? "");
+  const [lastName, setLastName] = useState(user?.lastName ?? "");
+
+  useEffect(() => {
+    setFirstName(user?.firstName ?? "");
+    setLastName(user?.lastName ?? "");
+  }, [user?.firstName, user?.lastName]);
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-2">
+      <SectionCard title="Your profile">
+        <div className="grid gap-4">
+          <Field
+            label="Email"
+            value={user?.email ?? ""}
+            onChange={() => undefined}
+            type="email"
+            disabled
+            hint="Email can’t be changed here."
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="First name" value={firstName} onChange={setFirstName} />
+            <Field label="Last name" value={lastName} onChange={setLastName} />
+          </div>
+          <Button
+            className="w-fit"
+            disabled={updateMe.isPending}
+            onClick={async () => {
+              try {
+                await updateMe.mutateAsync({
+                  firstName: firstName.trim() || null,
+                  lastName: lastName.trim() || null,
+                });
+                toast.success("Profile updated");
+              } catch (err) {
+                if (!(err instanceof ApiError)) toastApiError(err);
+              }
+            }}
+          >
+            {updateMe.isPending ? "Saving…" : "Save profile"}
+          </Button>
+        </div>
+      </SectionCard>
+      <SectionCard title="How your name appears">
+        <p className="text-sm text-muted-foreground">
+          Teammates see this on the Team list. Only you can edit your own name.
+        </p>
+        <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
+        {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
+      </SectionCard>
     </div>
   );
 }
@@ -465,13 +540,18 @@ function TeamTab() {
           <EmptyState title="No memberships" />
         ) : (
           <ul className="divide-y">
-            {(memberships.data ?? []).map((m) => (
+            {(memberships.data ?? []).map((m) => {
+              const name = userDisplayName(m.user, m.user?.email ?? m.userId);
+              const email = m.user?.email;
+              const roles = (m.roleKeys ?? []).join(", ") || "No roles";
+              const subtitle = [email && name !== email ? email : null, roles]
+                .filter(Boolean)
+                .join(" · ");
+              return (
               <li key={m.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{m.userId}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(m.roleKeys ?? []).join(", ") || "No roles"}
-                  </p>
+                  <p className="truncate text-sm font-medium">{name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
                 </div>
                 <StatusBadge status={m.status} />
                 <Can permission={PERMISSIONS.TEAM_MANAGE_PERMISSIONS}>
@@ -498,7 +578,8 @@ function TeamTab() {
                   </Select>
                 </Can>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </SectionCard>
@@ -1142,7 +1223,6 @@ function BillingTab() {
   const search = Route.useSearch();
   const subscription = useSubscription();
   const catalogue = useBillingCatalogue();
-  const plans = useMemo(() => catalogue.data ?? [], [catalogue.data]);
   const checkout = useStartCheckout();
   const reconcile = useReconcileCheckout();
   const portal = useBillingPortal();
@@ -1155,6 +1235,15 @@ function BillingTab() {
   const current = subscription.data?.subscription;
   const plan = subscription.data?.plan;
   const tz = useTenant().business?.defaultTimezone ?? "Europe/London";
+  const plans = useMemo(() => {
+    const list = [...(catalogue.data ?? [])];
+    list.sort((a, b) => {
+      const priceA = a.prices.find((x) => x.interval === interval) ?? a.prices[0];
+      const priceB = b.prices.find((x) => x.interval === interval) ?? b.prices[0];
+      return (priceA?.amountMinor ?? 0) - (priceB?.amountMinor ?? 0);
+    });
+    return list;
+  }, [catalogue.data, interval]);
 
   useEffect(() => {
     const sessionId = search.session_id;

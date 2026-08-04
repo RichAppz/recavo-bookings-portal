@@ -56,6 +56,7 @@ import type {
   Staff,
   SubscriptionChangePreview,
 } from "@/lib/api/types";
+import { useAuth } from "@/lib/auth/auth-store";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 export type OpeningHourInput = {
@@ -1607,6 +1608,23 @@ export function useMemberships() {
       );
       return res.data.memberships;
     },
+  });
+}
+
+/** Self-service account profile (firstName / lastName). Email is not editable. */
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  const businessId = useBusinessId();
+  const { updateProfile } = useAuth();
+  return useMutation({
+    mutationFn: (body: { firstName?: string | null; lastName?: string | null }) =>
+      updateProfile(body),
+    onSuccess: () => {
+      if (businessId) {
+        void qc.invalidateQueries({ queryKey: queryKeys.memberships(businessId) });
+      }
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 

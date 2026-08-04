@@ -240,7 +240,7 @@ function CalendarPage() {
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
                           className={cn(
-                            "absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] border-primary bg-primary-soft px-2 py-1 text-left transition-shadow hover:shadow-float",
+                            "absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] border-primary bg-primary-soft px-2 py-1 text-left",
                             cancelled && "opacity-45 line-through",
                           )}
                           style={{

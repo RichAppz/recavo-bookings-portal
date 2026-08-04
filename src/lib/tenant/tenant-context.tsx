@@ -177,16 +177,22 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const configuration = configurationQuery.data ?? null;
-  const terminology = useMemo(
-    () => ({
-      staff: configuration?.terminology?.staff || "Staff",
-      service: configuration?.terminology?.service || "Service",
-      booking: configuration?.terminology?.booking || "Booking",
+  const terminology = useMemo(() => {
+    const staff = configuration?.terminology?.staff || "Staff";
+    const booking = configuration?.terminology?.booking || "Booking";
+    let service = configuration?.terminology?.service || "Service";
+    // Older personal_training templates set both to "Session", which doubles nav labels.
+    if (service.trim().toLowerCase() === booking.trim().toLowerCase()) {
+      service = `${service.trim()} type`;
+    }
+    return {
+      staff,
+      service,
+      booking,
       client: "Client",
       linkedRecord: configuration?.terminology?.linkedRecord || "Record",
-    }),
-    [configuration],
-  );
+    };
+  }, [configuration]);
 
   // Prefer the current user's membership when available.
   const membership =

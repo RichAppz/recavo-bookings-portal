@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
+import { ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import { toast } from "sonner";
+import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
-import { toast } from "sonner";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -15,7 +16,15 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
   component: LoginPage,
-  head: () => ({ meta: [{ title: "Sign in — RECAVO" }] }),
+  head: () => ({
+    meta: [
+      { title: "Sign in — RECAVO" },
+      {
+        name: "description",
+        content: "Sign in to the RECAVO staff console to manage bookings, clients and payments.",
+      },
+    ],
+  }),
 });
 
 function LoginPage() {
@@ -24,6 +33,7 @@ function LoginPage() {
   const { redirect } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -32,92 +42,106 @@ function LoginPage() {
     }
   }, [status, redirect, navigate]);
 
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await signIn(email, password);
+      // Navigation happens in the effect above once the session is fully
+      // established (after any 2FA challenge and /me load).
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sign in failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex justify-center">
-          <Wordmark />
-        </div>
-        <div className="rounded-2xl border bg-card p-6 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Access your RECAVO staff console.</p>
+    <AuthShell
+      eyebrow="PT console"
+      title="Sign in to RECAVO"
+      subtitle="Pick up where you left off — today's sessions, payments and client messages."
+      footer={
+        <span>
+          New to RECAVO?{" "}
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            Create an account
+          </Link>
+        </span>
+      }
+    >
+      <GoogleButton
+        label="Continue with Google"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await signInWithGoogle();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Google sign-in failed");
+            setBusy(false);
+          }
+        }}
+      />
+      <AuthDivider />
 
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setBusy(true);
-              try {
-                await signIn(email, password);
-                toast.success("Signed in");
-                void navigate({ to: redirect || "/" });
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Sign in failed");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
-            </Button>
-          </form>
-
-          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            or
-            <div className="h-px flex-1 bg-border" />
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@recavo.co.uk"
+              className="h-11 rounded-xl pl-9"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
+        </div>
 
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await signInWithGoogle();
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Google sign-in failed");
-                setBusy(false);
-              }
-            }}
-          >
-            Continue with Google
-          </Button>
-
-          <div className="mt-4 flex justify-between text-sm">
-            <Link to="/reset" className="text-primary hover:underline">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link to="/reset" className="text-xs font-medium text-primary hover:underline">
               Forgot password?
             </Link>
-            <Link to="/register" className="text-primary hover:underline">
-              Create account
-            </Link>
+          </div>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="h-11 rounded-xl pr-11"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
           </div>
         </div>
-      </div>
-    </div>
+
+        <Button type="submit" size="lg" className="h-11 w-full rounded-xl" disabled={busy}>
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <>
+              Sign in <ArrowRight className="size-4" />
+            </>
+          )}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

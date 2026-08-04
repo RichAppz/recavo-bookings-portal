@@ -48,11 +48,31 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
 import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
-import { customerDisplayName } from "@/lib/api/types";
+import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
+
+/** Industry terminology for nav — keep bookings vs catalogue labels distinct. */
+function navLabel(
+  to: string,
+  fallback: string,
+  terminology: { client: string; staff: string; service: string; booking: string },
+): string {
+  if (to === "/clients") return `${terminology.client}s`;
+  if (to === "/staff") return terminology.staff;
+  if (to === "/bookings") return `${terminology.booking}s`;
+  if (to === "/services") {
+    const service = terminology.service.trim();
+    const booking = terminology.booking.trim();
+    if (service.toLowerCase() === booking.toLowerCase()) {
+      return `${service} types`;
+    }
+    return service.toLowerCase().endsWith("s") ? service : `${service}s`;
+  }
+  return fallback;
+}
 
 const NAV: Array<{
   to: string;
@@ -145,18 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3">
           {NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-            const label =
-              item.to === "/clients"
-                ? `${tenant.terminology.client}s`
-                : item.to === "/staff"
-                  ? tenant.terminology.staff
-                  : item.to === "/services"
-                    ? `${tenant.terminology.service}s`
-                    : item.to === "/bookings" || item.to === "/calendar"
-                      ? item.to === "/bookings"
-                        ? `${tenant.terminology.booking}s`
-                        : item.label
-                      : item.label;
+            const label = navLabel(item.to, item.label, tenant.terminology);
             return (
               <Link
                 key={item.to}
@@ -234,20 +243,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent/60">
-                <PersonAvatar name={user?.email ?? "?"} size={32} />
+                <PersonAvatar name={userDisplayName(user, "?")} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    {user?.email ?? "Signed in"}
+                    {userDisplayName(user)}
                   </span>
-                  <span className="block text-[11px] text-sidebar-foreground/70">
-                    {tenant.membership?.roleKeys.join(", ") || "Team member"}
+                  <span className="block truncate text-[11px] text-sidebar-foreground/70">
+                    {user?.email && userDisplayName(user) !== user.email
+                      ? user.email
+                      : tenant.membership?.roleKeys.join(", ") || "Team member"}
                   </span>
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuItem asChild>
-                <Link to="/settings">Account settings</Link>
+                <Link to="/settings" search={{ tab: "account" }}>
+                  Account settings
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

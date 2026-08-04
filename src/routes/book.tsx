@@ -294,7 +294,7 @@ function BookingFlow({ businessId }: { businessId: string }) {
                     setSelectedSlot(null);
                     setStep(1);
                   }}
-                  className="surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition-shadow hover:shadow-lg"
+                  className="surface-card flex w-full items-center justify-between gap-4 p-5 text-left"
                 >
                   <span>
                     <span className="block font-medium">{s.name}</span>

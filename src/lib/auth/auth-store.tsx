@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { api, setAccessToken, setMfaHandler, queryKeys, ApiError, toastApiError } from "@/lib/api";
 import type { User } from "@/lib/api/types";
+import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -25,9 +26,11 @@ type AuthContextValue = {
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: (redirectTo?: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  /** PATCH /api/v1/me — update first/last name on the account profile. */
+  updateProfile: (body: { firstName?: string | null; lastName?: string | null }) => Promise<User>;
   /** Complete a pending MFA challenge; returns true on success. */
   verifyMfa: (code: string) => Promise<boolean>;
   mfaRequired: boolean;
@@ -36,9 +39,33 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchMe(): Promise<User> {
-  const res = await api.get<{ user: User }>("/api/v1/me");
-  return res.data.user;
+/**
+ * Cap the session bootstrap so a slow or unreachable API can't trap the app on
+ * "Checking session…" forever. On timeout we fall through to /login. Generous
+ * enough to cover a cold-starting API machine waking from auto-stop.
+ */
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
+
+/** Namespaced debug logging for tracing the auth bootstrap (dev only). */
+function authLog(...args: unknown[]) {
+  if (import.meta.env.DEV) console.debug("[auth]", ...args);
+}
+
+async function fetchMe(signal?: AbortSignal): Promise<User> {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  try {
+    const res = await api.get<{ user: User }>("/api/v1/me", { signal });
+    authLog("fetchMe ok", {
+      ms: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+    });
+    return res.data.user;
+  } catch (err) {
+    authLog("fetchMe failed", {
+      ms: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      err,
+    });
+    throw err;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -50,6 +77,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [mfaRequired, setMfaRequired] = useState(false);
   const mfaResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  // The Supabase user id we've already loaded a profile for. Supabase fires
+  // multiple auth events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, …) and we
+  // also probe getSession() on mount; without this guard each one re-runs the
+  // AAL check and re-fetches /me, hammering the API and stacking error toasts.
+  const loadedForUserIdRef = useRef<string | null>(null);
+  // User id whose bootstrap is currently in flight, to coalesce concurrent events.
+  const inFlightUserIdRef = useRef<string | null>(null);
+
+  // Opens the MFA dialog and resolves once the user verifies (true) or cancels
+  // (false). Shared by the proactive sign-in challenge and the API 403 handler.
+  const challengeMfa = useCallback(async () => {
+    setMfaRequired(true);
+    return await new Promise<boolean>((resolve) => {
+      mfaResolveRef.current = resolve;
+    });
+  }, []);
 
   const applySession = useCallback(
     async (next: Session | null) => {
@@ -58,33 +101,118 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(token);
 
       if (!next) {
+        authLog("applySession: no session → unauthenticated");
+        loadedForUserIdRef.current = null;
+        inFlightUserIdRef.current = null;
         setUser(null);
         setStatus("unauthenticated");
         return;
       }
 
+      const userId = next.user?.id ?? null;
+      authLog("applySession", { userId, hasToken: !!token, expiresAt: next.expires_at });
+
+      // Token refresh or a duplicate auth event for a user we've already loaded:
+      // adopt the new token but skip re-running MFA and re-fetching /me.
+      if (userId && loadedForUserIdRef.current === userId) {
+        authLog("applySession: already loaded this user → skip /me");
+        setStatus("authenticated");
+        return;
+      }
+
+      // Coalesce concurrent bootstraps for the same user (getSession() racing the
+      // INITIAL_SESSION/SIGNED_IN events) so /me is only fetched once.
+      if (userId && inFlightUserIdRef.current === userId) {
+        authLog("applySession: bootstrap already in flight → skip");
+        return;
+      }
+      inFlightUserIdRef.current = userId;
+
+      // Proactive 2FA: if the user has a verified factor but the session is
+      // still aal1, challenge for their code now so 2FA happens at sign-in
+      // rather than lazily on the first privileged API call.
       try {
-        const me = await fetchMe();
+        const supabase = getSupabase();
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        authLog("aal", aal);
+        if (aal && aal.currentLevel === "aal1" && aal.nextLevel === "aal2") {
+          authLog("proactive MFA challenge required");
+          const verified = await challengeMfa();
+          if (!verified) {
+            await supabase.auth.signOut();
+            loadedForUserIdRef.current = null;
+            inFlightUserIdRef.current = null;
+            setAccessToken(null);
+            setSession(null);
+            setUser(null);
+            setStatus("unauthenticated");
+            return;
+          }
+          // Elevated to aal2 — pick up the refreshed token for the /me call.
+          const { data: refreshed } = await supabase.auth.getSession();
+          setSession(refreshed.session);
+          setAccessToken(refreshed.session?.access_token ?? null);
+        }
+      } catch (aalErr) {
+        // AAL lookup failed (e.g. offline) — fall back to reactive MFA on 403.
+        authLog("aal lookup failed (ignored)", aalErr);
+      }
+
+      try {
+        let me = await fetchMe(AbortSignal.timeout(SESSION_BOOTSTRAP_TIMEOUT_MS));
+
+        // Apply name collected at registration once we have an API session.
+        const pending = readPendingProfile();
+        if (pending && (!me.firstName || !me.lastName)) {
+          try {
+            const body: { firstName?: string; lastName?: string } = {};
+            if (!me.firstName && pending.firstName) body.firstName = pending.firstName;
+            if (!me.lastName && pending.lastName) body.lastName = pending.lastName;
+            if (Object.keys(body).length > 0) {
+              const res = await api.patch<{ user: User }>("/api/v1/me", body);
+              me = res.data.user;
+              clearPendingProfile();
+              authLog("applied pending profile from registration", body);
+            } else {
+              clearPendingProfile();
+            }
+          } catch (profileErr) {
+            // Keep the stash so a later sign-in can retry.
+            authLog("pending profile apply failed (will retry)", profileErr);
+          }
+        } else if (pending) {
+          clearPendingProfile();
+        }
+
         setUser(me);
         setStatus("authenticated");
+        loadedForUserIdRef.current = userId;
+        authLog("bootstrap complete → authenticated", { userId });
         void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
       } catch (err) {
+        loadedForUserIdRef.current = null;
         if (err instanceof ApiError && err.isUnauthenticated) {
           // The API rejected the token — treat as signed out.
+          authLog("bootstrap: /me returned 401 → unauthenticated");
           setAccessToken(null);
           setUser(null);
           setStatus("unauthenticated");
           return;
         }
-        // Network/connection error (e.g. API unreachable or CORS): the Supabase
-        // session is valid, but we couldn't load the profile. Surface it rather
-        // than silently pretending everything is fine.
+        authLog("bootstrap: /me failed (network/timeout) → unauthenticated", err);
+        // Network/timeout error (API unreachable, cold-starting or CORS): we
+        // couldn't confirm the session, so don't hang on "Checking session…"
+        // or pretend we're signed in. Send the user to /login with context;
+        // the Supabase session is kept so a retry re-authenticates once the
+        // API is reachable again.
         setUser(null);
-        setStatus("authenticated");
-        toastApiError(err, "Couldn't reach the API — check your connection or API URL.");
+        setStatus("unauthenticated");
+        toastApiError(err, "Couldn't reach the API — please try again once it's back.");
+      } finally {
+        inFlightUserIdRef.current = null;
       }
     },
-    [queryClient],
+    [queryClient, challengeMfa],
   );
 
   useEffect(() => {
@@ -98,10 +226,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
+      authLog("getSession() resolved", { hasSession: !!data.session, userId: data.session?.user?.id });
       void applySession(data.session);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      authLog("onAuthStateChange", event, { userId: next?.user?.id });
       void applySession(next);
     });
 
@@ -113,14 +243,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // MFA interceptor: privileged actions return 403 MFA_REQUIRED.
   useEffect(() => {
-    setMfaHandler(async () => {
-      setMfaRequired(true);
-      return await new Promise<boolean>((resolve) => {
-        mfaResolveRef.current = resolve;
-      });
-    });
+    setMfaHandler(() => challengeMfa());
     return () => setMfaHandler(null);
-  }, []);
+  }, [challengeMfa]);
 
   const verifyMfa = useCallback(async (code: string) => {
     const supabase = getSupabase();
@@ -173,12 +298,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    authLog("signIn: signInWithPassword");
     const supabase = getSupabase();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) {
+      authLog("signIn error", error);
+      throw error;
+    }
+    authLog("signIn: password accepted (awaiting auth-state event)");
   }, []);
 
   const signInWithGoogle = useCallback(async (redirectTo?: string) => {
+    authLog("signInWithGoogle: starting OAuth redirect");
     const supabase = getSupabase();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -190,11 +321,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
-    const supabase = getSupabase();
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-  }, []);
+  const signUp = useCallback(
+    async (email: string, password: string, metadata?: Record<string, unknown>) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        ...(metadata ? { options: { data: metadata } } : {}),
+      });
+      if (error) throw error;
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
     if (isSupabaseConfigured()) {
@@ -216,6 +354,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const updateProfile = useCallback(
+    async (body: { firstName?: string | null; lastName?: string | null }) => {
+      const res = await api.patch<{ user: User }>("/api/v1/me", body);
+      setUser(res.data.user);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
+      return res.data.user;
+    },
+    [queryClient],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -228,6 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       resetPassword,
+      updateProfile,
       verifyMfa,
       mfaRequired,
       clearMfa,
@@ -241,6 +390,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       resetPassword,
+      updateProfile,
       verifyMfa,
       mfaRequired,
       clearMfa,
