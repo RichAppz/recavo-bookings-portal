@@ -94,6 +94,59 @@ export type SubscriptionChangePreview = {
   }>;
 };
 
+/** Business setup checklist — `GET /api/v1/businesses/{id}/onboarding`. */
+export type OnboardingStepKey =
+  | "location"
+  | "staff_availability"
+  | "service"
+  | "client"
+  | "first_booking"
+  | "public_booking"
+  | "stripe_connect"
+  | "policies"
+  | "package";
+
+export type OnboardingStep = {
+  key: OnboardingStepKey;
+  title: string;
+  description: string;
+  required: boolean;
+  completed: boolean;
+  skipped: boolean;
+  href: string;
+  completedAt?: string | null;
+};
+
+export type BusinessOnboarding = {
+  businessId: string;
+  status: "in_progress" | "complete" | "dismissed";
+  percentComplete: number;
+  requiredCompleted: number;
+  requiredTotal: number;
+  dismissedAt?: string | null;
+  steps: OnboardingStep[];
+  version: number;
+};
+
+/** RECA-511 — `POST …/policy-documents/ai/draft` */
+export type AiPolicyDraftRequest = {
+  businessName: string;
+  cancellationWindowHours: number;
+  lateCancelNotes?: string;
+  refundNotes?: string;
+  locale?: string;
+  industryHint?: string;
+};
+
+export type AiPolicyDraftResponse = {
+  drafts: {
+    cancellation: PolicyDocument;
+    terms: PolicyDocument;
+  };
+  model: string;
+  disclaimer: string;
+};
+
 export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ");
 }

@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -11,6 +12,8 @@ import {
   usePaginatedQuery,
 } from "@/lib/api";
 import type {
+  AiPolicyDraftRequest,
+  AiPolicyDraftResponse,
   AuditEvent,
   AvailabilitySlot,
   Booking,
@@ -18,6 +21,7 @@ import type {
   Business,
   BusinessConfiguration,
   BusinessLifecycle,
+  BusinessOnboarding,
   CatalogueService,
   ConnectAccount,
   ConsentRecord,
@@ -40,6 +44,7 @@ import type {
   Location,
   Membership,
   Notification,
+  OnboardingStepKey,
   OutboxEvent,
   Package,
   PackagePurchase,
@@ -57,6 +62,13 @@ import type {
   SubscriptionChangePreview,
 } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
+import { deriveBusinessOnboarding } from "@/lib/onboarding/derive";
+import {
+  getSkippedStepsLocally,
+  isOnboardingDismissedLocally,
+  setOnboardingDismissedLocally,
+  skipOnboardingStepLocally,
+} from "@/lib/onboarding/local-state";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 export type OpeningHourInput = {
@@ -73,6 +85,22 @@ export function useBusinessId() {
 export function useLocationFilter() {
   const { currentLocationId } = useTenant();
   return currentLocationId === "all" ? undefined : currentLocationId;
+}
+
+function invalidateOnboarding(
+  qc: ReturnType<typeof useQueryClient>,
+  businessId: string,
+) {
+  void qc.invalidateQueries({ queryKey: queryKeys.onboarding(businessId) });
+}
+
+function unwrapOnboardingPayload(
+  data: BusinessOnboarding | { onboarding: BusinessOnboarding },
+): BusinessOnboarding {
+  if (data && typeof data === "object" && "onboarding" in data) {
+    return data.onboarding;
+  }
+  return data;
 }
 
 /* ---------------- Bookings ---------------- */
@@ -173,6 +201,7 @@ export function useCreateBooking() {
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
@@ -315,6 +344,7 @@ export function useCreateService() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -338,6 +368,7 @@ export function useUpdateService() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -365,6 +396,7 @@ export function useCreateStaff() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -388,6 +420,7 @@ export function useUpdateStaff() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.isConflict) {
@@ -455,6 +488,7 @@ export function useCreateLocation() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -485,6 +519,7 @@ export function useUpdateLocation() {
     onSuccess: (location) => {
       void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
       void qc.invalidateQueries({ queryKey: queryKeys.location(businessId, location.id) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.isConflict) {
@@ -573,6 +608,7 @@ function invalidateCustomerQueries(
   if (customerId) {
     void qc.invalidateQueries({ queryKey: queryKeys.customer(businessId, customerId) });
   }
+  invalidateOnboarding(qc, businessId);
 }
 
 /** First page of customers — used by pickers / search. Envelope is `{ items }`. */
@@ -947,6 +983,7 @@ export function useCreatePackage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -970,6 +1007,7 @@ export function useUpdatePackage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1098,6 +1136,7 @@ export function useStartConnectOnboarding() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.connectAccount(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1116,6 +1155,7 @@ export function useSyncConnectAccount() {
     },
     onSuccess: (account) => {
       qc.setQueryData(queryKeys.connectAccount(businessId), account);
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1733,6 +1773,7 @@ export function useCreatePolicyDocument() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1751,6 +1792,7 @@ export function usePublishPolicyDocument() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -1770,8 +1812,41 @@ export function useSeedPolicyDefaults() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/** True when AI drafting isn’t enabled yet (missing key or route not deployed). */
+export function isAiPolicyDraftUnavailable(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.code === "FEATURE_NOT_AVAILABLE") return true;
+  // Backend not deployed yet → 404 NOT_FOUND / "Route not found"
+  if (err.status === 404) return true;
+  return false;
+}
+
+/** RECA-511 — AI-assisted cancellation + terms drafts (never auto-publishes). */
+export function useAiDraftPolicies() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: AiPolicyDraftRequest) => {
+      const res = await api.post<AiPolicyDraftResponse>(
+        `/api/v1/businesses/${businessId}/policy-documents/ai/draft`,
+        body,
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.policyDocuments(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
+    onError: (err) => {
+      if (isAiPolicyDraftUnavailable(err)) return;
+      toastApiError(err);
+    },
   });
 }
 
@@ -1813,6 +1888,187 @@ export function useUpdateNotificationTemplate() {
     mutationFn: async (body: { key: string; bodyRegion: string }) => {
       await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
       return body;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Business onboarding checklist ---------------- */
+
+/**
+ * Loads `GET /businesses/{id}/onboarding`. When the endpoint is not yet
+ * available (404/501), derives the same shape from catalogue data so the
+ * setup widget works before backend lands.
+ */
+export function useBusinessOnboarding() {
+  const businessId = useBusinessId();
+  const [localEpoch, setLocalEpoch] = useState(0);
+
+  const remote = useQuery({
+    queryKey: queryKeys.onboarding(businessId),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async (): Promise<BusinessOnboarding | false> => {
+      try {
+        const res = await api.get<BusinessOnboarding | { onboarding: BusinessOnboarding }>(
+          `/api/v1/businesses/${businessId}/onboarding`,
+        );
+        return unwrapOnboardingPayload(res.data);
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 501)) {
+          return false;
+        }
+        throw err;
+      }
+    },
+  });
+
+  const needsDerive = remote.isSuccess && remote.data === false;
+
+  const locations = useLocationsList();
+  const staff = useStaffList();
+  const services = useServices();
+  const customers = useCustomers({ enabled: needsDerive });
+  const packages = usePackages();
+  const policies = usePolicyDocuments();
+  const connect = useConnectAccount();
+
+  const from = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 5);
+    return d.toISOString();
+  }, []);
+  const to = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString();
+  }, []);
+
+  const bookings = useBookings({ from, to, enabled: needsDerive });
+
+  const derived = useMemo(() => {
+    if (!needsDerive || !businessId) return undefined;
+    if (
+      !locations.isSuccess ||
+      !staff.isSuccess ||
+      !services.isSuccess ||
+      !customers.isSuccess ||
+      !packages.isSuccess ||
+      !policies.isSuccess ||
+      !bookings.isSuccess
+    ) {
+      return undefined;
+    }
+    return deriveBusinessOnboarding({
+      businessId,
+      locations: locations.data ?? [],
+      staff: staff.data ?? [],
+      services: services.data ?? [],
+      customers: customers.data?.items ?? [],
+      bookings: bookings.data?.bookings ?? [],
+      packages: packages.data ?? [],
+      policies: policies.data ?? [],
+      connect: connect.data,
+      skippedKeys: getSkippedStepsLocally(businessId),
+      dismissed: isOnboardingDismissedLocally(businessId),
+    });
+  }, [
+    needsDerive,
+    businessId,
+    locations.isSuccess,
+    locations.data,
+    staff.isSuccess,
+    staff.data,
+    services.isSuccess,
+    services.data,
+    customers.isSuccess,
+    customers.data,
+    packages.isSuccess,
+    packages.data,
+    policies.isSuccess,
+    policies.data,
+    bookings.isSuccess,
+    bookings.data,
+    connect.data,
+    localEpoch,
+  ]);
+
+  const remoteData = remote.data;
+  const data: BusinessOnboarding | undefined =
+    remoteData !== undefined && remoteData !== false ? remoteData : derived;
+
+  const isLoading =
+    remote.isLoading ||
+    (needsDerive &&
+      (locations.isLoading ||
+        staff.isLoading ||
+        services.isLoading ||
+        customers.isLoading ||
+        packages.isLoading ||
+        policies.isLoading ||
+        bookings.isLoading));
+
+  return {
+    data,
+    isLoading,
+    isError: remote.isError,
+    isDerived: needsDerive,
+    bumpLocal: () => setLocalEpoch((n) => n + 1),
+    refetch: remote.refetch,
+  };
+}
+
+export function useDismissOnboarding(isDerived: boolean, onLocalChange?: () => void) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (isDerived) {
+        setOnboardingDismissedLocally(businessId);
+        return;
+      }
+      try {
+        await api.post(`/api/v1/businesses/${businessId}/onboarding/dismiss`, {});
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 501)) {
+          setOnboardingDismissedLocally(businessId);
+          return;
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      onLocalChange?.();
+      invalidateOnboarding(qc, businessId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSkipOnboardingStep(isDerived: boolean, onLocalChange?: () => void) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (key: OnboardingStepKey) => {
+      if (isDerived) {
+        skipOnboardingStepLocally(businessId, key);
+        return;
+      }
+      try {
+        await api.post(`/api/v1/businesses/${businessId}/onboarding/steps/${key}/skip`, {});
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 501)) {
+          skipOnboardingStepLocally(businessId, key);
+          return;
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      onLocalChange?.();
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });

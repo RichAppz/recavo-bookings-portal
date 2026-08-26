@@ -5,6 +5,7 @@ export const queryKeys = {
 
   biz: (businessId: string) => ["biz", businessId] as const,
   business: (businessId: string) => ["biz", businessId, "business"] as const,
+  onboarding: (businessId: string) => ["biz", businessId, "onboarding"] as const,
   configuration: (businessId: string) => ["biz", businessId, "configuration"] as const,
   locations: (businessId: string) => ["biz", businessId, "locations"] as const,
   location: (businessId: string, locationId: string) =>

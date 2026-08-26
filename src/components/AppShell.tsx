@@ -47,6 +47,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -406,6 +407,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
+      <OnboardingChecklist />
     </div>
   );
 }

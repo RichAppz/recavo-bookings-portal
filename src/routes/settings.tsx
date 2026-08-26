@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { Copy, CreditCard, Globe } from "lucide-react";
+import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
 import {
@@ -32,6 +32,8 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
 import {
   useAddLinkedRecordField,
+  useAiDraftPolicies,
+  isAiPolicyDraftUnavailable,
   useApplyLinkedRecordTemplate,
   useAuditEvents,
   useBillingCatalogue,
@@ -66,6 +68,8 @@ import {
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
 import type {
+  AiPolicyDraftResponse,
+  PolicyDocument,
   PolicyDocumentType,
   SaasInterval,
   SaasPlanCode,
@@ -80,6 +84,8 @@ import { ApiError, toastApiError } from "@/lib/api";
 
 const searchSchema = z.object({
   tab: z.string().optional(),
+  /** RECA-512 — open AI policy assist when `1` / `true`. */
+  assist: z.union([z.literal("1"), z.literal("true"), z.boolean()]).optional(),
   session_id: z.string().optional(),
   checkoutAttemptId: z.string().optional(),
 });
@@ -151,8 +157,11 @@ const AUDIT_PAGE_SIZE = 25;
 function SettingsPage() {
   const tenant = useTenant();
   const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const business = tenant.business;
-  const defaultTab = search.tab ?? "business";
+  const tab = search.tab ?? "business";
+  const assistOpen =
+    search.assist === true || search.assist === "1" || search.assist === "true";
 
   return (
     <>
@@ -165,7 +174,18 @@ function SettingsPage() {
       ) : !business ? (
         <EmptyState title="Couldn't load your business" description="Please try again shortly." />
       ) : (
-        <Tabs defaultValue={defaultTab}>
+        <Tabs
+          value={tab}
+          onValueChange={(next) => {
+            void navigate({
+              search: (prev) => ({
+                ...prev,
+                tab: next,
+                assist: next === "policies" ? prev.assist : undefined,
+              }),
+            });
+          }}
+        >
           <TabsList>
             <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="business">Business</TabsTrigger>
@@ -193,7 +213,7 @@ function SettingsPage() {
             <TeamTab />
           </TabsContent>
           <TabsContent value="policies" className="mt-4">
-            <PoliciesTab />
+            <PoliciesTab assist={assistOpen} />
           </TabsContent>
           <TabsContent value="privacy" className="mt-4">
             <PrivacyTab />
@@ -650,134 +670,374 @@ function TeamTab() {
   );
 }
 
-function PoliciesTab() {
+function PoliciesTab({ assist = false }: { assist?: boolean }) {
+  const tenant = useTenant();
   const docs = usePolicyDocuments();
   const createDoc = useCreatePolicyDocument();
   const publishDoc = usePublishPolicyDocument();
   const seed = useSeedPolicyDefaults();
+  const aiDraft = useAiDraftPolicies();
   const [type, setType] = useState<PolicyDocumentType>("cancellation");
   const [content, setContent] = useState("");
   const [publishNow, setPublishNow] = useState(false);
+  const [showAssist, setShowAssist] = useState(assist);
+  const [aiResult, setAiResult] = useState<AiPolicyDraftResponse | null>(null);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
+
+  const config = tenant.configuration;
+  const [businessName, setBusinessName] = useState(
+    tenant.business?.tradingName || tenant.business?.legalName || "",
+  );
+  const [cancelHours, setCancelHours] = useState(
+    String(config?.booking?.cancellationWindowHours ?? 24),
+  );
+  const [lateCancelNotes, setLateCancelNotes] = useState("50% of session fee");
+  const [refundNotes, setRefundNotes] = useState("Unused packs transferable within 30 days");
+  const [locale, setLocale] = useState(tenant.business?.locale || "en-GB");
+  const [industryHint, setIndustryHint] = useState(
+    tenant.business?.industryTemplateKey?.replaceAll("_", " ") || "personal training",
+  );
+
   const current = useCurrentPolicyDocument(type);
 
+  useEffect(() => {
+    if (assist) setShowAssist(true);
+  }, [assist]);
+
+  useEffect(() => {
+    setBusinessName(tenant.business?.tradingName || tenant.business?.legalName || "");
+    setLocale(tenant.business?.locale || "en-GB");
+    setIndustryHint(
+      tenant.business?.industryTemplateKey?.replaceAll("_", " ") || "personal training",
+    );
+  }, [
+    tenant.business?.tradingName,
+    tenant.business?.legalName,
+    tenant.business?.locale,
+    tenant.business?.industryTemplateKey,
+  ]);
+
+  useEffect(() => {
+    setCancelHours(String(config?.booking?.cancellationWindowHours ?? 24));
+  }, [config?.booking?.cancellationWindowHours]);
+
+  const generateAiDrafts = async () => {
+    setAiUnavailable(false);
+    try {
+      const result = await aiDraft.mutateAsync({
+        businessName: businessName.trim() || "Your business",
+        cancellationWindowHours: Number(cancelHours) || 24,
+        lateCancelNotes: lateCancelNotes.trim() || undefined,
+        refundNotes: refundNotes.trim() || undefined,
+        locale: locale.trim() || "en-GB",
+        industryHint: industryHint.trim() || undefined,
+      });
+      setAiResult(result);
+      toast.success("Drafts ready for review");
+    } catch (err) {
+      if (isAiPolicyDraftUnavailable(err)) {
+        setAiUnavailable(true);
+        toast.message("AI drafting isn’t available yet", {
+          description: "Use Seed defaults for standard cancellation and terms, or write a draft manually.",
+        });
+        return;
+      }
+    }
+  };
+
+  const publishAiDraft = async (doc: PolicyDocument) => {
+    await publishDoc.mutateAsync({ documentId: doc.id });
+    toast.success(`${doc.type} published`);
+    setAiResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        drafts: {
+          ...prev.drafts,
+          [doc.type]: { ...doc, status: "published" as const },
+        },
+      };
+    });
+  };
+
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard
-        title="Policy documents"
-        action={
-          <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={seed.isPending}
-              onClick={async () => {
-                const result = await seed.mutateAsync();
-                toast.success("Defaults seeded", {
-                  description: `Published ${result.published.length}, skipped ${result.skipped.length}.`,
-                });
-              }}
-            >
-              Seed defaults
-            </Button>
-          </Can>
-        }
-      >
-        {(docs.data ?? []).length === 0 ? (
-          <EmptyState title="No policy documents" />
-        ) : (
-          <ul className="divide-y">
-            {(docs.data ?? []).map((doc) => (
-              <li key={doc.id} className="flex items-start justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {doc.type} · v{doc.version}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {doc.content?.slice(0, 120) || "No content"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={doc.status} />
-                  {doc.status === "draft" ? (
-                    <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={publishDoc.isPending}
-                        onClick={async () => {
-                          await publishDoc.mutateAsync({ documentId: doc.id });
-                          toast.success("Policy published");
-                        }}
-                      >
-                        Publish
-                      </Button>
-                    </Can>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </SectionCard>
-      <div className="space-y-5">
-        <SectionCard title="Create draft">
-          <Can
-            permission={PERMISSIONS.BUSINESS_UPDATE}
-            fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+    <div className="space-y-5">
+      <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
+        {showAssist ? (
+          <SectionCard
+            title="AI policy assist"
+            action={
+              <Button size="sm" variant="ghost" onClick={() => setShowAssist(false)}>
+                Hide
+              </Button>
+            }
           >
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label>Type</Label>
-                <Select value={type} onValueChange={(v) => setType(v as PolicyDocumentType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POLICY_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Answer a few questions and we’ll draft cancellation and terms policies for you to
+                review. Nothing is published until you confirm.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="ai-biz">Business name</Label>
+                  <Input
+                    id="ai-biz"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ai-hours">Cancellation window (hours)</Label>
+                  <Input
+                    id="ai-hours"
+                    type="number"
+                    min={0}
+                    value={cancelHours}
+                    onChange={(e) => setCancelHours(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="ai-late">Late cancel / no-show notes</Label>
+                  <Input
+                    id="ai-late"
+                    value={lateCancelNotes}
+                    onChange={(e) => setLateCancelNotes(e.target.value)}
+                    placeholder="e.g. 50% of session fee"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="ai-refund">Refund / package notes</Label>
+                  <Input
+                    id="ai-refund"
+                    value={refundNotes}
+                    onChange={(e) => setRefundNotes(e.target.value)}
+                    placeholder="e.g. Unused packs transferable within 30 days"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ai-locale">Locale</Label>
+                  <Input
+                    id="ai-locale"
+                    value={locale}
+                    onChange={(e) => setLocale(e.target.value)}
+                    placeholder="en-GB"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ai-industry">Industry</Label>
+                  <Input
+                    id="ai-industry"
+                    value={industryHint}
+                    onChange={(e) => setIndustryHint(e.target.value)}
+                    placeholder="personal training"
+                  />
+                </div>
               </div>
-              <Textarea rows={8} value={content} onChange={(e) => setContent(e.target.value)} />
-              <div className="flex items-center justify-between rounded-xl border p-3">
-                <p className="text-sm font-medium">Publish immediately</p>
-                <Switch checked={publishNow} onCheckedChange={setPublishNow} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button disabled={aiDraft.isPending} onClick={() => void generateAiDrafts()}>
+                  <Sparkles className="size-4" />
+                  {aiDraft.isPending ? "Drafting…" : "Draft with AI"}
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={seed.isPending}
+                  onClick={async () => {
+                    const result = await seed.mutateAsync();
+                    toast.success("Defaults seeded", {
+                      description: `Published ${result.published.length}, skipped ${result.skipped.length}.`,
+                    });
+                  }}
+                >
+                  Seed defaults instead
+                </Button>
               </div>
+              {aiUnavailable ? (
+                <p className="rounded-xl border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  AI drafting isn’t enabled on this environment. Use{" "}
+                  <span className="font-medium text-foreground">Seed defaults</span> for standard
+                  cancellation and terms, or write drafts manually below.
+                </p>
+              ) : null}
+              {aiResult ? (
+                <div className="space-y-4 rounded-xl border bg-secondary/30 p-4">
+                  <p className="text-xs text-muted-foreground">{aiResult.disclaimer}</p>
+                  <p className="text-[11px] text-muted-foreground">Model: {aiResult.model}</p>
+                  {(["cancellation", "terms"] as const).map((key) => {
+                    const doc = aiResult.drafts[key];
+                    const published = doc.status === "published";
+                    return (
+                      <div key={key} className="space-y-2 rounded-lg border bg-card p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium capitalize">{key}</p>
+                            <StatusBadge status={doc.status} />
+                          </div>
+                          {!published ? (
+                            <Button
+                              size="sm"
+                              disabled={publishDoc.isPending}
+                              onClick={() => void publishAiDraft(doc)}
+                            >
+                              Publish
+                            </Button>
+                          ) : null}
+                        </div>
+                        <p className="max-h-48 overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">
+                          {doc.content || "—"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {aiResult.drafts.cancellation.status === "draft" ||
+                  aiResult.drafts.terms.status === "draft" ? (
+                    <Button
+                      className="w-fit"
+                      disabled={publishDoc.isPending}
+                      onClick={async () => {
+                        for (const key of ["cancellation", "terms"] as const) {
+                          const doc = aiResult.drafts[key];
+                          if (doc.status === "draft") await publishAiDraft(doc);
+                        }
+                      }}
+                    >
+                      Publish both
+                    </Button>
+                  ) : (
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                      Cancellation and terms are published.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowAssist(true)}>
+              <Sparkles className="size-4" /> Draft with AI
+            </Button>
+          </div>
+        )}
+      </Can>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <SectionCard
+          title="Policy documents"
+          action={
+            <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
               <Button
-                className="w-fit"
-                disabled={createDoc.isPending || !content.trim()}
+                size="sm"
+                variant="outline"
+                disabled={seed.isPending}
                 onClick={async () => {
-                  await createDoc.mutateAsync({
-                    type,
-                    content: content.trim(),
-                    publish: publishNow,
+                  const result = await seed.mutateAsync();
+                  toast.success("Defaults seeded", {
+                    description: `Published ${result.published.length}, skipped ${result.skipped.length}.`,
                   });
-                  toast.success(publishNow ? "Policy published" : "Draft created");
-                  setContent("");
                 }}
               >
-                Create
+                Seed defaults
               </Button>
-            </div>
-          </Can>
-        </SectionCard>
-        <SectionCard title={`Current ${type}`}>
-          {!current.data ? (
-            <p className="text-sm text-muted-foreground">No published document.</p>
+            </Can>
+          }
+        >
+          {(docs.data ?? []).length === 0 ? (
+            <EmptyState title="No policy documents" />
           ) : (
-            <div className="space-y-2 text-sm">
-              <p>
-                v{current.data.version} · <StatusBadge status={current.data.status} />
-              </p>
-              <p className="whitespace-pre-wrap text-muted-foreground">
-                {current.data.content || "—"}
-              </p>
-            </div>
+            <ul className="divide-y">
+              {(docs.data ?? []).map((doc) => (
+                <li key={doc.id} className="flex items-start justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {doc.type} · v{doc.version}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {doc.content?.slice(0, 120) || "No content"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={doc.status} />
+                    {doc.status === "draft" ? (
+                      <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={publishDoc.isPending}
+                          onClick={async () => {
+                            await publishDoc.mutateAsync({ documentId: doc.id });
+                            toast.success("Policy published");
+                          }}
+                        >
+                          Publish
+                        </Button>
+                      </Can>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </SectionCard>
+        <div className="space-y-5">
+          <SectionCard title="Create draft">
+            <Can
+              permission={PERMISSIONS.BUSINESS_UPDATE}
+              fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
+            >
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label>Type</Label>
+                  <Select value={type} onValueChange={(v) => setType(v as PolicyDocumentType)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POLICY_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Textarea rows={8} value={content} onChange={(e) => setContent(e.target.value)} />
+                <div className="flex items-center justify-between rounded-xl border p-3">
+                  <p className="text-sm font-medium">Publish immediately</p>
+                  <Switch checked={publishNow} onCheckedChange={setPublishNow} />
+                </div>
+                <Button
+                  className="w-fit"
+                  disabled={createDoc.isPending || !content.trim()}
+                  onClick={async () => {
+                    await createDoc.mutateAsync({
+                      type,
+                      content: content.trim(),
+                      publish: publishNow,
+                    });
+                    toast.success(publishNow ? "Policy published" : "Draft created");
+                    setContent("");
+                  }}
+                >
+                  Create
+                </Button>
+              </div>
+            </Can>
+          </SectionCard>
+          <SectionCard title={`Current ${type}`}>
+            {!current.data ? (
+              <p className="text-sm text-muted-foreground">No published document.</p>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <p>
+                  v{current.data.version} · <StatusBadge status={current.data.status} />
+                </p>
+                <p className="whitespace-pre-wrap text-muted-foreground">
+                  {current.data.content || "—"}
+                </p>
+              </div>
+            )}
+          </SectionCard>
+        </div>
       </div>
     </div>
   );

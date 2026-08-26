@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarOff, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -447,6 +447,12 @@ function StaffDialog({
     setFieldErrors({});
   };
 
+  // Controlled Dialog: parent toggles `open` without firing onOpenChange(true),
+  // so hydrate fields whenever the drawer opens (create or edit).
+  useEffect(() => {
+    if (open) resetFrom(staff);
+  }, [open, staff?.id]);
+
   const toggleId = (list: string[], id: string) =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
@@ -527,7 +533,6 @@ function StaffDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else resetFrom(staff);
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
