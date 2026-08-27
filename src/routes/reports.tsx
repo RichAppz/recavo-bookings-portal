@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowDownToLine, Download, Loader2 } from "lucide-react";
 import {
   Bar,
@@ -97,7 +97,7 @@ function planGateMessage(error: unknown) {
     return "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics.";
   }
   if (error.code === "BILLING_ACCESS_REQUIRED") {
-    return "Your subscription needs attention before reports can be loaded. Visit Platform billing to resolve access.";
+    return "Your subscription needs attention before reports can be loaded. Open billing to start or update a Recavo plan.";
   }
   return null;
 }
@@ -267,11 +267,9 @@ function ReportsPage() {
             title="Reports unavailable"
             description={planGate}
             action={
-              tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN) ? (
-                <Button asChild>
-                  <a href="/platform">Go to Platform billing</a>
-                </Button>
-              ) : undefined
+              <Button asChild>
+                <Link to="/billing">Go to billing</Link>
+              </Button>
             }
           />
         ) : dashboard.isLoading ? (

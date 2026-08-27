@@ -46,6 +46,12 @@ const STEP_META: Record<
     required: true,
     href: "/calendar",
   },
+  saas_subscription: {
+    title: "Choose your Recavo plan",
+    description: "Start a 14-day trial so Recavo can bill your workspace.",
+    required: false,
+    href: "/billing",
+  },
   public_booking: {
     title: "Share your booking link",
     description: "Make a service and location public so clients can self-book.",
@@ -78,6 +84,7 @@ const STEP_ORDER: OnboardingStepKey[] = [
   "service",
   "client",
   "first_booking",
+  "saas_subscription",
   "public_booking",
   "stripe_connect",
   "policies",
@@ -101,6 +108,7 @@ export type DeriveOnboardingInput = {
   packages: Package[];
   policies: PolicyDocument[];
   connect: ConnectAccount | null | undefined;
+  saasEntitled?: boolean;
   skippedKeys?: OnboardingStepKey[];
   dismissed?: boolean;
   dismissedAt?: string | null;
@@ -112,10 +120,7 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
       return input.locations.length > 0;
     case "staff_availability":
       return input.staff.some(
-        (s) =>
-          s.status === "active" &&
-          s.workingRules.length > 0 &&
-          s.locationIds.length > 0,
+        (s) => s.status === "active" && s.workingRules.length > 0 && s.locationIds.length > 0,
       );
     case "service":
       return input.services.some((s) => s.active);
@@ -132,6 +137,8 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
       return Boolean(
         input.connect?.chargesEnabled || input.connect?.onboardingState === "complete",
       );
+    case "saas_subscription":
+      return Boolean(input.saasEntitled);
     case "policies": {
       const published = new Set(
         input.policies.filter((p) => p.status === "published").map((p) => p.type),

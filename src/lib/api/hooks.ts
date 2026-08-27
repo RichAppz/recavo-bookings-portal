@@ -70,6 +70,7 @@ import {
   skipOnboardingStepLocally,
 } from "@/lib/onboarding/local-state";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { isSaasSubscriptionComplete } from "@/lib/billing/access";
 
 export type OpeningHourInput = {
   dayOfWeek: number;
@@ -87,10 +88,7 @@ export function useLocationFilter() {
   return currentLocationId === "all" ? undefined : currentLocationId;
 }
 
-function invalidateOnboarding(
-  qc: ReturnType<typeof useQueryClient>,
-  businessId: string,
-) {
+function invalidateOnboarding(qc: ReturnType<typeof useQueryClient>, businessId: string) {
   void qc.invalidateQueries({ queryKey: queryKeys.onboarding(businessId) });
 }
 
@@ -1932,6 +1930,7 @@ export function useBusinessOnboarding() {
   const packages = usePackages();
   const policies = usePolicyDocuments();
   const connect = useConnectAccount();
+  const subscription = useSubscription();
 
   const from = useMemo(() => {
     const d = new Date();
@@ -1969,6 +1968,7 @@ export function useBusinessOnboarding() {
       packages: packages.data ?? [],
       policies: policies.data ?? [],
       connect: connect.data,
+      saasEntitled: isSaasSubscriptionComplete(subscription.data?.subscription),
       skippedKeys: getSkippedStepsLocally(businessId),
       dismissed: isOnboardingDismissedLocally(businessId),
     });
@@ -1990,6 +1990,7 @@ export function useBusinessOnboarding() {
     bookings.isSuccess,
     bookings.data,
     connect.data,
+    subscription.data,
     localEpoch,
   ]);
 
@@ -2257,6 +2258,8 @@ export type BusinessSubscription = {
   trialEnd?: string | null;
   cancelAtPeriodEnd?: boolean;
   limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
+  graceStartedAt?: string | null;
+  graceEndsAt?: string | null;
 };
 
 export function usePlans() {
@@ -2335,6 +2338,7 @@ export function useReconcileCheckout() {
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -2385,6 +2389,7 @@ export function useSubscriptionChangeApply() {
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -2404,6 +2409,7 @@ export function useCancelSubscription() {
     }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -2423,6 +2429,7 @@ export function useResumeSubscription() {
     }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });

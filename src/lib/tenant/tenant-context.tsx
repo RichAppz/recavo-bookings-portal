@@ -69,7 +69,7 @@ function writeStored(key: string, value: string | null) {
 }
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [businessId, setBusinessId] = useState<string | null>(() => readStored(BUSINESS_KEY));
   const [currentLocationId, setCurrentLocationIdState] = useState<string | "all">(
     () => (readStored(LOCATION_KEY) as string | "all") || "all",
@@ -156,7 +156,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, currentLocationId]);
 
-  const roleKeys = useMemo(() => summary?.roleKeys ?? [], [summary]);
+  // Prefer the current user's membership when the list is available.
+  const membership = useMemo(() => {
+    const list = membershipsQuery.data ?? [];
+    const mine = user?.id ? list.find((m) => m.userId === user.id) : undefined;
+    return mine ?? list.find((m) => m.status === "active") ?? list[0] ?? null;
+  }, [membershipsQuery.data, user?.id]);
+
+  const roleKeys = useMemo(() => {
+    const fromSummary = summary?.roleKeys ?? [];
+    if (fromSummary.length) return fromSummary;
+    return membership?.roleKeys ?? [];
+  }, [summary, membership]);
   const permissions = useMemo(() => permissionsForRoles(roleKeys), [roleKeys]);
 
   const can = useCallback(
@@ -193,10 +204,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       linkedRecord: configuration?.terminology?.linkedRecord || "Record",
     };
   }, [configuration]);
-
-  // Prefer the current user's membership when available.
-  const membership =
-    membershipsQuery.data?.find((m) => m.status === "active") ?? membershipsQuery.data?.[0] ?? null;
 
   const value = useMemo<TenantContextValue>(
     () => ({

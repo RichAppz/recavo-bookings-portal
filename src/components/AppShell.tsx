@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
@@ -47,9 +47,16 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
+import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
-import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
+import {
+  useCustomers,
+  useMarkNotificationRead,
+  useNotifications,
+  useSubscription,
+} from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
+import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -112,6 +119,12 @@ const NAV: Array<{
   { to: "/messages", label: "Messages", icon: MessageSquare, anyOf: [PERMISSIONS.CUSTOMER_READ] },
   { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
   { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
+  {
+    to: "/billing",
+    label: "Billing",
+    icon: CreditCard,
+    anyOf: [PERMISSIONS.BILLING_MANAGE, PERMISSIONS.BUSINESS_UPDATE],
+  },
   { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
 ];
 
@@ -124,6 +137,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const subscription = useSubscription();
 
   useEffect(() => setMobileNav(false), [pathname]);
 
@@ -134,6 +148,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   const markNotificationRead = useMarkNotificationRead();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
+  const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
+  const onBilling = isBillingPath(pathname);
+  const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
+
+  if (subscription.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking subscription…</p>
+      </div>
+    );
+  }
+
+  if (billingLocked && !onBilling && !onPlatform) {
+    return <Navigate to="/billing" replace />;
+  }
+
+  if (billingLocked && onBilling) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="flex h-16 items-center justify-between border-b px-4 sm:px-6">
+          <Wordmark />
+          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+            <LogOut className="size-4" /> Sign out
+          </Button>
+        </header>
+        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -401,7 +444,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+          <BillingBanner />
+          {children}
+        </main>
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />

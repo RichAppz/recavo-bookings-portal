@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -36,9 +36,6 @@ import {
   isAiPolicyDraftUnavailable,
   useApplyLinkedRecordTemplate,
   useAuditEvents,
-  useBillingCatalogue,
-  useBillingPortal,
-  useCancelSubscription,
   useCloseBusiness,
   useConnectAccount,
   useCreateLinkedRecordDefinition,
@@ -54,30 +51,17 @@ import {
   usePolicyDocuments,
   usePublishPolicyDocument,
   usePublishPrivacyNotice,
-  useReconcileCheckout,
-  useResumeSubscription,
   useSeedPolicyDefaults,
-  useStartCheckout,
-  useSubscription,
-  useSubscriptionChangeApply,
-  useSubscriptionChangePreview,
   useUpdateBusiness,
   useUpdateConfiguration,
   useUpdateMe,
   useUpdateMembership,
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
-import type {
-  AiPolicyDraftResponse,
-  PolicyDocument,
-  PolicyDocumentType,
-  SaasInterval,
-  SaasPlanCode,
-  SubscriptionChangePreview,
-} from "@/lib/api/types";
+import type { AiPolicyDraftResponse, PolicyDocument, PolicyDocumentType } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
-import { formatInTz, formatMoney } from "@/lib/format";
-import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
+import { formatInTz } from "@/lib/format";
+import { PERMISSIONS, SYSTEM_ROLES, holdsBusinessOwnerRole } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 import { ApiError, toastApiError } from "@/lib/api";
@@ -160,8 +144,18 @@ function SettingsPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const business = tenant.business;
   const tab = search.tab ?? "business";
-  const assistOpen =
-    search.assist === true || search.assist === "1" || search.assist === "true";
+  const assistOpen = search.assist === true || search.assist === "1" || search.assist === "true";
+
+  useEffect(() => {
+    if (!search.session_id && !search.checkoutAttemptId) return;
+    void navigate({
+      to: "/billing/success",
+      search: {
+        session_id: search.session_id,
+        checkoutAttemptId: search.checkoutAttemptId,
+      },
+    });
+  }, [search.session_id, search.checkoutAttemptId, navigate]);
 
   return (
     <>
@@ -234,7 +228,14 @@ function SettingsPage() {
             <PaymentsTab />
           </TabsContent>
           <TabsContent value="billing" className="mt-4">
-            <BillingTab />
+            <SectionCard title="Recavo subscription">
+              <p className="text-sm text-muted-foreground">
+                Plans, trial, invoices and cancellation live on the billing page.
+              </p>
+              <Button className="mt-4 w-fit" asChild>
+                <Link to="/billing">Open billing</Link>
+              </Button>
+            </SectionCard>
           </TabsContent>
         </Tabs>
       )}
@@ -563,41 +564,48 @@ function TeamTab() {
             {(memberships.data ?? []).map((m) => {
               const name = userDisplayName(m.user, m.user?.email ?? m.userId);
               const email = m.user?.email;
-              const roles = (m.roleKeys ?? []).join(", ") || "No roles";
+              const isOwner = holdsBusinessOwnerRole(m.roleKeys);
+              const roles = isOwner ? "Owner" : (m.roleKeys ?? []).join(", ") || "No roles";
               const subtitle = [email && name !== email ? email : null, roles]
                 .filter(Boolean)
                 .join(" · ");
               return (
-              <li key={m.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-                </div>
-                <StatusBadge status={m.status} />
-                <Can permission={PERMISSIONS.TEAM_MANAGE_PERMISSIONS}>
-                  <Select
-                    value={m.roleKeys[0] ?? SYSTEM_ROLES.STAFF}
-                    onValueChange={async (value) => {
-                      await updateMembership.mutateAsync({
-                        membershipId: m.id,
-                        body: { roleKeys: [value] },
-                      });
-                      toast.success("Role updated");
-                    }}
-                  >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INVITE_ROLES.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r.replaceAll("_", " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Can>
-              </li>
+                <li key={m.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+                  </div>
+                  <StatusBadge status={m.status} />
+                  {isOwner ? (
+                    <p className="w-[160px] text-right text-xs text-muted-foreground">
+                      Owner role is fixed
+                    </p>
+                  ) : (
+                    <Can permission={PERMISSIONS.TEAM_MANAGE_PERMISSIONS}>
+                      <Select
+                        value={m.roleKeys[0] ?? SYSTEM_ROLES.STAFF}
+                        onValueChange={async (value) => {
+                          await updateMembership.mutateAsync({
+                            membershipId: m.id,
+                            body: { roleKeys: [value] },
+                          });
+                          toast.success("Role updated");
+                        }}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {INVITE_ROLES.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {r.replaceAll("_", " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Can>
+                  )}
+                </li>
               );
             })}
           </ul>
@@ -738,7 +746,8 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
       if (isAiPolicyDraftUnavailable(err)) {
         setAiUnavailable(true);
         toast.message("AI drafting isn’t available yet", {
-          description: "Use Seed defaults for standard cancellation and terms, or write a draft manually.",
+          description:
+            "Use Seed defaults for standard cancellation and terms, or write a draft manually.",
         });
         return;
       }
@@ -1476,241 +1485,5 @@ function PaymentsTab() {
         </p>
       </SectionCard>
     </>
-  );
-}
-
-function BillingTab() {
-  const search = Route.useSearch();
-  const subscription = useSubscription();
-  const catalogue = useBillingCatalogue();
-  const checkout = useStartCheckout();
-  const reconcile = useReconcileCheckout();
-  const portal = useBillingPortal();
-  const cancel = useCancelSubscription();
-  const resume = useResumeSubscription();
-  const preview = useSubscriptionChangePreview();
-  const apply = useSubscriptionChangeApply();
-  const [interval, setInterval] = useState<SaasInterval>("month");
-  const [previewResult, setPreviewResult] = useState<SubscriptionChangePreview | null>(null);
-  const current = subscription.data?.subscription;
-  const plan = subscription.data?.plan;
-  const tz = useTenant().business?.defaultTimezone ?? "Europe/London";
-  const plans = useMemo(() => {
-    const list = [...(catalogue.data ?? [])];
-    list.sort((a, b) => {
-      const priceA = a.prices.find((x) => x.interval === interval) ?? a.prices[0];
-      const priceB = b.prices.find((x) => x.interval === interval) ?? b.prices[0];
-      return (priceA?.amountMinor ?? 0) - (priceB?.amountMinor ?? 0);
-    });
-    return list;
-  }, [catalogue.data, interval]);
-
-  useEffect(() => {
-    const sessionId = search.session_id;
-    const attemptId = search.checkoutAttemptId;
-    if (!sessionId && !attemptId) return;
-    void (async () => {
-      await reconcile.mutateAsync({
-        ...(sessionId ? { stripeCheckoutSessionId: sessionId } : {}),
-        ...(attemptId ? { checkoutAttemptId: attemptId } : {}),
-      });
-      toast.success("Subscription reconciled");
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.session_id, search.checkoutAttemptId]);
-
-  return (
-    <Can
-      permission={PERMISSIONS.BILLING_MANAGE}
-      fallback={<EmptyState title="Permission denied" description="Requires billing.manage." />}
-    >
-      <div className="grid gap-5 xl:grid-cols-2">
-        <SectionCard
-          title="Subscription"
-          action={current?.status ? <StatusBadge status={current.status} /> : null}
-        >
-          {!current ? (
-            <EmptyState
-              title="No plan selected"
-              description="Choose a plan below to start Checkout."
-            />
-          ) : (
-            <div className="space-y-3 text-sm">
-              <p>
-                Plan: <span className="font-medium">{plan?.name ?? current.planId ?? "—"}</span>
-              </p>
-              <p>
-                Access: <span className="font-medium capitalize">{current.accessState ?? "—"}</span>
-              </p>
-              {current.currentPeriodEnd ? (
-                <p>Period ends: {formatInTz(current.currentPeriodEnd, tz)}</p>
-              ) : null}
-              {current.cancelAtPeriodEnd ? (
-                <p className="text-amber-700">Cancels at period end</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  disabled={portal.isPending}
-                  onClick={async () => {
-                    const result = await portal.mutateAsync();
-                    const url = result.portalUrl ?? result.url;
-                    if (url) window.location.assign(url);
-                  }}
-                >
-                  Manage in Stripe
-                </Button>
-                {current.cancelAtPeriodEnd ? (
-                  <Button
-                    variant="outline"
-                    disabled={resume.isPending}
-                    onClick={async () => {
-                      await resume.mutateAsync();
-                      toast.success("Subscription resumed");
-                    }}
-                  >
-                    Resume
-                  </Button>
-                ) : (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" disabled={cancel.isPending}>
-                        Cancel at period end
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Access continues until the current period ends.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Keep plan</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={async () => {
-                            await cancel.mutateAsync();
-                            toast.success("Cancellation scheduled");
-                          }}
-                        >
-                          Confirm cancel
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </div>
-            </div>
-          )}
-        </SectionCard>
-        <SectionCard
-          title="Available plans"
-          action={
-            <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="month">Monthly</SelectItem>
-                <SelectItem value="year">Yearly</SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        >
-          <div className="space-y-3">
-            {plans.map((p) => {
-              const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
-              const isCurrent = plan?.code === p.code || current?.planId === p.code;
-              return (
-                <div
-                  key={p.code}
-                  className="flex items-center justify-between gap-3 rounded-xl border p-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {p.name} {isCurrent ? <StatusBadge status="active" /> : null}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {price
-                        ? `${formatMoney(price.amountMinor, p.currency)} / ${price.interval}`
-                        : "—"}
-                    </p>
-                  </div>
-                  {!current ? (
-                    <Button
-                      size="sm"
-                      disabled={checkout.isPending}
-                      onClick={async () => {
-                        const result = await checkout.mutateAsync({
-                          plan: p.code,
-                          interval: price?.interval ?? interval,
-                        });
-                        const url = result.checkoutUrl ?? result.url;
-                        if (url) window.location.assign(url);
-                      }}
-                    >
-                      Checkout
-                    </Button>
-                  ) : !isCurrent ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={preview.isPending}
-                      onClick={async () => {
-                        const result = await preview.mutateAsync({
-                          plan: p.code as SaasPlanCode,
-                          interval: (price?.interval ?? interval) as SaasInterval,
-                        });
-                        setPreviewResult(result);
-                      }}
-                    >
-                      Preview change
-                    </Button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
-        {previewResult ? (
-          <SectionCard title="Change preview" className="xl:col-span-2">
-            <div className="space-y-3 text-sm">
-              <p>
-                {previewResult.changeKind} · {previewResult.timing} · effective{" "}
-                {formatInTz(previewResult.effectiveAt, tz)}
-              </p>
-              <p>
-                Charge now: {formatMoney(previewResult.chargeNowMinor, previewResult.currency)} ·
-                Credit now: {formatMoney(previewResult.creditNowMinor, previewResult.currency)} ·
-                Tax: {formatMoney(previewResult.taxMinor, previewResult.currency)}
-              </p>
-              {previewResult.overLimitBlockers.length > 0 ? (
-                <p className="text-amber-700">
-                  Blockers:{" "}
-                  {previewResult.overLimitBlockers
-                    .map((b) => `${b.limitKey} (${b.currentUsage}/${b.targetLimit})`)
-                    .join(", ")}
-                </p>
-              ) : null}
-              <div className="flex gap-2">
-                <Button
-                  disabled={apply.isPending || previewResult.overLimitBlockers.length > 0}
-                  onClick={async () => {
-                    await apply.mutateAsync({ previewToken: previewResult.previewToken });
-                    setPreviewResult(null);
-                    toast.success("Plan change applied");
-                  }}
-                >
-                  Apply change
-                </Button>
-                <Button variant="outline" onClick={() => setPreviewResult(null)}>
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          </SectionCard>
-        ) : null}
-      </div>
-    </Can>
   );
 }

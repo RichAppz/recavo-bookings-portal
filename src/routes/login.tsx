@@ -13,6 +13,16 @@ const searchSchema = z.object({
   redirect: z.string().optional(),
 });
 
+/**
+ * Only follow in-app absolute paths. Rejects full URLs and protocol-relative
+ * paths (open redirect), and /login itself (redirect loop).
+ */
+function safeRedirect(value: string | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  if (value === "/login" || value.startsWith("/login?")) return "/";
+  return value;
+}
+
 export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
   component: LoginPage,
@@ -38,7 +48,7 @@ function LoginPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      void navigate({ to: redirect || "/" });
+      void navigate({ to: safeRedirect(redirect) });
     }
   }, [status, redirect, navigate]);
 

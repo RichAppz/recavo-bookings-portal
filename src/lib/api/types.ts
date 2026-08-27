@@ -101,6 +101,7 @@ export type OnboardingStepKey =
   | "service"
   | "client"
   | "first_booking"
+  | "saas_subscription"
   | "public_booking"
   | "stripe_connect"
   | "policies"

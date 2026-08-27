@@ -74,6 +74,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.REPORT_READ,
     P.REPORT_EXPORT,
     P.AUDIT_READ,
+    P.CONNECT_MANAGE,
+    P.BILLING_MANAGE,
   ],
   [SYSTEM_ROLES.MANAGER]: [
     P.BUSINESS_READ,
@@ -119,13 +121,52 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
   [SYSTEM_ROLES.CUSTOMER]: [P.BOOKING_READ_OWN],
 };
 
+const ROLE_ALIASES: Record<string, SystemRoleKey> = {
+  owner: SYSTEM_ROLES.BUSINESS_OWNER,
+  businessowner: SYSTEM_ROLES.BUSINESS_OWNER,
+  admin: SYSTEM_ROLES.ADMINISTRATOR,
+};
+
+export function normalizeRoleKey(key: string): string {
+  const normalised = key
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return ROLE_ALIASES[normalised] ?? normalised;
+}
+
 export function permissionsForRoles(roleKeys: readonly string[]): Set<PermissionKey> {
   const result = new Set<PermissionKey>();
   for (const key of roleKeys) {
-    const permissions = DEFAULT_ROLE_PERMISSIONS[key as SystemRoleKey];
+    const permissions = DEFAULT_ROLE_PERMISSIONS[normalizeRoleKey(key) as SystemRoleKey];
     if (permissions) {
       for (const permission of permissions) result.add(permission);
     }
   }
   return result;
+}
+
+/** Who may start or manage the Recavo SaaS plan (not client payments). */
+export function canManageSaasBilling(input: {
+  can: (permission: PermissionKey | string) => boolean;
+  roleKeys: readonly string[];
+  /** When the console is gated, unknown/empty roles must not be a dead end. */
+  blocked?: boolean;
+}): boolean {
+  if (input.can(PERMISSIONS.BILLING_MANAGE) || input.can(PERMISSIONS.BUSINESS_UPDATE)) {
+    return true;
+  }
+  const roles = new Set(input.roleKeys.map(normalizeRoleKey));
+  if (
+    roles.has(SYSTEM_ROLES.BUSINESS_OWNER) ||
+    roles.has(SYSTEM_ROLES.ADMINISTRATOR) ||
+    roles.has(SYSTEM_ROLES.FINANCE)
+  ) {
+    return true;
+  }
+  return Boolean(input.blocked && input.roleKeys.length === 0);
+}
+
+export function holdsBusinessOwnerRole(roleKeys: readonly string[] | undefined): boolean {
+  return (roleKeys ?? []).some((key) => normalizeRoleKey(key) === SYSTEM_ROLES.BUSINESS_OWNER);
 }

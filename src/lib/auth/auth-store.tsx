@@ -46,6 +46,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  */
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 30_000;
 
+/**
+ * How long to keep showing "Checking session…" while supabase-js exchanges an
+ * OAuth callback for a session. Without this we can bounce to /login before the
+ * exchange finishes, which discards the callback and loses the sign-in.
+ */
+const OAUTH_CALLBACK_GRACE_MS = 15_000;
+
+/** True when the current URL is an OAuth / magic-link callback awaiting exchange. */
+function hasPendingAuthCallback(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash;
+  if (hash.includes("access_token=") || hash.includes("error_description=")) return true;
+  return new URLSearchParams(window.location.search).has("code");
+}
+
 /** Namespaced debug logging for tracing the auth bootstrap (dev only). */
 function authLog(...args: unknown[]) {
   if (import.meta.env.DEV) console.debug("[auth]", ...args);
@@ -56,12 +71,16 @@ async function fetchMe(signal?: AbortSignal): Promise<User> {
   try {
     const res = await api.get<{ user: User }>("/api/v1/me", { signal });
     authLog("fetchMe ok", {
-      ms: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ms: Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
+      ),
     });
     return res.data.user;
   } catch (err) {
     authLog("fetchMe failed", {
-      ms: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ms: Math.round(
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
+      ),
       err,
     });
     throw err;
@@ -84,6 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadedForUserIdRef = useRef<string | null>(null);
   // User id whose bootstrap is currently in flight, to coalesce concurrent events.
   const inFlightUserIdRef = useRef<string | null>(null);
+  // Set on mount when the URL carries an OAuth callback; cleared once a session
+  // arrives or the grace period expires.
+  const awaitingOauthCallbackRef = useRef(false);
 
   // Opens the MFA dialog and resolves once the user verifies (true) or cancels
   // (false). Shared by the proactive sign-in challenge and the API 403 handler.
@@ -101,6 +123,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(token);
 
       if (!next) {
+        // supabase-js can report "no session" before it has finished parsing an
+        // OAuth callback out of the URL. Redirecting now would strip the hash
+        // and abort the sign-in, so hold on "loading" until the grace expires.
+        if (awaitingOauthCallbackRef.current) {
+          authLog("applySession: no session yet, OAuth callback pending → stay loading");
+          return;
+        }
         authLog("applySession: no session → unauthenticated");
         loadedForUserIdRef.current = null;
         inFlightUserIdRef.current = null;
@@ -108,6 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("unauthenticated");
         return;
       }
+
+      awaitingOauthCallbackRef.current = false;
 
       const userId = next.user?.id ?? null;
       authLog("applySession", { userId, hasToken: !!token, expiresAt: next.expires_at });
@@ -224,19 +255,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = getSupabase();
     let mounted = true;
 
+    awaitingOauthCallbackRef.current = hasPendingAuthCallback();
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    if (awaitingOauthCallbackRef.current) {
+      authLog("OAuth callback detected in URL — holding session bootstrap");
+      graceTimer = setTimeout(() => {
+        if (!mounted || !awaitingOauthCallbackRef.current) return;
+        authLog("OAuth callback grace expired → unauthenticated");
+        awaitingOauthCallbackRef.current = false;
+        setStatus((current) => (current === "loading" ? "unauthenticated" : current));
+      }, OAUTH_CALLBACK_GRACE_MS);
+    }
+
     void supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      authLog("getSession() resolved", { hasSession: !!data.session, userId: data.session?.user?.id });
+      authLog("getSession() resolved", {
+        hasSession: !!data.session,
+        userId: data.session?.user?.id,
+      });
       void applySession(data.session);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       authLog("onAuthStateChange", event, { userId: next?.user?.id });
+      // An explicit sign-out must win over any pending callback grace.
+      if (event === "SIGNED_OUT") awaitingOauthCallbackRef.current = false;
       void applySession(next);
     });
 
     return () => {
       mounted = false;
+      if (graceTimer) clearTimeout(graceTimer);
       sub.subscription.unsubscribe();
     };
   }, [applySession]);
@@ -316,6 +365,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         redirectTo:
           redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
+        // Without this Google silently reuses whichever account is already
+        // signed in to the browser, so there is no way to pick a different one.
+        queryParams: { prompt: "select_account" },
       },
     });
     if (error) throw error;
@@ -335,15 +387,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    if (isSupabaseConfigured()) {
-      const supabase = getSupabase();
-      await supabase.auth.signOut();
-    }
+    // Drop local state before calling Supabase. A rejected sign-out (offline, or
+    // a session the server already considers gone) must not strand the user in a
+    // signed-in shell with no route back to /login.
+    loadedForUserIdRef.current = null;
+    inFlightUserIdRef.current = null;
+    awaitingOauthCallbackRef.current = false;
     setAccessToken(null);
     setSession(null);
     setUser(null);
     setStatus("unauthenticated");
     queryClient.clear();
+
+    if (isSupabaseConfigured()) {
+      try {
+        await getSupabase().auth.signOut();
+      } catch (err) {
+        authLog("signOut: supabase sign-out failed (local session cleared)", err);
+      }
+    }
   }, [queryClient]);
 
   const resetPassword = useCallback(async (email: string) => {

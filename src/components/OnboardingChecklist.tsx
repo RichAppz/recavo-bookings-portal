@@ -66,20 +66,20 @@ function StepRow({
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg px-2 py-2 transition-colors",
+        "rounded-lg px-2 py-2 transition-colors",
         done ? "opacity-60" : "hover:bg-secondary/70",
       )}
     >
-      <span className="mt-0.5 shrink-0 text-muted-foreground">
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 text-muted-foreground">
+          {done ? (
+            <Check className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          ) : (
+            <Circle className="size-4" aria-hidden />
+          )}
+        </span>
         {done ? (
-          <Check className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
-        ) : (
-          <Circle className="size-4" aria-hidden />
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        {done ? (
-          <p className="text-sm font-medium line-through decoration-muted-foreground/50">
+          <p className="min-w-0 flex-1 text-sm font-medium leading-none line-through decoration-muted-foreground/50">
             {step.title}
           </p>
         ) : (
@@ -87,26 +87,26 @@ function StepRow({
             to={to}
             search={search}
             onClick={onNavigate}
-            className="text-sm font-medium text-foreground hover:text-primary"
+            className="min-w-0 flex-1 text-sm font-medium leading-none text-foreground hover:text-primary"
           >
             {step.title}
           </Link>
         )}
-        {!done ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">{step.description}</p>
+        {!done && !step.required && onSkip ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-xs"
+            disabled={skipPending}
+            onClick={onSkip}
+          >
+            Skip
+          </Button>
         ) : null}
       </div>
-      {!done && !step.required && onSkip ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 px-2 text-xs"
-          disabled={skipPending}
-          onClick={onSkip}
-        >
-          Skip
-        </Button>
+      {!done ? (
+        <p className="mt-0.5 pl-7 text-xs text-muted-foreground">{step.description}</p>
       ) : null}
     </div>
   );
@@ -195,11 +195,7 @@ export function OnboardingChecklist() {
                 step={step}
                 skipPending={skip.isPending}
                 onNavigate={() => setExpanded(false)}
-                onSkip={
-                  !step.required && !step.completed
-                    ? () => skip.mutate(step.key)
-                    : undefined
-                }
+                onSkip={!step.required && !step.completed ? () => skip.mutate(step.key) : undefined}
               />
             ))}
           </div>

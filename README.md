@@ -35,8 +35,23 @@ Point `VITE_API_BASE_URL` at a running RECAVO API (default `http://localhost:300
 ## Surfaces
 
 - **Staff console** (`/`, `/calendar`, `/bookings`, …) — authenticated, business + location scoped
+- **Billing** (`/billing`) — Recavo SaaS plans, 14-day trial via Stripe Checkout, return URLs `/billing/success` and `/billing/cancel`
 - **Public booking** (`/book?businessId=…`) — unauthenticated `/api/v1/public/…`
 - **Customer portal** (`/portal?businessId=…`) — authenticated `/api/v1/portal/…`
+
+The staff console is locked until the business has access `trial`, `entitled`, or `grace`. New businesses go to `/billing` after create.
+
+### API flags (required for Checkout and server-side gates)
+
+On the RECAVO API the portal proxies to (`VITE_API_BASE_URL`):
+
+```
+SAAS_BILLING_CHECKOUT_ENABLED=true
+SAAS_BILLING_REQUIRE_SUBSCRIPTION=true
+PUBLIC_APP_URL=http://localhost:8080
+```
+
+Or set `BILLING_SUCCESS_URL` / `BILLING_CANCEL_URL` to `http://localhost:8080/billing/success` and `…/billing/cancel`. Staging/production should use the real portal origin. Without these, Checkout returns 403 and unpaid businesses stay unrestricted on the API (the portal still gates the UI).
 
 ## Lovable
 

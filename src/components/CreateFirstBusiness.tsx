@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
@@ -19,6 +20,7 @@ const DEFAULT_INDUSTRY = "personal_training";
  */
 export function CreateFirstBusiness() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { signOut } = useAuth();
   const [legalName, setLegalName] = useState("");
   const [tradingName, setTradingName] = useState("");
@@ -47,6 +49,7 @@ export function CreateFirstBusiness() {
     onSuccess: async () => {
       toast.success("Business created");
       await queryClient.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
+      await navigate({ to: "/billing" });
     },
     onError: (err) => toastApiError(err),
   });
