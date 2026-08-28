@@ -111,6 +111,8 @@ export const queryKeys = {
   publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
+  /** Every cached day of availability, for when a booking has just taken a slot. */
+  publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
 
   portalMe: (businessId: string) => ["portal", businessId, "me"] as const,
   portalBookings: (businessId: string) => ["portal", businessId, "bookings"] as const,

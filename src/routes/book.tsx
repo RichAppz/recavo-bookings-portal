@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { ArrowLeft, Check, Clock, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
   type PublicPackage,
   type PublicPackagePayment,
 } from "@/lib/api/hooks";
+import { queryKeys } from "@/lib/api/query-keys";
 import type { AvailabilitySlot, Booking } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { packageSummary, validityLabel } from "@/lib/packages";
@@ -228,6 +230,8 @@ function authenticationSucceeded(): boolean {
 }
 
 function BookingFlow({ businessId }: { businessId: string }) {
+  const navigate = Route.useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(STEP_CHOOSE);
   /** Which of the two journeys the customer is on, chosen on the first step. */
   const [mode, setMode] = useState<"service" | "package">("service");
@@ -310,6 +314,47 @@ function BookingFlow({ businessId }: { businessId: string }) {
   );
 
   const clearStoredHold = () => writeStoredJourney(businessId, null);
+
+  /**
+   * The confirmation was a dead end — reloading the page was the only way to book
+   * again. Contact details are deliberately kept: the same address resolves to the
+   * same customer server-side, so retyping them would achieve nothing.
+   */
+  const bookAnother = () => {
+    clearStoredHold();
+    writeStoredPurchase(businessId, null);
+    if (restoredContact) {
+      // Card authentication remounted the page with empty inputs, so put back what
+      // the customer already typed rather than making them do it twice.
+      const [first = "", ...rest] = (restoredContact.name ?? "").split(" ");
+      setFirstName((v) => v || first);
+      setLastName((v) => v || rest.join(" "));
+      setEmail((v) => v || restoredContact.email || "");
+      setPhone((v) => v || restoredContact.phone || "");
+      setRestoredContact(null);
+    }
+    setMode("service");
+    setPackageId(null);
+    setServiceId(null);
+    setLocationId(null);
+    setSelectedSlot(null);
+    setNotes("");
+    setFieldErrors({});
+    setHold(null);
+    setConfirmedBooking(null);
+    setPayment(null);
+    setPackagePayment(null);
+    setPackageBought(false);
+    setSettling(false);
+    setStep(STEP_CHOOSE);
+    // The slot just taken is still sitting in the cached day.
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.publicAvailabilityAll(businessId),
+    });
+    // Stripe's redirect params linger in the URL, and a refresh with them still
+    // there would look like another return from the bank.
+    void navigate({ search: { businessId }, replace: true });
+  };
 
   const submitDetails = () => {
     if (!selectedSlot) return;
@@ -1074,6 +1119,12 @@ function BookingFlow({ businessId }: { businessId: string }) {
                 </span>
               </p>
             ) : null}
+            <Button size="xl" variant="outline" className="w-full" onClick={bookAnother}>
+              Book another session
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Your details are saved, so it only takes a moment.
+            </p>
           </section>
         ) : null}
       </div>
