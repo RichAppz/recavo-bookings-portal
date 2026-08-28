@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
 import {
   AlertDialog,
@@ -61,6 +62,7 @@ import {
 import type { AiPolicyDraftResponse, PolicyDocument, PolicyDocumentType } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
 import { formatInTz } from "@/lib/format";
+import { markdownToPlainText, parsePolicyContent } from "@/lib/markdown";
 import { PERMISSIONS, SYSTEM_ROLES, holdsBusinessOwnerRole } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -94,6 +96,33 @@ export const Route = createFileRoute("/settings")({
   ),
 });
 
+const POLICY_TYPE_META: Record<PolicyDocumentType, { label: string; description: string }> = {
+  cancellation: {
+    label: "Cancellation policy",
+    description: "Notice periods, late cancellations and what you charge for them.",
+  },
+  terms: {
+    label: "Terms and conditions",
+    description: "The agreement between your business and the people who book with it.",
+  },
+  privacy: {
+    label: "Privacy notice",
+    description: "What personal data you collect, why you hold it and for how long.",
+  },
+  consent_text: {
+    label: "Consent wording",
+    description: "The text a client agrees to when they confirm a booking.",
+  },
+  package_terms: {
+    label: "Package terms",
+    description: "Expiry, transfers and refunds for prepaid packages.",
+  },
+  dpa: {
+    label: "Data processing addendum",
+    description: "Controller and processor terms, including subprocessors.",
+  },
+};
+
 const POLICY_TYPES: PolicyDocumentType[] = [
   "cancellation",
   "terms",
@@ -102,6 +131,10 @@ const POLICY_TYPES: PolicyDocumentType[] = [
   "package_terms",
   "dpa",
 ];
+
+function policyLabel(type: string): string {
+  return POLICY_TYPE_META[type as PolicyDocumentType]?.label ?? type.replace(/_/g, " ");
+}
 
 const INVITE_ROLES = [
   SYSTEM_ROLES.ADMINISTRATOR,
@@ -412,6 +445,20 @@ function ConfigurationTab() {
   const tenant = useTenant();
   const config = tenant.configuration;
   const update = useUpdateConfiguration();
+  // `src/lib/api/schema.d.ts` is generated from a committed openapi.json that predates
+  // this setting, and regenerating it drags in unrelated API drift the portal has yet
+  // to absorb. Read and write the one new field through a narrow local shape until the
+  // schema is refreshed as its own change.
+  const bookingConfig = config?.booking as
+    | {
+        cancellationWindowHours?: number;
+        defaultHoldMinutes?: number;
+        requireOnlinePayment?: boolean;
+      }
+    | undefined;
+  const brandingConfig = (
+    config as { branding?: { logoUrl?: string | null; accentColour?: string | null } } | undefined
+  )?.branding;
   const [staffTerm, setStaffTerm] = useState(config?.terminology?.staff ?? "Staff");
   const [serviceTerm, setServiceTerm] = useState(config?.terminology?.service ?? "Service");
   const [bookingTerm, setBookingTerm] = useState(config?.terminology?.booking ?? "Booking");
@@ -420,6 +467,11 @@ function ConfigurationTab() {
   const [cancelHours, setCancelHours] = useState(
     String(config?.booking?.cancellationWindowHours ?? 24),
   );
+  const [requireOnlinePayment, setRequireOnlinePayment] = useState(
+    Boolean(bookingConfig?.requireOnlinePayment),
+  );
+  const [logoUrl, setLogoUrl] = useState(brandingConfig?.logoUrl ?? "");
+  const [accentColour, setAccentColour] = useState(brandingConfig?.accentColour ?? "");
   const [vatRegistered, setVatRegistered] = useState(Boolean(config?.tax?.vatRegistered));
   const [vatNumber, setVatNumber] = useState(config?.tax?.vatNumber ?? "");
   const [closureDays, setClosureDays] = useState(
@@ -439,6 +491,9 @@ function ConfigurationTab() {
     setLinkedTerm(config?.terminology?.linkedRecord ?? "Record");
     setHoldMinutes(String(config?.booking?.defaultHoldMinutes ?? 10));
     setCancelHours(String(config?.booking?.cancellationWindowHours ?? 24));
+    setRequireOnlinePayment(Boolean(bookingConfig?.requireOnlinePayment));
+    setLogoUrl(brandingConfig?.logoUrl ?? "");
+    setAccentColour(brandingConfig?.accentColour ?? "");
     setVatRegistered(Boolean(config?.tax?.vatRegistered));
     setVatNumber(config?.tax?.vatNumber ?? "");
     setClosureDays(String(config?.retention?.closureWindowDays ?? 30));
@@ -448,7 +503,21 @@ function ConfigurationTab() {
     setRegion(config?.legalAddress?.region ?? "");
     setPostalCode(config?.legalAddress?.postalCode ?? "");
     setCountry(config?.legalAddress?.country ?? "GB");
-  }, [config]);
+  }, [
+    config,
+    bookingConfig?.requireOnlinePayment,
+    brandingConfig?.logoUrl,
+    brandingConfig?.accentColour,
+  ]);
+
+  const accentValid = accentColour === "" || /^#[0-9a-fA-F]{6}$/.test(accentColour);
+  const logoValid = logoUrl === "" || logoUrl.startsWith("https://");
+
+  // Branding has the same generated-schema gap as `requireOnlinePayment` above, so it
+  // rides along on a widened patch type until openapi.json is refreshed.
+  type ConfigPatch = Parameters<typeof update.mutateAsync>[0] & {
+    branding?: { logoUrl: string | null; accentColour: string | null };
+  };
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
@@ -474,6 +543,72 @@ function ConfigurationTab() {
             onChange={setCancelHours}
             type="number"
           />
+          <div className="flex items-start justify-between gap-4 rounded-xl border p-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Take payment online</p>
+              <p className="text-xs text-muted-foreground">
+                Priced sessions booked on your public page are paid for by card before they're
+                confirmed. Needs a connected Stripe account that can accept payments.
+              </p>
+            </div>
+            <Switch checked={requireOnlinePayment} onCheckedChange={setRequireOnlinePayment} />
+          </div>
+        </div>
+      </SectionCard>
+      <SectionCard title="Branding">
+        <div className="grid gap-4">
+          <p className="text-xs text-muted-foreground">
+            Used on the emails your customers receive. Leave either field empty to fall back to
+            RECAVO's.
+          </p>
+          <div className="grid gap-1.5">
+            <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
+            <p className="text-xs text-muted-foreground">
+              {logoValid
+                ? "Must be a public https link — email apps cannot load private files."
+                : "Must start with https://"}
+            </p>
+          </div>
+          <div className="grid gap-1.5">
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Field label="Accent colour" value={accentColour} onChange={setAccentColour} />
+              </div>
+              <input
+                type="color"
+                aria-label="Pick accent colour"
+                value={accentValid && accentColour ? accentColour : "#019c86"}
+                onChange={(event) => setAccentColour(event.target.value)}
+                className="size-10 shrink-0 cursor-pointer rounded-lg border bg-background p-1"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {accentValid ? "Buttons and highlights in your emails." : "Must be a #rrggbb value."}
+            </p>
+          </div>
+          <div className="rounded-xl border bg-background p-4">
+            <p className="mb-3 text-xs font-medium text-muted-foreground">Email preview</p>
+            {logoValid && logoUrl ? (
+              <img src={logoUrl} alt="" className="mb-2 h-9 w-auto object-contain" />
+            ) : (
+              <p className="mb-2 text-[17px] font-extrabold uppercase tracking-[0.06em]">
+                {tenant.business?.tradingName ?? "Your business"}
+              </p>
+            )}
+            <div
+              className="h-[3px] w-11 rounded-sm"
+              style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
+            />
+            <p className="mt-4 text-base font-bold">Your sessions are ready</p>
+            <button
+              type="button"
+              disabled
+              className="mt-3 rounded-[10px] px-6 py-3 text-sm font-semibold text-white"
+              style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
+            >
+              Book your sessions
+            </button>
+          </div>
         </div>
       </SectionCard>
       <SectionCard title="Tax">
@@ -507,9 +642,13 @@ function ConfigurationTab() {
           fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
         >
           <Button
-            disabled={update.isPending}
+            disabled={update.isPending || !accentValid || !logoValid}
             onClick={async () => {
-              await update.mutateAsync({
+              const patch: ConfigPatch = {
+                branding: {
+                  logoUrl: logoUrl.trim() || null,
+                  accentColour: accentColour.trim().toLowerCase() || null,
+                },
                 terminology: {
                   staff: staffTerm.trim(),
                   service: serviceTerm.trim(),
@@ -519,7 +658,8 @@ function ConfigurationTab() {
                 booking: {
                   defaultHoldMinutes: Number(holdMinutes) || 10,
                   cancellationWindowHours: Number(cancelHours) || 0,
-                },
+                  requireOnlinePayment,
+                } as NonNullable<Parameters<typeof update.mutateAsync>[0]["booking"]>,
                 tax: { vatRegistered, vatNumber: vatNumber.trim() || null },
                 retention: { closureWindowDays: Number(closureDays) || 30 },
                 legalAddress: line1.trim()
@@ -532,7 +672,8 @@ function ConfigurationTab() {
                       country: country.trim().toUpperCase(),
                     }
                   : null,
-              });
+              };
+              await update.mutateAsync(patch);
               toast.success("Configuration saved");
             }}
           >
@@ -707,6 +848,9 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
   );
 
   const current = useCurrentPolicyDocument(type);
+  const { reviewStatus: currentReview, body: currentBody } = parsePolicyContent(
+    current.data?.content,
+  );
 
   useEffect(() => {
     if (assist) setShowAssist(true);
@@ -874,12 +1018,16 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
                   {(["cancellation", "terms"] as const).map((key) => {
                     const doc = aiResult.drafts[key];
                     const published = doc.status === "published";
+                    const draft = parsePolicyContent(doc.content);
                     return (
                       <div key={key} className="space-y-2 rounded-lg border bg-card p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium capitalize">{key}</p>
+                            <p className="text-sm font-medium">{policyLabel(key)}</p>
                             <StatusBadge status={doc.status} />
+                            {draft.reviewStatus ? (
+                              <StatusBadge status={draft.reviewStatus} />
+                            ) : null}
                           </div>
                           {!published ? (
                             <Button
@@ -891,9 +1039,9 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
                             </Button>
                           ) : null}
                         </div>
-                        <p className="max-h-48 overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">
-                          {doc.content || "—"}
-                        </p>
+                        <Markdown className="max-h-48 overflow-y-auto text-muted-foreground">
+                          {draft.body || "—"}
+                        </Markdown>
                       </div>
                     );
                   })}
@@ -954,36 +1102,43 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
             <EmptyState title="No policy documents" />
           ) : (
             <ul className="divide-y">
-              {(docs.data ?? []).map((doc) => (
-                <li key={doc.id} className="flex items-start justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {doc.type} · v{doc.version}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {doc.content?.slice(0, 120) || "No content"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={doc.status} />
-                    {doc.status === "draft" ? (
-                      <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={publishDoc.isPending}
-                          onClick={async () => {
-                            await publishDoc.mutateAsync({ documentId: doc.id });
-                            toast.success("Policy published");
-                          }}
-                        >
-                          Publish
-                        </Button>
-                      </Can>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
+              {(docs.data ?? []).map((doc) => {
+                const reviewStatus = parsePolicyContent(doc.content).reviewStatus;
+                const summary =
+                  POLICY_TYPE_META[doc.type]?.description ||
+                  markdownToPlainText(doc.content).slice(0, 120) ||
+                  "No content";
+                return (
+                  <li key={doc.id} className="flex items-start justify-between gap-3 py-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <p className="text-sm font-medium">{policyLabel(doc.type)}</p>
+                        <span className="text-xs text-muted-foreground">Version {doc.version}</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{summary}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      {reviewStatus ? <StatusBadge status={reviewStatus} /> : null}
+                      <StatusBadge status={doc.status} />
+                      {doc.status === "draft" ? (
+                        <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={publishDoc.isPending}
+                            onClick={async () => {
+                              await publishDoc.mutateAsync({ documentId: doc.id });
+                              toast.success("Policy published");
+                            }}
+                          >
+                            Publish
+                          </Button>
+                        </Can>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </SectionCard>
@@ -1003,7 +1158,7 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
                     <SelectContent>
                       {POLICY_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
-                          {t}
+                          {POLICY_TYPE_META[t].label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1032,17 +1187,27 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
               </div>
             </Can>
           </SectionCard>
-          <SectionCard title={`Current ${type}`}>
+          <SectionCard title={policyLabel(type)} description={POLICY_TYPE_META[type]?.description}>
             {!current.data ? (
               <p className="text-sm text-muted-foreground">No published document.</p>
             ) : (
-              <div className="space-y-2 text-sm">
-                <p>
-                  v{current.data.version} · <StatusBadge status={current.data.status} />
-                </p>
-                <p className="whitespace-pre-wrap text-muted-foreground">
-                  {current.data.content || "—"}
-                </p>
+              <div className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Version {current.data.version}
+                  </span>
+                  <StatusBadge status={current.data.status} />
+                  {currentReview ? <StatusBadge status={currentReview} /> : null}
+                </div>
+                {currentReview === "pending_counsel_review" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Placeholder wording from the RECAVO template. Have it checked by a solicitor
+                    before you rely on it.
+                  </p>
+                ) : null}
+                <Markdown className="max-h-[32rem] overflow-y-auto text-muted-foreground">
+                  {currentBody || "—"}
+                </Markdown>
               </div>
             )}
           </SectionCard>

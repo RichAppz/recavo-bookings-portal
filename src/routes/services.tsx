@@ -297,6 +297,15 @@ function ServiceDialog({
     setFieldErrors({});
   };
 
+  // Radix only reports open changes it initiates itself, so a dialog opened by the
+  // parent flipping `open` never re-seeded its fields — every edit showed the create
+  // defaults, or whatever the previous edit left behind.
+  useEffect(() => {
+    if (open) resetFrom(service);
+    // resetFrom closes over fresh setters each render; the service is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, service?.id]);
+
   const updateVariant = (index: number, patch: Partial<VariantRow>) => {
     setVariants((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
@@ -382,7 +391,6 @@ function ServiceDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else resetFrom(service);
       }}
     >
       <DialogContent className="sm:max-w-2xl">

@@ -7,11 +7,9 @@ export function Wordmark({ compact }: { compact?: boolean }) {
         alt={compact ? "RECAVO" : ""}
         className="size-9 rounded-xl object-cover"
       />
-      {!compact ? (
-        <span className="text-[19px] font-semibold tracking-tight text-sidebar-accent-foreground">
-          RECAVO
-        </span>
-      ) : null}
+      {/* Inherits its colour: the wordmark sits on the dark sidebar and on light
+          public pages, and a fixed near-white made it invisible on the latter. */}
+      {!compact ? <span className="text-[19px] font-semibold tracking-tight">RECAVO</span> : null}
     </span>
   );
 }

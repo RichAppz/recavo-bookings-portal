@@ -14,6 +14,7 @@ import { Route as BillingRouteImport } from './routes/billing'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
@@ -31,8 +32,11 @@ import { Route as StaffRouteImport } from './routes/staff'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as BillingSuccessRouteImport } from './routes/billing.success'
+import { Route as ClaimTokenRouteImport } from './routes/claim.$token'
 import { Route as ClientsIndexRouteImport } from './routes/clients.index'
 import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
+import { Route as ConnectRefreshBusinessIdRouteImport } from './routes/connect.refresh.$businessId'
+import { Route as ConnectReturnBusinessIdRouteImport } from './routes/connect.return.$businessId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,6 +61,11 @@ const BookingsRoute = BookingsRouteImport.update({
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectRoute = ConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -144,6 +153,11 @@ const BillingSuccessRoute = BillingSuccessRouteImport.update({
   path: '/success',
   getParentRoute: () => BillingRoute,
 } as any)
+const ClaimTokenRoute = ClaimTokenRouteImport.update({
+  id: '/claim/$token',
+  path: '/claim/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClientsIndexRoute = ClientsIndexRouteImport.update({
   id: '/clients/',
   path: '/clients/',
@@ -154,6 +168,17 @@ const ClientsClientIdRoute = ClientsClientIdRouteImport.update({
   path: '/clients/$clientId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConnectRefreshBusinessIdRoute =
+  ConnectRefreshBusinessIdRouteImport.update({
+    id: '/refresh/$businessId',
+    path: '/refresh/$businessId',
+    getParentRoute: () => ConnectRoute,
+  } as any)
+const ConnectReturnBusinessIdRoute = ConnectReturnBusinessIdRouteImport.update({
+  id: '/return/$businessId',
+  path: '/return/$businessId',
+  getParentRoute: () => ConnectRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -161,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/connect': typeof ConnectRouteWithChildren
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -177,15 +203,19 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/success': typeof BillingSuccessRoute
+  '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
+  '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
+  '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/connect': typeof ConnectRouteWithChildren
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -202,9 +232,12 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/success': typeof BillingSuccessRoute
+  '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
+  '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
+  '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -213,6 +246,7 @@ export interface FileRoutesById {
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
+  '/connect': typeof ConnectRouteWithChildren
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -229,9 +263,12 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/success': typeof BillingSuccessRoute
+  '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
+  '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
+  '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -241,6 +278,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/connect'
     | '/invite'
     | '/locations'
     | '/login'
@@ -257,15 +295,19 @@ export interface FileRouteTypes {
     | '/staff'
     | '/billing/cancel'
     | '/billing/success'
+    | '/claim/$token'
     | '/clients/$clientId'
     | '/billing/'
     | '/clients/'
+    | '/connect/refresh/$businessId'
+    | '/connect/return/$businessId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/connect'
     | '/invite'
     | '/locations'
     | '/login'
@@ -282,9 +324,12 @@ export interface FileRouteTypes {
     | '/staff'
     | '/billing/cancel'
     | '/billing/success'
+    | '/claim/$token'
     | '/clients/$clientId'
     | '/billing'
     | '/clients'
+    | '/connect/refresh/$businessId'
+    | '/connect/return/$businessId'
   id:
     | '__root__'
     | '/'
@@ -292,6 +337,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/bookings'
     | '/calendar'
+    | '/connect'
     | '/invite'
     | '/locations'
     | '/login'
@@ -308,9 +354,12 @@ export interface FileRouteTypes {
     | '/staff'
     | '/billing/cancel'
     | '/billing/success'
+    | '/claim/$token'
     | '/clients/$clientId'
     | '/billing/'
     | '/clients/'
+    | '/connect/refresh/$businessId'
+    | '/connect/return/$businessId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -319,6 +368,7 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRoute
   BookingsRoute: typeof BookingsRoute
   CalendarRoute: typeof CalendarRoute
+  ConnectRoute: typeof ConnectRouteWithChildren
   InviteRoute: typeof InviteRoute
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
@@ -333,6 +383,7 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
   StaffRoute: typeof StaffRoute
+  ClaimTokenRoute: typeof ClaimTokenRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
 }
@@ -372,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connect': {
+      id: '/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -493,6 +551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BillingSuccessRouteImport
       parentRoute: typeof BillingRoute
     }
+    '/claim/$token': {
+      id: '/claim/$token'
+      path: '/claim/$token'
+      fullPath: '/claim/$token'
+      preLoaderRoute: typeof ClaimTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/clients/': {
       id: '/clients/'
       path: '/clients'
@@ -506,6 +571,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/clients/$clientId'
       preLoaderRoute: typeof ClientsClientIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/connect/refresh/$businessId': {
+      id: '/connect/refresh/$businessId'
+      path: '/refresh/$businessId'
+      fullPath: '/connect/refresh/$businessId'
+      preLoaderRoute: typeof ConnectRefreshBusinessIdRouteImport
+      parentRoute: typeof ConnectRoute
+    }
+    '/connect/return/$businessId': {
+      id: '/connect/return/$businessId'
+      path: '/return/$businessId'
+      fullPath: '/connect/return/$businessId'
+      preLoaderRoute: typeof ConnectReturnBusinessIdRouteImport
+      parentRoute: typeof ConnectRoute
     }
   }
 }
@@ -525,12 +604,26 @@ const BillingRouteChildren: BillingRouteChildren = {
 const BillingRouteWithChildren =
   BillingRoute._addFileChildren(BillingRouteChildren)
 
+interface ConnectRouteChildren {
+  ConnectRefreshBusinessIdRoute: typeof ConnectRefreshBusinessIdRoute
+  ConnectReturnBusinessIdRoute: typeof ConnectReturnBusinessIdRoute
+}
+
+const ConnectRouteChildren: ConnectRouteChildren = {
+  ConnectRefreshBusinessIdRoute: ConnectRefreshBusinessIdRoute,
+  ConnectReturnBusinessIdRoute: ConnectReturnBusinessIdRoute,
+}
+
+const ConnectRouteWithChildren =
+  ConnectRoute._addFileChildren(ConnectRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BillingRoute: BillingRouteWithChildren,
   BookRoute: BookRoute,
   BookingsRoute: BookingsRoute,
   CalendarRoute: CalendarRoute,
+  ConnectRoute: ConnectRouteWithChildren,
   InviteRoute: InviteRoute,
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,
@@ -545,6 +638,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
   StaffRoute: StaffRoute,
+  ClaimTokenRoute: ClaimTokenRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsIndexRoute: ClientsIndexRoute,
 }

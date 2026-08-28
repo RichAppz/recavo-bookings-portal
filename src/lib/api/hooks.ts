@@ -2787,16 +2787,30 @@ export function useRunFilesRetention() {
 
 /* ---------------- Public booking journey (RECA-507) ---------------- */
 
+/**
+ * The public endpoints already return only active, publicly visible rows, and
+ * their projection drops the `active` and `publicVisible` flags along with the
+ * rest of the staff-facing fields. Typed narrowly so a client-side re-filter on
+ * a field that is never sent — which silently empties the booking page — fails
+ * to compile instead of shipping.
+ */
+export type PublicService = Pick<
+  CatalogueService,
+  "id" | "name" | "description" | "category" | "durationMinutes" | "basePriceMinor" | "currency"
+> & { colour: string | null };
+
+export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
+
 export function usePublicServices(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.publicServices(businessId ?? ""),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ services: CatalogueService[] }>(
+      const res = await api.get<{ services: PublicService[] }>(
         `/api/v1/public/businesses/${businessId}/services`,
         { public: true },
       );
-      return res.data.services.filter((s) => s.active);
+      return res.data.services;
     },
   });
 }
@@ -2806,11 +2820,11 @@ export function usePublicLocations(businessId: string | undefined) {
     queryKey: queryKeys.publicLocations(businessId ?? ""),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ locations: Location[] }>(
+      const res = await api.get<{ locations: PublicLocation[] }>(
         `/api/v1/public/businesses/${businessId}/locations`,
         { public: true },
       );
-      return res.data.locations.filter((l) => l.active);
+      return res.data.locations;
     },
   });
 }
@@ -2845,6 +2859,98 @@ export function usePublicAvailability(
       );
       return res.data.slots;
     },
+    // Changing the date is a new query key, which would otherwise blank the times and
+    // flash a loading line. Holding the previous day's times until the new ones land
+    // keeps the grid steady — but only within the same service and location, since
+    // showing another service's times, even briefly, invites booking the wrong thing.
+    placeholderData: (previous, previousQuery) => {
+      const previousFilters = previousQuery?.queryKey?.[3] as
+        { serviceId?: string; locationId?: string } | undefined;
+      if (!previousFilters) return undefined;
+      const sameContext =
+        previousFilters.serviceId === query.serviceId &&
+        previousFilters.locationId === query.locationId;
+      return sameContext ? previous : undefined;
+    },
+  });
+}
+
+/** A package as an unauthenticated buyer sees it on the booking page. */
+export type PublicPackage = {
+  id: string;
+  name: string;
+  description: string | null;
+  priceMinor: number;
+  currency: string;
+  creditsIssued: number;
+  /** Empty means the credits work on any service. */
+  eligibleServiceIds: string[];
+  validity: { kind: "calendar_months" | "days"; amount: number };
+};
+
+export function usePublicPackages(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicPackages(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ packages: PublicPackage[] }>(
+        `/api/v1/public/businesses/${businessId}/packages`,
+        { public: true },
+      );
+      return res.data.packages;
+    },
+  });
+}
+
+export type PublicPackagePayment = PublicBookingPayment & {
+  packageName: string;
+  creditsIssued: number;
+  /**
+   * One-time token that links the buyer's own account to the customer record this
+   * purchase created. Without redeeming it they have no way into the portal, and
+   * the credits they just paid for stay out of reach.
+   */
+  claimToken: string;
+};
+
+/**
+ * Turns a claim token into portal access for the signed-in user. The token names
+ * its own business, so there is nothing else to pass.
+ */
+export function useRedeemPurchaseClaim() {
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const res = await api.post<{ businessId: string; customerId: string }>(
+        `/api/v1/customer-claims/${encodeURIComponent(token)}/accept`,
+        {},
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useBuyPublicPackage(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: {
+          packageId: string;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          marketingConsent?: boolean;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<PublicPackagePayment>(
+          `/api/v1/public/businesses/${businessId}/package-purchases/payment`,
+          vars,
+          { public: true, idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
   });
 }
 
@@ -2863,11 +2969,14 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
         },
         idempotencyKey: string,
       ) => {
-        const res = await api.post<{ booking: Booking; holdToken: string }>(
-          `/api/v1/public/businesses/${businessId}/booking-holds`,
-          body,
-          { public: true, idempotencyKey },
-        );
+        const res = await api.post<{
+          booking: Booking;
+          holdToken: string;
+          onlinePaymentRequired?: boolean;
+        }>(`/api/v1/public/businesses/${businessId}/booking-holds`, body, {
+          public: true,
+          idempotencyKey,
+        });
         return res.data;
       },
     ),
@@ -2884,6 +2993,33 @@ export function useConfirmPublicBooking(businessId: string | undefined) {
           { public: true, idempotencyKey },
         );
         return res.data.booking;
+      },
+    ),
+  });
+}
+
+export type PublicBookingPayment = {
+  clientSecret: string;
+  /**
+   * The charge is created directly on the business's connected account, so Stripe.js
+   * has to be initialised against that account rather than the platform.
+   */
+  connectedAccountId: string;
+  publishableKey: string;
+  amountMinor: number;
+  currency: string;
+};
+
+export function useStartPublicBookingPayment(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string; holdToken: string }, idempotencyKey: string) => {
+        const res = await api.post<PublicBookingPayment>(
+          `/api/v1/public/businesses/${businessId}/bookings/payment`,
+          vars,
+          { public: true, idempotencyKey },
+        );
+        return res.data;
       },
     ),
   });
@@ -3072,6 +3208,61 @@ export function usePortalPayments(businessId: string | undefined) {
       });
       return res.data.payments;
     },
+  });
+}
+
+/** A bucket of prepaid sessions, as the customer who owns it sees it. */
+export type PortalCredit = {
+  id: string;
+  packageId: string;
+  /** Empty means the credits can be spent on any service. */
+  eligibleServiceIds: string[];
+  unitsIssued: number;
+  available: number;
+  reserved: number;
+  expiresAt: string;
+  status: string;
+};
+
+export function usePortalCredits(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalCredits(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ credits: PortalCredit[] }>("/api/v1/portal/credits", {
+        query: { businessId },
+      });
+      return res.data.credits;
+    },
+  });
+}
+
+/**
+ * Books a session against a credit the customer already owns. Only the slot is sent:
+ * the API resolves who the booking is for from the portal link, so this cannot spend
+ * another customer's credits.
+ */
+export function useBookWithPortalCredit(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<Booking, ApiError, { slotToken: string; notesCustomer?: string | null }>({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: { slotToken: string; notesCustomer?: string | null },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ booking: Booking }>(
+          "/api/v1/portal/bookings",
+          { slotToken: vars.slotToken, notesCustomer: vars.notesCustomer ?? null },
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 

@@ -55,6 +55,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* Headers on pages that have no sidebar (public booking, client portal). */
+  --color-nav: var(--nav);
+  --color-nav-foreground: var(--nav-foreground);
+  --color-nav-accent: var(--nav-accent);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -112,6 +116,9 @@
   --chart-3: oklch(0.735 0.145 62);
   --chart-4: oklch(0.6 0.09 285);
   --chart-5: oklch(0.66 0.13 145);
+  --nav: oklch(0.238 0.014 258);
+  --nav-foreground: oklch(0.96 0.004 250);
+  --nav-accent: oklch(0.295 0.016 258);
   --sidebar: oklch(0.238 0.014 258);
   --sidebar-foreground: oklch(0.86 0.008 250);
   --sidebar-primary: oklch(0.68 0.12 178);
