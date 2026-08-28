@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { z } from "zod";
 import {
   CalendarClock,
@@ -128,6 +128,14 @@ function PortalContent({ businessId }: { businessId: string }) {
   const me = usePortalMe(businessId);
   const bookings = usePortalBookings(businessId);
   const cancelBooking = useCancelPortalBooking(businessId);
+
+  // A 404 means this account holds no customer link here, which happens when a
+  // businessId outlives the person it belonged to — signing in after someone
+  // else was signed out of this page returns you to their URL. Send them to the
+  // root, which knows where they actually belong.
+  if (me.isError && me.error instanceof ApiError && me.error.status === 404) {
+    return <Navigate to="/" replace />;
+  }
 
   const now = new Date().toISOString();
   const upcoming = (bookings.data ?? [])

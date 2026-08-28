@@ -26,7 +26,12 @@ type AuthContextValue = {
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: (redirectTo?: string) => Promise<void>;
-  signUp: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    metadata?: Record<string, unknown>,
+    emailRedirectTo?: string,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   /** PATCH /api/v1/me — update first/last name on the account profile. */
@@ -149,6 +154,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLog("applySession: already loaded this user → skip /me");
         setStatus("authenticated");
         return;
+      }
+
+      // A different account is taking over the tab: signing in over a live
+      // session, or a session replaced in another tab. Only the sign-out button
+      // emptied the cache before, so everything the previous user loaded was
+      // still readable — and some of it decides where the app sends you.
+      if (userId && loadedForUserIdRef.current && loadedForUserIdRef.current !== userId) {
+        authLog("applySession: different user → clearing cached data");
+        queryClient.clear();
       }
 
       // Coalesce concurrent bootstraps for the same user (getSession() racing the
@@ -373,13 +387,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  /**
+   * `emailRedirectTo` matters when the sign-up carries something the confirmation
+   * has to come back to, such as a purchase claim token. Left unset, Supabase
+   * sends the user to the project's site root and that context is lost.
+   */
   const signUp = useCallback(
-    async (email: string, password: string, metadata?: Record<string, unknown>) => {
+    async (
+      email: string,
+      password: string,
+      metadata?: Record<string, unknown>,
+      emailRedirectTo?: string,
+    ) => {
       const supabase = getSupabase();
+      const options = {
+        ...(metadata ? { data: metadata } : {}),
+        ...(emailRedirectTo ? { emailRedirectTo } : {}),
+      };
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        ...(metadata ? { options: { data: metadata } } : {}),
+        ...(Object.keys(options).length > 0 ? { options } : {}),
       });
       if (error) throw error;
     },

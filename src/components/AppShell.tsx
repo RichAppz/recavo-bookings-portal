@@ -49,10 +49,12 @@ import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions"
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import {
   useCustomers,
   useMarkNotificationRead,
   useNotifications,
+  usePortalBusinesses,
   useSubscription,
 } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
@@ -147,10 +149,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
+  const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
+  const portalBusinesses = usePortalBusinesses(noStaffBusiness);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
   const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
   const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
+
+  // Only the staff app requires a business, so the prompt to create one lives
+  // here rather than around every route: a customer in their portal, or someone
+  // opening a staff invitation, has no membership yet and must not be asked to
+  // found a studio.
+  if (noStaffBusiness) {
+    if (portalBusinesses.isLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Loading your account…</p>
+        </div>
+      );
+    }
+    // Someone who bought sessions has a customer record but nothing to run, so
+    // send them to their own account rather than offering to set up a studio.
+    // Their studio picked them; they did not pick a studio, and in practice
+    // there is one.
+    const customerOf = portalBusinesses.data?.[0];
+    if (customerOf) {
+      return <Navigate to="/portal" search={{ businessId: customerOf.id }} replace />;
+    }
+    return <CreateFirstBusiness />;
+  }
 
   if (subscription.isLoading) {
     return (

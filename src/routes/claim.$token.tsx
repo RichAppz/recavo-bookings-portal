@@ -111,7 +111,10 @@ function ClaimPage() {
     setProblem(null);
     try {
       if (mode === "signup") {
-        await signUp(email, password);
+        // Send the confirmation back to this page rather than the app root, so
+        // the token survives the round trip and the buyer lands on their
+        // sessions instead of the staff app.
+        await signUp(email, password, undefined, window.location.href);
         // Supabase either signs them straight in — the effect above then takes
         // over — or waits on a confirmation email, which we cannot tell apart
         // from here. The link keeps working either way, so say so.

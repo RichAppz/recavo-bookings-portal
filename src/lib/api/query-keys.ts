@@ -114,6 +114,8 @@ export const queryKeys = {
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
 
+  /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
+  portalBusinesses: () => ["portal", "businesses"] as const,
   portalMe: (businessId: string) => ["portal", businessId, "me"] as const,
   portalBookings: (businessId: string) => ["portal", businessId, "bookings"] as const,
   portalBooking: (businessId: string, bookingId: string) =>

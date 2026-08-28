@@ -3037,6 +3037,28 @@ export type PortalCustomer = {
   status?: "active" | "archived" | "anonymised";
 } & Record<string, unknown>;
 
+/**
+ * Businesses the signed-in user can visit as a customer.
+ *
+ * Enabled only where it is needed — an account with no staff membership, which
+ * has to be told apart from a new owner before it is offered a business to set
+ * up. Staff never reach that branch, so they never pay for the request.
+ */
+export function usePortalBusinesses(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.portalBusinesses(),
+    enabled,
+    queryFn: async () => {
+      const res = await api.get<{ businesses: PortalBusinessSummary[] }>(
+        "/api/v1/portal/businesses",
+      );
+      return res.data.businesses;
+    },
+  });
+}
+
+export type PortalBusinessSummary = { id: string; slug: string; tradingName: string };
+
 export function usePortalMe(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.portalMe(businessId ?? ""),
