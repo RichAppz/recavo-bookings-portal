@@ -2,6 +2,11 @@
 .env
 .env.*
 !.env.example
+# Deploy targets are tracked: every VITE_* value is compiled into the client
+# bundle and served to anyone who loads the page, so none of it can be secret,
+# and keeping it here means a deploy does not depend on one laptop's files.
+!.env.production
+!.env.staging
 
 # Logs
 logs
