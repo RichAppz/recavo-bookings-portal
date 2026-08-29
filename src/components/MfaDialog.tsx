@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { Copy } from "lucide-react";
-import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -12,26 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TotpQr, TotpSecretField } from "@/components/TotpEnrollFields";
 import { useAuth } from "@/lib/auth/auth-store";
-
-function TotpQr({ qrCode }: { qrCode: string }) {
-  const trimmed = qrCode.trim();
-  if (trimmed.startsWith("<svg")) {
-    return (
-      <div
-        className="mx-auto size-48 overflow-hidden rounded-lg bg-white p-2 [&_svg]:size-full"
-        dangerouslySetInnerHTML={{ __html: trimmed }}
-      />
-    );
-  }
-  return (
-    <img
-      src={trimmed}
-      alt="Authenticator QR code"
-      className="mx-auto size-48 rounded-lg bg-white p-2"
-    />
-  );
-}
 
 export function MfaDialog() {
   const { mfaRequired, mfaMode, mfaEnrollment, verifyMfa, clearMfa } = useAuth();
@@ -67,28 +47,7 @@ export function MfaDialog() {
         {enrolling && mfaEnrollment ? (
           <div className="space-y-3">
             <TotpQr qrCode={mfaEnrollment.qrCode} />
-            <div className="space-y-2">
-              <Label htmlFor="mfa-secret">Or enter this key manually</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="mfa-secret"
-                  readOnly
-                  value={mfaEnrollment.secret}
-                  className="font-mono text-sm tracking-wide"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(mfaEnrollment.secret);
-                    toast.success("Secret copied");
-                  }}
-                >
-                  <Copy className="size-4" />
-                  <span className="sr-only">Copy secret</span>
-                </Button>
-              </div>
-            </div>
+            <TotpSecretField secret={mfaEnrollment.secret} />
           </div>
         ) : null}
         <div className="space-y-2">
