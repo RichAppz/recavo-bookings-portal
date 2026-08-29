@@ -430,8 +430,8 @@ function TwoFactorCard() {
       ) : (
         <div className="grid gap-4">
           <p className="text-sm text-muted-foreground">
-            Add Google Authenticator, 1Password, or Authy so checkout and other privileged
-            actions require a code.
+            Add Google Authenticator, 1Password, or Authy. You can require a code for privileged
+            actions once this is on.
           </p>
           <Button
             className="w-fit"
