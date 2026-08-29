@@ -12,11 +12,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { api, setAccessToken, setMfaHandler, queryKeys, ApiError, toastApiError } from "@/lib/api";
 import type { User } from "@/lib/api/types";
+import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
 import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
+
+export type MfaMode = "challenge" | "enroll";
+
+export type MfaEnrollment = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
 
 type AuthContextValue = {
   status: AuthStatus;
@@ -40,9 +49,20 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<void>;
   /** PATCH /api/v1/me — update first/last name on the account profile. */
   updateProfile: (body: { firstName?: string | null; lastName?: string | null }) => Promise<User>;
-  /** Complete a pending MFA challenge; returns true on success. */
+  /**
+   * Raise the session to AAL2: no-op if already there, challenge a verified
+   * factor, or enrol TOTP then verify. Returns false if the person cancels.
+   */
+  ensureAal2: () => Promise<boolean>;
+  /** Remove the verified TOTP factor. Challenges first if the session is AAL1. */
+  unenrollMfa: () => Promise<boolean>;
+  refreshMfaStatus: () => Promise<void>;
+  /** Complete a pending MFA challenge or enrolment; returns true on success. */
   verifyMfa: (code: string) => Promise<boolean>;
   mfaRequired: boolean;
+  mfaMode: MfaMode;
+  mfaEnrollment: MfaEnrollment | null;
+  mfaEnrolled: boolean;
   clearMfa: () => void;
 };
 
@@ -75,6 +95,40 @@ function authLog(...args: unknown[]) {
   if (import.meta.env.DEV) console.debug("[auth]", ...args);
 }
 
+async function discardUnverifiedTotpFactors(): Promise<void> {
+  const supabase = getSupabase();
+  const { data } = await supabase.auth.mfa.listFactors();
+  const ids = new Set<string>();
+  for (const factor of data?.totp ?? []) {
+    if (factor.status !== "verified") ids.add(factor.id);
+  }
+  for (const factor of data?.all ?? []) {
+    if (factor.factor_type === "totp" && factor.status !== "verified") ids.add(factor.id);
+  }
+  await Promise.all([...ids].map((factorId) => supabase.auth.mfa.unenroll({ factorId })));
+}
+
+async function beginTotpEnrollment(): Promise<MfaEnrollment | null> {
+  const supabase = getSupabase();
+  const enrollOnce = () => supabase.auth.mfa.enroll({ factorType: "totp" });
+  let enrolled = await enrollOnce();
+  if (enrolled.error || !enrolled.data?.totp) {
+    await discardUnverifiedTotpFactors();
+    enrolled = await enrollOnce();
+  }
+  if (enrolled.error || !enrolled.data?.totp) {
+    toast.error("Couldn't start two-factor enrolment", {
+      description: enrolled.error?.message ?? "Please try again shortly.",
+    });
+    return null;
+  }
+  return {
+    factorId: enrolled.data.id,
+    qrCode: enrolled.data.totp.qr_code,
+    secret: enrolled.data.totp.secret,
+  };
+}
+
 async function fetchMe(signal?: AbortSignal): Promise<User> {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   try {
@@ -104,7 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isSupabaseConfigured() ? "loading" : "unconfigured",
   );
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaMode, setMfaMode] = useState<MfaMode>("challenge");
+  const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollment | null>(null);
+  const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const mfaResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const mfaEnrollmentRef = useRef<MfaEnrollment | null>(null);
   // The Supabase user id we've already loaded a profile for. Supabase fires
   // multiple auth events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, …) and we
   // also probe getSession() on mount; without this guard each one re-runs the
@@ -116,14 +174,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // arrives or the grace period expires.
   const awaitingOauthCallbackRef = useRef(false);
 
-  // Opens the MFA dialog and resolves once the user verifies (true) or cancels
-  // (false). Shared by the proactive sign-in challenge and the API 403 handler.
+  const adoptEnrollment = useCallback((next: MfaEnrollment | null) => {
+    mfaEnrollmentRef.current = next;
+    setMfaEnrollment(next);
+  }, []);
+
+  const refreshMfaStatus = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setMfaEnrolled(false);
+      return;
+    }
+    try {
+      const { data } = await getSupabase().auth.mfa.listFactors();
+      setMfaEnrolled(Boolean(verifiedTotp(data)));
+    } catch (err) {
+      authLog("refreshMfaStatus failed", err);
+    }
+  }, []);
+
+  // Challenge-only: used at sign-in for people who already enrolled. Never enrols.
   const challengeMfa = useCallback(async () => {
+    adoptEnrollment(null);
+    setMfaMode("challenge");
     setMfaRequired(true);
     return await new Promise<boolean>((resolve) => {
       mfaResolveRef.current = resolve;
     });
-  }, []);
+  }, [adoptEnrollment]);
+
+  const ensureAal2 = useCallback(async () => {
+    try {
+      const supabase = getSupabase();
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const step = mfaStepFor(aal, factors);
+      authLog("ensureAal2", { step, aal });
+      if (step === "proceed") return true;
+
+      if (step === "enroll") {
+        const enrollment = await beginTotpEnrollment();
+        if (!enrollment) return false;
+        adoptEnrollment(enrollment);
+        setMfaMode("enroll");
+      } else {
+        adoptEnrollment(null);
+        setMfaMode("challenge");
+      }
+
+      return await new Promise<boolean>((resolve) => {
+        mfaResolveRef.current = resolve;
+        setMfaRequired(true);
+      });
+    } catch (err) {
+      authLog("ensureAal2 failed", err);
+      toast.error("Couldn't check two-factor status", {
+        description: "Please try again shortly.",
+      });
+      return false;
+    }
+  }, [adoptEnrollment]);
 
   const applySession = useCallback(
     async (next: Session | null) => {
@@ -142,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLog("applySession: no session → unauthenticated");
         loadedForUserIdRef.current = null;
         inFlightUserIdRef.current = null;
+        setMfaEnrolled(false);
         setUser(null);
         setStatus("unauthenticated");
         return;
@@ -237,6 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authenticated");
         loadedForUserIdRef.current = userId;
         authLog("bootstrap complete → authenticated", { userId });
+        void refreshMfaStatus();
         void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
       } catch (err) {
         loadedForUserIdRef.current = null;
@@ -245,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           authLog("bootstrap: /me returned 401 → unauthenticated");
           setAccessToken(null);
           setUser(null);
+          setMfaEnrolled(false);
           setStatus("unauthenticated");
           return;
         }
@@ -261,7 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         inFlightUserIdRef.current = null;
       }
     },
-    [queryClient, challengeMfa],
+    [queryClient, challengeMfa, refreshMfaStatus],
   );
 
   useEffect(() => {
@@ -308,37 +420,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [applySession]);
 
-  // MFA interceptor: privileged actions return 403 MFA_REQUIRED.
+  // MFA interceptor: privileged actions return 403 MFA_REQUIRED. Enrol or
+  // challenge, then retry the original request with the AAL2 bearer token.
   useEffect(() => {
-    setMfaHandler(() => challengeMfa());
+    setMfaHandler(() => ensureAal2());
     return () => setMfaHandler(null);
-  }, [challengeMfa]);
+  }, [ensureAal2]);
 
   const verifyMfa = useCallback(async (code: string) => {
     const supabase = getSupabase();
     const { data: factors } = await supabase.auth.mfa.listFactors();
-    const totp = factors?.totp?.[0];
-    if (!totp) {
+    const factorId = mfaEnrollmentRef.current?.factorId ?? verifiedTotp(factors)?.id;
+    if (!factorId) {
       toast.error("No TOTP factor enrolled", {
         description: "Enrol 2FA in account settings first.",
       });
       mfaResolveRef.current?.(false);
       mfaResolveRef.current = null;
+      adoptEnrollment(null);
       setMfaRequired(false);
       return false;
     }
 
-    const challenge = await supabase.auth.mfa.challenge({ factorId: totp.id });
+    const challenge = await supabase.auth.mfa.challenge({ factorId });
     if (challenge.error || !challenge.data) {
       toast.error("Unable to start 2FA challenge");
       mfaResolveRef.current?.(false);
       mfaResolveRef.current = null;
+      adoptEnrollment(null);
       setMfaRequired(false);
       return false;
     }
 
     const verified = await supabase.auth.mfa.verify({
-      factorId: totp.id,
+      factorId,
       challengeId: challenge.data.id,
       code,
     });
@@ -352,17 +467,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase.auth.getSession();
     setAccessToken(data.session?.access_token ?? null);
     setSession(data.session);
+    setMfaEnrolled(true);
+    adoptEnrollment(null);
     mfaResolveRef.current?.(true);
     mfaResolveRef.current = null;
     setMfaRequired(false);
     return true;
-  }, []);
+  }, [adoptEnrollment]);
 
   const clearMfa = useCallback(() => {
+    const pending = mfaEnrollmentRef.current;
     mfaResolveRef.current?.(false);
     mfaResolveRef.current = null;
+    adoptEnrollment(null);
     setMfaRequired(false);
-  }, []);
+    if (pending) {
+      void getSupabase()
+        .auth.mfa.unenroll({ factorId: pending.factorId })
+        .catch((err) => authLog("discard cancelled enrolment failed", err));
+    }
+  }, [adoptEnrollment]);
+
+  const unenrollMfa = useCallback(async () => {
+    const ok = await ensureAal2();
+    if (!ok) return false;
+    const supabase = getSupabase();
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const totp = verifiedTotp(factors);
+    if (!totp) {
+      setMfaEnrolled(false);
+      return true;
+    }
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: totp.id });
+    if (error) {
+      toast.error("Couldn't remove two-factor authentication", {
+        description: error.message,
+      });
+      return false;
+    }
+    const { data } = await supabase.auth.getSession();
+    setAccessToken(data.session?.access_token ?? null);
+    setSession(data.session);
+    setMfaEnrolled(false);
+    toast.success("Two-factor authentication removed");
+    return true;
+  }, [ensureAal2]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     authLog("signIn: signInWithPassword");
@@ -464,6 +613,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setSession(null);
     setUser(null);
+    setMfaEnrolled(false);
     setStatus("unauthenticated");
     queryClient.clear();
 
@@ -509,8 +659,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       resetPassword,
       updateProfile,
+      ensureAal2,
+      unenrollMfa,
+      refreshMfaStatus,
       verifyMfa,
       mfaRequired,
+      mfaMode,
+      mfaEnrollment,
+      mfaEnrolled,
       clearMfa,
     }),
     [
@@ -525,8 +681,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       resetPassword,
       updateProfile,
+      ensureAal2,
+      unenrollMfa,
+      refreshMfaStatus,
       verifyMfa,
       mfaRequired,
+      mfaMode,
+      mfaEnrollment,
+      mfaEnrolled,
       clearMfa,
     ],
   );

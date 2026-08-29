@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "gen:api": "openapi-typescript openapi.json -o src/lib/api/schema.d.ts",
-    "test": "node --experimental-strip-types --test src/lib/*.test.ts src/lib/api/*.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts src/lib/api/*.test.ts src/lib/auth/*.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

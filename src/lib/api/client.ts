@@ -30,7 +30,7 @@ export type ApiResult<T> = {
 
 let mfaHandler: ((error: ApiError) => Promise<boolean>) | null = null;
 
-/** Register a handler that challenges TOTP and returns true if the caller should retry. */
+/** Register a handler that enrols or challenges TOTP and returns true if the caller should retry. */
 export function setMfaHandler(handler: ((error: ApiError) => Promise<boolean>) | null) {
   mfaHandler = handler;
 }

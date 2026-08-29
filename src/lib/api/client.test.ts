@@ -51,6 +51,25 @@ describe("parseProblemDetails", () => {
   });
 });
 
+describe("ApiError MFA flags", () => {
+  it("treats 403 MFA_REQUIRED as a step-up, not a forbidden", () => {
+    const err = new ApiError({ status: 403, code: "MFA_REQUIRED", title: "MFA required" });
+    assert.equal(err.isMfaRequired, true);
+    assert.equal(err.isMfaUnavailable, false);
+    assert.equal(err.isForbidden, false);
+  });
+
+  it("treats 503 MFA_UNAVAILABLE as transient", () => {
+    const err = new ApiError({
+      status: 503,
+      code: "MFA_UNAVAILABLE",
+      title: "MFA unavailable",
+    });
+    assert.equal(err.isMfaUnavailable, true);
+    assert.equal(err.isMfaRequired, false);
+  });
+});
+
 describe("toFormErrors", () => {
   it("maps field errors for react-hook-form", () => {
     const err = new ApiError({
