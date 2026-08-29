@@ -41,6 +41,7 @@ import type {
 import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { canManageSaasBilling } from "@/lib/permissions";
+import { useAuth } from "@/lib/auth/auth-store";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +132,7 @@ function accessCopy(sub: BusinessSubscription | null | undefined): string {
 
 export function BillingPage() {
   const tenant = useTenant();
+  const { ensureAal2 } = useAuth();
   const subscription = useSubscription();
   const catalogue = useBillingCatalogue();
   const checkout = useStartCheckout();
@@ -171,6 +173,8 @@ export function BillingPage() {
   );
 
   const startCheckout = async (p: PublicCataloguePlan) => {
+    const steppedUp = await ensureAal2();
+    if (!steppedUp) return;
     const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
     const result = await checkout.mutateAsync({
       plan: p.code,
@@ -181,6 +185,8 @@ export function BillingPage() {
   };
 
   const openPortal = async () => {
+    const steppedUp = await ensureAal2();
+    if (!steppedUp) return;
     const result = await portal.mutateAsync();
     const url = result.portalUrl ?? result.url;
     if (url) window.location.assign(url);

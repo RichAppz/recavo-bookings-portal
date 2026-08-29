@@ -49,7 +49,7 @@ export function CreateFirstBusiness() {
     onSuccess: async () => {
       toast.success("Business created");
       await queryClient.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
-      await navigate({ to: "/billing" });
+      await navigate({ to: "/billing/setup" });
     },
     onError: (err) => toastApiError(err),
   });

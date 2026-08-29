@@ -51,6 +51,10 @@ export class ApiError extends Error {
     return this.status === 403 && this.code === "MFA_REQUIRED";
   }
 
+  get isMfaUnavailable() {
+    return this.status === 503 && this.code === "MFA_UNAVAILABLE";
+  }
+
   get isUnauthenticated() {
     return this.status === 401 || this.code === "UNAUTHENTICATED";
   }
@@ -114,6 +118,13 @@ export function applyFormErrors(
 
 export function toastApiError(error: unknown, fallback = "Something went wrong") {
   if (error instanceof ApiError) {
+    if (error.isMfaRequired) return;
+    if (error.isMfaUnavailable) {
+      toast.error("Two-factor authentication is temporarily unavailable", {
+        description: "Please try again shortly.",
+      });
+      return;
+    }
     const description = [error.detail, error.requestId ? `Ref: ${error.requestId}` : null]
       .filter(Boolean)
       .join(" · ");

@@ -56,8 +56,8 @@ import {
   useSubscription,
 } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
-import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
-import { PERMISSIONS } from "@/lib/permissions";
+import { isBillingBlocked, isBillingPath, isTotpSetupPath } from "@/lib/billing/access";
+import { canManageSaasBilling, PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
@@ -130,7 +130,7 @@ const NAV: Array<{
 
 export function AppShell({ children }: { children: ReactNode }) {
   const tenant = useTenant();
-  const { user, signOut } = useAuth();
+  const { user, signOut, mfaEnrolled, mfaStatusReady } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -150,7 +150,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
   const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
+  const onTotpSetup = isTotpSetupPath(pathname);
   const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
+  const canManageBilling = canManageSaasBilling({
+    can: tenant.can,
+    roleKeys: tenant.roleKeys,
+    blocked: billingLocked,
+  });
+  const needsTotpSetup = billingLocked && canManageBilling && !mfaEnrolled;
 
   if (subscription.isLoading) {
     return (
@@ -158,6 +165,22 @@ export function AppShell({ children }: { children: ReactNode }) {
         <p className="text-sm text-muted-foreground">Checking subscription…</p>
       </div>
     );
+  }
+
+  if (billingLocked && canManageBilling && !mfaStatusReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking two-factor status…</p>
+      </div>
+    );
+  }
+
+  if (needsTotpSetup && !onTotpSetup) {
+    return <Navigate to="/billing/setup" replace />;
+  }
+
+  if (!needsTotpSetup && onTotpSetup) {
+    return <Navigate to="/billing" replace />;
   }
 
   if (billingLocked && !onBilling && !onPlatform) {
