@@ -18,6 +18,7 @@ import { AppShell } from "@/components/AppShell";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
+import { StatsGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -273,11 +274,7 @@ function ReportsPage() {
             }
           />
         ) : dashboard.isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className="surface-card h-[124px] animate-pulse" />
-            ))}
-          </div>
+          <StatsGhost />
         ) : dashboard.isError || !dashboard.data ? (
           <EmptyState title="Couldn't load reports" description="Please try again shortly." />
         ) : (

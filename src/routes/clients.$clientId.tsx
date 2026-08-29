@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { FileAttachments } from "@/components/FileAttachments";
@@ -125,7 +126,7 @@ function ClientProfile() {
   const anonymise = useAnonymiseCustomer(clientId);
 
   if (customer.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading client…</p>;
+    return <DetailGhost />;
   }
 
   if (customer.isError || !customer.data) {
@@ -258,7 +259,7 @@ function ClientProfile() {
         <TabsContent value="upcoming" className="mt-4">
           <SectionCard bodyClassName="p-0">
             {bookings.isLoading ? (
-              <p className="p-6 text-sm text-muted-foreground">Loading bookings…</p>
+              <TableGhost rows={5} />
             ) : upcoming.length === 0 ? (
               <div className="p-6">
                 <EmptyState
@@ -302,7 +303,7 @@ function ClientProfile() {
         <TabsContent value="packages" className="mt-4 space-y-6">
           <SectionCard title="Packages and credits" bodyClassName="p-0">
             {credits.isLoading ? (
-              <p className="p-6 text-sm text-muted-foreground">Loading credits…</p>
+              <TableGhost rows={4} />
             ) : credits.isError ? (
               <div className="p-6">
                 <EmptyState title="Couldn't load credits" description="Please try again shortly." />
@@ -335,7 +336,7 @@ function ClientProfile() {
         <TabsContent value="payments" className="mt-4">
           <SectionCard bodyClassName="p-0">
             {payments.isLoading ? (
-              <p className="p-6 text-sm text-muted-foreground">Loading payments…</p>
+              <TableGhost rows={5} />
             ) : (payments.payments ?? []).length === 0 ? (
               <div className="p-6">
                 <EmptyState title="No payments recorded" />
@@ -803,7 +804,9 @@ function CustomerConsentsTab({ customerId, disabled }: { customerId: string; dis
         </div>
       </Can>
       {consents.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading consents…</p>
+        <div className="surface-card overflow-hidden">
+          <TableGhost rows={3} />
+        </div>
       ) : (consents.data ?? []).length === 0 ? (
         <EmptyState title="No consents recorded" />
       ) : (
@@ -971,7 +974,9 @@ function CustomerLinkedRecordsTab({
         </div>
       </Can>
       {records.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading linked records…</p>
+        <div className="surface-card overflow-hidden">
+          <TableGhost rows={3} />
+        </div>
       ) : (records.data ?? []).length === 0 ? (
         <EmptyState
           title="No linked records"
@@ -1139,7 +1144,9 @@ function EntitlementRow({
             </li>
           ))}
           {ledger.isLoading ? (
-            <li className="text-xs text-muted-foreground">Loading ledger…</li>
+            <li className="px-0 py-2">
+              <TableGhost rows={3} />
+            </li>
           ) : null}
           {!ledger.isLoading && (ledger.data?.entries ?? []).length === 0 ? (
             <li className="text-xs text-muted-foreground">No ledger activity yet.</li>

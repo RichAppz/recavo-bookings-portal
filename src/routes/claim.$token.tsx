@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
 import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
+import { AuthChromeGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useRedeemPurchaseClaim } from "@/lib/api/hooks";
@@ -105,14 +105,7 @@ function ClaimPage() {
   const redeeming = status === "authenticated" && (redeem.isPending || redeem.isSuccess);
 
   if (redeeming || !authSettled) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          {redeeming ? "Setting up your sessions…" : "One moment…"}
-        </div>
-      </div>
-    );
+    return <AuthChromeGhost />;
   }
 
   if (problem) {

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BookingFlow } from "@/components/BookingFlow";
+import { PageGhost } from "@/components/ghost";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBusiness } from "@/lib/api/hooks";
 
@@ -45,8 +46,13 @@ function SlugBookingPage() {
 
 function ResolvingPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <p className="text-sm text-muted-foreground">Loading…</p>
+    <main className="min-h-screen bg-background">
+      <header className="flex h-16 items-center border-b px-4 sm:px-6">
+        <Wordmark />
+      </header>
+      <div className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+        <PageGhost />
+      </div>
     </main>
   );
 }

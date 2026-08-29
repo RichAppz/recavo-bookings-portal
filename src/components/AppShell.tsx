@@ -50,6 +50,7 @@ import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
+import { PageGhost } from "@/components/ghost";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import {
   useCustomers,
@@ -177,8 +178,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (noStaffBusiness) {
     if (!portalLink.isFetched || portalBusinesses.isLoading) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <p className="text-sm text-muted-foreground">Loading your account…</p>
+        <div className="min-h-screen bg-background">
+          <header className="flex h-16 items-center border-b px-4 sm:px-6">
+            <Wordmark />
+          </header>
+          <main className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+            <PageGhost />
+          </main>
         </div>
       );
     }
@@ -198,33 +204,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <CreateFirstBusiness />;
   }
 
-  if (subscription.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Checking subscription…</p>
-      </div>
-    );
-  }
+  const accessPending =
+    tenant.isLoading ||
+    (Boolean(tenant.businessId) && subscription.isLoading) ||
+    (billingLocked && canManageBilling && !mfaStatusReady);
 
-  if (billingLocked && canManageBilling && !mfaStatusReady) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Checking two-factor status…</p>
-      </div>
-    );
-  }
-
-  if (needsTotpSetup && !onTotpSetup) {
+  if (!accessPending && needsTotpSetup && !onTotpSetup) {
     return <Navigate to="/billing/setup" replace />;
   }
 
-  if (!needsTotpSetup && onTotpSetup) {
+  if (!accessPending && !needsTotpSetup && onTotpSetup) {
     return <Navigate to="/billing" replace />;
   }
 
-  if (billingLocked && !onBilling && !onPlatform) {
+  if (!accessPending && billingLocked && !onBilling && !onPlatform) {
     return <Navigate to="/billing" replace />;
   }
+
+  const page = accessPending ? <PageGhost /> : children;
 
   if (billingLocked && onBilling) {
     return (
@@ -235,7 +232,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LogOut className="size-4" /> Sign out
           </Button>
         </header>
-        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{page}</main>
       </div>
     );
   }
@@ -269,30 +266,34 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3">
-          {NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
-            const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-            const label = navLabel(item.to, item.label, tenant.terminology);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                )}
-              >
-                <item.icon className={cn("size-4.5", active && "text-sidebar-primary")} />
-                {label}
-                {item.label === "Messages" && unread > 0 ? (
-                  <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
-                    {unread}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
+          {tenant.isLoading
+            ? Array.from({ length: 8 }, (_, i) => (
+                <div key={i} className="h-10 animate-pulse rounded-xl bg-sidebar-accent/70" />
+              ))
+            : NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
+                const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+                const label = navLabel(item.to, item.label, tenant.terminology);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    )}
+                  >
+                    <item.icon className={cn("size-4.5", active && "text-sidebar-primary")} />
+                    {label}
+                    {item.label === "Messages" && unread > 0 ? (
+                      <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
+                        {unread}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
         </nav>
 
         <div className="space-y-1 border-t border-sidebar-border p-3">
@@ -515,8 +516,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
-          <BillingBanner />
-          {children}
+          {accessPending ? null : <BillingBanner />}
+          {page}
         </main>
       </div>
 

@@ -400,7 +400,11 @@ export function AddBookingModal({
                 Choose a service and location to see availability.
               </p>
             ) : availability.isLoading ? (
-              <p className="text-xs text-muted-foreground">Loading availability…</p>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
+                ))}
+              </div>
             ) : slots.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 No availability on this date. Try another day.

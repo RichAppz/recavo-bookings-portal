@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Check, Megaphone, Send } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, PersonAvatar, SectionCard } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -125,7 +126,7 @@ function MessagesPage() {
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <SectionCard title="Inbox" bodyClassName="p-0">
           {conversations.isLoading ? (
-            <p className="p-5 text-sm text-muted-foreground">Loading conversations…</p>
+            <TableGhost rows={6} />
           ) : conversations.isError ? (
             <div className="p-5">
               <EmptyState title="Couldn't load messages" />
@@ -303,7 +304,9 @@ function AnnouncementDialog({ open, onClose }: { open: boolean; onClose: () => v
             </label>
             <ul className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
               {customers.isLoading ? (
-                <li className="text-sm text-muted-foreground">Loading clients…</li>
+                <li>
+                  <TableGhost rows={4} />
+                </li>
               ) : clientList.length === 0 ? (
                 <li className="text-sm text-muted-foreground">No clients yet</li>
               ) : (

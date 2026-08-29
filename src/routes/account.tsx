@@ -5,6 +5,7 @@ import { AccountShell, type AccountView } from "@/components/AccountShell";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
 import { Button } from "@/components/ui/button";
 import { EmptyState, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
 import {
@@ -248,7 +249,7 @@ function Overview({
           bodyClassName="p-0 sm:p-0"
         >
           {loading && upcoming.length === 0 ? (
-            <p className="p-5 text-sm text-muted-foreground">Loading your sessions…</p>
+            <TableGhost rows={4} />
           ) : upcoming.length === 0 ? (
             <div className="p-5">
               <EmptyState
