@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
 import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
+import { AuthChromeGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,11 +62,7 @@ function LoginPage() {
   }, [status, redirect, navigate]);
 
   if (customer === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <AuthChromeGhost />;
   }
   return customer ? <CustomerLogin /> : <StaffLogin />;
 }

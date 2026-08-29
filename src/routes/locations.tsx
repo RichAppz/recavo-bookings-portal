@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Building2, MapPin, Pencil, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import { CardsGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -209,7 +210,7 @@ function LocationsPage() {
       </div>
 
       {tenant.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading locations…</p>
+        <CardsGhost count={2} className="h-[240px]" />
       ) : locations.length === 0 ? (
         <EmptyState
           title="No locations yet"

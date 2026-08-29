@@ -42,6 +42,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import {
   useAvailability,
   useBooking,
@@ -175,7 +176,9 @@ export function BookingPanel({
       <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
         <header className="flex items-start justify-between gap-3 border-b p-5">
           {bookingQuery.isLoading || !booking ? (
-            <p className="text-sm text-muted-foreground">Loading booking…</p>
+            <div className="w-full">
+              <TableGhost rows={3} />
+            </div>
           ) : (
             <div>
               <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
@@ -314,7 +317,7 @@ export function BookingPanel({
 
                 <TabsContent value="history">
                   {history.isLoading ? (
-                    <p className="text-xs text-muted-foreground">Loading history…</p>
+                    <TableGhost rows={4} />
                   ) : history.isError ? (
                     <p className="text-xs text-destructive">Couldn't load booking history.</p>
                   ) : historyEntries.length === 0 ? (
@@ -356,7 +359,7 @@ export function BookingPanel({
                   )}
 
                   {payments.isLoading ? (
-                    <p className="text-xs text-muted-foreground">Loading payments…</p>
+                    <TableGhost rows={3} />
                   ) : payments.isError ? (
                     <p className="text-xs text-destructive">Couldn't load payments.</p>
                   ) : (payments.data ?? []).length === 0 ? (
@@ -716,7 +719,11 @@ function RescheduleDialog({
           <div className="grid gap-2">
             <Label>Available times</Label>
             {availability.isLoading ? (
-              <p className="text-xs text-muted-foreground">Loading availability…</p>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
+                ))}
+              </div>
             ) : availability.isError ? (
               <p className="text-xs text-destructive">Couldn't load availability.</p>
             ) : slots.length === 0 ? (

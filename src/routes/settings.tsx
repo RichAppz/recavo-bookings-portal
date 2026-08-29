@@ -5,6 +5,7 @@ import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { StatsGhost, TableGhost } from "@/components/ghost";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,7 +210,12 @@ function SettingsPage() {
         description={`Configure how RECAVO works for ${business?.tradingName ?? "your business"}.`}
       />
       {tenant.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading settings…</p>
+        <div className="space-y-6">
+          <StatsGhost />
+          <div className="surface-card overflow-hidden">
+            <TableGhost />
+          </div>
+        </div>
       ) : !business ? (
         <EmptyState title="Couldn't load your business" description="Please try again shortly." />
       ) : (
@@ -424,8 +430,8 @@ function TwoFactorCard() {
       ) : (
         <div className="grid gap-4">
           <p className="text-sm text-muted-foreground">
-            Add Google Authenticator, 1Password, or Authy so checkout and other privileged
-            actions require a code.
+            Add Google Authenticator, 1Password, or Authy. You can require a code for privileged
+            actions once this is on.
           </p>
           <Button
             className="w-fit"
@@ -848,7 +854,7 @@ function TeamTab() {
     <div className="grid gap-5 xl:grid-cols-2">
       <SectionCard title="Memberships">
         {memberships.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <TableGhost rows={4} />
         ) : (memberships.data ?? []).length === 0 ? (
           <EmptyState title="No memberships" />
         ) : (

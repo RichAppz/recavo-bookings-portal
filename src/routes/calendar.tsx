@@ -207,6 +207,8 @@ function CalendarPage() {
         <div className="surface-card p-6 text-sm text-destructive">
           Couldn't load bookings for this range.
         </div>
+      ) : bookings.isLoading ? (
+        <div className="surface-card min-h-[480px] animate-pulse" />
       ) : view === "month" ? (
         <div className="surface-card overflow-hidden">
           <div className="grid grid-cols-7 border-b bg-secondary/50 text-center text-[11px] font-medium tracking-wide text-muted-foreground uppercase">

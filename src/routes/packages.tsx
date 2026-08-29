@@ -4,6 +4,7 @@ import { Pencil, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -118,7 +119,7 @@ function PackagesPage() {
 
       <SectionCard title="Package types" bodyClassName="p-0">
         {packages.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading packages…</p>
+          <TableGhost rows={4} />
         ) : packages.isError ? (
           <div className="p-6">
             <EmptyState

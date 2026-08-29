@@ -33,6 +33,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
+import { DetailGhost, TableGhost } from "@/components/ghost";
 import { Wordmark } from "@/components/Wordmark";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -153,7 +154,7 @@ function PortalContent({ businessId }: { businessId: string }) {
   return (
     <>
       {me.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading your account…</p>
+        <DetailGhost />
       ) : me.isError ? (
         <EmptyState
           title="Couldn't load your account"
@@ -188,7 +189,9 @@ function PortalContent({ businessId }: { businessId: string }) {
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Upcoming sessions</h2>
             {bookings.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading your sessions…</p>
+              <div className="surface-card overflow-hidden">
+                <TableGhost rows={4} />
+              </div>
             ) : bookings.isError ? (
               <EmptyState
                 title="Couldn't load your bookings"
@@ -613,7 +616,11 @@ function BookWithCreditDialog({
                 </div>
 
                 {availability.isLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading available times…</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: 6 }, (_, i) => (
+                      <div key={i} className="h-10 animate-pulse rounded-md bg-primary/10" />
+                    ))}
+                  </div>
                 ) : slots.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No availability on this date.</p>
                 ) : (
@@ -682,7 +689,7 @@ function BookingDetailDialog({
           <DialogTitle>{booking?.serviceSnapshot.name ?? "Booking details"}</DialogTitle>
         </DialogHeader>
         {detail.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <TableGhost rows={4} />
         ) : detail.isError || !booking ? (
           <EmptyState title="Couldn't load this booking" description="Please try again shortly." />
         ) : (
@@ -770,7 +777,7 @@ function MessagesPanel({ businessId }: { businessId: string }) {
       </div>
 
       {messages.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading messages…</p>
+        <TableGhost rows={5} />
       ) : messages.isError ? (
         <EmptyState title="Couldn't load messages" description="Please try again shortly." />
       ) : sorted.length === 0 ? (
@@ -841,7 +848,7 @@ function PaymentsPanel({ businessId }: { businessId: string }) {
         <Receipt className="size-4" /> Payments
       </div>
       {payments.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading payments…</p>
+        <TableGhost rows={4} />
       ) : payments.isError ? (
         <EmptyState title="Couldn't load payments" description="Please try again shortly." />
       ) : sorted.length === 0 ? (
@@ -886,7 +893,7 @@ function NotesPanel({ businessId }: { businessId: string }) {
           <FileText className="size-4" /> Notes from your studio
         </div>
         {notes.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading notes…</p>
+          <TableGhost rows={3} />
         ) : (
           <EmptyState title="No notes yet" description="Notes shared with you will appear here." />
         )}
@@ -919,7 +926,7 @@ function LinkedRecordsPanel({ businessId }: { businessId: string }) {
     <div className="surface-card p-5">
       <div className="mb-3 text-sm font-semibold">Your records</div>
       {records.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <TableGhost rows={3} />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {records.data!.map((r) => (
@@ -1017,7 +1024,11 @@ function RescheduleDialog({
         </div>
 
         {availability.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading available times…</p>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded-md bg-primary/10" />
+            ))}
+          </div>
         ) : slots.length === 0 ? (
           <p className="text-sm text-muted-foreground">No availability on this date.</p>
         ) : (

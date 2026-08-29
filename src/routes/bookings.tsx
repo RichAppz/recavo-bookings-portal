@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -168,7 +169,7 @@ function BookingsPage() {
 
       <div className="surface-card overflow-hidden">
         {bookings.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading bookings…</p>
+          <TableGhost />
         ) : bookings.isError ? (
           <div className="p-6">
             <EmptyState

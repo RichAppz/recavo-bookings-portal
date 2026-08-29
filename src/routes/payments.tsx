@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -153,7 +154,7 @@ function PaymentsPage() {
           }
         >
           {connect.isLoading ? (
-            <p className="text-sm text-muted-foreground">Checking payout account…</p>
+            <TableGhost rows={3} />
           ) : connect.isError || !connect.data ? (
             <EmptyState
               icon={<CreditCard className="size-6" />}
@@ -261,7 +262,7 @@ function PaymentsPage() {
         }
       >
         {payments.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading payments…</p>
+          <TableGhost />
         ) : payments.isError ? (
           <div className="p-6">
             <EmptyState title="Couldn't load payments" description="Please try again shortly." />
@@ -462,7 +463,7 @@ function ReceiptDialog({ paymentId, onClose }: { paymentId: string | null; onClo
           <DialogTitle>Payment receipt</DialogTitle>
         </DialogHeader>
         {receipt.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading receipt…</p>
+          <TableGhost rows={4} />
         ) : receipt.isError || !receipt.data ? (
           <EmptyState title="Couldn't load receipt" />
         ) : (

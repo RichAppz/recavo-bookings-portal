@@ -4,6 +4,7 @@ import { Search, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -98,7 +99,7 @@ function ClientsPage() {
         </div>
 
         {customers.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading clients…</p>
+          <TableGhost />
         ) : customers.isError ? (
           <div className="p-6">
             <EmptyState title="Couldn't load clients" description="Please try again shortly." />
