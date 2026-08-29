@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
+import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -55,7 +56,6 @@ import {
   useSeedPolicyDefaults,
   useUpdateBusiness,
   useUpdateConfiguration,
-  useUpdateMe,
   useUpdateMembership,
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
@@ -319,53 +319,19 @@ function Field({
 
 function AccountProfileTab() {
   const { user } = useAuth();
-  const updateMe = useUpdateMe();
-  const [firstName, setFirstName] = useState(user?.firstName ?? "");
-  const [lastName, setLastName] = useState(user?.lastName ?? "");
-
-  useEffect(() => {
-    setFirstName(user?.firstName ?? "");
-    setLastName(user?.lastName ?? "");
-  }, [user?.firstName, user?.lastName]);
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Your profile">
-        <div className="grid gap-4">
-          <Field
-            label="Email"
-            value={user?.email ?? ""}
-            onChange={() => undefined}
-            type="email"
-            disabled
-            hint="Email can’t be changed here."
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="First name" value={firstName} onChange={setFirstName} />
-            <Field label="Last name" value={lastName} onChange={setLastName} />
-          </div>
-          <Button
-            className="w-fit"
-            disabled={updateMe.isPending}
-            onClick={async () => {
-              try {
-                await updateMe.mutateAsync({
-                  firstName: firstName.trim() || null,
-                  lastName: lastName.trim() || null,
-                });
-                toast.success("Profile updated");
-              } catch (err) {
-                if (!(err instanceof ApiError)) toastApiError(err);
-              }
-            }}
-          >
-            {updateMe.isPending ? "Saving…" : "Save profile"}
-          </Button>
-        </div>
+      <SectionCard
+        title="Your profile"
+        description="Your own account, not this business's settings."
+      >
+        <AccountProfileForm />
       </SectionCard>
       <SectionCard title="How your name appears">
         <p className="text-sm text-muted-foreground">
-          Teammates see this on the Team list. Only you can edit your own name.
+          Teammates see this on the Team list. Only you can edit your own name. The name clients see
+          when they book with you is set separately, on your staff record.
         </p>
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}

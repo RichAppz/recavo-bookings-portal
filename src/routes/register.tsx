@@ -30,8 +30,7 @@ export const Route = createFileRoute("/register")({
 function RegisterPage() {
   const { signUp, signInWithGoogle, status } = useAuth();
   const navigate = useNavigate();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [name, setName] = useState("");
   const [business, setBusiness] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,8 +47,7 @@ function RegisterPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      const first = firstName.trim();
-      const last = lastName.trim();
+      const trimmedName = name.trim();
       // Carry business + name into post-auth onboarding: the Supabase account is
       // created now; PATCH /me and CreateFirstBusiness run once authenticated.
       if (business.trim()) {
@@ -58,13 +56,11 @@ function RegisterPage() {
           industryTemplateKey: DEFAULT_INDUSTRY,
         });
       }
-      if (first || last) {
-        stashPendingProfile({ firstName: first, lastName: last });
+      if (trimmedName) {
+        stashPendingProfile({ name: trimmedName });
       }
       await signUp(email, password, {
-        first_name: first || undefined,
-        last_name: last || undefined,
-        full_name: [first, last].filter(Boolean).join(" ") || undefined,
+        full_name: trimmedName || undefined,
       });
       toast.success("Account created", {
         description: "Check your email to verify if prompted.",
@@ -108,31 +104,17 @@ function RegisterPage() {
       <AuthDivider />
 
       <form onSubmit={submit} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="first-name">First name</Label>
-            <div className="relative">
-              <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="first-name"
-                autoComplete="given-name"
-                placeholder="Alex"
-                className="h-11 rounded-xl pl-9"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="last-name">Last name</Label>
+        <div className="space-y-2">
+          <Label htmlFor="name">Your name</Label>
+          <div className="relative">
+            <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              id="last-name"
-              autoComplete="family-name"
-              placeholder="Morgan"
-              className="h-11 rounded-xl"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
+              id="name"
+              autoComplete="name"
+              placeholder="Alex Morgan"
+              className="h-11 rounded-xl pl-9"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
           </div>

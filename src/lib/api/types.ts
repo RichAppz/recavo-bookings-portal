@@ -3,7 +3,6 @@ import type { components } from "./schema";
 export type schemas = components["schemas"];
 
 export type User = schemas["User"];
-export type UserSummary = schemas["UserSummary"];
 export type Business = schemas["Business"];
 export type BusinessSummary = schemas["BusinessSummary"];
 export type BusinessConfiguration = schemas["BusinessConfiguration"];
@@ -152,12 +151,35 @@ export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">)
   return [c.firstName, c.lastName].filter(Boolean).join(" ");
 }
 
-/** Account / membership name; falls back to email when names are empty. */
+/** The account name and email, as embedded on a membership row or held on the session. */
+export type AccountIdentity = {
+  name?: string | null;
+  email?: string | null;
+};
+
+/**
+ * `GET …/memberships` still embeds the account behind each membership so the
+ * Team list can show a name rather than a uuid. The OpenAPI contract stopped
+ * modelling that embed, so it is declared optional here and every reader must
+ * cope with it being absent.
+ */
+export type MembershipWithUser = Membership & {
+  user?: (AccountIdentity & { id: string }) | null;
+};
+
+/** Editable fields on `PATCH /api/v1/me`. `displayName` is a deprecated alias and unused here. */
+export type UserProfileUpdate = {
+  name?: string | null;
+  phone?: string | null;
+  locale?: string | null;
+  timezone?: string | null;
+};
+
+/** Account / membership name; falls back to email when the name is unset. */
 export function userDisplayName(
-  user: Pick<UserSummary, "firstName" | "lastName" | "email"> | null | undefined,
+  user: AccountIdentity | null | undefined,
   fallback = "Signed in",
 ): string {
   if (!user) return fallback;
-  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
-  return name || user.email || fallback;
+  return user.name?.trim() || user.email || fallback;
 }
