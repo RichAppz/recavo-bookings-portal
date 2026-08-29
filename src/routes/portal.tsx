@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { z } from "zod";
 import {
   CalendarClock,
@@ -160,16 +160,17 @@ function PortalContent({ businessId }: { businessId: string }) {
           description="Please sign in again or contact the studio."
         />
       ) : me.data ? (
-        <div className="surface-card flex items-center gap-4 p-5">
+        <div className="surface-card flex flex-wrap items-center gap-4 p-5">
           <PersonAvatar name={`${me.data.firstName} ${me.data.lastName ?? ""}`} size={56} />
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-semibold">
               {me.data.firstName} {me.data.lastName}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="truncate text-sm text-muted-foreground">
               {me.data.emailDisplay ?? me.data.phoneDisplay ?? ""}
             </p>
           </div>
+          <BookMoreButton businessId={businessId} />
         </div>
       ) : null}
 
@@ -197,6 +198,7 @@ function PortalContent({ businessId }: { businessId: string }) {
               <EmptyState
                 title="No upcoming sessions"
                 description="Book your next session with your studio."
+                action={<BookMoreButton businessId={businessId} />}
               />
             ) : (
               <ul className="space-y-3">
@@ -358,6 +360,24 @@ function PortalContent({ businessId }: { businessId: string }) {
   );
 }
 
+/**
+ * Sends the customer into the public booking flow for their studio.
+ *
+ * A link out rather than another dialog in here: that flow already handles
+ * choosing a service, paying, and buying a package, and it is the same page the
+ * studio's own booking link points at. Duplicating it in the portal would mean
+ * two checkouts to keep in step.
+ */
+function BookMoreButton({ businessId }: { businessId: string }) {
+  return (
+    <Button asChild>
+      <Link to="/book" search={{ businessId }}>
+        <CalendarClock className="size-4" /> Book a session
+      </Link>
+    </Button>
+  );
+}
+
 /** Credits with sessions left on them that haven't lapsed — the only ones worth showing. */
 function usableCredits(credits: PortalCredit[] | undefined): PortalCredit[] {
   const now = Date.now();
@@ -400,8 +420,11 @@ function CreditsPanel({ businessId, onBook }: { businessId: string; onBook: () =
                 )}.`}
           </p>
         </div>
+        {/* Says "with a credit" because the header offers plain "Book a session"
+            and that one charges. Two buttons reading the same on one screen, one
+            spending what you already paid for, is a bill nobody meant to run up. */}
         <Button size="sm" onClick={onBook}>
-          <CalendarClock className="size-4" /> Book a session
+          <CalendarClock className="size-4" /> Book with a credit
         </Button>
       </div>
 

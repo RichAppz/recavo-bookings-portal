@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "recavo-holding",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-28",
+  // Claims the production hostnames so they resolve to a holding page rather
+  // than to the app running on staging's database. Cloudflare creates the DNS
+  // records itself for a custom_domain route.
+  "routes": [
+    { "pattern": "dashboard.recavo.app", "custom_domain": true },
+    { "pattern": "book.recavo.app", "custom_domain": true }
+  ],
+  "observability": { "enabled": true }
+}

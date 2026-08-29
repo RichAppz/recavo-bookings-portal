@@ -16,15 +16,15 @@ const STATS = [
 ];
 
 /** RECAVO wordmark using the brand logo asset; text colour adapts to the panel. */
-function BrandMark({ tone }: { tone: "light" | "dark" }) {
+export function BrandMark({ tone }: { tone: "light" | "dark" }) {
   return (
     <span className="flex items-center gap-2.5">
-      <img src="/recavo-logo.jpg" alt="RECAVO" className="size-10 rounded-lg object-cover" />
+      <img src="/recavo-logo.jpg" alt="RECAVO" className="size-10 rounded-[22%] object-cover" />
       <span
         className={
           tone === "dark"
-            ? "text-[19px] font-semibold tracking-tight text-sidebar-foreground"
-            : "text-[19px] font-semibold tracking-tight text-foreground"
+            ? "text-[19px] font-extrabold tracking-tight text-sidebar-foreground"
+            : "text-[19px] font-extrabold tracking-tight text-foreground"
         }
       >
         RECAVO

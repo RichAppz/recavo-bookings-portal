@@ -1,11 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
+import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
+import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { useRedeemPurchaseClaim } from "@/lib/api/hooks";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -57,22 +56,18 @@ function claimProblem(error: unknown): { title: string; detail: string } {
 /**
  * Lands a public buyer in the portal with the credits they just paid for.
  *
- * They bought without an account, so this page has to cover the whole gap: get
- * them authenticated however they like, then spend the one-time token from the
- * purchase to link that account to the customer record the sale created.
+ * They bought without an account, so this page has to cover the whole gap:
+ * prove they own the address they checked out with, then spend the one-time
+ * token from the purchase to link that account to the customer record the sale
+ * created. An emailed code does both at once, which is why there is no password
+ * here — this is the worst possible moment to ask someone to invent one.
  */
 function ClaimPage() {
   const { token } = Route.useParams();
-  const { status, signIn, signUp, signInWithGoogle } = useAuth();
+  const { status } = useAuth();
   const navigate = useNavigate();
   const redeem = useRedeemPurchaseClaim();
 
-  const [mode, setMode] = useState<"signup" | "signin">("signup");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [checkInbox, setCheckInbox] = useState(false);
   const [problem, setProblem] = useState<{ title: string; detail: string } | null>(null);
   const [authSettled, setAuthSettled] = useState(false);
   // Redeeming twice is harmless server-side, but re-running on every auth render
@@ -97,37 +92,13 @@ function ClaimPage() {
     if (status !== "authenticated" || attempted.current) return;
     attempted.current = true;
     redeem.mutate(token, {
-      onSuccess: ({ businessId }) => {
+      onSuccess: () => {
         toast.success("You're all set", { description: "Your sessions are ready to book." });
-        void navigate({ to: "/portal", search: { businessId } });
+        void navigate({ to: "/account" });
       },
       onError: (error) => setProblem(claimProblem(error)),
     });
   }, [status, token, redeem, navigate]);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setProblem(null);
-    try {
-      if (mode === "signup") {
-        // Send the confirmation back to this page rather than the app root, so
-        // the token survives the round trip and the buyer lands on their
-        // sessions instead of the staff app.
-        await signUp(email, password, undefined, window.location.href);
-        // Supabase either signs them straight in — the effect above then takes
-        // over — or waits on a confirmation email, which we cannot tell apart
-        // from here. The link keeps working either way, so say so.
-        setCheckInbox(true);
-      } else {
-        await signIn(email, password);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "That didn't work");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   // `isSuccess` keeps the spinner up while the redirect to the portal happens, so
   // the form never flashes behind a completed claim.
@@ -146,13 +117,12 @@ function ClaimPage() {
 
   if (problem) {
     return (
-      <AuthShell
-        eyebrow="Your sessions"
+      <CustomerAuthLayout
         title={problem.title}
         subtitle={problem.detail}
         footer={
           <span>
-            Already have an account?{" "}
+            Already signed up?{" "}
             <Link to="/login" className="font-medium text-primary hover:underline">
               Sign in
             </Link>
@@ -162,133 +132,19 @@ function ClaimPage() {
         <Button size="lg" className="h-11 w-full rounded-xl" onClick={() => navigate({ to: "/" })}>
           Back to RECAVO
         </Button>
-      </AuthShell>
-    );
-  }
-
-  if (checkInbox) {
-    return (
-      <AuthShell
-        eyebrow="Almost there"
-        title="Check your inbox"
-        subtitle={`We've sent a confirmation to ${email}. Open it, then come back to this link to finish setting up your sessions.`}
-        footer={<span>The link in your receipt stays valid, so you can pick this up later.</span>}
-      >
-        <Button
-          size="lg"
-          variant="outline"
-          className="h-11 w-full rounded-xl"
-          onClick={() => setCheckInbox(false)}
-        >
-          Use a different email
-        </Button>
-      </AuthShell>
+      </CustomerAuthLayout>
     );
   }
 
   return (
-    <AuthShell
-      eyebrow="Your sessions"
-      title={mode === "signup" ? "Set up your account" : "Sign in to book"}
-      subtitle="Your sessions are paid for and waiting. Set up an account to book them whenever you like."
-      footer={
-        mode === "signup" ? (
-          <span>
-            Already have an account?{" "}
-            <button
-              type="button"
-              onClick={() => setMode("signin")}
-              className="font-medium text-primary hover:underline"
-            >
-              Sign in
-            </button>
-          </span>
-        ) : (
-          <span>
-            No account yet?{" "}
-            <button
-              type="button"
-              onClick={() => setMode("signup")}
-              className="font-medium text-primary hover:underline"
-            >
-              Create one
-            </button>
-          </span>
-        )
-      }
+    <CustomerAuthLayout
+      title="Your sessions are waiting"
+      subtitle="They're paid for. Confirm your email and they're yours to book whenever you like."
     >
-      <GoogleButton
-        label="Continue with Google"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            // Come back to this page, not the app root, so the token is still in
-            // hand when Google sends them home.
-            await signInWithGoogle(window.location.href);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Google sign-in failed");
-            setBusy(false);
-          }
-        }}
-      />
-      <AuthDivider />
-
-      <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="claim-email">Email</Label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="claim-email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.co.uk"
-              className="h-11 rounded-xl pl-9"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Use the same address you gave at checkout.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="claim-password">Password</Label>
-          <div className="relative">
-            <Input
-              id="claim-password"
-              type={showPassword ? "text" : "password"}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              placeholder="••••••••"
-              className="h-11 rounded-xl pr-11"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((value) => !value)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
-          </div>
-        </div>
-
-        <Button type="submit" size="lg" className="h-11 w-full rounded-xl" disabled={busy}>
-          {busy ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <>
-              {mode === "signup" ? "Create account" : "Sign in"} <ArrowRight className="size-4" />
-            </>
-          )}
-        </Button>
-      </form>
-    </AuthShell>
+      <EmailCodeSignIn />
+      <p className="mt-4 text-xs text-muted-foreground">
+        Use the same address you gave at checkout — that's what this link is tied to.
+      </p>
+    </CustomerAuthLayout>
   );
 }

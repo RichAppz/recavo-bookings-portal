@@ -49,9 +49,16 @@ const START_HOUR = 6;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
+/** Six Monday-first weeks from the Monday on or before the 1st. */
+function monthGrid(anchor: Date): Date[] {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  return Array.from({ length: 42 }, (_, i) => addDays(first, i));
+}
+
 function CalendarPage() {
   const tenant = useTenant();
-  const [view, setView] = useState<"day" | "week">("week");
+  const [view, setView] = useState<"day" | "week" | "month">("week");
   const [anchor, setAnchor] = useState(() => new Date());
   const [staffFilter, setStaffFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -63,6 +70,7 @@ function CalendarPage() {
 
   const days = useMemo(() => {
     if (view === "day") return [anchor];
+    if (view === "month") return monthGrid(anchor);
     return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
   }, [view, anchor]);
 
@@ -73,6 +81,9 @@ function CalendarPage() {
     from: rangeStart.toISOString(),
     to: rangeEnd.toISOString(),
     staffId: staffFilter !== "all" ? staffFilter : undefined,
+    // A six-week grid clears the server's default page of 50 on any busy month,
+    // and a calendar that quietly omits sessions is worse than no calendar.
+    limit: 200,
   });
 
   const filtered = (bookings.data?.bookings ?? []).filter(
@@ -83,12 +94,25 @@ function CalendarPage() {
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const todayIso = isoDate(new Date());
 
-  const shift = (dir: number) => setAnchor((a) => addDays(a, view === "day" ? dir : dir * 7));
+  const shift = (dir: number) =>
+    setAnchor((a) =>
+      view === "month"
+        ? new Date(a.getFullYear(), a.getMonth() + dir, 1)
+        : addDays(a, view === "day" ? dir : dir * 7),
+    );
+
+  /** Clicking a day in the month grid opens that day, the way a diary works. */
+  const openDay = (day: Date) => {
+    setAnchor(day);
+    setView("day");
+  };
 
   const range =
-    view === "day"
-      ? ukDateLong(isoDate(anchor))
-      : `${ukDateLong(isoDate(days[0]))} – ${ukDateLong(isoDate(days[6]))}`;
+    view === "month"
+      ? anchor.toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+      : view === "day"
+        ? ukDateLong(isoDate(anchor))
+        : `${ukDateLong(isoDate(days[0]))} – ${ukDateLong(isoDate(days[6]))}`;
 
   const minutesOf = (iso: string, tz: string) => {
     const parts = new Intl.DateTimeFormat("en-GB", {
@@ -139,6 +163,7 @@ function CalendarPage() {
           <TabsList>
             <TabsTrigger value="day">Day</TabsTrigger>
             <TabsTrigger value="week">Week</TabsTrigger>
+            <TabsTrigger value="month">Month</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
@@ -171,9 +196,101 @@ function CalendarPage() {
         </div>
       </div>
 
+      {bookings.data?.nextCursor ? (
+        <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
+          This range has more bookings than we can show at once. Narrow it with the filters, or
+          switch to week or day view, to see them all.
+        </p>
+      ) : null}
+
       {bookings.isError ? (
         <div className="surface-card p-6 text-sm text-destructive">
           Couldn't load bookings for this range.
+        </div>
+      ) : view === "month" ? (
+        <div className="surface-card overflow-hidden">
+          <div className="grid grid-cols-7 border-b bg-secondary/50 text-center text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            {days.slice(0, 7).map((day) => (
+              <div key={day.toISOString()} className="py-2">
+                {day.toLocaleDateString("en-GB", { weekday: "short" })}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7">
+            {days.map((day) => {
+              const iso = isoDate(day);
+              const outside = day.getMonth() !== anchor.getMonth();
+              const dayBookings = filtered
+                .filter((b) => isoDateInTz(b.start, timezone) === iso)
+                .sort((a, b) => a.start.localeCompare(b.start));
+              return (
+                <div
+                  key={iso}
+                  className={cn(
+                    // The card draws its own edge, so the grid drops the borders
+                    // that would otherwise double up along the right and bottom.
+                    "relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-child(n+36)]:border-b-0",
+                    outside && "bg-muted/30",
+                  )}
+                >
+                  {/* Sits behind the chips so empty space opens the day, while a
+                      chip still opens its own booking. Nesting the two as real
+                      buttons would be invalid markup. */}
+                  <button
+                    type="button"
+                    onClick={() => openDay(day)}
+                    className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
+                    aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                  />
+
+                  <span
+                    className={cn(
+                      "pointer-events-none relative inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums",
+                      outside ? "text-muted-foreground/60" : "text-foreground",
+                      iso === todayIso && "bg-primary font-semibold text-primary-foreground",
+                    )}
+                  >
+                    {day.getDate()}
+                  </span>
+
+                  <div className="relative mt-1 flex flex-col gap-0.5">
+                    {dayBookings.slice(0, 3).map((b) => {
+                      const cancelled =
+                        b.status === "cancelled_by_customer" ||
+                        b.status === "cancelled_by_business" ||
+                        b.status === "late_cancelled";
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setSelectedBookingId(b.id)}
+                          className={cn(
+                            "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] border-primary bg-primary-soft px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            cancelled && "opacity-45 line-through",
+                          )}
+                        >
+                          <span className="font-semibold tabular-nums">
+                            {formatInTz(b.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className="truncate">{b.serviceSnapshot.name}</span>
+                        </button>
+                      );
+                    })}
+                    {dayBookings.length > 3 ? (
+                      <button
+                        type="button"
+                        onClick={() => openDay(day)}
+                        className="cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        +{dayBookings.length - 3} more
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="surface-card overflow-x-auto">

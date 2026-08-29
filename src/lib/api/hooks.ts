@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   api,
@@ -108,6 +108,8 @@ export function useBookings(filters: {
   to: string;
   staffId?: string;
   status?: string;
+  /** Server default is 50 and its ceiling is 200. Ranges wider than a few days need it raised. */
+  limit?: number;
   enabled?: boolean;
 }) {
   const businessId = useBusinessId();
@@ -117,6 +119,7 @@ export function useBookings(filters: {
     to: filters.to,
     ...(filters.staffId ? { staffId: filters.staffId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.limit !== undefined ? { limit: filters.limit } : {}),
     ...(locationId ? { locationId } : {}),
   };
 
@@ -1595,6 +1598,7 @@ export function useUpdateBusiness() {
     mutationFn: async (vars: {
       version: number;
       body: {
+        slug?: string;
         legalName?: string;
         tradingName?: string;
         currency?: string;
@@ -2801,6 +2805,40 @@ export type PublicService = Pick<
 
 export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
 
+export interface PublicBusinessProfile {
+  id: string;
+  slug: string;
+  tradingName: string;
+  currency: string;
+  defaultTimezone: string;
+  branding: { logoUrl: string | null; accentColour: string | null };
+}
+
+/**
+ * Resolves a booking link to the studio behind it. Takes either the slug from a
+ * short link or the id from a link issued before slugs existed, since both are
+ * in circulation and the page needs the same answer for each.
+ *
+ * A studio's name and logo change about as often as its address, so this is held
+ * for the session rather than refetched per navigation.
+ */
+export function usePublicBusiness(handle: string | undefined, by: "slug" | "id" = "slug") {
+  return useQuery({
+    queryKey: queryKeys.publicBusiness(handle ?? ""),
+    enabled: Boolean(handle),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const path =
+        by === "slug"
+          ? `/api/v1/public/businesses/by-slug/${encodeURIComponent(handle!)}`
+          : `/api/v1/public/businesses/${handle}/profile`;
+      const res = await api.get<{ business: PublicBusinessProfile }>(path, { public: true });
+      return res.data.business;
+    },
+  });
+}
+
 export function usePublicServices(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.publicServices(businessId ?? ""),
@@ -3059,6 +3097,32 @@ export function usePortalBusinesses(enabled: boolean) {
 
 export type PortalBusinessSummary = { id: string; slug: string; tradingName: string };
 
+/**
+ * Attaches anything bought as a guest with this account's verified email.
+ *
+ * A query rather than a mutation, despite the POST, because what we want is its
+ * caching: run once, remember it ran, and let anything that depends on the
+ * result wait on the same promise. As a mutation each caller would fire its own.
+ * The call is idempotent server-side, so a repeat costs nothing but a round trip.
+ *
+ * Failure is deliberately quiet. This runs on every sign-in and improves an
+ * answer rather than producing one, so an error means "found nothing extra", not
+ * "your sign-in is broken" — {@link usePortalBusinesses} still gives the truth.
+ */
+export function usePortalLink(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.portalLink(),
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+    queryFn: async () => {
+      const res = await api.post<{ businessIds: string[] }>("/api/v1/portal/links", {});
+      return res.data.businessIds;
+    },
+  });
+}
+
 export function usePortalMe(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.portalMe(businessId ?? ""),
@@ -3257,6 +3321,81 @@ export function usePortalCredits(businessId: string | undefined) {
       return res.data.credits;
     },
   });
+}
+
+/** One row of a customer's account, tagged with the studio it came from. */
+export type FromStudio<T> = T & { readonly studio: PortalBusinessSummary };
+
+/**
+ * Everything a customer has, across every studio they deal with.
+ *
+ * Assembled in the browser from the per-studio endpoints rather than served by
+ * a cross-business one. Every portal read is `businessId`-scoped by design, and
+ * ADR 0018 rules out a cross-business customer graph at launch, so fanning out
+ * here respects that decision instead of quietly reversing it. Worth revisiting
+ * if anyone accumulates enough studios for the request count to matter; in
+ * practice that number is one or two.
+ *
+ * A studio that fails is reported but does not blank the page — the others still
+ * have sessions the customer needs to see.
+ */
+export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
+  const list = useMemo(() => studios ?? [], [studios]);
+
+  const bookings = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalBookings(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ bookings: Booking[] }>("/api/v1/portal/bookings", {
+          query: { businessId: studio.id },
+        });
+        return res.data.bookings;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
+  const credits = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalCredits(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ credits: PortalCredit[] }>("/api/v1/portal/credits", {
+          query: { businessId: studio.id },
+        });
+        return res.data.credits;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
+  const payments = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPayments(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ payments: Payment[] }>("/api/v1/portal/payments", {
+          query: { businessId: studio.id },
+        });
+        return res.data.payments;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
+  return { bookings, credits, payments };
+}
+
+function combineByStudio<T>(
+  results: readonly { data?: T[]; isPending: boolean; isError: boolean }[],
+  studios: readonly PortalBusinessSummary[],
+) {
+  return {
+    data: results.flatMap((result, i) =>
+      (result.data ?? []).map((row) => ({ ...row, studio: studios[i] }) as FromStudio<T>),
+    ),
+    isPending: results.some((r) => r.isPending),
+    /** True when a studio failed, even though the rest loaded. */
+    isPartial: results.some((r) => r.isError),
+  };
 }
 
 /**

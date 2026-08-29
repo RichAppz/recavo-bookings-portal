@@ -59,11 +59,23 @@ import {
   useUpdateMembership,
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
-import type { AiPolicyDraftResponse, PolicyDocument, PolicyDocumentType } from "@/lib/api/types";
+import type {
+  AiPolicyDraftResponse,
+  Business,
+  PolicyDocument,
+  PolicyDocumentType,
+} from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
 import { formatInTz } from "@/lib/format";
+import { bookingUrlFor } from "@/lib/hosts";
 import { markdownToPlainText, parsePolicyContent } from "@/lib/markdown";
-import { PERMISSIONS, SYSTEM_ROLES, holdsBusinessOwnerRole } from "@/lib/permissions";
+import {
+  PERMISSIONS,
+  SYSTEM_ROLES,
+  holdsBusinessOwnerRole,
+  roleLabel,
+  roleLabels,
+} from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 import { ApiError, toastApiError } from "@/lib/api";
@@ -366,7 +378,6 @@ function BusinessProfileTab() {
   const tenant = useTenant();
   const business = tenant.business!;
   const update = useUpdateBusiness();
-  const bookingUrl = `${window.location.origin}/book?businessId=${business.id}`;
   const [tradingName, setTradingName] = useState(business.tradingName);
   const [legalName, setLegalName] = useState(business.legalName);
   const [currency, setCurrency] = useState(business.currency);
@@ -420,24 +431,90 @@ function BusinessProfileTab() {
           </Can>
         </div>
       </SectionCard>
-      <SectionCard title="Booking page">
+      <BookingLinkCard business={business} />
+    </div>
+  );
+}
+
+/**
+ * Mirrors the server's slugify so the preview cannot promise a link the API
+ * will then rewrite. The server remains the authority; this only stops the
+ * field from lying while someone types.
+ */
+function slugifyPreview(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function BookingLinkCard({ business }: { business: Business }) {
+  const update = useUpdateBusiness();
+  const [slug, setSlug] = useState(business.slug);
+
+  useEffect(() => {
+    setSlug(business.slug);
+  }, [business.slug]);
+
+  const normalised = slugifyPreview(slug);
+  const savedUrl = bookingUrlFor(business.slug);
+  const previewUrl = normalised ? bookingUrlFor(normalised) : savedUrl;
+  const changed = normalised !== business.slug;
+
+  return (
+    <SectionCard title="Booking page">
+      <div className="grid gap-4">
         <div className="grid gap-2">
-          <Label>Public booking link</Label>
+          <Label htmlFor="booking-slug">Public booking link</Label>
           <div className="flex gap-2">
-            <Input readOnly value={bookingUrl} />
+            <Input
+              id="booking-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder={business.slug}
+              aria-describedby="booking-slug-preview"
+            />
             <Button
               variant="outline"
               onClick={() => {
-                void navigator.clipboard.writeText(bookingUrl);
+                void navigator.clipboard.writeText(savedUrl);
                 toast.success("Booking link copied");
               }}
             >
               <Copy className="size-4" />
             </Button>
           </div>
+          <p id="booking-slug-preview" className="text-sm text-muted-foreground">
+            {previewUrl.replace(/^https?:\/\//, "")}
+          </p>
         </div>
-      </SectionCard>
-    </div>
+        <Can
+          permission={PERMISSIONS.BUSINESS_UPDATE}
+          fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
+        >
+          {changed ? (
+            <p className="text-xs text-muted-foreground">
+              Anywhere you have already shared {savedUrl.replace(/^https?:\/\//, "")} — printed
+              cards, old emails — will stop working.
+            </p>
+          ) : null}
+          <Button
+            className="w-fit"
+            disabled={update.isPending || !changed || normalised.length < 3}
+            onClick={async () => {
+              await update.mutateAsync({ version: business.version, body: { slug: normalised } });
+              toast.success("Booking link updated");
+            }}
+          >
+            {update.isPending ? "Saving…" : "Save link"}
+          </Button>
+        </Can>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -706,7 +783,7 @@ function TeamTab() {
               const name = userDisplayName(m.user, m.user?.email ?? m.userId);
               const email = m.user?.email;
               const isOwner = holdsBusinessOwnerRole(m.roleKeys);
-              const roles = isOwner ? "Owner" : (m.roleKeys ?? []).join(", ") || "No roles";
+              const roles = isOwner ? "Owner" : roleLabels(m.roleKeys, "No roles");
               const subtitle = [email && name !== email ? email : null, roles]
                 .filter(Boolean)
                 .join(" · ");
@@ -739,7 +816,7 @@ function TeamTab() {
                         <SelectContent>
                           {INVITE_ROLES.map((r) => (
                             <SelectItem key={r} value={r}>
-                              {r.replaceAll("_", " ")}
+                              {roleLabel(r)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -769,7 +846,7 @@ function TeamTab() {
                   <SelectContent>
                     {INVITE_ROLES.map((r) => (
                       <SelectItem key={r} value={r}>
-                        {r.replaceAll("_", " ")}
+                        {roleLabel(r)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -804,7 +881,7 @@ function TeamTab() {
                   <div>
                     <p className="text-sm font-medium">{inv.email}</p>
                     <p className="text-xs text-muted-foreground">
-                      {(inv.roleKeys ?? []).join(", ")} · expires{" "}
+                      {roleLabels(inv.roleKeys, "No roles")} · expires{" "}
                       {new Date(inv.expiresAt).toLocaleDateString("en-GB")}
                     </p>
                   </div>

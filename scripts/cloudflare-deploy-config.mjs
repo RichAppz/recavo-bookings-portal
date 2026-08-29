@@ -7,22 +7,23 @@
  * one silently deploys staging over production — both environments are declared
  * here and selected by argument.
  *
- *   node scripts/cloudflare-deploy-config.mjs production|staging
+ *   node scripts/cloudflare-deploy-config.mjs staging
  *
  * `custom_domain: true` is what makes Cloudflare create and manage the DNS
- * record itself, which is why none of these four hostnames are in the zone by
- * hand.
+ * record itself, which is why none of these hostnames are in the zone by hand.
+ *
+ * There is deliberately no `production` target. Production does not exist yet —
+ * no Supabase project, no API, and live Stripe keys nowhere — so the only thing
+ * a production deploy could serve is staging's database on a public hostname.
+ * dashboard./book.recavo.app are held by the holding page instead (see
+ * holding/). Add the target back at launch, alongside a real .env.production.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
 const TARGETS = {
-  production: {
-    name: "recavo-portal",
-    domains: ["dashboard.recavo.app", "booking.recavo.app"],
-  },
   staging: {
     name: "recavo-portal-staging",
-    domains: ["staging-dashboard.recavo.app", "staging-booking.recavo.app"],
+    domains: ["staging-dashboard.recavo.app", "staging-book.recavo.app"],
   },
 };
 
