@@ -35,7 +35,16 @@ type AuthContextValue = {
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: (redirectTo?: string) => Promise<void>;
-  signUp: (email: string, password: string, metadata?: Record<string, unknown>) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    metadata?: Record<string, unknown>,
+    emailRedirectTo?: string,
+  ) => Promise<void>;
+  /** Emails a six-digit code. Creates the account if the address is new. */
+  sendEmailCode: (email: string) => Promise<void>;
+  /** Redeems the code from {@link sendEmailCode}, signing the person in. */
+  verifyEmailCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   /** PATCH /api/v1/me — update first/last name on the account profile. */
@@ -276,6 +285,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLog("applySession: already loaded this user → skip /me");
         setStatus("authenticated");
         return;
+      }
+
+      // A different account is taking over the tab: signing in over a live
+      // session, or a session replaced in another tab. Only the sign-out button
+      // emptied the cache before, so everything the previous user loaded was
+      // still readable — and some of it decides where the app sends you.
+      if (userId && loadedForUserIdRef.current && loadedForUserIdRef.current !== userId) {
+        authLog("applySession: different user → clearing cached data");
+        queryClient.clear();
       }
 
       // Coalesce concurrent bootstraps for the same user (getSession() racing the
@@ -542,18 +560,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  /**
+   * `emailRedirectTo` matters when the sign-up carries something the confirmation
+   * has to come back to, such as a purchase claim token. Left unset, Supabase
+   * sends the user to the project's site root and that context is lost.
+   */
   const signUp = useCallback(
-    async (email: string, password: string, metadata?: Record<string, unknown>) => {
+    async (
+      email: string,
+      password: string,
+      metadata?: Record<string, unknown>,
+      emailRedirectTo?: string,
+    ) => {
       const supabase = getSupabase();
+      const options = {
+        ...(metadata ? { data: metadata } : {}),
+        ...(emailRedirectTo ? { emailRedirectTo } : {}),
+      };
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        ...(metadata ? { options: { data: metadata } } : {}),
+        ...(Object.keys(options).length > 0 ? { options } : {}),
       });
       if (error) throw error;
     },
     [],
   );
+
+  /**
+   * Sign-in for customers, who arrive from a link, buy once, and come back
+   * months later. A password would be a fifth thing to forget, and a forgotten
+   * one is indistinguishable from having no account at all — they buy again as
+   * a guest and end up with two records.
+   *
+   * `shouldCreateUser` is on because there is no separate sign-up: someone who
+   * bought as a guest has purchases waiting under their address but no account,
+   * and being told to register first is the wrong answer. Proving the address is
+   * exactly what lets `POST /api/v1/portal/links` attach those purchases.
+   */
+  const sendEmailCode = useCallback(async (email: string) => {
+    authLog("sendEmailCode: signInWithOtp");
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true },
+    });
+    if (error) {
+      authLog("sendEmailCode error", error);
+      throw error;
+    }
+  }, []);
+
+  const verifyEmailCode = useCallback(async (email: string, code: string) => {
+    authLog("verifyEmailCode: verifyOtp");
+    const supabase = getSupabase();
+    // `type: 'email'` covers both halves of shouldCreateUser — a code sent to a
+    // new address and one sent to an existing account verify the same way.
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+    if (error) {
+      authLog("verifyEmailCode error", error);
+      throw error;
+    }
+  }, []);
 
   const signOut = useCallback(async () => {
     // Drop local state before calling Supabase. A rejected sign-out (offline, or
@@ -607,6 +675,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithGoogle,
       signUp,
+      sendEmailCode,
+      verifyEmailCode,
       signOut,
       resetPassword,
       updateProfile,
@@ -629,6 +699,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithGoogle,
       signUp,
+      sendEmailCode,
+      verifyEmailCode,
       signOut,
       resetPassword,
       updateProfile,

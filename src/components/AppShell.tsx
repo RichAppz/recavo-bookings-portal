@@ -49,15 +49,20 @@ import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions"
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
+import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import {
   useCustomers,
   useMarkNotificationRead,
   useNotifications,
+  usePortalBusinesses,
+  usePortalLink,
   useSubscription,
 } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath, isTotpSetupPath } from "@/lib/billing/access";
-import { canManageSaasBilling, PERMISSIONS } from "@/lib/permissions";
+import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
+import { canManageSaasBilling, PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
@@ -147,6 +152,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
+  const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
+  // Adopt guest purchases before asking what this account owns, or someone who
+  // bought as a guest and then signed up with the same address is told they have
+  // nothing, and the screen corrects itself a moment later.
+  const portalLink = usePortalLink(noStaffBusiness);
+  const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
   const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
@@ -158,6 +169,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     blocked: billingLocked,
   });
   const needsTotpSetup = billingLocked && canManageBilling && !mfaEnrolled;
+
+  // Only the staff app requires a business, so the prompt to create one lives
+  // here rather than around every route: a customer in their portal, or someone
+  // opening a staff invitation, has no membership yet and must not be asked to
+  // found a studio.
+  if (noStaffBusiness) {
+    if (!portalLink.isFetched || portalBusinesses.isLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Loading your account…</p>
+        </div>
+      );
+    }
+    // Someone who bought sessions has a customer record but nothing to run, so
+    // send them to their own account rather than offering to set up a studio.
+    // /account rather than one studio's page: which studio came first is an
+    // accident of history, and picking it for them hides the others.
+    if ((portalBusinesses.data ?? []).length > 0) {
+      return <Navigate to="/account" replace />;
+    }
+    // Nothing to go on: no membership, no customer link. The hostname is the last
+    // evidence of why they came, and on the customer one "set up your studio" is
+    // the wrong question — they are mid-claim, or their link has yet to redeem.
+    if (typeof window !== "undefined" && isCustomerHost(window.location.hostname)) {
+      return <NoCustomerAccount />;
+    }
+    return <CreateFirstBusiness />;
+  }
 
   if (subscription.isLoading) {
     return (
@@ -283,7 +322,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {tenant.business?.tradingName ?? "Loading…"}
                   </span>
                   <span className="block text-[11px] text-sidebar-foreground/70">
-                    {tenant.membership?.roleKeys.join(", ") || "Member"}
+                    {roleLabels(tenant.membership?.roleKeys, "Member")}
                   </span>
                 </span>
                 <ChevronsUpDown className="size-4 text-sidebar-foreground/60" />
@@ -318,7 +357,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="block truncate text-[11px] text-sidebar-foreground/70">
                     {user?.email && userDisplayName(user) !== user.email
                       ? user.email
-                      : tenant.membership?.roleKeys.join(", ") || "Team member"}
+                      : roleLabels(tenant.membership?.roleKeys, "Team member")}
                   </span>
                 </span>
               </button>
@@ -330,9 +369,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/book">Open client booking page</Link>
-              </DropdownMenuItem>
+              {tenant.business ? (
+                <DropdownMenuItem asChild>
+                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
+                    Open client booking page
+                  </a>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={() => void signOut()}>
                 <LogOut className="size-4" /> Sign out
               </DropdownMenuItem>
@@ -458,11 +501,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="outline" asChild className="hidden xl:inline-flex">
-                <Link to="/book" search={{ businessId: tenant.businessId }}>
-                  View booking page <ExternalLink className="size-3.5" />
-                </Link>
-              </Button>
+              {tenant.business ? (
+                <Button variant="outline" asChild className="hidden xl:inline-flex">
+                  {/* The customer hostname, not this one: what a studio opens from
+                      here is the same link it hands out. */}
+                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
+                    View booking page <ExternalLink className="size-3.5" />
+                  </a>
+                </Button>
+              ) : null}
             </div>
           </div>
         </header>

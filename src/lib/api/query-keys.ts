@@ -106,6 +106,8 @@ export const queryKeys = {
   file: (businessId: string, fileId: string) => ["biz", businessId, "files", fileId] as const,
 
   // Public / portal surfaces
+  /** Keyed by handle, not id: resolving the handle is the point of the request. */
+  publicBusiness: (handle: string) => ["public", "business", handle] as const,
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,
   publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
@@ -114,6 +116,10 @@ export const queryKeys = {
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
 
+  /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
+  portalBusinesses: () => ["portal", "businesses"] as const,
+  /** Runs once per session, before the businesses lookup can be trusted. */
+  portalLink: () => ["portal", "link"] as const,
   portalMe: (businessId: string) => ["portal", businessId, "me"] as const,
   portalBookings: (businessId: string) => ["portal", businessId, "bookings"] as const,
   portalBooking: (businessId: string, bookingId: string) =>

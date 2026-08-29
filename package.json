@@ -7,6 +7,9 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "build:staging": "vite build --mode staging",
+    "deploy:staging": "npm run build:staging && node scripts/cloudflare-deploy-config.mjs staging && wrangler deploy",
+    "deploy:holding": "wrangler deploy -c holding/wrangler.jsonc",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -90,6 +93,7 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "wrangler": "^4.127.1"
   }
 }

@@ -4,10 +4,13 @@ import { z } from "zod";
 import { ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
+import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
+import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth/auth-store";
+import { isCustomerHost } from "@/lib/hosts";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -38,19 +41,57 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { signIn, signInWithGoogle, status } = useAuth();
+  const { status } = useAuth();
   const navigate = useNavigate();
   const { redirect } = Route.useSearch();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Which form to show depends on the hostname, which the server render cannot
+  // see. Deciding in an effect rather than during render is what keeps the
+  // customer host from being served the staff form and swapping it a moment
+  // later — a password box appearing and vanishing looks like a bug.
+  const [customer, setCustomer] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setCustomer(isCustomerHost(window.location.hostname));
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
       void navigate({ to: safeRedirect(redirect) });
     }
   }, [status, redirect, navigate]);
+
+  if (customer === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  return customer ? <CustomerLogin /> : <StaffLogin />;
+}
+
+/**
+ * Customers get a code by email and nothing else. They visit a handful of times
+ * a year, so a password is a fifth thing to forget; staff, who are in this all
+ * day, keep passwords where password managers and MFA earn their place.
+ */
+function CustomerLogin() {
+  return (
+    <CustomerAuthLayout
+      title="Your sessions and credits"
+      subtitle="Sign in with your email to see what you've booked, use your credits and buy more."
+    >
+      <EmailCodeSignIn />
+    </CustomerAuthLayout>
+  );
+}
+
+function StaffLogin() {
+  const { signIn, signInWithGoogle } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

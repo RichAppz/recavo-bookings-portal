@@ -170,3 +170,35 @@ export function canManageSaasBilling(input: {
 export function holdsBusinessOwnerRole(roleKeys: readonly string[] | undefined): boolean {
   return (roleKeys ?? []).some((key) => normalizeRoleKey(key) === SYSTEM_ROLES.BUSINESS_OWNER);
 }
+
+const ROLE_LABELS: Record<SystemRoleKey, string> = {
+  [SYSTEM_ROLES.BUSINESS_OWNER]: "Owner",
+  [SYSTEM_ROLES.ADMINISTRATOR]: "Administrator",
+  [SYSTEM_ROLES.MANAGER]: "Manager",
+  [SYSTEM_ROLES.STAFF]: "Staff",
+  [SYSTEM_ROLES.RECEPTION]: "Reception",
+  [SYSTEM_ROLES.FINANCE]: "Finance",
+  [SYSTEM_ROLES.RESTRICTED_STAFF]: "Restricted staff",
+  [SYSTEM_ROLES.CUSTOMER]: "Client",
+};
+
+/**
+ * A role key as a person would say it.
+ *
+ * Roles a business defines for itself never reach this table, so unknown keys
+ * are tidied rather than dropped: better an approximation of someone's own
+ * wording than a blank where their job title should be.
+ */
+export function roleLabel(key: string): string {
+  const normalised = normalizeRoleKey(key);
+  const known = ROLE_LABELS[normalised as SystemRoleKey];
+  if (known) return known;
+  const words = normalised.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
+}
+
+/** Joined role labels, or a caller-chosen fallback when someone holds none. */
+export function roleLabels(keys: readonly string[] | undefined, empty = ""): string {
+  const labels = (keys ?? []).map(roleLabel).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : empty;
+}

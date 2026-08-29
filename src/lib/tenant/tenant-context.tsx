@@ -19,7 +19,6 @@ import type {
 } from "@/lib/api/types";
 import { permissionsForRoles, type PermissionKey } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth/auth-store";
-import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 
 const BUSINESS_KEY = "recavo.activeBusinessId";
 const LOCATION_KEY = "recavo.activeLocationId";
@@ -268,10 +267,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
-    return <CreateFirstBusiness />;
-  }
-
+  // Having no business is not an error here. This provider wraps every route,
+  // including the ones a customer uses, and a customer never has a staff
+  // membership — prompting them to found a business is nonsense. Whether an
+  // empty list means "create one" is a question only the staff app can answer,
+  // so {@link AppShell} asks it.
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
 }
 
