@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
+import { TableGhost } from "@/components/ghost";
 import { api, ApiError, queryKeys } from "@/lib/api";
 import type {
   Business,
@@ -309,7 +310,7 @@ export function RequirePermission({
 }) {
   const { allowed, isLoading } = useRequirePermission(permission);
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return <TableGhost rows={4} />;
   }
   if (!allowed) {
     return (
@@ -325,7 +326,7 @@ export function RequirePermission({
 /** Convenience: redirect home when tenant not ready (used rarely). */
 export function RequireBusiness({ children }: { children: ReactNode }) {
   const { businessId, isLoading } = useTenant();
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading business…</p>;
+  if (isLoading) return <TableGhost rows={3} />;
   if (!businessId) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

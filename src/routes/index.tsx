@@ -37,6 +37,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui-bits";
+import { StatsGhost, TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -204,11 +205,7 @@ function Overview() {
         </div>
 
         {dashboard.isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className="surface-card h-[124px] animate-pulse" />
-            ))}
-          </div>
+          <StatsGhost />
         ) : dashboard.isError ? (
           isPlanGated(dashboard.error) ? (
             <EmptyState
@@ -356,7 +353,7 @@ function Overview() {
           bodyClassName="p-0"
         >
           {todays.isLoading ? (
-            <p className="p-5 text-sm text-muted-foreground">Loading today's schedule…</p>
+            <TableGhost rows={5} />
           ) : todays.isError ? (
             <p className="p-5 text-sm text-destructive">Couldn't load today's bookings.</p>
           ) : scheduled.length === 0 ? (

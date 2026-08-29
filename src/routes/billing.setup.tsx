@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { TotpQr, TotpSecretField } from "@/components/TotpEnrollFields";
+import { DetailGhost } from "@/components/ghost";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ function TotpSetupPage() {
   }, [mfaStatusReady, mfaEnrolled, navigate]);
 
   if (!mfaStatusReady || mfaEnrolled) {
-    return <p className="text-sm text-muted-foreground">Checking two-factor status…</p>;
+    return <DetailGhost />;
   }
 
   return (

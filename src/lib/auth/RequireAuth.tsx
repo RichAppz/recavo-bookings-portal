@@ -1,5 +1,6 @@
 import { Navigate, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
+import { AppChromeGhost } from "@/components/ghost";
 import { useAuth } from "./auth-store";
 
 /** Redirect unauthenticated users to /login, preserving the intended destination. */
@@ -17,11 +18,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const [redirectTo] = useState(destination);
 
   if (status === "loading") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Checking session…</p>
-      </div>
-    );
+    return <AppChromeGhost />;
   }
 
   if (status === "unconfigured") {

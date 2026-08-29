@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Wordmark } from "@/components/Wordmark";
+import { CardsGhost } from "@/components/ghost";
 import { ApiError } from "@/lib/api";
 import { BookingCheckout, type BookingContact } from "@/components/BookingCheckout";
 import {
@@ -636,7 +637,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
               {studioName ? `Book at ${studioName}` : "Choose a session"}
             </h1>
             {services.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading services…</p>
+              <CardsGhost count={3} className="h-28" />
             ) : services.isError ? (
               <p className="text-sm text-destructive">
                 Couldn't load services. Please try again shortly.
@@ -760,9 +761,11 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
                             </div>
 
                             {availability.isLoading ? (
-                              <p className="text-sm text-muted-foreground">
-                                Loading available times…
-                              </p>
+                              <div className="grid grid-cols-3 gap-2">
+                                {Array.from({ length: 6 }, (_, i) => (
+                                  <div key={i} className="h-10 animate-pulse rounded-md bg-primary/10" />
+                                ))}
+                              </div>
                             ) : slots.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
                                 {loadingTimes

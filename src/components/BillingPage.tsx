@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { PageGhost } from "@/components/ghost";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -193,7 +194,7 @@ export function BillingPage() {
   };
 
   if (tenant.isLoading && !canManage) {
-    return <p className="text-sm text-muted-foreground">Loading billing…</p>;
+    return <PageGhost />;
   }
 
   if (!canManage) {

@@ -11,6 +11,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui-bits";
+import { CardsGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -141,7 +142,7 @@ function StaffPage() {
       </div>
 
       {staff.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading team…</p>
+        <CardsGhost count={2} className="h-[320px]" />
       ) : staff.isError ? (
         <EmptyState
           title="Couldn't load staff"

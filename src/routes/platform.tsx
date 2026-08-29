@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -129,7 +130,7 @@ function PlatformContent() {
         action={currentSub?.status ? <StatusBadge status={currentSub.status} /> : null}
       >
         {subscription.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading subscription…</p>
+          <TableGhost rows={3} />
         ) : subscription.isError ? (
           <EmptyState title="Couldn't load subscription" description="Please try again shortly." />
         ) : !currentSub ? (
@@ -162,7 +163,7 @@ function PlatformContent() {
 
       <SectionCard title="Plan catalogue" bodyClassName="p-0">
         {plans.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading plans…</p>
+          <TableGhost rows={4} />
         ) : plans.isError ? (
           <div className="p-6">
             <EmptyState title="Couldn't load plans" />
@@ -243,7 +244,7 @@ function OpsSection() {
     <>
       <SectionCard title="Failed background jobs" bodyClassName="p-0">
         {failedJobs.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading failed jobs…</p>
+          <TableGhost rows={4} />
         ) : (failedJobs.data ?? []).length === 0 ? (
           <div className="p-6">
             <EmptyState title="No failed jobs" description="Background job queue is healthy." />
@@ -286,7 +287,7 @@ function OpsSection() {
 
       <SectionCard title="Failed outbox events" bodyClassName="p-0">
         {failedOutbox.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+          <TableGhost rows={4} />
         ) : (failedOutbox.data ?? []).length === 0 ? (
           <div className="p-6">
             <EmptyState title="No failed events" />
@@ -312,7 +313,7 @@ function OpsSection() {
 
       <SectionCard title="Dead-letter outbox" bodyClassName="p-0">
         {deadLetter.isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+          <TableGhost rows={4} />
         ) : (deadLetter.data ?? []).length === 0 ? (
           <div className="p-6">
             <EmptyState title="No dead-letter events" />
@@ -564,7 +565,9 @@ function PlatformBillingAdminSection() {
       </div>
 
       {!targetBusinessId ? null : billing.isLoading ? (
-        <p className="mt-4 text-sm text-muted-foreground">Loading billing view…</p>
+        <div className="mt-4">
+          <TableGhost rows={5} />
+        </div>
       ) : billing.isError ? (
         <div className="mt-4">
           <EmptyState
@@ -684,7 +687,7 @@ function PlatformOverridesTable({
   isLoading: boolean;
   isError: boolean;
 }) {
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading overrides…</p>;
+  if (isLoading) return <TableGhost rows={4} />;
   if (isError) return <p className="text-sm text-destructive">Couldn't load overrides.</p>;
   if (overrides.length === 0) {
     return (
