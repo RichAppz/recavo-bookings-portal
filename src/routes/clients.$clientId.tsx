@@ -236,16 +236,16 @@ function ClientProfile() {
       </div>
 
       <Tabs defaultValue="profile">
-        <TabsList className="flex-wrap">
+        <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming bookings</TabsTrigger>
-          <TabsTrigger value="packages">Packages and credits</TabsTrigger>
-          <TabsTrigger value="payments">Payment history</TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+          <TabsTrigger value="packages">Packages</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="consents">Consents</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
           <TabsTrigger value="linked">Linked records</TabsTrigger>
-          <TabsTrigger value="portal">Portal link</TabsTrigger>
+          <TabsTrigger value="portal">Portal</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>

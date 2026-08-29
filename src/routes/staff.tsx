@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarOff, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -74,9 +74,27 @@ export const Route = createFileRoute("/staff")({
 
 // API `dayOfWeek` is 1 (Monday) .. 7 (Sunday) — see openapi.json Staff.workingRules.
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DEFAULT_WORK_START = timeToMinutes("09:00");
+const DEFAULT_WORK_END = timeToMinutes("17:00");
+
+type WorkingRuleRow = {
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+  locationId: string | null;
+};
 
 function minutesLabel(mins: number) {
   return minutesToTime(mins);
+}
+
+function defaultWeekRules(): WorkingRuleRow[] {
+  return DAYS.map((_, i) => ({
+    dayOfWeek: i + 1,
+    startMinute: DEFAULT_WORK_START,
+    endMinute: DEFAULT_WORK_END,
+    locationId: null,
+  }));
 }
 
 function StaffPage() {
@@ -371,21 +389,16 @@ function InviteStaffDialog({ open, onClose }: { open: boolean; onClose: () => vo
   );
 }
 
-type WorkingRuleRow = {
-  dayOfWeek: number;
-  startMinute: number;
-  endMinute: number;
-  locationId: string | null;
-};
-
 function toWorkingRuleRows(staff: Staff | null): WorkingRuleRow[] {
-  if (!staff) return [];
-  return staff.workingRules.map((r) => ({
-    dayOfWeek: r.dayOfWeek,
-    startMinute: r.startMinute,
-    endMinute: r.endMinute,
-    locationId: r.locationId,
-  }));
+  if (!staff || staff.workingRules.length === 0) return defaultWeekRules();
+  return [...staff.workingRules]
+    .map((r) => ({
+      dayOfWeek: r.dayOfWeek,
+      startMinute: r.startMinute,
+      endMinute: r.endMinute,
+      locationId: r.locationId,
+    }))
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinute - b.startMinute);
 }
 
 function StaffDialog({
@@ -434,19 +447,35 @@ function StaffDialog({
     setFieldErrors({});
   };
 
+  // Controlled Dialog: parent toggles `open` without firing onOpenChange(true),
+  // so hydrate fields whenever the drawer opens (create or edit).
+  useEffect(() => {
+    if (open) resetFrom(staff);
+  }, [open, staff?.id]);
+
   const toggleId = (list: string[], id: string) =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
   const addWorkingRule = () =>
-    setWorkingRules((rows) => [
-      ...rows,
-      {
-        dayOfWeek: 1,
-        startMinute: timeToMinutes("09:00"),
-        endMinute: timeToMinutes("17:00"),
-        locationId: null,
-      },
-    ]);
+    setWorkingRules((rows) => {
+      const present = new Set(rows.map((r) => r.dayOfWeek));
+      const missing = [1, 2, 3, 4, 5, 6, 7].filter((day) => !present.has(day));
+      if (missing.length === 0) {
+        toast.message("All days are already listed", {
+          description: "Remove a day first if you want to add it again.",
+        });
+        return rows;
+      }
+      return [
+        ...rows,
+        ...missing.map((dayOfWeek) => ({
+          dayOfWeek,
+          startMinute: DEFAULT_WORK_START,
+          endMinute: DEFAULT_WORK_END,
+          locationId: null as string | null,
+        })),
+      ].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinute - b.startMinute);
+    });
 
   const updateWorkingRule = (index: number, patch: Partial<WorkingRuleRow>) =>
     setWorkingRules((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -504,17 +533,16 @@ function StaffDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else resetFrom(staff);
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 pb-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="st-name">Name</Label>
@@ -650,11 +678,16 @@ function StaffDialog({
               </Button>
             </div>
             {workingRules.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No recurring working hours set.</p>
+              <p className="text-xs text-muted-foreground">
+                No days listed. Use Add hours to restore missing days.
+              </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 pb-2">
                 {workingRules.map((r, i) => (
-                  <div key={i} className="flex flex-wrap items-end gap-2">
+                  <div
+                    key={`${r.dayOfWeek}-${r.startMinute}-${i}`}
+                    className="flex flex-wrap items-end gap-2 rounded-lg border border-border/70 bg-card p-2.5"
+                  >
                     <div className="grid w-28 gap-1">
                       <Label className="text-xs text-muted-foreground">Day</Label>
                       <Select
@@ -719,6 +752,7 @@ function StaffDialog({
                       variant="ghost"
                       size="icon"
                       onClick={() => removeWorkingRule(i)}
+                      aria-label={`Remove ${DAYS[r.dayOfWeek - 1] ?? "day"}`}
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -728,7 +762,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="px-6 pb-6">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

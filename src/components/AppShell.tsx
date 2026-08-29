@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
@@ -47,12 +47,45 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { useCustomers, useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
-import { customerDisplayName } from "@/lib/api/types";
-import { PERMISSIONS } from "@/lib/permissions";
+import { BillingBanner } from "@/components/BillingBanner";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
+import { NoCustomerAccount } from "@/components/NoCustomerAccount";
+import {
+  useCustomers,
+  useMarkNotificationRead,
+  useNotifications,
+  usePortalBusinesses,
+  usePortalLink,
+  useSubscription,
+} from "@/lib/api/hooks";
+import { customerDisplayName, userDisplayName } from "@/lib/api/types";
+import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
+import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
+import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
+
+/** Industry terminology for nav — keep bookings vs catalogue labels distinct. */
+function navLabel(
+  to: string,
+  fallback: string,
+  terminology: { client: string; staff: string; service: string; booking: string },
+): string {
+  if (to === "/clients") return `${terminology.client}s`;
+  if (to === "/staff") return terminology.staff;
+  if (to === "/bookings") return `${terminology.booking}s`;
+  if (to === "/services") {
+    const service = terminology.service.trim();
+    const booking = terminology.booking.trim();
+    if (service.toLowerCase() === booking.toLowerCase()) {
+      return `${service} types`;
+    }
+    return service.toLowerCase().endsWith("s") ? service : `${service}s`;
+  }
+  return fallback;
+}
 
 const NAV: Array<{
   to: string;
@@ -91,6 +124,12 @@ const NAV: Array<{
   { to: "/messages", label: "Messages", icon: MessageSquare, anyOf: [PERMISSIONS.CUSTOMER_READ] },
   { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
   { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
+  {
+    to: "/billing",
+    label: "Billing",
+    icon: CreditCard,
+    anyOf: [PERMISSIONS.BILLING_MANAGE, PERMISSIONS.BUSINESS_UPDATE],
+  },
   { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
 ];
 
@@ -103,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const subscription = useSubscription();
 
   useEffect(() => setMobileNav(false), [pathname]);
 
@@ -112,7 +152,70 @@ export function AppShell({ children }: { children: ReactNode }) {
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
+  const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
+  // Adopt guest purchases before asking what this account owns, or someone who
+  // bought as a guest and then signed up with the same address is told they have
+  // nothing, and the screen corrects itself a moment later.
+  const portalLink = usePortalLink(noStaffBusiness);
+  const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
+  const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
+  const onBilling = isBillingPath(pathname);
+  const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
+
+  // Only the staff app requires a business, so the prompt to create one lives
+  // here rather than around every route: a customer in their portal, or someone
+  // opening a staff invitation, has no membership yet and must not be asked to
+  // found a studio.
+  if (noStaffBusiness) {
+    if (!portalLink.isFetched || portalBusinesses.isLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Loading your account…</p>
+        </div>
+      );
+    }
+    // Someone who bought sessions has a customer record but nothing to run, so
+    // send them to their own account rather than offering to set up a studio.
+    // /account rather than one studio's page: which studio came first is an
+    // accident of history, and picking it for them hides the others.
+    if ((portalBusinesses.data ?? []).length > 0) {
+      return <Navigate to="/account" replace />;
+    }
+    // Nothing to go on: no membership, no customer link. The hostname is the last
+    // evidence of why they came, and on the customer one "set up your studio" is
+    // the wrong question — they are mid-claim, or their link has yet to redeem.
+    if (typeof window !== "undefined" && isCustomerHost(window.location.hostname)) {
+      return <NoCustomerAccount />;
+    }
+    return <CreateFirstBusiness />;
+  }
+
+  if (subscription.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking subscription…</p>
+      </div>
+    );
+  }
+
+  if (billingLocked && !onBilling && !onPlatform) {
+    return <Navigate to="/billing" replace />;
+  }
+
+  if (billingLocked && onBilling) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="flex h-16 items-center justify-between border-b px-4 sm:px-6">
+          <Wordmark />
+          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+            <LogOut className="size-4" /> Sign out
+          </Button>
+        </header>
+        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -145,18 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3">
           {NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
             const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-            const label =
-              item.to === "/clients"
-                ? `${tenant.terminology.client}s`
-                : item.to === "/staff"
-                  ? tenant.terminology.staff
-                  : item.to === "/services"
-                    ? `${tenant.terminology.service}s`
-                    : item.to === "/bookings" || item.to === "/calendar"
-                      ? item.to === "/bookings"
-                        ? `${tenant.terminology.booking}s`
-                        : item.label
-                      : item.label;
+            const label = navLabel(item.to, item.label, tenant.terminology);
             return (
               <Link
                 key={item.to}
@@ -207,7 +299,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {tenant.business?.tradingName ?? "Loading…"}
                   </span>
                   <span className="block text-[11px] text-sidebar-foreground/70">
-                    {tenant.membership?.roleKeys.join(", ") || "Member"}
+                    {roleLabels(tenant.membership?.roleKeys, "Member")}
                   </span>
                 </span>
                 <ChevronsUpDown className="size-4 text-sidebar-foreground/60" />
@@ -234,25 +326,33 @@ export function AppShell({ children }: { children: ReactNode }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent/60">
-                <PersonAvatar name={user?.email ?? "?"} size={32} />
+                <PersonAvatar name={userDisplayName(user, "?")} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    {user?.email ?? "Signed in"}
+                    {userDisplayName(user)}
                   </span>
-                  <span className="block text-[11px] text-sidebar-foreground/70">
-                    {tenant.membership?.roleKeys.join(", ") || "Team member"}
+                  <span className="block truncate text-[11px] text-sidebar-foreground/70">
+                    {user?.email && userDisplayName(user) !== user.email
+                      ? user.email
+                      : roleLabels(tenant.membership?.roleKeys, "Team member")}
                   </span>
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuItem asChild>
-                <Link to="/settings">Account settings</Link>
+                <Link to="/settings" search={{ tab: "account" }}>
+                  Account settings
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link to="/book">Open client booking page</Link>
-              </DropdownMenuItem>
+              {tenant.business ? (
+                <DropdownMenuItem asChild>
+                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
+                    Open client booking page
+                  </a>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={() => void signOut()}>
                 <LogOut className="size-4" /> Sign out
               </DropdownMenuItem>
@@ -378,21 +478,29 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="outline" asChild className="hidden xl:inline-flex">
-                <Link to="/book" search={{ businessId: tenant.businessId }}>
-                  View booking page <ExternalLink className="size-3.5" />
-                </Link>
-              </Button>
+              {tenant.business ? (
+                <Button variant="outline" asChild className="hidden xl:inline-flex">
+                  {/* The customer hostname, not this one: what a studio opens from
+                      here is the same link it hands out. */}
+                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
+                    View booking page <ExternalLink className="size-3.5" />
+                  </a>
+                </Button>
+              ) : null}
             </div>
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+          <BillingBanner />
+          {children}
+        </main>
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
+      <OnboardingChecklist />
     </div>
   );
 }

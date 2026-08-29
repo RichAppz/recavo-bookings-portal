@@ -19,7 +19,6 @@ import type {
 } from "@/lib/api/types";
 import { permissionsForRoles, type PermissionKey } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth/auth-store";
-import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 
 const BUSINESS_KEY = "recavo.activeBusinessId";
 const LOCATION_KEY = "recavo.activeLocationId";
@@ -69,7 +68,7 @@ function writeStored(key: string, value: string | null) {
 }
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [businessId, setBusinessId] = useState<string | null>(() => readStored(BUSINESS_KEY));
   const [currentLocationId, setCurrentLocationIdState] = useState<string | "all">(
     () => (readStored(LOCATION_KEY) as string | "all") || "all",
@@ -156,7 +155,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, currentLocationId]);
 
-  const roleKeys = useMemo(() => summary?.roleKeys ?? [], [summary]);
+  // Prefer the current user's membership when the list is available.
+  const membership = useMemo(() => {
+    const list = membershipsQuery.data ?? [];
+    const mine = user?.id ? list.find((m) => m.userId === user.id) : undefined;
+    return mine ?? list.find((m) => m.status === "active") ?? list[0] ?? null;
+  }, [membershipsQuery.data, user?.id]);
+
+  const roleKeys = useMemo(() => {
+    const fromSummary = summary?.roleKeys ?? [];
+    if (fromSummary.length) return fromSummary;
+    return membership?.roleKeys ?? [];
+  }, [summary, membership]);
   const permissions = useMemo(() => permissionsForRoles(roleKeys), [roleKeys]);
 
   const can = useCallback(
@@ -177,20 +187,22 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const configuration = configurationQuery.data ?? null;
-  const terminology = useMemo(
-    () => ({
-      staff: configuration?.terminology?.staff || "Staff",
-      service: configuration?.terminology?.service || "Service",
-      booking: configuration?.terminology?.booking || "Booking",
+  const terminology = useMemo(() => {
+    const staff = configuration?.terminology?.staff || "Staff";
+    const booking = configuration?.terminology?.booking || "Booking";
+    let service = configuration?.terminology?.service || "Service";
+    // Older personal_training templates set both to "Session", which doubles nav labels.
+    if (service.trim().toLowerCase() === booking.trim().toLowerCase()) {
+      service = `${service.trim()} type`;
+    }
+    return {
+      staff,
+      service,
+      booking,
       client: "Client",
       linkedRecord: configuration?.terminology?.linkedRecord || "Record",
-    }),
-    [configuration],
-  );
-
-  // Prefer the current user's membership when available.
-  const membership =
-    membershipsQuery.data?.find((m) => m.status === "active") ?? membershipsQuery.data?.[0] ?? null;
+    };
+  }, [configuration]);
 
   const value = useMemo<TenantContextValue>(
     () => ({
@@ -255,10 +267,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (status === "authenticated" && !businessesQuery.isLoading && businesses.length === 0) {
-    return <CreateFirstBusiness />;
-  }
-
+  // Having no business is not an error here. This provider wraps every route,
+  // including the ones a customer uses, and a customer never has a staff
+  // membership — prompting them to found a business is nonsense. Whether an
+  // empty list means "create one" is a question only the staff app can answer,
+  // so {@link AppShell} asks it.
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
 }
 

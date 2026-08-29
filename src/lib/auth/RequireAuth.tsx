@@ -5,11 +5,16 @@ import { useAuth } from "./auth-store";
 /** Redirect unauthenticated users to /login, preserving the intended destination. */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
-  const currentHref = useRouterState({ select: (s) => s.location.href });
-  // Capture the intended destination once at mount. Reading the live href on
+  // Path + query only. The hash is deliberately dropped: an OAuth callback lands
+  // on /#access_token=… and round-tripping that through ?redirect= would put the
+  // access, refresh and provider tokens in the address bar and browser history.
+  const destination = useRouterState({
+    select: (s) => `${s.location.pathname}${s.location.searchStr ?? ""}`,
+  });
+  // Capture the intended destination once at mount. Reading the live location on
   // every render feeds the growing /login?redirect=… URL back into itself and
   // causes an infinite navigation loop during the router transition.
-  const [redirectTo] = useState(currentHref);
+  const [redirectTo] = useState(destination);
 
   if (status === "loading") {
     return (

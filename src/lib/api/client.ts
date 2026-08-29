@@ -97,11 +97,22 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     headers["If-Match"] = String(ifMatch);
   }
 
+  let hasAuth = false;
   if (!isPublic) {
     const token = tokenOverride === undefined ? getAccessToken() : tokenOverride;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+      hasAuth = true;
     }
+  }
+
+  const startedAt =
+    typeof performance !== "undefined" ? performance.now() : Date.now();
+  const elapsed = () =>
+    Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
+
+  if (import.meta.env.DEV) {
+    console.debug(`[api] → ${method} ${url}${hasAuth ? " (auth)" : ""}`);
   }
 
   let res: Response;
@@ -113,16 +124,37 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
       signal,
     });
   } catch (err) {
+    // AbortSignal.timeout / caller abort both surface as an AbortError whose
+    // raw message ("signal timed out") is confusing in a toast — classify it.
+    const aborted =
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError");
+    if (import.meta.env.DEV) {
+      console.error(
+        `[api] ✗ ${method} ${url} ${aborted ? "TIMEOUT/ABORT" : "NETWORK"} after ${elapsed()}ms`,
+        err,
+      );
+    }
     throw new ApiError({
       status: 0,
-      code: "NETWORK_ERROR",
-      title: "Network error",
-      detail: err instanceof Error ? err.message : "Unable to reach the server.",
+      code: aborted ? "TIMEOUT" : "NETWORK_ERROR",
+      title: aborted ? "Request timed out" : "Network error",
+      detail: aborted
+        ? "The API took too long to respond (it may be waking up). Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Unable to reach the server.",
     });
   }
 
   const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
   const parsed = await parseBody(res);
+
+  if (import.meta.env.DEV) {
+    const line = `[api] ← ${res.status} ${method} ${url} in ${elapsed()}ms${requestId ? ` reqId=${requestId}` : ""}`;
+    if (res.ok) console.debug(line);
+    else console.warn(line, parsed);
+  }
 
   if (!res.ok) {
     const error = parseProblemDetails(parsed, res.status, requestId);

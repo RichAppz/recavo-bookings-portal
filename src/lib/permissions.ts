@@ -74,6 +74,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.REPORT_READ,
     P.REPORT_EXPORT,
     P.AUDIT_READ,
+    P.CONNECT_MANAGE,
+    P.BILLING_MANAGE,
   ],
   [SYSTEM_ROLES.MANAGER]: [
     P.BUSINESS_READ,
@@ -119,13 +121,84 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
   [SYSTEM_ROLES.CUSTOMER]: [P.BOOKING_READ_OWN],
 };
 
+const ROLE_ALIASES: Record<string, SystemRoleKey> = {
+  owner: SYSTEM_ROLES.BUSINESS_OWNER,
+  businessowner: SYSTEM_ROLES.BUSINESS_OWNER,
+  admin: SYSTEM_ROLES.ADMINISTRATOR,
+};
+
+export function normalizeRoleKey(key: string): string {
+  const normalised = key
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return ROLE_ALIASES[normalised] ?? normalised;
+}
+
 export function permissionsForRoles(roleKeys: readonly string[]): Set<PermissionKey> {
   const result = new Set<PermissionKey>();
   for (const key of roleKeys) {
-    const permissions = DEFAULT_ROLE_PERMISSIONS[key as SystemRoleKey];
+    const permissions = DEFAULT_ROLE_PERMISSIONS[normalizeRoleKey(key) as SystemRoleKey];
     if (permissions) {
       for (const permission of permissions) result.add(permission);
     }
   }
   return result;
+}
+
+/** Who may start or manage the Recavo SaaS plan (not client payments). */
+export function canManageSaasBilling(input: {
+  can: (permission: PermissionKey | string) => boolean;
+  roleKeys: readonly string[];
+  /** When the console is gated, unknown/empty roles must not be a dead end. */
+  blocked?: boolean;
+}): boolean {
+  if (input.can(PERMISSIONS.BILLING_MANAGE) || input.can(PERMISSIONS.BUSINESS_UPDATE)) {
+    return true;
+  }
+  const roles = new Set(input.roleKeys.map(normalizeRoleKey));
+  if (
+    roles.has(SYSTEM_ROLES.BUSINESS_OWNER) ||
+    roles.has(SYSTEM_ROLES.ADMINISTRATOR) ||
+    roles.has(SYSTEM_ROLES.FINANCE)
+  ) {
+    return true;
+  }
+  return Boolean(input.blocked && input.roleKeys.length === 0);
+}
+
+export function holdsBusinessOwnerRole(roleKeys: readonly string[] | undefined): boolean {
+  return (roleKeys ?? []).some((key) => normalizeRoleKey(key) === SYSTEM_ROLES.BUSINESS_OWNER);
+}
+
+const ROLE_LABELS: Record<SystemRoleKey, string> = {
+  [SYSTEM_ROLES.BUSINESS_OWNER]: "Owner",
+  [SYSTEM_ROLES.ADMINISTRATOR]: "Administrator",
+  [SYSTEM_ROLES.MANAGER]: "Manager",
+  [SYSTEM_ROLES.STAFF]: "Staff",
+  [SYSTEM_ROLES.RECEPTION]: "Reception",
+  [SYSTEM_ROLES.FINANCE]: "Finance",
+  [SYSTEM_ROLES.RESTRICTED_STAFF]: "Restricted staff",
+  [SYSTEM_ROLES.CUSTOMER]: "Client",
+};
+
+/**
+ * A role key as a person would say it.
+ *
+ * Roles a business defines for itself never reach this table, so unknown keys
+ * are tidied rather than dropped: better an approximation of someone's own
+ * wording than a blank where their job title should be.
+ */
+export function roleLabel(key: string): string {
+  const normalised = normalizeRoleKey(key);
+  const known = ROLE_LABELS[normalised as SystemRoleKey];
+  if (known) return known;
+  const words = normalised.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
+}
+
+/** Joined role labels, or a caller-chosen fallback when someone holds none. */
+export function roleLabels(keys: readonly string[] | undefined, empty = ""): string {
+  const labels = (keys ?? []).map(roleLabel).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : empty;
 }

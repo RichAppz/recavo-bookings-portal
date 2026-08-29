@@ -172,7 +172,7 @@ export function BookingPanel({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-[2px]" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card shadow-float">
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
         <header className="flex items-start justify-between gap-3 border-b p-5">
           {bookingQuery.isLoading || !booking ? (
             <p className="text-sm text-muted-foreground">Loading booking…</p>
@@ -708,7 +708,7 @@ function RescheduleDialog({
                   setDate(e.target.value);
                   setSlotStart(null);
                 }}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none"
+                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
               />
             </div>
           </div>

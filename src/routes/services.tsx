@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { Clock, Eye, EyeOff, Plus, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
@@ -29,7 +30,12 @@ import { formatMoney, parseMoneyToMinor } from "@/lib/format";
 import type { CatalogueService } from "@/lib/api/types";
 import { toast } from "sonner";
 
+const searchSchema = z.object({
+  create: z.coerce.boolean().optional(),
+});
+
 export const Route = createFileRoute("/services")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Services — RECAVO" },
@@ -55,12 +61,20 @@ export const Route = createFileRoute("/services")({
 });
 
 function ServicesPage() {
+  const { create: openCreate } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const services = useServices();
   const staff = useStaffList();
   const locations = useLocationsList();
   const updateService = useUpdateService();
   const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (!openCreate) return;
+    setCreating(true);
+    void navigate({ search: { create: undefined }, replace: true });
+  }, [openCreate, navigate]);
 
   return (
     <>
@@ -283,6 +297,15 @@ function ServiceDialog({
     setFieldErrors({});
   };
 
+  // Radix only reports open changes it initiates itself, so a dialog opened by the
+  // parent flipping `open` never re-seeded its fields — every edit showed the create
+  // defaults, or whatever the previous edit left behind.
+  useEffect(() => {
+    if (open) resetFrom(service);
+    // resetFrom closes over fresh setters each render; the service is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, service?.id]);
+
   const updateVariant = (index: number, patch: Partial<VariantRow>) => {
     setVariants((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
@@ -368,7 +391,6 @@ function ServiceDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) onClose();
-        else resetFrom(service);
       }}
     >
       <DialogContent className="sm:max-w-2xl">

@@ -1,38 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
+import { clearPendingBusiness, readPendingBusiness } from "@/lib/auth/pending-business";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
 
-const INDUSTRY_TEMPLATES = [
-  { key: "general_appointments", name: "General appointments" },
-  { key: "personal_training", name: "Personal training" },
-  { key: "car_detailing", name: "Car detailing" },
-  { key: "barbering", name: "Barbering" },
-] as const;
+/** Soft launch: PT-only. Industry picker stays out of the UI for now. */
+const DEFAULT_INDUSTRY = "personal_training";
 
 /**
  * First-run onboarding for a signed-in account with no business membership.
  * Calls POST /api/v1/businesses, which provisions the owner membership and
- * applies the chosen industry template.
+ * applies the personal training industry template.
  */
 export function CreateFirstBusiness() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { signOut } = useAuth();
   const [legalName, setLegalName] = useState("");
   const [tradingName, setTradingName] = useState("");
-  const [industryTemplateKey, setIndustryTemplateKey] = useState<string>(INDUSTRY_TEMPLATES[0].key);
+
+  // Prefill from the business name captured during registration.
+  useEffect(() => {
+    const pending = readPendingBusiness();
+    if (!pending) return;
+    setLegalName(pending.legalName);
+    clearPendingBusiness();
+  }, []);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -41,7 +40,7 @@ export function CreateFirstBusiness() {
         {
           legalName: legalName.trim(),
           ...(tradingName.trim() ? { tradingName: tradingName.trim() } : {}),
-          industryTemplateKey,
+          industryTemplateKey: DEFAULT_INDUSTRY,
         },
         { idempotencyKey: newIdempotencyKey() },
       );
@@ -50,6 +49,7 @@ export function CreateFirstBusiness() {
     onSuccess: async () => {
       toast.success("Business created");
       await queryClient.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
+      await navigate({ to: "/billing" });
     },
     onError: (err) => toastApiError(err),
   });
@@ -60,10 +60,11 @@ export function CreateFirstBusiness() {
         <div className="flex justify-center">
           <Wordmark />
         </div>
-        <div className="rounded-2xl border bg-card p-6 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight">Create your business</h1>
+        <div className="rounded-2xl border bg-card p-6">
+          <h1 className="text-xl font-semibold tracking-tight">Set up your PT business</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your account isn't linked to a business yet. Set one up to get started.
+            Your account isn't linked to a business yet. Add your studio or trading name to get
+            started with sessions, clients and payments.
           </p>
 
           <form
@@ -78,13 +79,13 @@ export function CreateFirstBusiness() {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="legalName">Business name</Label>
+              <Label htmlFor="legalName">Studio or business name</Label>
               <Input
                 id="legalName"
                 required
                 value={legalName}
                 onChange={(e) => setLegalName(e.target.value)}
-                placeholder="Acme Detailing Ltd"
+                placeholder="Peak Performance PT"
               />
             </div>
 
@@ -94,27 +95,8 @@ export function CreateFirstBusiness() {
                 id="tradingName"
                 value={tradingName}
                 onChange={(e) => setTradingName(e.target.value)}
-                placeholder="Acme Detailing"
+                placeholder="Peak PT"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="industry">Industry</Label>
-              <Select value={industryTemplateKey} onValueChange={setIndustryTemplateKey}>
-                <SelectTrigger id="industry">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDUSTRY_TEMPLATES.map((t) => (
-                    <SelectItem key={t.key} value={t.key}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Sets default terminology and configuration. You can adjust settings later.
-              </p>
             </div>
 
             <Button type="submit" className="w-full" disabled={create.isPending}>

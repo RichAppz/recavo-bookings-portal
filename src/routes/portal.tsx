@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { z } from "zod";
 import {
   CalendarClock,
@@ -41,15 +41,20 @@ import {
   usePortalBooking,
   usePortalBookings,
   usePortalConversation,
+  usePortalCredits,
   usePortalLinkedRecords,
   usePortalMe,
   usePortalMessages,
   usePortalNotes,
   usePortalPayments,
   usePublicAvailability,
+  usePublicLocations,
+  usePublicServices,
+  useBookWithPortalCredit,
   useCancelPortalBooking,
   useReschedulePortalBooking,
   useSendPortalMessage,
+  type PortalCredit,
 } from "@/lib/api/hooks";
 import type { AvailabilitySlot, Booking } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
@@ -87,7 +92,7 @@ function PortalShell() {
           <Button
             variant="ghost"
             size="sm"
-            className="text-nav-foreground hover:text-nav-foreground"
+            className="text-nav-foreground hover:bg-nav-accent hover:text-nav-foreground"
             onClick={() => void signOut()}
           >
             <LogOut className="size-4" /> Sign out
@@ -118,10 +123,19 @@ function addDays(base: Date, days: number) {
 function PortalContent({ businessId }: { businessId: string }) {
   const [rescheduleTarget, setRescheduleTarget] = useState<Booking | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [bookingWithCredit, setBookingWithCredit] = useState(false);
 
   const me = usePortalMe(businessId);
   const bookings = usePortalBookings(businessId);
   const cancelBooking = useCancelPortalBooking(businessId);
+
+  // A 404 means this account holds no customer link here, which happens when a
+  // businessId outlives the person it belonged to — signing in after someone
+  // else was signed out of this page returns you to their URL. Send them to the
+  // root, which knows where they actually belong.
+  if (me.isError && me.error instanceof ApiError && me.error.status === 404) {
+    return <Navigate to="/" replace />;
+  }
 
   const now = new Date().toISOString();
   const upcoming = (bookings.data ?? [])
@@ -146,16 +160,17 @@ function PortalContent({ businessId }: { businessId: string }) {
           description="Please sign in again or contact the studio."
         />
       ) : me.data ? (
-        <div className="surface-card flex items-center gap-4 p-5">
+        <div className="surface-card flex flex-wrap items-center gap-4 p-5">
           <PersonAvatar name={`${me.data.firstName} ${me.data.lastName ?? ""}`} size={56} />
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-semibold">
               {me.data.firstName} {me.data.lastName}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="truncate text-sm text-muted-foreground">
               {me.data.emailDisplay ?? me.data.phoneDisplay ?? ""}
             </p>
           </div>
+          <BookMoreButton businessId={businessId} />
         </div>
       ) : null}
 
@@ -168,6 +183,8 @@ function PortalContent({ businessId }: { businessId: string }) {
         </TabsList>
 
         <TabsContent value="bookings" className="space-y-6">
+          <CreditsPanel businessId={businessId} onBook={() => setBookingWithCredit(true)} />
+
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Upcoming sessions</h2>
             {bookings.isLoading ? (
@@ -181,6 +198,7 @@ function PortalContent({ businessId }: { businessId: string }) {
               <EmptyState
                 title="No upcoming sessions"
                 description="Book your next session with your studio."
+                action={<BookMoreButton businessId={businessId} />}
               />
             ) : (
               <ul className="space-y-3">
@@ -306,6 +324,15 @@ function PortalContent({ businessId }: { businessId: string }) {
         </TabsContent>
       </Tabs>
 
+      {bookingWithCredit ? (
+        <BookWithCreditDialog
+          businessId={businessId}
+          onOpenChange={(open) => {
+            if (!open) setBookingWithCredit(false);
+          }}
+        />
+      ) : null}
+
       {rescheduleTarget ? (
         <RescheduleDialog
           businessId={businessId}
@@ -330,6 +357,306 @@ function PortalContent({ businessId }: { businessId: string }) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Sends the customer into the public booking flow for their studio.
+ *
+ * A link out rather than another dialog in here: that flow already handles
+ * choosing a service, paying, and buying a package, and it is the same page the
+ * studio's own booking link points at. Duplicating it in the portal would mean
+ * two checkouts to keep in step.
+ */
+function BookMoreButton({ businessId }: { businessId: string }) {
+  return (
+    <Button asChild>
+      <Link to="/book" search={{ businessId }}>
+        <CalendarClock className="size-4" /> Book a session
+      </Link>
+    </Button>
+  );
+}
+
+/** Credits with sessions left on them that haven't lapsed — the only ones worth showing. */
+function usableCredits(credits: PortalCredit[] | undefined): PortalCredit[] {
+  const now = Date.now();
+  return (credits ?? [])
+    .filter((c) => c.status === "active" && c.available > 0 && Date.parse(c.expiresAt) > now)
+    .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+}
+
+function sessionCount(n: number): string {
+  return `${n} ${n === 1 ? "session" : "sessions"}`;
+}
+
+function CreditsPanel({ businessId, onBook }: { businessId: string; onBook: () => void }) {
+  const credits = usePortalCredits(businessId);
+  const usable = usableCredits(credits.data);
+
+  // Nothing to say to a customer who has never bought a package, so stay out of the way.
+  if (credits.isLoading || credits.isError || usable.length === 0) return null;
+
+  const total = usable.reduce((sum, c) => sum + c.available, 0);
+  // Soonest to lapse, which is also the one the next booking will spend.
+  const nextToExpire = usable[0];
+
+  return (
+    <section className="surface-card space-y-3 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">{sessionCount(total)} prepaid</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {usable.length === 1
+              ? `Use ${nextToExpire.available === 1 ? "it" : "them"} before ${formatInTz(
+                  nextToExpire.expiresAt,
+                  "Europe/London",
+                  { dateStyle: "medium" },
+                )}.`
+              : `Your next ${sessionCount(nextToExpire.available)} expire ${formatInTz(
+                  nextToExpire.expiresAt,
+                  "Europe/London",
+                  { dateStyle: "medium" },
+                )}.`}
+          </p>
+        </div>
+        {/* Says "with a credit" because the header offers plain "Book a session"
+            and that one charges. Two buttons reading the same on one screen, one
+            spending what you already paid for, is a bill nobody meant to run up. */}
+        <Button size="sm" onClick={onBook}>
+          <CalendarClock className="size-4" /> Book with a credit
+        </Button>
+      </div>
+
+      {usable.length > 1 ? (
+        <ul className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
+          {usable.map((c) => (
+            <li key={c.id} className="flex justify-between gap-3">
+              <span>{sessionCount(c.available)} left</span>
+              <span className="tabular-nums">
+                expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function BookWithCreditDialog({
+  businessId,
+  onOpenChange,
+}: {
+  businessId: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const credits = usePortalCredits(businessId);
+  const services = usePublicServices(businessId);
+  const locations = usePublicLocations(businessId);
+  const book = useBookWithPortalCredit(businessId);
+
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const [date, setDate] = useState(isoDate(addDays(new Date(), 1)));
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+
+  // A credit is only spendable on the services its package covers, so offering anything
+  // else would just fail at submit. An entitlement with no restriction covers everything.
+  const bookable = useMemo(() => {
+    const usable = usableCredits(credits.data);
+    if (usable.length === 0) return [];
+    const unrestricted = usable.some((c) => c.eligibleServiceIds.length === 0);
+    if (unrestricted) return services.data ?? [];
+    const allowed = new Set(usable.flatMap((c) => c.eligibleServiceIds));
+    return (services.data ?? []).filter((s) => allowed.has(s.id));
+  }, [credits.data, services.data]);
+
+  const activeService = bookable.length === 1 ? bookable[0].id : serviceId;
+  const locationList = locations.data ?? [];
+  const activeLocation = locationList.length === 1 ? locationList[0].id : locationId;
+
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const availability = usePublicAvailability(businessId, {
+    serviceId: activeService ?? undefined,
+    locationId: activeLocation ?? undefined,
+    from: dayStart.toISOString(),
+    to: dayEnd.toISOString(),
+    enabled: Boolean(activeService && activeLocation),
+  });
+
+  const slots = useMemo(
+    () => (availability.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start)),
+    [availability.data],
+  );
+
+  const submit = () => {
+    if (!selectedSlot) return;
+    book.mutate(
+      { slotToken: selectedSlot.slotToken },
+      {
+        onSuccess: () => {
+          toast.success("Session booked", { description: "One credit has been used." });
+          onOpenChange(false);
+        },
+        onError: (err) => {
+          if (err instanceof ApiError && (err.code === "BOOKING_CONFLICT" || err.isConflict)) {
+            toast.error("That time was just taken — please choose another.");
+            setSelectedSlot(null);
+            void availability.refetch();
+          }
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Book with a credit</DialogTitle>
+        </DialogHeader>
+
+        {bookable.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {services.isLoading
+              ? "Loading…"
+              : "Your credits don't cover any of the sessions available to book online. Please contact the studio."}
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {bookable.length > 1 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Session</p>
+                <div className="grid gap-2">
+                  {bookable.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setServiceId(s.id);
+                        setSelectedSlot(null);
+                      }}
+                      className={`rounded-xl border p-3 text-left text-sm ${
+                        s.id === activeService
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "hover:bg-secondary"
+                      }`}
+                    >
+                      <span className="block font-medium">{s.name}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {s.durationMinutes} minutes
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {locationList.length > 1 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Location</p>
+                <div className="grid gap-2">
+                  {locationList.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => {
+                        setLocationId(l.id);
+                        setSelectedSlot(null);
+                      }}
+                      className={`rounded-xl border p-3 text-left text-sm ${
+                        l.id === activeLocation
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "hover:bg-secondary"
+                      }`}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {activeService && activeLocation ? (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  {Array.from({ length: 8 }, (_, i) => isoDate(addDays(new Date(), i + 1))).map(
+                    (d) => {
+                      const dt = new Date(`${d}T00:00:00Z`);
+                      const selected = d === date;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDate(d);
+                            setSelectedSlot(null);
+                          }}
+                          className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 text-center text-xs ${
+                            selected
+                              ? "border-primary bg-primary-soft text-primary"
+                              : "hover:bg-secondary"
+                          }`}
+                        >
+                          <span className="text-muted-foreground">
+                            {dt.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })}
+                          </span>
+                          <span className="font-semibold tabular-nums">
+                            {dt.toLocaleDateString("en-GB", { day: "numeric", timeZone: "UTC" })}
+                          </span>
+                        </button>
+                      );
+                    },
+                  )}
+                </div>
+
+                {availability.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading available times…</p>
+                ) : slots.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No availability on this date.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {slots.map((s) => (
+                      <button
+                        key={`${s.start}-${s.staffId}`}
+                        type="button"
+                        onClick={() => setSelectedSlot(s)}
+                        className={`rounded-xl border py-2 text-sm tabular-nums ${
+                          s.start === selectedSlot?.start && s.staffId === selectedSlot?.staffId
+                            ? "border-primary bg-primary-soft text-primary"
+                            : "hover:bg-secondary"
+                        }`}
+                      >
+                        {formatInTz(s.start, s.displayTimezone, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Choose a session{locationList.length > 1 ? " and location" : ""} to see available
+                times.
+              </p>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={!selectedSlot || book.isPending} onClick={submit}>
+            {book.isPending ? "Booking…" : "Book with 1 credit"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -217,7 +217,7 @@ function Overview() {
               description="Revenue, attendance and occupancy reporting isn't included on your current plan."
               action={
                 <Button variant="outline" asChild>
-                  <Link to="/platform">View plans</Link>
+                  <Link to="/billing">View plans</Link>
                 </Button>
               }
             />

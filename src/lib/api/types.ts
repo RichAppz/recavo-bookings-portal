@@ -3,6 +3,7 @@ import type { components } from "./schema";
 export type schemas = components["schemas"];
 
 export type User = schemas["User"];
+export type UserSummary = schemas["UserSummary"];
 export type Business = schemas["Business"];
 export type BusinessSummary = schemas["BusinessSummary"];
 export type BusinessConfiguration = schemas["BusinessConfiguration"];
@@ -93,6 +94,70 @@ export type SubscriptionChangePreview = {
   }>;
 };
 
+/** Business setup checklist — `GET /api/v1/businesses/{id}/onboarding`. */
+export type OnboardingStepKey =
+  | "location"
+  | "staff_availability"
+  | "service"
+  | "client"
+  | "first_booking"
+  | "saas_subscription"
+  | "public_booking"
+  | "stripe_connect"
+  | "policies"
+  | "package";
+
+export type OnboardingStep = {
+  key: OnboardingStepKey;
+  title: string;
+  description: string;
+  required: boolean;
+  completed: boolean;
+  skipped: boolean;
+  href: string;
+  completedAt?: string | null;
+};
+
+export type BusinessOnboarding = {
+  businessId: string;
+  status: "in_progress" | "complete" | "dismissed";
+  percentComplete: number;
+  requiredCompleted: number;
+  requiredTotal: number;
+  dismissedAt?: string | null;
+  steps: OnboardingStep[];
+  version: number;
+};
+
+/** RECA-511 — `POST …/policy-documents/ai/draft` */
+export type AiPolicyDraftRequest = {
+  businessName: string;
+  cancellationWindowHours: number;
+  lateCancelNotes?: string;
+  refundNotes?: string;
+  locale?: string;
+  industryHint?: string;
+};
+
+export type AiPolicyDraftResponse = {
+  drafts: {
+    cancellation: PolicyDocument;
+    terms: PolicyDocument;
+  };
+  model: string;
+  disclaimer: string;
+};
+
 export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ");
+}
+
+/** Account / membership name; falls back to email when names are empty. */
+export function userDisplayName(
+  user: Pick<UserSummary, "firstName" | "lastName" | "email"> | null | undefined,
+  fallback = "Signed in",
+): string {
+  if (!user) return fallback;
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return name || user.email || fallback;
 }

@@ -101,6 +101,7 @@ const statusStyles: Record<string, string> = {
   none: "bg-muted text-muted-foreground",
   late_cancelled: "bg-warning-soft text-warning-foreground",
   late_cancellation: "bg-warning-soft text-warning-foreground",
+  pending_counsel_review: "bg-warning-soft text-warning-foreground",
   no_show: "bg-destructive-soft text-destructive",
   failed: "bg-destructive-soft text-destructive",
   suspended: "bg-destructive-soft text-destructive",
@@ -121,6 +122,7 @@ const statusLabels: Record<string, string> = {
   no_show: "No-show",
   partially_refunded: "Partially refunded",
   past_due: "Past due",
+  pending_counsel_review: "Needs legal review",
   over_limit: "Over limit",
   grace_over_limit: "Grace (over limit)",
 };

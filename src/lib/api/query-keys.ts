@@ -5,6 +5,7 @@ export const queryKeys = {
 
   biz: (businessId: string) => ["biz", businessId] as const,
   business: (businessId: string) => ["biz", businessId, "business"] as const,
+  onboarding: (businessId: string) => ["biz", businessId, "onboarding"] as const,
   configuration: (businessId: string) => ["biz", businessId, "configuration"] as const,
   locations: (businessId: string) => ["biz", businessId, "locations"] as const,
   location: (businessId: string, locationId: string) =>
@@ -105,11 +106,20 @@ export const queryKeys = {
   file: (businessId: string, fileId: string) => ["biz", businessId, "files", fileId] as const,
 
   // Public / portal surfaces
+  /** Keyed by handle, not id: resolving the handle is the point of the request. */
+  publicBusiness: (handle: string) => ["public", "business", handle] as const,
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,
+  publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
+  /** Every cached day of availability, for when a booking has just taken a slot. */
+  publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
 
+  /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
+  portalBusinesses: () => ["portal", "businesses"] as const,
+  /** Runs once per session, before the businesses lookup can be trusted. */
+  portalLink: () => ["portal", "link"] as const,
   portalMe: (businessId: string) => ["portal", businessId, "me"] as const,
   portalBookings: (businessId: string) => ["portal", businessId, "bookings"] as const,
   portalBooking: (businessId: string, bookingId: string) =>
@@ -119,6 +129,7 @@ export const queryKeys = {
     ["portal", businessId, "conversation", "messages"] as const,
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
+  portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
   portalLinkedRecords: (businessId: string) => ["portal", businessId, "linked-records"] as const,
 
   // Platform admin: cross-tenant billing (RECA-509)
