@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { Copy, CreditCard, Globe, Sparkles } from "lucide-react";
+import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -40,6 +40,7 @@ import {
   useAuditEvents,
   useCloseBusiness,
   useConnectAccount,
+  useConnectLoginLink,
   useCreateLinkedRecordDefinition,
   useCreatePolicyDocument,
   useCurrentPolicyDocument,
@@ -1772,6 +1773,13 @@ function AuditTab() {
 
 function PaymentsTab() {
   const connect = useConnectAccount();
+  const loginLink = useConnectLoginLink();
+
+  const openStripeDashboard = async () => {
+    const url = await loginLink.mutateAsync();
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <>
       <SectionCard
@@ -1783,21 +1791,40 @@ function PaymentsTab() {
             icon={<CreditCard className="size-6" />}
             title="No payout account connected"
             description="Connect a payment provider to take card payments."
+            action={
+              <Button asChild variant="outline">
+                <Link to="/payments">Set up payments</Link>
+              </Button>
+            }
           />
         ) : (
-          <div className="flex items-start gap-4 rounded-xl border p-4">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
-              <CreditCard className="size-5" />
-            </span>
-            <div>
-              <p className="text-sm font-medium">
-                {connect.data.provider} · {connect.data.accountId}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
-                {connect.data.payoutsEnabled ? "enabled" : "disabled"}
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 rounded-xl border p-4">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <CreditCard className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium">
+                  {connect.data.provider} · {connect.data.accountId}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
+                  {connect.data.payoutsEnabled ? "enabled" : "disabled"}
+                </p>
+              </div>
             </div>
+            <Can permission={PERMISSIONS.CONNECT_MANAGE}>
+              {connect.data.onboardingState !== "not_started" ? (
+                <Button
+                  size="sm"
+                  disabled={loginLink.isPending}
+                  onClick={() => void openStripeDashboard()}
+                >
+                  <Landmark className="size-4" />
+                  {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
+                </Button>
+              ) : null}
+            </Can>
           </div>
         )}
       </SectionCard>
