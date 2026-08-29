@@ -218,6 +218,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [adoptEnrollment]);
 
+  // 403 MFA_REQUIRED interceptor. Challenge an existing factor; do not enrol.
+  const stepUpIfEnrolled = useCallback(async () => {
+    try {
+      const supabase = getSupabase();
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const step = mfaStepFor(aal, factors);
+      if (step === "proceed") return true;
+      if (step === "enroll") return false;
+      return challengeMfa();
+    } catch (err) {
+      authLog("stepUpIfEnrolled failed", err);
+      return false;
+    }
+  }, [challengeMfa]);
+
   const ensureAal2 = useCallback(async () => {
     try {
       const supabase = getSupabase();
@@ -440,12 +456,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [applySession]);
 
-  // MFA interceptor: privileged actions return 403 MFA_REQUIRED. Enrol or
-  // challenge, then retry the original request with the AAL2 bearer token.
+  // MFA interceptor: privileged actions return 403 MFA_REQUIRED only when a
+  // factor is already enrolled. Challenge that factor, then retry. Never enrol
+  // here — TOTP is optional and lives in account settings, not on checkout.
   useEffect(() => {
-    setMfaHandler(() => ensureAal2());
+    setMfaHandler(() => stepUpIfEnrolled());
     return () => setMfaHandler(null);
-  }, [ensureAal2]);
+  }, [stepUpIfEnrolled]);
 
   const verifyMfa = useCallback(async (code: string) => {
     const supabase = getSupabase();
