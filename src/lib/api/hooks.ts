@@ -1162,6 +1162,25 @@ export function useSyncConnectAccount() {
   });
 }
 
+/**
+ * Mints a single-use Stripe Express Dashboard login link. The URL is short-lived
+ * and single-use, so it is never cached — fetch a fresh one on every click and
+ * redirect immediately.
+ */
+export function useConnectLoginLink() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ url: string }>(
+        `/api/v1/businesses/${businessId}/connect/login-link`,
+        {},
+      );
+      return res.data.url;
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useDashboard(
   filters: { from?: string; to?: string; locationId?: string | null } = {},
 ) {

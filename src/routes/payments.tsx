@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CreditCard, ExternalLink, Receipt, RotateCcw } from "lucide-react";
+import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
@@ -27,6 +27,7 @@ import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useConnectAccount,
+  useConnectLoginLink,
   useCreateRefund,
   useCustomers,
   usePaymentReceipt,
@@ -101,6 +102,14 @@ function PaymentsPage() {
   const connect = useConnectAccount();
   const startOnboarding = useStartConnectOnboarding();
   const syncConnect = useSyncConnectAccount();
+  const loginLink = useConnectLoginLink();
+
+  const openStripeDashboard = async () => {
+    // The link is single-use and short-lived, so mint a fresh one on every click
+    // and send the user straight to Stripe (§5).
+    const url = await loginLink.mutateAsync();
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const currency = tenant.business?.currency ?? "GBP";
   const list = payments.payments;
@@ -200,17 +209,36 @@ function PaymentsPage() {
                   ))}
                 </ul>
               ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={syncConnect.isPending}
-                onClick={async () => {
-                  await syncConnect.mutateAsync();
-                  toast.success("Account synced");
-                }}
-              >
-                <RotateCcw className="size-4" /> Sync account
-              </Button>
+              {connect.data.payoutsEnabled ? (
+                <p className="text-xs text-muted-foreground">
+                  Payouts are automatic — Stripe pays your available balance to your bank on a
+                  rolling schedule. Use the dashboard to view your balance, see payout history,
+                  change your bank account or trigger an instant payout.
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {connect.data.onboardingState !== "not_started" ? (
+                  <Button
+                    size="sm"
+                    disabled={loginLink.isPending}
+                    onClick={() => void openStripeDashboard()}
+                  >
+                    <Landmark className="size-4" />
+                    {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={syncConnect.isPending}
+                  onClick={async () => {
+                    await syncConnect.mutateAsync();
+                    toast.success("Account synced");
+                  }}
+                >
+                  <RotateCcw className="size-4" /> Sync account
+                </Button>
+              </div>
             </div>
           )}
         </SectionCard>
