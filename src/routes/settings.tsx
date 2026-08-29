@@ -370,7 +370,81 @@ function AccountProfileTab() {
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
       </SectionCard>
+      <TwoFactorCard />
     </div>
+  );
+}
+
+function TwoFactorCard() {
+  const { mfaEnrolled, ensureAal2, unenrollMfa, refreshMfaStatus } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void refreshMfaStatus();
+  }, [refreshMfaStatus]);
+
+  return (
+    <SectionCard
+      title="Two-factor authentication"
+      description="Privileged actions require a code from an authenticator app once this is on."
+    >
+      {mfaEnrolled ? (
+        <div className="grid gap-4">
+          <p className="text-sm text-muted-foreground">
+            An authenticator app is enrolled on this account.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="w-fit" disabled={busy}>
+                Unenrol
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove two-factor authentication?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You’ll need to enter a code from your authenticator app to confirm. Privileged
+                  actions will no longer require 2FA until you enrol again.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setBusy(true);
+                    void unenrollMfa().finally(() => setBusy(false));
+                  }}
+                >
+                  Unenrol
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          <p className="text-sm text-muted-foreground">
+            Add Google Authenticator, 1Password, or Authy so checkout and other privileged
+            actions require a code.
+          </p>
+          <Button
+            className="w-fit"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const ok = await ensureAal2();
+                if (ok) toast.success("Two-factor authentication is on");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Working…" : "Enrol authenticator"}
+          </Button>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
