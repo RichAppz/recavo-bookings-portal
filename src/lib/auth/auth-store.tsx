@@ -57,12 +57,16 @@ type AuthContextValue = {
   /** Remove the verified TOTP factor. Challenges first if the session is AAL1. */
   unenrollMfa: () => Promise<boolean>;
   refreshMfaStatus: () => Promise<void>;
+  /** Enrol a TOTP factor and expose the QR/secret without opening the challenge dialog. */
+  startTotpEnrollment: () => Promise<boolean>;
   /** Complete a pending MFA challenge or enrolment; returns true on success. */
   verifyMfa: (code: string) => Promise<boolean>;
   mfaRequired: boolean;
   mfaMode: MfaMode;
   mfaEnrollment: MfaEnrollment | null;
   mfaEnrolled: boolean;
+  /** True after the first listFactors (or sign-out) so gates do not flash. */
+  mfaStatusReady: boolean;
   clearMfa: () => void;
 };
 
@@ -161,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mfaMode, setMfaMode] = useState<MfaMode>("challenge");
   const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollment | null>(null);
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
+  const [mfaStatusReady, setMfaStatusReady] = useState(false);
   const mfaResolveRef = useRef<((ok: boolean) => void) | null>(null);
   const mfaEnrollmentRef = useRef<MfaEnrollment | null>(null);
   // The Supabase user id we've already loaded a profile for. Supabase fires
@@ -182,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshMfaStatus = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       setMfaEnrolled(false);
+      setMfaStatusReady(true);
       return;
     }
     try {
@@ -189,8 +195,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMfaEnrolled(Boolean(verifiedTotp(data)));
     } catch (err) {
       authLog("refreshMfaStatus failed", err);
+    } finally {
+      setMfaStatusReady(true);
     }
   }, []);
+
+  const startTotpEnrollment = useCallback(async () => {
+    const enrollment = await beginTotpEnrollment();
+    if (!enrollment) return false;
+    adoptEnrollment(enrollment);
+    setMfaMode("enroll");
+    return true;
+  }, [adoptEnrollment]);
 
   // Challenge-only: used at sign-in for people who already enrolled. Never enrols.
   const challengeMfa = useCallback(async () => {
@@ -252,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadedForUserIdRef.current = null;
         inFlightUserIdRef.current = null;
         setMfaEnrolled(false);
+        setMfaStatusReady(true);
         setUser(null);
         setStatus("unauthenticated");
         return;
@@ -357,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(null);
           setUser(null);
           setMfaEnrolled(false);
+          setMfaStatusReady(true);
           setStatus("unauthenticated");
           return;
         }
@@ -367,6 +385,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the Supabase session is kept so a retry re-authenticates once the
         // API is reachable again.
         setUser(null);
+        setMfaEnrolled(false);
+        setMfaStatusReady(true);
         setStatus("unauthenticated");
         toastApiError(err, "Couldn't reach the API — please try again once it's back.");
       } finally {
@@ -614,6 +634,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setMfaEnrolled(false);
+    setMfaStatusReady(true);
     setStatus("unauthenticated");
     queryClient.clear();
 
@@ -662,11 +683,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ensureAal2,
       unenrollMfa,
       refreshMfaStatus,
+      startTotpEnrollment,
       verifyMfa,
       mfaRequired,
       mfaMode,
       mfaEnrollment,
       mfaEnrolled,
+      mfaStatusReady,
       clearMfa,
     }),
     [
@@ -684,11 +707,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ensureAal2,
       unenrollMfa,
       refreshMfaStatus,
+      startTotpEnrollment,
       verifyMfa,
       mfaRequired,
       mfaMode,
       mfaEnrollment,
       mfaEnrolled,
+      mfaStatusReady,
       clearMfa,
     ],
   );

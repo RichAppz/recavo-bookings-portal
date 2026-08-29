@@ -42,6 +42,10 @@ export function isBillingPath(pathname: string): boolean {
   return pathname === "/billing" || pathname.startsWith("/billing/");
 }
 
+export function isTotpSetupPath(pathname: string): boolean {
+  return pathname === "/billing/setup" || pathname.startsWith("/billing/setup/");
+}
+
 export function isSaasSubscriptionComplete(subscription: SubscriptionLike): boolean {
   const access = subscriptionAccessState(subscription);
   if (CONSOLE_OK.has(access)) return true;
