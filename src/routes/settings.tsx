@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
+import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
+import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { StatsGhost, TableGhost } from "@/components/ghost";
@@ -33,23 +35,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
 import {
-  useAddLinkedRecordField,
   useAiDraftPolicies,
   isAiPolicyDraftUnavailable,
-  useApplyLinkedRecordTemplate,
   useAuditEvents,
-  useCloseBusiness,
   useConnectAccount,
   useConnectLoginLink,
-  useCreateLinkedRecordDefinition,
   useCreatePolicyDocument,
   useCurrentPolicyDocument,
   useInvitations,
   useInviteStaff,
   useLatestPrivacyNotice,
-  useLifecycle,
-  useLifecycleTransition,
-  useLinkedRecordDefinition,
   useMemberships,
   usePolicyDocuments,
   usePublishPolicyDocument,
@@ -57,7 +52,6 @@ import {
   useSeedPolicyDefaults,
   useUpdateBusiness,
   useUpdateConfiguration,
-  useUpdateMe,
   useUpdateMembership,
   useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
@@ -80,7 +74,6 @@ import {
 } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
-import { ApiError, toastApiError } from "@/lib/api";
 
 const searchSchema = z.object({
   tab: z.string().optional(),
@@ -97,7 +90,7 @@ export const Route = createFileRoute("/settings")({
       { title: "Settings — RECAVO" },
       {
         name: "description",
-        content: "Business profile, configuration, team access, policies, lifecycle and billing.",
+        content: "Business profile, configuration, team access, policies and billing.",
       },
     ],
   }),
@@ -148,6 +141,78 @@ const POLICY_TYPES: PolicyDocumentType[] = [
 
 function policyLabel(type: string): string {
   return POLICY_TYPE_META[type as PolicyDocumentType]?.label ?? type.replace(/_/g, " ");
+}
+
+/** Turn an industry template key like `personal_training` into `Personal Training`. */
+function formatIndustry(key: string): string {
+  return key
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/** Sentence-case a raw token like `some_action` → `Some action`. */
+function humanizeToken(token: string): string {
+  const words = token
+    .replace(/[_\s]+/g, " ")
+    .trim()
+    .toLowerCase();
+  if (!words) return "";
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Known audit action keys → plain-English phrases shown to the business owner. */
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  "credit.issued": "Credit issued",
+  "credit.adjusted": "Credit adjusted",
+  "customer.created": "Customer created",
+  "payment.refunded": "Payment refunded",
+  "file.retention_run": "Data retention run",
+  "file.download_url_issued": "File download link issued",
+  "file.malware_scan": "File malware scan",
+};
+
+/**
+ * Map a raw audit action key to a readable label. Unknown keys fall back to the
+ * part after the last `.`, sentence-cased (`namespace.some_action` → "Some action").
+ */
+function auditActionLabel(action: string): string {
+  if (AUDIT_ACTION_LABELS[action]) return AUDIT_ACTION_LABELS[action];
+  const tail = action.includes(".") ? action.slice(action.lastIndexOf(".") + 1) : action;
+  return humanizeToken(tail) || action;
+}
+
+/** Actor type → who performed the action. Never surfaces the opaque actor ID. */
+const AUDIT_ACTOR_LABELS: Record<string, string> = {
+  system: "System",
+  user: "Team member",
+};
+
+function auditActorLabel(actorType: string): string {
+  return AUDIT_ACTOR_LABELS[actorType] ?? (humanizeToken(actorType) || actorType);
+}
+
+/** Target type → what the action affected. Never surfaces the opaque target ID. */
+const AUDIT_TARGET_LABELS: Record<string, string> = {
+  customer: "a customer",
+  entitlement: "a credit/entitlement",
+  payment: "a payment",
+  retention: "a retention job",
+  booking: "a booking",
+  file: "a file",
+  policy: "a policy document",
+  privacy: "a privacy notice",
+  business: "the business",
+  membership: "a team member",
+  invitation: "an invitation",
+  user: "a team member",
+};
+
+function auditTargetLabel(targetType: string): string {
+  if (AUDIT_TARGET_LABELS[targetType]) return AUDIT_TARGET_LABELS[targetType];
+  const humanized = humanizeToken(targetType).toLowerCase();
+  return humanized ? `a ${humanized}` : targetType;
 }
 
 const INVITE_ROLES = [
@@ -240,8 +305,6 @@ function SettingsPage() {
             <TabsTrigger value="policies">Policies</TabsTrigger>
             <TabsTrigger value="privacy">Privacy</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="records">Linked records</TabsTrigger>
-            <TabsTrigger value="lifecycle">Lifecycle</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="billing">Billing</TabsTrigger>
@@ -266,12 +329,6 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="notifications" className="mt-4">
             <NotificationTemplatesTab />
-          </TabsContent>
-          <TabsContent value="records" className="mt-4">
-            <LinkedRecordsTab />
-          </TabsContent>
-          <TabsContent value="lifecycle" className="mt-4">
-            <LifecycleTab />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <AuditTab />
@@ -326,53 +383,19 @@ function Field({
 
 function AccountProfileTab() {
   const { user } = useAuth();
-  const updateMe = useUpdateMe();
-  const [firstName, setFirstName] = useState(user?.firstName ?? "");
-  const [lastName, setLastName] = useState(user?.lastName ?? "");
-
-  useEffect(() => {
-    setFirstName(user?.firstName ?? "");
-    setLastName(user?.lastName ?? "");
-  }, [user?.firstName, user?.lastName]);
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Your profile">
-        <div className="grid gap-4">
-          <Field
-            label="Email"
-            value={user?.email ?? ""}
-            onChange={() => undefined}
-            type="email"
-            disabled
-            hint="Email can’t be changed here."
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="First name" value={firstName} onChange={setFirstName} />
-            <Field label="Last name" value={lastName} onChange={setLastName} />
-          </div>
-          <Button
-            className="w-fit"
-            disabled={updateMe.isPending}
-            onClick={async () => {
-              try {
-                await updateMe.mutateAsync({
-                  firstName: firstName.trim() || null,
-                  lastName: lastName.trim() || null,
-                });
-                toast.success("Profile updated");
-              } catch (err) {
-                if (!(err instanceof ApiError)) toastApiError(err);
-              }
-            }}
-          >
-            {updateMe.isPending ? "Saving…" : "Save profile"}
-          </Button>
-        </div>
+      <SectionCard
+        title="Your profile"
+        description="Your own account, not this business's settings."
+      >
+        <AccountProfileForm />
       </SectionCard>
       <SectionCard title="How your name appears">
         <p className="text-sm text-muted-foreground">
-          Teammates see this on the Team list. Only you can edit your own name.
+          Teammates see this on the Team list. Only you can edit your own name. The name clients see
+          when they book with you is set separately, on your staff record.
         </p>
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
@@ -482,9 +505,12 @@ function BusinessProfileTab() {
           <Field label="Currency" value={currency} onChange={setCurrency} />
           <Field label="Timezone" value={timezone} onChange={setTimezone} />
           <Field label="Locale" value={locale} onChange={setLocale} />
-          <p className="text-xs text-muted-foreground">
-            <StatusBadge status={business.status} /> · industry{" "}
-            <span className="font-medium">{business.industryTemplateKey}</span>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <StatusBadge status={business.status} />
+            <span>Industry:</span>
+            <span className="font-medium text-foreground">
+              {formatIndustry(business.industryTemplateKey)}
+            </span>
           </p>
           <Can
             permission={PERMISSIONS.BUSINESS_UPDATE}
@@ -547,7 +573,7 @@ function BookingLinkCard({ business }: { business: Business }) {
   const changed = normalised !== business.slug;
 
   return (
-    <SectionCard title="Booking page">
+    <SectionCard title="Booking page" className="self-start">
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="booking-slug">Public booking link</Label>
@@ -861,7 +887,7 @@ function TeamTab() {
         ) : (
           <ul className="divide-y">
             {(memberships.data ?? []).map((m) => {
-              const name = userDisplayName(m.user, m.user?.email ?? m.userId);
+              const name = userDisplayName(m.user, "Pending teammate");
               const email = m.user?.email;
               const isOwner = holdsBusinessOwnerRole(m.roleKeys);
               const roles = isOwner ? "Owner" : roleLabels(m.roleKeys, "No roles");
@@ -1147,7 +1173,7 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
               <div className="flex flex-wrap items-center gap-2">
                 <Button disabled={aiDraft.isPending} onClick={() => void generateAiDrafts()}>
                   <Sparkles className="size-4" />
-                  {aiDraft.isPending ? "Drafting…" : "Draft with AI"}
+                  {aiDraft.isPending ? "Drafting… up to a minute" : "Draft with AI"}
                 </Button>
                 <Button
                   variant="outline"
@@ -1475,243 +1501,6 @@ function NotificationTemplatesTab() {
   );
 }
 
-function LinkedRecordsTab() {
-  const def = useLinkedRecordDefinition();
-  const applyTemplate = useApplyLinkedRecordTemplate();
-  const createDef = useCreateLinkedRecordDefinition();
-  const addField = useAddLinkedRecordField();
-  const [templateKey, setTemplateKey] = useState("vehicle");
-  const [key, setKey] = useState("vehicle");
-  const [singular, setSingular] = useState("Vehicle");
-  const [plural, setPlural] = useState("Vehicles");
-  const [fieldKey, setFieldKey] = useState("registration");
-  const [fieldLabel, setFieldLabel] = useState("Registration");
-  const [dataType, setDataType] = useState<"short_text" | "long_text" | "integer" | "boolean">(
-    "short_text",
-  );
-  const definition = def.data?.definition;
-  const fields = def.data?.fields ?? [];
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Active definition">
-        {!definition ? (
-          <EmptyState title="No linked-record definition" />
-        ) : (
-          <div className="space-y-3 text-sm">
-            <p className="font-medium">
-              {definition.singularLabel} / {definition.pluralLabel}{" "}
-              <StatusBadge status={definition.status} />
-            </p>
-            <p className="text-xs text-muted-foreground">key: {definition.key}</p>
-            <ul className="divide-y rounded-xl border">
-              {fields.length === 0 ? (
-                <li className="px-3 py-2 text-xs text-muted-foreground">No fields yet</li>
-              ) : (
-                fields.map((f, i) => (
-                  <li key={String(f.id ?? f.fieldKey ?? i)} className="px-3 py-2 text-xs">
-                    <span className="font-medium">{String(f.label ?? f.fieldKey)}</span>{" "}
-                    <span className="text-muted-foreground">
-                      ({String(f.dataType ?? f.type ?? "field")})
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        )}
-      </SectionCard>
-      <div className="space-y-5">
-        <SectionCard title="Apply template">
-          <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-            <div className="grid gap-3">
-              <Field label="Template key" value={templateKey} onChange={setTemplateKey} />
-              <Button
-                className="w-fit"
-                disabled={applyTemplate.isPending || !templateKey.trim()}
-                onClick={async () => {
-                  await applyTemplate.mutateAsync(templateKey.trim());
-                  toast.success("Template applied");
-                }}
-              >
-                Apply template
-              </Button>
-            </div>
-          </Can>
-        </SectionCard>
-        {!definition ? (
-          <SectionCard title="Create definition">
-            <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-              <div className="grid gap-3">
-                <Field label="Key" value={key} onChange={setKey} />
-                <Field label="Singular" value={singular} onChange={setSingular} />
-                <Field label="Plural" value={plural} onChange={setPlural} />
-                <Button
-                  className="w-fit"
-                  disabled={createDef.isPending}
-                  onClick={async () => {
-                    await createDef.mutateAsync({
-                      key: key.trim(),
-                      singularLabel: singular.trim(),
-                      pluralLabel: plural.trim(),
-                    });
-                    toast.success("Definition created");
-                  }}
-                >
-                  Create
-                </Button>
-              </div>
-            </Can>
-          </SectionCard>
-        ) : (
-          <SectionCard title="Add field">
-            <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
-              <div className="grid gap-3">
-                <Field label="Field key" value={fieldKey} onChange={setFieldKey} />
-                <Field label="Label" value={fieldLabel} onChange={setFieldLabel} />
-                <Select value={dataType} onValueChange={(v) => setDataType(v as typeof dataType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="short_text">short_text</SelectItem>
-                    <SelectItem value="long_text">long_text</SelectItem>
-                    <SelectItem value="integer">integer</SelectItem>
-                    <SelectItem value="boolean">boolean</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  className="w-fit"
-                  disabled={addField.isPending}
-                  onClick={async () => {
-                    await addField.mutateAsync({
-                      definitionId: definition.id,
-                      body: { fieldKey: fieldKey.trim(), label: fieldLabel.trim(), dataType },
-                    });
-                    toast.success("Field added");
-                  }}
-                >
-                  Add field
-                </Button>
-              </div>
-            </Can>
-          </SectionCard>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LifecycleTab() {
-  const lifecycle = useLifecycle();
-  const transition = useLifecycleTransition();
-  const close = useCloseBusiness();
-  const [status, setStatus] = useState<
-    "trial" | "active" | "past_due" | "restricted" | "suspended"
-  >("active");
-  const [reason, setReason] = useState("");
-  const tz = useTenant().business?.defaultTimezone ?? "Europe/London";
-  const data = lifecycle.data;
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard
-        title="Lifecycle state"
-        action={data ? <StatusBadge status={data.status} /> : null}
-      >
-        {!data ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <div className="space-y-2 text-sm">
-            <p>Operational creates: {data.allowsOperationalCreates ? "allowed" : "blocked"}</p>
-            <p>Export access: {data.allowsExportAccess ? "allowed" : "blocked"}</p>
-            {data.closureExportUntil ? (
-              <p className="text-amber-700">
-                Export until {formatInTz(data.closureExportUntil, tz)}
-              </p>
-            ) : null}
-          </div>
-        )}
-      </SectionCard>
-      <SectionCard title="Transitions">
-        <Can
-          permission={PERMISSIONS.BUSINESS_UPDATE}
-          fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
-        >
-          <div className="grid gap-4">
-            <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(["trial", "active", "past_due", "restricted", "suspended"] as const).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Field label="Reason (optional)" value={reason} onChange={setReason} />
-            <Button
-              className="w-fit"
-              disabled={transition.isPending || !data || data.status === "closed"}
-              onClick={async () => {
-                if (!data) return;
-                await transition.mutateAsync({
-                  version: data.version,
-                  status,
-                  reason: reason.trim() || null,
-                });
-                toast.success(`Lifecycle moved to ${status}`);
-              }}
-            >
-              Apply transition
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  className="w-fit"
-                  disabled={!data || data.status === "closed" || close.isPending}
-                >
-                  Close business
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Close this business?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Starts the closure export window and schedules retention jobs.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={async () => {
-                      if (!data) return;
-                      const result = await close.mutateAsync({
-                        version: data.version,
-                        reason: reason.trim() || null,
-                      });
-                      toast.success("Business closed", {
-                        description: result.closureExportUntil
-                          ? `Export until ${formatInTz(result.closureExportUntil, tz)}`
-                          : undefined,
-                      });
-                    }}
-                  >
-                    Confirm close
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </Can>
-      </SectionCard>
-    </div>
-  );
-}
-
 function AuditTab() {
   const events = useAuditEvents();
   const [page, setPage] = useState(0);
@@ -1731,17 +1520,25 @@ function AuditTab() {
         ) : (
           <>
             <ul className="divide-y">
-              {slice.map((e) => (
-                <li key={e.id} className="py-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{e.action}</p>
-                    <p className="text-xs text-muted-foreground">{formatInTz(e.occurredAt, tz)}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {e.actorType}:{e.actorId} → {e.targetType}:{e.targetId}
-                  </p>
-                </li>
-              ))}
+              {slice.map((e) => {
+                const detail = [
+                  e.actorType ? auditActorLabel(e.actorType) : null,
+                  e.targetType ? auditTargetLabel(e.targetType) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <li key={e.id} className="py-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">{auditActionLabel(e.action)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatInTz(e.occurredAt, tz)}
+                      </p>
+                    </div>
+                    {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
+                  </li>
+                );
+              })}
             </ul>
             <div className="mt-4 flex items-center justify-between">
               <Button
@@ -1787,16 +1584,19 @@ function PaymentsTab() {
         action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}
       >
         {!connect.data ? (
-          <EmptyState
-            icon={<CreditCard className="size-6" />}
-            title="No payout account connected"
-            description="Connect a payment provider to take card payments."
-            action={
-              <Button asChild variant="outline">
-                <Link to="/payments">Set up payments</Link>
-              </Button>
-            }
-          />
+          <div className="space-y-4">
+            <EmptyState
+              icon={<CreditCard className="size-6" />}
+              title="No payout account connected"
+              description="Connect Stripe to take card payments. Recavo never stores your bank details."
+              action={
+                <Button asChild variant="outline">
+                  <Link to="/payments">Set up payments</Link>
+                </Button>
+              }
+            />
+            <StripeFeesNote />
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-start gap-4 rounded-xl border p-4">
@@ -1805,7 +1605,7 @@ function PaymentsTab() {
               </span>
               <div>
                 <p className="text-sm font-medium">
-                  {connect.data.provider} · {connect.data.accountId}
+                  {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
@@ -1813,6 +1613,7 @@ function PaymentsTab() {
                 </p>
               </div>
             </div>
+            <StripeFeesNote connected />
             <Can permission={PERMISSIONS.CONNECT_MANAGE}>
               {connect.data.onboardingState !== "not_started" ? (
                 <Button

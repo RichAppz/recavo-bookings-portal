@@ -27330,13 +27330,16 @@ export interface components {
             /** Format: uuid */
             id: string;
             email: string | null;
-            /** @description Optional given name on the account profile. */
-            firstName: string | null;
-            /** @description Optional family name on the account profile. */
-            lastName: string | null;
             emailVerified: boolean;
             /** @enum {string} */
-            status: "active" | "disabled";
+            status: "active" | "suspended" | "deleted";
+            /** @description Account display name. */
+            name?: string | null;
+            phone?: string | null;
+            /** @description Canonical BCP 47 tag. */
+            locale?: string | null;
+            /** @description IANA zone. */
+            timezone?: string | null;
         };
         /** @description Compact user projection embedded on team memberships. */
         UserSummary: {

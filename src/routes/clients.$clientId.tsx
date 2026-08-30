@@ -199,9 +199,7 @@ function ClientProfile() {
             · Client since {ukDate(client.createdAt.slice(0, 10))}
           </p>
           {client.userId ? (
-            <p className="mt-1 font-mono text-xs text-muted-foreground">
-              Portal user: {client.userId}
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Has a linked portal account</p>
           ) : null}
           {anonymised ? (
             <p className="mt-2 text-sm text-destructive">
@@ -361,7 +359,7 @@ function ClientProfile() {
                         {ukDate(p.createdAt.slice(0, 10))}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {p.providerPaymentId ?? p.id}
+                        {p.providerPaymentId ?? "—"}
                       </td>
                       <td className="px-4 py-3 tabular-nums">
                         {formatMoney(p.amountMinor, p.currency)}

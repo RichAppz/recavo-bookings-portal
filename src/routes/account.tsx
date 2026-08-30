@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 import { CalendarClock, CalendarDays, Receipt, Store, Ticket, Wallet } from "lucide-react";
+import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import type { Booking, Payment } from "@/lib/api/types";
 import { formatInTz, formatMoney } from "@/lib/format";
 
 const searchSchema = z.object({
-  view: z.enum(["overview", "calendar", "credits", "purchases"]).optional(),
+  view: z.enum(["overview", "calendar", "credits", "purchases", "profile"]).optional(),
 });
 
 export const Route = createFileRoute("/account")({
@@ -43,6 +44,7 @@ const TITLES: Record<AccountView, { title: string; description: string }> = {
   calendar: { title: "Calendar", description: "Your sessions, month by month." },
   credits: { title: "Credits", description: "Sessions you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
+  profile: { title: "Profile", description: "Your name and contact details." },
 };
 
 /**
@@ -65,6 +67,18 @@ function AccountPage() {
   const studios = usePortalBusinesses(signedIn && link.isFetched);
 
   const copy = TITLES[view];
+
+  // Your profile belongs to you, not to a studio's record of you, so it has to
+  // be reachable before — and whether or not — any studio is attached.
+  if (view === "profile") {
+    return (
+      <AccountShell view={view} title={copy.title} description={copy.description}>
+        <SectionCard title="Your details" className="max-w-xl">
+          <AccountProfileForm />
+        </SectionCard>
+      </AccountShell>
+    );
+  }
 
   if (studios.isLoading || !studios.data) {
     return (

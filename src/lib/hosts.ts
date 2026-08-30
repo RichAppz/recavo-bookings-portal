@@ -20,6 +20,7 @@ function parse(hostname: string): { staging: boolean; role: string; domain: stri
   const labels = hostname.split(".");
   // A bare host — localhost, or an IP in a preview — names no role.
   if (labels.length < 2 || !labels[0]) return null;
+  if (labels.every((label) => /^\d+$/.test(label))) return null;
   if (labels[0] === "staging" && labels.length >= 3 && labels[1]) {
     return { staging: true, role: labels[1], domain: labels.slice(2).join(".") };
   }
