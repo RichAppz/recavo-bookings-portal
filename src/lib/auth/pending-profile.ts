@@ -1,13 +1,12 @@
 /**
- * Register collects first/last name before the API user exists. Stash them so
- * we can PATCH /api/v1/me once the session is authenticated (immediate signup
- * or after email verification).
+ * Register collects a name before the API user exists. Stash it so we can PATCH
+ * /api/v1/me once the session is authenticated (immediate signup or after email
+ * verification).
  */
 const KEY = "recavo.pendingProfile";
 
 export type PendingProfile = {
-  firstName: string;
-  lastName: string;
+  name: string;
 };
 
 export function stashPendingProfile(value: PendingProfile): void {

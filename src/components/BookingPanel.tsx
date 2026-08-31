@@ -560,10 +560,7 @@ function humanize(value: string): string {
 function historyActorLabel(entry: BookingHistoryEntry): string {
   if (entry.actorName) return entry.actorName;
   if (entry.actorType === "system" || entry.actorId === "system") return "System";
-  if (entry.actorType && entry.actorId) {
-    return `${humanize(entry.actorType)} · ${String(entry.actorId).slice(0, 8)}`;
-  }
-  if (entry.actorId) return String(entry.actorId).slice(0, 8);
+  if (entry.actorType) return humanize(entry.actorType);
   return "System";
 }
 

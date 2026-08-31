@@ -43,6 +43,7 @@ import type {
   LinkedRecordDefinitionBundle,
   Location,
   Membership,
+  MembershipWithUser,
   Notification,
   OnboardingStepKey,
   OutboxEvent,
@@ -60,6 +61,7 @@ import type {
   SaasPlanCode,
   Staff,
   SubscriptionChangePreview,
+  UserProfileUpdate,
 } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
 import { deriveBusinessOnboarding } from "@/lib/onboarding/derive";
@@ -1664,7 +1666,7 @@ export function useMemberships() {
     queryKey: queryKeys.memberships(businessId),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ memberships: Membership[] }>(
+      const res = await api.get<{ memberships: MembershipWithUser[] }>(
         `/api/v1/businesses/${businessId}/memberships`,
       );
       return res.data.memberships;
@@ -1672,20 +1674,26 @@ export function useMemberships() {
   });
 }
 
-/** Self-service account profile (firstName / lastName). Email is not editable. */
+/**
+ * The caller's own account profile — name, phone, locale, timezone. Not
+ * tenant-scoped, and nothing to do with email or password, which belong to
+ * Supabase Auth.
+ *
+ * Errors are left to the caller: a 400 here carries per-field codes that belong
+ * beside the inputs rather than in a toast.
+ */
 export function useUpdateMe() {
   const qc = useQueryClient();
   const businessId = useBusinessId();
   const { updateProfile } = useAuth();
   return useMutation({
-    mutationFn: (body: { firstName?: string | null; lastName?: string | null }) =>
-      updateProfile(body),
+    mutationFn: (body: UserProfileUpdate) => updateProfile(body),
     onSuccess: () => {
+      // A renamed member shows up in the Team list, which embeds the account.
       if (businessId) {
         void qc.invalidateQueries({ queryKey: queryKeys.memberships(businessId) });
       }
     },
-    onError: (err) => toastApiError(err),
   });
 }
 
@@ -1839,11 +1847,14 @@ export function useSeedPolicyDefaults() {
   });
 }
 
-/** True when AI drafting isn’t enabled yet (missing key or route not deployed). */
+/** True when AI drafting isn’t enabled yet (feature flag off, no key, or route not deployed). */
 export function isAiPolicyDraftUnavailable(err: unknown): boolean {
   if (!(err instanceof ApiError)) return false;
+  // Feature flag / missing provider key → 403 FEATURE_NOT_AVAILABLE.
   if (err.code === "FEATURE_NOT_AVAILABLE") return true;
-  // Backend not deployed yet → 404 NOT_FOUND / "Route not found"
+  // Route present but drafting not implemented on this environment → 501.
+  if (err.status === 501) return true;
+  // Backend not deployed yet → 404 NOT_FOUND / "Route not found".
   if (err.status === 404) return true;
   return false;
 }

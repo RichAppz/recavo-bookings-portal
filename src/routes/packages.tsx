@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Pencil, Plus } from "lucide-react";
+import { Clock, Eye, EyeOff, Plus, Ticket } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
-import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
-import { TableGhost } from "@/components/ghost";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,21 +36,21 @@ import {
 } from "@/lib/api/hooks";
 import type { Package } from "@/lib/api/types";
 import { formatMoney, parseMoneyToMinor } from "@/lib/format";
+import { validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/packages")({
   head: () => ({
     meta: [
-      { title: "Packages and credits — RECAVO" },
+      { title: "Packages — RECAVO" },
       {
         name: "description",
-        content:
-          "Sell session packages, track credit balances and follow every credit movement in the ledger.",
+        content: "Prepaid session packages clients can buy up front.",
       },
       { property: "og:title", content: "RECAVO Packages" },
       {
         property: "og:description",
-        content: "Credit packages, expiries and the full credit ledger.",
+        content: "Prepaid session packages clients can buy up front.",
       },
     ],
   }),
@@ -73,148 +72,148 @@ function PackagesPage() {
   const [editing, setEditing] = useState<Package | null>(null);
   const [quick, setQuick] = useState<QuickAction>(null);
 
-  const activePackages = (packages.data ?? []).filter((p) => p.active).length;
-
   return (
     <>
       <PageHeader
-        title="Packages and credits"
-        description="Prepaid blocks of sessions, plus every credit movement across your clients."
+        title="Packages"
+        description="Prepaid blocks of sessions clients can buy up front."
         actions={
           <>
-            <Button
-              variant="outline"
-              disabled={expireCredits.isPending}
-              onClick={async () => {
-                const result = await expireCredits.mutateAsync();
-                toast.success(
-                  result.expired.length === 0
-                    ? "No credits were due to expire"
-                    : `Expired ${result.expired.length} entitlement(s)`,
-                  { description: result.requestId ? `Ref: ${result.requestId}` : undefined },
-                );
-              }}
-            >
-              Run expiry sweep
-            </Button>
             <Button variant="outline" onClick={() => setQuick("package")}>
               Sell package
             </Button>
             <Button onClick={() => setCreating(true)}>
-              <Plus className="size-4" /> New package
+              <Plus className="size-4" /> Create package
             </Button>
           </>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Package types" value={String((packages.data ?? []).length)} />
-        <StatCard label="Available to buy" value={String(activePackages)} />
-        <StatCard
-          label="Total credits per sale"
-          value={String((packages.data ?? []).reduce((s, p) => s + p.creditsIssued, 0))}
-          hint="across all package types"
+      {packages.isLoading ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="surface-card h-[280px] animate-pulse" />
+          ))}
+        </div>
+      ) : packages.isError ? (
+        <EmptyState
+          title="Couldn't load packages"
+          description={
+            packages.error instanceof ApiError
+              ? packages.error.detail || packages.error.title
+              : "Please try again shortly."
+          }
+          action={<Button onClick={() => packages.refetch()}>Try again</Button>}
         />
-      </div>
+      ) : (packages.data ?? []).length === 0 ? (
+        <EmptyState
+          title="No packages yet"
+          description="Create a package so clients can buy credits up front."
+          action={<Button onClick={() => setCreating(true)}>Create package</Button>}
+        />
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {(packages.data ?? []).map((p) => {
+            const eligible =
+              p.eligibleServiceIds.length === 0
+                ? "Any session"
+                : p.eligibleServiceIds
+                    .map((id) => services.data?.find((s) => s.id === id)?.name)
+                    .filter(Boolean)
+                    .join(", ") || "Any session";
+            return (
+              <article key={p.id} className="surface-card flex flex-col p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex size-8 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                    <Ticket className="size-4" />
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {p.salesAvailable ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Eye className="size-3.5" /> On booking page
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <EyeOff className="size-3.5" /> Hidden from booking page
+                      </span>
+                    )}
+                    <StatusBadge status={p.active ? "active" : "inactive"} />
+                  </div>
+                </div>
+                <h2 className="mt-3 text-lg font-semibold">{p.name}</h2>
+                {p.description ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{p.description}</p>
+                ) : null}
 
-      <SectionCard title="Package types" bodyClassName="p-0">
-        {packages.isLoading ? (
-          <TableGhost rows={4} />
-        ) : packages.isError ? (
-          <div className="p-6">
-            <EmptyState
-              title="Couldn't load packages"
-              description={
-                packages.error instanceof ApiError
-                  ? packages.error.detail || packages.error.title
-                  : "Please try again shortly."
-              }
-              action={<Button onClick={() => packages.refetch()}>Try again</Button>}
-            />
-          </div>
-        ) : (packages.data ?? []).length === 0 ? (
-          <div className="p-6">
-            <EmptyState
-              title="No packages yet"
-              description="Create a package to let clients buy credits up front."
-              action={<Button onClick={() => setCreating(true)}>New package</Button>}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/60 text-xs text-muted-foreground">
-                <tr>
-                  {[
-                    "Package",
-                    "Price",
-                    "Credits",
-                    "Validity",
-                    "Eligible services",
-                    "Available",
-                    "",
-                  ].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(packages.data ?? []).map((p) => (
-                  <tr key={p.id} className="hover:bg-secondary/50">
-                    <td className="px-4 py-3 font-medium">{p.name}</td>
-                    <td className="px-4 py-3 tabular-nums">
-                      {formatMoney(p.priceMinor, p.currency)}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">{p.creditsIssued}</td>
-                    <td className="px-4 py-3">
-                      {p.validity.amount} {p.validity.kind.replace("_", " ")}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {p.eligibleServiceIds.length === 0
-                        ? "All services"
-                        : p.eligibleServiceIds
-                            .map((id) => services.data?.find((s) => s.id === id)?.name)
-                            .filter(Boolean)
-                            .join(", ")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Switch
-                        checked={p.active}
-                        disabled={updatePackage.isPending}
-                        onCheckedChange={(v) =>
-                          updatePackage.mutate(
-                            { packageId: p.id, version: p.version, body: { active: v } },
-                            {
-                              onSuccess: () =>
-                                toast.success(v ? "Package activated" : "Package paused"),
-                            },
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(p)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SectionCard>
+                <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    {formatMoney(p.priceMinor, p.currency)}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Ticket className="size-4 text-muted-foreground" />
+                    {p.creditsIssued} {p.creditsIssued === 1 ? "session" : "sessions"}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="size-4 text-muted-foreground" />
+                    Valid {validityLabel(p.validity)}
+                  </span>
+                </div>
 
-      <SectionCard
-        title="Client credit balances and ledgers"
-        description="Open a client profile to view or adjust their balances"
-      >
-        <Link to="/clients" className="text-sm text-primary hover:underline">
-          Go to clients →
+                <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                  <Row label="Sessions" value={eligible} />
+                  <Row label="Transferable" value={p.transferable ? "Yes" : "No"} />
+                </dl>
+
+                <div className="mt-auto flex items-center justify-between pt-5">
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch
+                      checked={p.active}
+                      disabled={updatePackage.isPending}
+                      onCheckedChange={(v) =>
+                        updatePackage.mutate(
+                          { packageId: p.id, version: p.version, body: { active: v } },
+                          {
+                            onSuccess: () =>
+                              toast.success(v ? "Package activated" : "Package paused"),
+                          },
+                        )
+                      }
+                    />
+                    {p.active ? "On sale" : "Paused"}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
+                    Edit package
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="text-sm text-muted-foreground">
+        Credit balances live on the client profile.{" "}
+        <Link to="/clients" className="text-primary hover:underline">
+          Go to clients
         </Link>
-      </SectionCard>
+        {" · "}
+        <button
+          type="button"
+          className="text-primary hover:underline disabled:opacity-50"
+          disabled={expireCredits.isPending}
+          onClick={async () => {
+            const result = await expireCredits.mutateAsync();
+            toast.success(
+              result.expired.length === 0
+                ? "No credits were due to expire"
+                : `Expired ${result.expired.length} entitlement(s)`,
+              { description: result.requestId ? `Ref: ${result.requestId}` : undefined },
+            );
+          }}
+        >
+          {expireCredits.isPending ? "Running expiry sweep…" : "Run expiry sweep"}
+        </button>
+      </p>
 
       <PackageDialog
         open={creating || editing !== null}
@@ -226,6 +225,15 @@ function PackagesPage() {
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
     </>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
+    </div>
   );
 }
 

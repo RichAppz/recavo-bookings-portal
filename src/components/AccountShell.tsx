@@ -1,6 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, LayoutDashboard, LogOut, Menu, Receipt, Ticket, X } from "lucide-react";
+import {
+  CalendarDays,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Receipt,
+  Ticket,
+  UserRound,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar } from "@/components/ui-bits";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -9,13 +18,14 @@ import { useAuth } from "@/lib/auth/auth-store";
 import { userDisplayName } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-export type AccountView = "overview" | "calendar" | "credits" | "purchases";
+export type AccountView = "overview" | "calendar" | "credits" | "purchases" | "profile";
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "calendar", label: "Calendar", icon: CalendarDays },
   { view: "credits", label: "Credits", icon: Ticket },
   { view: "purchases", label: "Purchases", icon: Receipt },
+  { view: "profile", label: "Profile", icon: UserRound },
 ];
 
 /**
