@@ -42,6 +42,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
+import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { TableGhost } from "@/components/ghost";
 import {
   useAvailability,
@@ -53,6 +54,7 @@ import {
   useLocationsList,
   useStaffList,
   useTakeBookingPayment,
+  type PublicBookingPayment,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
 import {
@@ -61,6 +63,7 @@ import {
   type BookingHistoryEntry,
   type Staff,
 } from "@/lib/api/types";
+import { bookingNeedsPayment } from "@/lib/booking-payment";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -87,6 +90,7 @@ export function BookingPanel({
   const [cancelReason, setCancelReason] = useState("");
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [tab, setTab] = useState("details");
+  const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
 
   const bookingQuery = useBooking(bookingId ?? undefined);
   const staffList = useStaffList();
@@ -160,13 +164,19 @@ export function BookingPanel({
     if (!booking) return;
     try {
       const result = await takePayment.mutateAsync({ bookingId: booking.id });
-      toast.success("Payment started", {
-        description: result.clientSecret
-          ? "Payment intent created — complete checkout to confirm."
-          : "Payment recorded.",
+      if (!result.clientSecret || !result.connectedAccountId || !result.publishableKey) {
+        toast.error("Card checkout isn't available for this business yet.");
+        return;
+      }
+      setCheckout({
+        clientSecret: result.clientSecret,
+        connectedAccountId: result.connectedAccountId,
+        publishableKey: result.publishableKey,
+        amountMinor: result.amountMinor ?? booking.priceMinor,
+        currency: result.currency ?? booking.currency,
       });
-    } catch (err) {
-      toastApiError(err);
+    } catch {
+      // Mutation onError already surfaced the problem.
     }
   };
 
@@ -212,6 +222,9 @@ export function BookingPanel({
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
                 <StatusBadge status={booking.attendanceStatus} />
+                {bookingNeedsPayment(booking, payments.data ?? []) ? (
+                  <StatusBadge status="payment_due" />
+                ) : null}
               </div>
 
               <Tabs value={tab} onValueChange={setTab}>
@@ -344,7 +357,7 @@ export function BookingPanel({
                       <p className="text-xs text-muted-foreground">
                         {hasSucceededPayment
                           ? "Payment received for this booking."
-                          : "No successful payment recorded yet."}
+                          : `Payment of ${formatMoney(booking.priceMinor, booking.currency)} is due.`}
                       </p>
                       <Button
                         size="sm"
@@ -532,6 +545,25 @@ export function BookingPanel({
           rescheduleAction={rescheduleAction}
         />
       ) : null}
+
+      <OutstandingPaymentDialog
+        title="Take payment"
+        payment={checkout}
+        contact={{
+          name: customer.data ? customerDisplayName(customer.data) : null,
+          email: customer.data?.emailDisplay ?? null,
+          phone: customer.data?.phoneDisplay ?? null,
+        }}
+        onPaid={async () => {
+          setCheckout(null);
+          toast.success("Payment received");
+          void bookingQuery.refetch();
+          void payments.refetch();
+        }}
+        onOpenChange={(open) => {
+          if (!open) setCheckout(null);
+        }}
+      />
     </>
   );
 }

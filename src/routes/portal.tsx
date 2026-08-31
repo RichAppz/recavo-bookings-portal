@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   CalendarClock,
   CalendarX,
+  CreditCard,
   FileText,
   LogOut,
   MapPin,
@@ -55,11 +56,15 @@ import {
   useCancelPortalBooking,
   useReschedulePortalBooking,
   useSendPortalMessage,
+  useStartPortalBookingPayment,
   type PortalCredit,
+  type PublicBookingPayment,
 } from "@/lib/api/hooks";
 import type { AvailabilitySlot, Booking } from "@/lib/api/types";
+import { bookingNeedsPayment } from "@/lib/booking-payment";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
+import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 
 const searchSchema = z.object({
   businessId: z.string().optional(),
@@ -125,10 +130,14 @@ function PortalContent({ businessId }: { businessId: string }) {
   const [rescheduleTarget, setRescheduleTarget] = useState<Booking | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [bookingWithCredit, setBookingWithCredit] = useState(false);
+  const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   const me = usePortalMe(businessId);
   const bookings = usePortalBookings(businessId);
+  const payments = usePortalPayments(businessId);
   const cancelBooking = useCancelPortalBooking(businessId);
+  const startPayment = useStartPortalBookingPayment(businessId);
 
   // A 404 means this account holds no customer link here, which happens when a
   // businessId outlives the person it belonged to — signing in after someone
@@ -150,6 +159,23 @@ function PortalContent({ businessId }: { businessId: string }) {
   const past = (bookings.data ?? [])
     .filter((b) => !upcoming.includes(b))
     .sort((a, b) => b.start.localeCompare(a.start));
+  const paymentRows = payments.data ?? [];
+
+  const payNow = async (booking: Booking) => {
+    setPayingId(booking.id);
+    try {
+      const result = await startPayment.mutateAsync({ bookingId: booking.id });
+      if (!result.clientSecret || !result.connectedAccountId || !result.publishableKey) {
+        toast.error("Card checkout isn't available for this studio yet.");
+        return;
+      }
+      setCheckout(result);
+    } catch {
+      // Mutation onError already surfaced the problem.
+    } finally {
+      setPayingId(null);
+    }
+  };
 
   return (
     <>
@@ -224,10 +250,24 @@ function PortalContent({ businessId }: { businessId: string }) {
                       </p>
                       <p className="mt-1 text-xs font-medium">
                         {formatMoney(b.priceMinor, b.currency)}
+                        {bookingNeedsPayment(b, paymentRows) ? " due" : ""}
                       </p>
                     </button>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <StatusBadge status={b.status} />
+                      {bookingNeedsPayment(b, paymentRows) ? (
+                        <StatusBadge status="payment_due" />
+                      ) : null}
+                      {bookingNeedsPayment(b, paymentRows) ? (
+                        <Button
+                          size="sm"
+                          disabled={payingId === b.id || startPayment.isPending}
+                          onClick={() => void payNow(b)}
+                        >
+                          <CreditCard className="size-4" />
+                          {payingId === b.id ? "Starting…" : "Pay now"}
+                        </Button>
+                      ) : null}
                       {b.status === "confirmed" || b.status === "awaiting_payment" ? (
                         <>
                           <Button
@@ -350,6 +390,10 @@ function PortalContent({ businessId }: { businessId: string }) {
         <BookingDetailDialog
           businessId={businessId}
           bookingId={detailId}
+          due={(bookings.data ?? []).some(
+            (b) => b.id === detailId && bookingNeedsPayment(b, paymentRows),
+          )}
+          paying={payingId === detailId && startPayment.isPending}
           onOpenChange={(open) => {
             if (!open) setDetailId(null);
           }}
@@ -357,8 +401,28 @@ function PortalContent({ businessId }: { businessId: string }) {
             setDetailId(null);
             setRescheduleTarget(booking);
           }}
+          onPay={(booking) => void payNow(booking)}
         />
       ) : null}
+
+      <OutstandingPaymentDialog
+        title="Pay for this session"
+        payment={checkout}
+        contact={{
+          name: me.data ? `${me.data.firstName} ${me.data.lastName ?? ""}`.trim() : null,
+          email: me.data?.emailDisplay ?? null,
+          phone: me.data?.phoneDisplay ?? null,
+        }}
+        onPaid={async () => {
+          setCheckout(null);
+          toast.success("Payment received");
+          void bookings.refetch();
+          void payments.refetch();
+        }}
+        onOpenChange={(open) => {
+          if (!open) setCheckout(null);
+        }}
+      />
     </>
   );
 }
@@ -670,13 +734,19 @@ function BookWithCreditDialog({
 function BookingDetailDialog({
   businessId,
   bookingId,
+  due,
+  paying,
   onOpenChange,
   onReschedule,
+  onPay,
 }: {
   businessId: string;
   bookingId: string;
+  due: boolean;
+  paying: boolean;
   onOpenChange: (open: boolean) => void;
   onReschedule: (booking: Booking) => void;
+  onPay: (booking: Booking) => void;
 }) {
   const detail = usePortalBooking(businessId, bookingId);
   const cancelBooking = useCancelPortalBooking(businessId);
@@ -704,7 +774,12 @@ function BookingDetailDialog({
                 }),
               ],
               ["Status", booking.status.replace(/_/g, " ")],
-              ["Total", formatMoney(booking.priceMinor, booking.currency)],
+              [
+                "Total",
+                due
+                  ? `${formatMoney(booking.priceMinor, booking.currency)} due`
+                  : formatMoney(booking.priceMinor, booking.currency),
+              ],
               ["Notes", booking.notesCustomer || "—"],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4">
@@ -716,6 +791,12 @@ function BookingDetailDialog({
         )}
         {booking && (booking.status === "confirmed" || booking.status === "awaiting_payment") ? (
           <DialogFooter className="gap-2 sm:justify-between">
+            {due ? (
+              <Button disabled={paying} onClick={() => onPay(booking)}>
+                <CreditCard className="size-4" />
+                {paying ? "Starting…" : "Pay now"}
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={() => onReschedule(booking)}>
               <CalendarClock className="size-4" /> Reschedule
             </Button>
@@ -852,7 +933,10 @@ function PaymentsPanel({ businessId }: { businessId: string }) {
       ) : payments.isError ? (
         <EmptyState title="Couldn't load payments" description="Please try again shortly." />
       ) : sorted.length === 0 ? (
-        <EmptyState title="No payments yet" description="Your payment history will appear here." />
+        <EmptyState
+          title="No payments yet"
+          description="When you pay for a session, the receipt will show up here. Amounts still due appear on your bookings."
+        />
       ) : (
         <ul className="divide-y">
           {sorted.map((p) => (
