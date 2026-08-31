@@ -18,6 +18,7 @@ import {
   type PortalCredit,
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
+import { bookingNeedsPayment } from "@/lib/booking-payment";
 import { formatInTz, formatMoney } from "@/lib/format";
 
 const searchSchema = z.object({
@@ -40,7 +41,7 @@ export const Route = createFileRoute("/account")({
 });
 
 const TITLES: Record<AccountView, { title: string; description: string }> = {
-  overview: { title: "My account", description: "Everything you've booked and paid for." },
+  overview: { title: "My account", description: "Your sessions, credits and payments." },
   calendar: { title: "Calendar", description: "Your sessions, month by month." },
   credits: { title: "Credits", description: "Sessions you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
@@ -295,7 +296,12 @@ function Overview({
                         {solo ? "" : ` · ${b.studio.tradingName}`}
                       </p>
                     </div>
-                    <StatusBadge status={b.status} />
+                    <div className="flex shrink-0 items-center gap-2">
+                      {bookingNeedsPayment(b, history) ? (
+                        <StatusBadge status="payment_due" />
+                      ) : null}
+                      <StatusBadge status={b.status} />
+                    </div>
                   </Link>
                 </li>
               ))}

@@ -79,6 +79,7 @@ const statusStyles: Record<string, string> = {
   entitled: "bg-success-soft text-success",
   connected: "bg-success-soft text-success",
   awaiting_payment: "bg-warning-soft text-warning-foreground",
+  payment_due: "bg-warning-soft text-warning-foreground",
   pending: "bg-warning-soft text-warning-foreground",
   held: "bg-warning-soft text-warning-foreground",
   draft: "bg-warning-soft text-warning-foreground",
@@ -115,6 +116,7 @@ const statusStyles: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   awaiting_payment: "Awaiting payment",
+  payment_due: "Payment due",
   late_cancellation: "Late cancellation",
   late_cancelled: "Late cancellation",
   cancelled_by_customer: "Cancelled by client",
