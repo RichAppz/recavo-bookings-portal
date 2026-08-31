@@ -24,7 +24,9 @@ export default defineConfig({
         "/api": {
           target: apiTarget,
           changeOrigin: true,
-          secure: true,
+          // Staging is HTTPS; the local API is HTTP. Verifying TLS against
+          // 127.0.0.1 would refuse the proxy and look like a network error.
+          secure: apiTarget.startsWith("https://"),
         },
       },
     },

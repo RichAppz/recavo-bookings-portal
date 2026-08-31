@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
@@ -165,28 +166,31 @@ function PaymentsPage() {
           {connect.isLoading ? (
             <TableGhost rows={3} />
           ) : connect.isError || !connect.data ? (
-            <EmptyState
-              icon={<CreditCard className="size-6" />}
-              title="No payout account connected"
-              description="Connect a payment provider to start taking card payments."
-              action={
-                <Button
-                  disabled={startOnboarding.isPending}
-                  onClick={async () => {
-                    const result = await startOnboarding.mutateAsync();
-                    if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
-                  }}
-                >
-                  Connect account
-                </Button>
-              }
-            />
+            <div className="space-y-4">
+              <EmptyState
+                icon={<CreditCard className="size-6" />}
+                title="No payout account connected"
+                description="Connect Stripe to start taking card payments. Recavo never stores your bank details — Stripe handles onboarding and payouts."
+                action={
+                  <Button
+                    disabled={startOnboarding.isPending}
+                    onClick={async () => {
+                      const result = await startOnboarding.mutateAsync();
+                      if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+                    }}
+                  >
+                    Connect Stripe
+                  </Button>
+                }
+              />
+              <StripeFeesNote />
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-6 text-sm">
                 <span>
                   <span className="text-muted-foreground">Provider: </span>
-                  {connect.data.provider}
+                  {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
                 </span>
                 <span>
                   <span className="text-muted-foreground">Charges: </span>
@@ -209,6 +213,7 @@ function PaymentsPage() {
                   ))}
                 </ul>
               ) : null}
+              <StripeFeesNote connected />
               {connect.data.payoutsEnabled ? (
                 <p className="text-xs text-muted-foreground">
                   Payouts are automatic — Stripe pays your available balance to your bank on a

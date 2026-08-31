@@ -2438,8 +2438,6 @@
         "required": [
           "id",
           "email",
-          "firstName",
-          "lastName",
           "emailVerified",
           "status"
         ],
@@ -2454,20 +2452,6 @@
               "null"
             ]
           },
-          "firstName": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional given name on the account profile."
-          },
-          "lastName": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional family name on the account profile."
-          },
           "emailVerified": {
             "type": "boolean"
           },
@@ -2475,8 +2459,36 @@
             "type": "string",
             "enum": [
               "active",
-              "disabled"
+              "suspended",
+              "deleted"
             ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Account display name."
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Canonical BCP 47 tag."
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "IANA zone."
           }
         }
       },
@@ -6204,7 +6216,7 @@
       },
       "patch": {
         "summary": "Update the authenticated user’s profile",
-        "description": "Self-service profile update. Currently supports firstName and lastName (omit to leave unchanged; null/blank clears). Email changes are not supported here.",
+        "description": "Self-service profile update. Supports name, phone, locale and timezone (omit to leave unchanged; null/blank clears, except name which rejects blank). Email changes are not supported here.",
         "security": [
           {
             "bearerAuth": []
@@ -6217,19 +6229,30 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "firstName": {
+                  "name": {
                     "type": [
                       "string",
                       "null"
                     ],
-                    "maxLength": 100
+                    "maxLength": 120
                   },
-                  "lastName": {
+                  "phone": {
                     "type": [
                       "string",
                       "null"
-                    ],
-                    "maxLength": 100
+                    ]
+                  },
+                  "locale": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "timezone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "additionalProperties": false

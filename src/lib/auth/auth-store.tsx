@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import { api, setAccessToken, setMfaHandler, queryKeys, ApiError, toastApiError } from "@/lib/api";
-import type { User } from "@/lib/api/types";
+import type { User, UserProfileUpdate } from "@/lib/api/types";
 import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
 import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -47,8 +47,8 @@ type AuthContextValue = {
   verifyEmailCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  /** PATCH /api/v1/me — update first/last name on the account profile. */
-  updateProfile: (body: { firstName?: string | null; lastName?: string | null }) => Promise<User>;
+  /** PATCH /api/v1/me — update name, phone, locale or timezone on the account profile. */
+  updateProfile: (body: UserProfileUpdate) => Promise<User>;
   /**
    * Raise the session to AAL2: no-op if already there, challenge a verified
    * factor, or enrol TOTP then verify. Returns false if the person cancels.
@@ -353,21 +353,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         let me = await fetchMe(AbortSignal.timeout(SESSION_BOOTSTRAP_TIMEOUT_MS));
 
-        // Apply name collected at registration once we have an API session.
+        // Apply the name collected at registration once we have an API session.
         const pending = readPendingProfile();
-        if (pending && (!me.firstName || !me.lastName)) {
+        if (pending && !me.name && pending.name) {
           try {
-            const body: { firstName?: string; lastName?: string } = {};
-            if (!me.firstName && pending.firstName) body.firstName = pending.firstName;
-            if (!me.lastName && pending.lastName) body.lastName = pending.lastName;
-            if (Object.keys(body).length > 0) {
-              const res = await api.patch<{ user: User }>("/api/v1/me", body);
-              me = res.data.user;
-              clearPendingProfile();
-              authLog("applied pending profile from registration", body);
-            } else {
-              clearPendingProfile();
-            }
+            const res = await api.patch<{ user: User }>("/api/v1/me", { name: pending.name });
+            me = res.data.user;
+            clearPendingProfile();
+            authLog("applied pending profile from registration");
           } catch (profileErr) {
             // Keep the stash so a later sign-in can retry.
             authLog("pending profile apply failed (will retry)", profileErr);
@@ -673,7 +666,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateProfile = useCallback(
-    async (body: { firstName?: string | null; lastName?: string | null }) => {
+    async (body: UserProfileUpdate) => {
+      // PATCH returns the same envelope as GET, so the response can replace
+      // session state outright rather than triggering a re-fetch.
       const res = await api.patch<{ user: User }>("/api/v1/me", body);
       setUser(res.data.user);
       void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
