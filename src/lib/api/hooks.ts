@@ -294,10 +294,24 @@ export function useTakeBookingPayment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createIdempotentMutationFn<
-      { payment?: Payment; clientSecret?: string | null },
+      {
+        payment?: Payment;
+        clientSecret?: string | null;
+        connectedAccountId?: string;
+        publishableKey?: string | null;
+        amountMinor?: number;
+        currency?: string;
+      },
       { bookingId: string }
     >(async (vars, idempotencyKey) => {
-      const res = await api.post<{ payment?: Payment; clientSecret?: string | null }>(
+      const res = await api.post<{
+        payment?: Payment;
+        clientSecret?: string | null;
+        connectedAccountId?: string;
+        publishableKey?: string | null;
+        amountMinor?: number;
+        currency?: string;
+      }>(
         `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/payment`,
         {},
         { idempotencyKey },
@@ -3090,6 +3104,27 @@ export function useStartPublicBookingPayment(businessId: string | undefined) {
         return res.data;
       },
     ),
+  });
+}
+
+export function useStartPortalBookingPayment(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { bookingId: string }, idempotencyKey: string) => {
+        const res = await api.post<PublicBookingPayment>(
+          `/api/v1/portal/bookings/${vars.bookingId}/payment`,
+          {},
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalPayments(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
