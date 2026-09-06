@@ -39,6 +39,7 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
 import {
   AlertDialog,
@@ -251,7 +252,7 @@ function ClientProfile() {
       </Link>
 
       <div className="surface-card flex flex-col gap-5 p-6 lg:flex-row lg:items-center">
-        <PersonAvatar name={customerDisplayName(client)} size={72} />
+        <CustomerAvatar customer={client} size={72} editable />
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{customerDisplayName(client)}</h1>

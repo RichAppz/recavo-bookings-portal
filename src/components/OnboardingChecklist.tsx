@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Check, ChevronDown, ChevronUp, Circle, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,35 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useBusinessOnboarding, useSkipOnboardingStep } from "@/lib/api/hooks";
-import type { OnboardingStep } from "@/lib/api/types";
+import type { OnboardingStep, OnboardingStepKey } from "@/lib/api/types";
+import {
+  consumePendingSetupPrompt,
+  useSetupPromptListener,
+  type SetupPrompt,
+} from "@/lib/onboarding/setup-prompt";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
+
+// The checklist introduces itself once per business — the first time the owner
+// lands in the console with nothing set up. After that it stays collapsed to the
+// corner pill and only opens when asked (sidebar card, or a contextual gate).
+const INTRO_KEY = (businessId: string) => `recavo.setup.introduced.${businessId}`;
+
+function hasBeenIntroduced(businessId: string): boolean {
+  try {
+    return window.localStorage.getItem(INTRO_KEY(businessId)) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markIntroduced(businessId: string): void {
+  try {
+    window.localStorage.setItem(INTRO_KEY(businessId), "1");
+  } catch {
+    // ignore — worst case it introduces itself again next visit
+  }
+}
 
 function parseHref(href: string): { to: string; search?: Record<string, string> } {
   const [path, query] = href.split("?");
@@ -58,11 +85,14 @@ function StepRow({
   onSkip,
   onNavigate,
   skipPending,
+  highlighted = false,
 }: {
   step: OnboardingStep;
   onSkip?: () => void;
   onNavigate?: () => void;
   skipPending?: boolean;
+  /** The step the user's last action was blocked on. */
+  highlighted?: boolean;
 }) {
   const done = step.completed || step.skipped;
   const { to, search } = parseHref(step.href);
@@ -72,6 +102,7 @@ function StepRow({
       className={cn(
         "rounded-lg px-2 py-2 transition-colors",
         done ? "opacity-60" : "hover:bg-secondary/70",
+        highlighted && !done && "bg-primary/5 ring-1 ring-primary/40",
       )}
     >
       <div className="flex items-center gap-3">
@@ -95,6 +126,11 @@ function StepRow({
         >
           {step.title}
         </Link>
+        {highlighted && !done ? (
+          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+            Needed next
+          </span>
+        ) : null}
         {!done && !step.required && onSkip ? (
           <Button
             type="button"
@@ -125,23 +161,51 @@ export function OnboardingChecklist({
   const onboarding = useBusinessOnboarding();
   const skip = useSkipOnboardingStep(onboarding.isDerived, onboarding.bumpLocal);
   const isMobile = useIsMobile();
+  const { businessId } = useTenant();
   const [open, setOpen] = useState(false);
   const [showFurther, setShowFurther] = useState(false);
+  const [highlight, setHighlight] = useState<OnboardingStepKey | null>(null);
 
   const data = onboarding.data;
-  const [didAutoOpen, setDidAutoOpen] = useState(false);
 
   useEffect(() => {
     if (openRequest > 0) setOpen(true);
   }, [openRequest]);
 
+  // Contextual prompt: something the user tried needs a step they haven't done.
+  // Open on that step; a prompt fired just before navigating lands here on mount.
+  const onPrompt = useCallback(({ step }: SetupPrompt) => {
+    setHighlight(step);
+    setOpen(true);
+  }, []);
+  useSetupPromptListener(onPrompt);
   useEffect(() => {
-    if (didAutoOpen || !data) return;
-    if (data.status === "in_progress" && data.requiredCompleted === 0) {
-      setOpen(true);
-      setDidAutoOpen(true);
-    }
-  }, [data, didAutoOpen]);
+    const pending = consumePendingSetupPrompt();
+    if (pending) onPrompt(pending);
+  }, [onPrompt]);
+
+  // If the highlighted step is optional, it lives behind "Go further" — reveal it.
+  // Runs once data is in, since a pending prompt is consumed before the first fetch.
+  useEffect(() => {
+    if (!highlight || !data) return;
+    if (!data.steps.find((s) => s.key === highlight)?.required) setShowFurther(true);
+  }, [highlight, data]);
+
+  // First visit only: introduce the checklist when nothing is set up yet. Every
+  // route remounts this component, so the flag lives in localStorage rather than
+  // state — otherwise it would pop open on every page while someone looks around.
+  useEffect(() => {
+    if (!data || !businessId || hasBeenIntroduced(businessId)) return;
+    markIntroduced(businessId);
+    // Only worth an unprompted open when nothing is set up yet; a business already
+    // under way (or finished) just gets the pill.
+    if (data.status === "in_progress" && data.requiredCompleted === 0) setOpen(true);
+  }, [data, businessId]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setHighlight(null);
+  }, []);
 
   const required = data?.steps.filter((s) => s.required) ?? [];
   const optional = data?.steps.filter((s) => !s.required) ?? [];
@@ -183,8 +247,9 @@ export function OnboardingChecklist({
         <StepRow
           key={step.key}
           step={step}
+          highlighted={highlight === step.key}
           skipPending={skip.isPending}
-          onNavigate={() => setOpen(false)}
+          onNavigate={close}
           onSkip={!step.required && !step.completed ? () => skip.mutate(step.key) : undefined}
         />
       ))
@@ -210,7 +275,7 @@ export function OnboardingChecklist({
         type="button"
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
         onClick={() => {
-          setOpen(false);
+          close();
           onOpenTour();
         }}
       >
@@ -223,7 +288,7 @@ export function OnboardingChecklist({
   // Mobile keeps the full-height sheet; it's the right pattern on a small screen.
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
         <SheetContent
           side="right"
           className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md"
@@ -264,7 +329,7 @@ export function OnboardingChecklist({
               size="icon"
               className="size-8 shrink-0"
               aria-label="Collapse setup checklist"
-              onClick={() => setOpen(false)}
+              onClick={close}
             >
               <ChevronDown className="size-4" />
             </Button>
