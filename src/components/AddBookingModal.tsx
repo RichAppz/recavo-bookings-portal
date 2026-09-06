@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ import {
   useCreateBooking,
   useCreateBookingHold,
   useCustomerLinkedRecords,
+  useCustomer,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
@@ -80,10 +82,16 @@ export function AddBookingModal({
   open,
   onOpenChange,
   defaultCustomerId,
+  defaultDate,
+  defaultStaffId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultCustomerId?: string;
+  /** ISO date (YYYY-MM-DD) to start on — e.g. the day clicked in the calendar. */
+  defaultDate?: string;
+  /** Pre-select a staff member — e.g. the calendar's current staff filter. */
+  defaultStaffId?: string;
 }) {
   const tenant = useTenant();
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
@@ -91,8 +99,17 @@ export function AddBookingModal({
   const [variantId, setVariantId] = useState<string>("none");
   const [staffId, setStaffId] = useState("all");
   const [locationId, setLocationId] = useState("");
-  const [date, setDate] = useState(isoDate(new Date()));
+  const [date, setDate] = useState(defaultDate ?? isoDate(new Date()));
   const [slotKey, setSlotKey] = useState<string | null>(null);
+
+  // Defaults come from wherever the modal was opened (a calendar day, a client's
+  // profile) and differ between opens, so apply them each time it opens.
+  useEffect(() => {
+    if (!open) return;
+    setDate(defaultDate ?? isoDate(new Date()));
+    setStaffId(defaultStaffId ?? "all");
+    setSlotKey(null);
+  }, [open, defaultDate, defaultStaffId]);
   const [paymentMethod, setPaymentMethod] = useState<"none" | "credit" | "bank_transfer">("none");
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
@@ -123,10 +140,28 @@ export function AddBookingModal({
   const serviceList = services.data ?? [];
   const locationList = locations.data ?? [];
   const customerList = customers.data?.items ?? [];
+  // The chosen client may sit beyond the first page (e.g. opened from their profile).
+  const chosenCustomer = useCustomer(customerId || undefined);
+  const selectedCustomer =
+    customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
   const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
   const noClients = customers.isSuccess && customerList.length === 0;
+
+  // Nothing to choose when there's a single location, and a top-bar location
+  // filter is a clear statement of intent — pre-fill either, but never override
+  // a choice already made in the form.
+  useEffect(() => {
+    if (!open || locationId) return;
+    const active = locationList.filter((l) => l.active);
+    const pick =
+      (tenant.currentLocationId !== "all" &&
+        locationList.find((l) => l.id === tenant.currentLocationId)?.id) ||
+      (active.length === 1 ? active[0]!.id : undefined) ||
+      (locationList.length === 1 ? locationList[0]!.id : undefined);
+    if (pick) setLocationId(pick);
+  }, [open, locationId, locationList, tenant.currentLocationId]);
   const setupBlocked = noServices || noLocations || noClients;
 
   const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
@@ -439,25 +474,16 @@ export function AddBookingModal({
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Client</Label>
-              <Select
-                value={customerId}
-                onValueChange={(v) => {
-                  setCustomerId(v);
+              <CustomerSearchPicker
+                value={selectedCustomer}
+                suggestions={customerList}
+                placeholder="Choose or search for a client"
+                onSelect={(c) => {
+                  setCustomerId(c.id);
                   // A record belongs to one client, so it can't survive a client change.
                   setLinkedRecordId("none");
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customerList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {customerDisplayName(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
 
             {hasLinkedRecords && customerId ? (

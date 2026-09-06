@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
@@ -65,6 +65,12 @@ function CalendarPage() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState<string | undefined>(undefined);
+  /** Open Add booking on a given day (defaults to the day in view, or today). */
+  const openAdd = (iso?: string) => {
+    setAddDate(iso);
+    setAddOpen(true);
+  };
 
   const services = useServices();
   const staff = useStaffList();
@@ -157,7 +163,7 @@ function CalendarPage() {
         title="Calendar"
         description="Click any booking for the full detail panel. Use the top bar to filter by location."
         actions={
-          <Button onClick={() => setAddOpen(true)}>
+          <Button onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>
             <CalendarPlus className="size-4" /> Add booking
           </Button>
         }
@@ -255,7 +261,7 @@ function CalendarPage() {
                   className={cn(
                     // The card draws its own edge, so the grid drops the borders
                     // that would otherwise double up along the right and bottom.
-                    "relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-child(n+36)]:border-b-0",
+                    "group relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-child(n+36)]:border-b-0",
                     outside && "bg-muted/30",
                   )}
                 >
@@ -278,6 +284,15 @@ function CalendarPage() {
                   >
                     {day.getDate()}
                   </span>
+                  {/* Quick add for this day; shows on hover (always on touch, which has no hover). */}
+                  <button
+                    type="button"
+                    onClick={() => openAdd(iso)}
+                    className="absolute top-1.5 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                    aria-label={`Add booking on ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
 
                   <div className="relative mt-1 flex flex-col gap-0.5">
                     {dayBookings.slice(0, 3).map((b) => {
@@ -373,6 +388,13 @@ function CalendarPage() {
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
                       <div key={i} className="border-b" style={{ height: HOUR_HEIGHT }} />
                     ))}
+                    {/* Empty space in a column adds a booking on that day; blocks sit above it. */}
+                    <button
+                      type="button"
+                      onClick={() => openAdd(iso)}
+                      className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/40"
+                      aria-label={`Add booking on ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                    />
 
                     {iso === todayIso &&
                     nowMinutes > START_HOUR * 60 &&
@@ -457,7 +479,12 @@ function CalendarPage() {
         ))}
       </div>
 
-      <AddBookingModal open={addOpen} onOpenChange={setAddOpen} />
+      <AddBookingModal
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultDate={addDate}
+        defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
+      />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
     </>
   );
