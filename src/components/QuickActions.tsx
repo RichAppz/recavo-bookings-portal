@@ -219,19 +219,19 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             placeholder="Cole"
           />
         </div>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="c-nickname">Known as</Label>
-        <Input
-          id="c-nickname"
-          value={nickname}
-          maxLength={80}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="e.g. Harriet – red Audi"
-        />
-        <p className="text-xs text-muted-foreground">
-          Optional. A name that helps you remember them; never shown to the client.
-        </p>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="c-nickname">Known as</Label>
+          <Input
+            id="c-nickname"
+            value={nickname}
+            maxLength={80}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="e.g. Harriet – red Audi"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. A name that helps you remember them; never shown to the client.
+          </p>
+        </div>
       </div>
       <div className="grid gap-2">
         <Label htmlFor="c-email">Email</Label>
