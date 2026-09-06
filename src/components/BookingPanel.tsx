@@ -6,12 +6,23 @@ import {
   CheckCircle2,
   CreditCard,
   Landmark,
+  Mail,
   MessageSquare,
+  Send,
+  Smartphone,
   UserX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
@@ -56,7 +67,9 @@ import {
   useLinkedRecord,
   useLocationsList,
   useMarkBankTransferReceived,
+  usePlanFeature,
   useRecordBookingPayment,
+  useResendBookingMessage,
   useServices,
   useStaffList,
   stripeCheckoutFrom,
@@ -65,6 +78,7 @@ import {
   useSyncBookingPayment,
   type PublicBookingPayment,
   type RecordPaymentMethod,
+  type ResendChannel,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
 import {
@@ -126,6 +140,8 @@ export function BookingPanel({
   const syncPayment = useSyncBookingPayment();
   const markReceived = useMarkBankTransferReceived();
   const recordPayment = useRecordBookingPayment();
+  const resend = useResendBookingMessage();
+  const smsEntitled = usePlanFeature("reminders.sms");
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
@@ -152,6 +168,47 @@ export function BookingPanel({
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
+  // What "Resend" would send, mirroring the API's choice by status (RECA-525).
+  const resendLabel: string | null = (() => {
+    switch (booking?.status) {
+      case "awaiting_payment":
+        return bankPending ? "payment instructions" : "payment request";
+      case "confirmed":
+        return settlement && settlement.state === "unpaid" && booking.source !== "public"
+          ? "payment request"
+          : "confirmation";
+      case "cancelled_by_customer":
+      case "cancelled_by_business":
+      case "late_cancelled":
+        return "cancellation notice";
+      default:
+        return null;
+    }
+  })();
+  const customerPhone = customer.data?.phoneNormalised ?? null;
+  const customerEmail = customer.data?.emailNormalised ?? null;
+  const smsOptedOut = customer.data?.contactPreferences?.operationalNotifications === false;
+  const smsBlocked = !smsEntitled
+    ? "Not included in your plan"
+    : !customerPhone
+      ? "No mobile number on file"
+      : smsOptedOut
+        ? "Customer has opted out of texts"
+        : null;
+
+  const sendAgain = async (channel: ResendChannel) => {
+    if (!booking) return;
+    try {
+      await resend.mutateAsync({ bookingId: booking.id, channel });
+      toast.success(
+        `${resendLabel ? resendLabel[0]!.toUpperCase() + resendLabel.slice(1) : "Message"} sent by ${
+          channel === "sms" ? "text" : "email"
+        }`,
+      );
+    } catch (err) {
+      toastApiError(err);
+    }
+  };
 
   const historyEntries = [...(history.data ?? [])].sort((a, b) => {
     const ta = new Date(historyTimestamp(a) ?? 0).getTime();
@@ -669,6 +726,43 @@ export function BookingPanel({
               >
                 <CalendarClock className="size-4" /> Reschedule
               </Button>
+              {resendLabel ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="col-span-2" disabled={resend.isPending}>
+                      <Send className="size-4" />
+                      {resend.isPending ? "Sending…" : `Resend ${resendLabel}`}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      Send the {resendLabel} again to{" "}
+                      {customer.data ? customerDisplayName(customer.data) : "the customer"}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={!customerEmail}
+                      onSelect={() => void sendAgain("email")}
+                    >
+                      <Mail className="size-4" />
+                      <span className="flex-1">Email</span>
+                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
+                        {customerEmail ?? "No email on file"}
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={Boolean(smsBlocked)}
+                      onSelect={() => void sendAgain("sms")}
+                    >
+                      <Smartphone className="size-4" />
+                      <span className="flex-1">Text message</span>
+                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
+                        {smsBlocked ?? customerPhone}
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
               <Button variant="outline" asChild>
                 <Link to="/messages" onClick={onClose}>
                   <MessageSquare className="size-4" /> Message

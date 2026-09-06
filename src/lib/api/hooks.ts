@@ -271,6 +271,33 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
  * Idempotent; a 422 means it's not awaiting a bank transfer any more (e.g. a
  * colleague already confirmed it) — the caller should refresh, so no toast here.
  */
+export type ResendChannel = "email" | "sms";
+
+/**
+ * Re-send whatever message the booking's state calls for — bank transfer
+ * instructions, confirmation / payment request, or the cancellation notice
+ * (RECA-525). Errors are surfaced by the caller so staff know nothing went out.
+ */
+export function useResendBookingMessage() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; channel: ResendChannel }) => {
+      const res = await api.post<{ notification: Notification; templateKey: string }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/resend`,
+        { channel: vars.channel },
+      );
+      return res.data;
+    },
+    onSuccess: (data) => {
+      // The customer's notification log shows the new entry.
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerNotifications(businessId, data.notification.recipientId),
+      });
+    },
+  });
+}
+
 export function useMarkBankTransferReceived() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -2266,9 +2293,9 @@ export function useBusinessOnboarding() {
   const bankTransfer = tenant.configuration?.bankTransfer;
   const bankTransferReady = Boolean(
     bankTransfer?.enabled &&
-      bankTransfer.accountName &&
-      bankTransfer.sortCode &&
-      bankTransfer.accountNumber,
+    bankTransfer.accountName &&
+    bankTransfer.sortCode &&
+    bankTransfer.accountNumber,
   );
 
   const from = useMemo(() => {
