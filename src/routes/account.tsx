@@ -1,28 +1,46 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { CalendarClock, CalendarDays, Receipt, Store, Ticket, Wallet } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
+import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
+import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
+import { businessIdPendingCardReturn } from "@/components/BookingFlow";
+import { CalendarDayBooker } from "@/components/CalendarDayBooker";
+import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
 import { Button } from "@/components/ui/button";
 import { EmptyState, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
+import { ApiError, toastApiError } from "@/lib/api";
 import {
   usePortalAcrossStudios,
   usePortalBusinesses,
   usePortalLink,
+  stripeCheckoutFrom,
+  stripeCheckoutUnavailableMessage,
+  useStartPortalBookingPayment,
+  useSyncPortalBookingPayment,
   type FromStudio,
   type PortalBusinessSummary,
   type PortalCredit,
+  type PublicBookingPayment,
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
-import { bookingNeedsPayment } from "@/lib/booking-payment";
-import { formatInTz, formatMoney } from "@/lib/format";
+import { userDisplayName } from "@/lib/api/types";
+import { bookingNeedsPayment, isSettledPaymentState } from "@/lib/booking-payment";
+import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { toast } from "sonner";
 
 const searchSchema = z.object({
   view: z.enum(["overview", "calendar", "credits", "purchases", "profile"]).optional(),
+  // Stripe 3-D Secure returns here when checkout ran from the account drawer.
+  payment_intent: z.string().optional(),
+  payment_intent_client_secret: z.string().optional(),
+  redirect_status: z.string().optional(),
 });
 
 export const Route = createFileRoute("/account")({
@@ -30,7 +48,7 @@ export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
       { title: "My account — RECAVO" },
-      { name: "description", content: "Your sessions, credits and purchases in one place." },
+      { name: "description", content: "Your bookings, credits and purchases in one place." },
     ],
   }),
   component: () => (
@@ -41,9 +59,9 @@ export const Route = createFileRoute("/account")({
 });
 
 const TITLES: Record<AccountView, { title: string; description: string }> = {
-  overview: { title: "My account", description: "Your sessions, credits and payments." },
-  calendar: { title: "Calendar", description: "Your sessions, month by month." },
-  credits: { title: "Credits", description: "Sessions you've already paid for." },
+  overview: { title: "My account", description: "Your bookings, credits and payments." },
+  calendar: { title: "Calendar", description: "Your bookings, month by month." },
+  credits: { title: "Credits", description: "Bookings you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
   profile: { title: "Profile", description: "Your name and contact details." },
 };
@@ -51,12 +69,8 @@ const TITLES: Record<AccountView, { title: string; description: string }> = {
 /**
  * One page covering every studio a customer deals with.
  *
- * The per-studio page at `/portal?businessId=` still exists, and still owns the
- * things that are inherently one studio's business — messages, their notes on
- * you, the records they keep. What does not divide that way is the question
- * someone actually opens this app to ask: what have I got booked, and what have
- * I already paid for. That answer should not depend on remembering which link
- * they used.
+ * `/portal` still exists as a redirect so old links do not 404. Bookings,
+ * payments and credits all live here.
  */
 function AccountPage() {
   const { status } = useAuth();
@@ -99,7 +113,7 @@ function AccountPage() {
         <EmptyState
           icon={<Store className="size-5" />}
           title="Nothing here yet"
-          description="Once you book or buy with a studio, everything you've got with them shows up here. Use the link your studio gave you to get started."
+          description="Once you book or buy with a business, everything you've got with them shows up here. Use the link the business gave you to get started."
         />
       </AccountShell>
     );
@@ -117,8 +131,30 @@ function AccountContent({
   copy: { title: string; description: string };
   studios: PortalBusinessSummary[];
 }) {
+  const { user } = useAuth();
   const { bookings, credits, payments } = usePortalAcrossStudios(studios);
+  const startPayment = useStartPortalBookingPayment(undefined);
+  const syncPayment = useSyncPortalBookingPayment();
+  const [bookingStudio, setBookingStudio] = useState<PortalBusinessSummary | null>(null);
+  const [bookingSeed, setBookingSeed] = useState<BookingSeed | null>(null);
+  const [calDay, setCalDay] = useState(isoDate(new Date()));
+  const [checkout, setCheckout] = useState<{
+    payment: PublicBookingPayment;
+    bookingId: string;
+    businessId: string;
+  } | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
   const solo = studios.length === 1;
+
+  useEffect(() => {
+    const id = businessIdPendingCardReturn(studios.map((s) => s.id));
+    if (!id) return;
+    const studio = studios.find((s) => s.id === id);
+    if (studio) {
+      setBookingSeed(null);
+      setBookingStudio(studio);
+    }
+  }, [studios]);
 
   const now = new Date().toISOString();
   const live = bookings.data.filter(
@@ -140,40 +176,151 @@ function AccountContent({
     status: b.status,
   }));
 
-  return (
-    <AccountShell
-      view={view}
-      title={copy.title}
-      description={copy.description}
-      actions={solo ? <BookButton studio={studios[0]} /> : undefined}
-    >
-      {bookings.isPartial || credits.isPartial || payments.isPartial ? (
-        <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
-          One of your studios didn't load, so this may be incomplete. Refresh to try again.
-        </p>
-      ) : null}
+  const payNow = async (booking: FromStudio<Booking>) => {
+    setPayingId(booking.id);
+    try {
+      try {
+        const existing = await syncPayment.mutateAsync({
+          bookingId: booking.id,
+          businessId: booking.studio.id,
+        });
+        if (isSettledPaymentState(existing.state)) {
+          toast.success("Payment received");
+          return;
+        }
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 404)) {
+          toastApiError(err);
+          return;
+        }
+      }
+      const result = await startPayment.mutateAsync({
+        bookingId: booking.id,
+        businessId: booking.studio.id,
+      });
+      const started = stripeCheckoutFrom(result);
+      if (!started) {
+        toast.error(stripeCheckoutUnavailableMessage(result));
+        return;
+      }
+      setCheckout({
+        payment: started,
+        bookingId: booking.id,
+        businessId: booking.studio.id,
+      });
+    } catch {
+      // Mutation onError already surfaced the problem.
+    } finally {
+      setPayingId(null);
+    }
+  };
 
-      {view === "overview" ? (
-        <Overview
-          solo={solo}
-          studios={studios}
-          upcoming={upcoming}
-          usable={usable}
-          history={history}
-          sessions={sessions}
-          loading={bookings.isPending}
-        />
-      ) : view === "calendar" ? (
-        <SessionCalendar
-          sessions={sessions}
-          emptyHint="Nothing booked on this day. Pick a studio below to book one."
-        />
-      ) : view === "credits" ? (
-        <Credits credits={usable} studios={studios} solo={solo} />
-      ) : (
-        <Purchases payments={history} solo={solo} />
-      )}
-    </AccountShell>
+  const openBooking = (studio: PortalBusinessSummary, seed?: BookingSeed | null) => {
+    setBookingSeed(seed ?? null);
+    setBookingStudio(studio);
+  };
+
+  return (
+    <>
+      <AccountShell
+        view={view}
+        title={copy.title}
+        description={copy.description}
+        actions={solo ? <BookButton onClick={() => openBooking(studios[0])} /> : undefined}
+      >
+        {bookings.isPartial || credits.isPartial || payments.isPartial ? (
+          <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
+            One of your studios didn't load, so this may be incomplete. Refresh to try again.
+          </p>
+        ) : null}
+
+        {view === "overview" ? (
+          <Overview
+            solo={solo}
+            studios={studios}
+            upcoming={upcoming}
+            usable={usable}
+            history={history}
+            sessions={sessions}
+            loading={bookings.isPending}
+            payingId={payingId}
+            onPay={(booking) => void payNow(booking)}
+            onBook={(studio) => openBooking(studio)}
+          />
+        ) : view === "calendar" ? (
+          <SessionCalendar
+            sessions={sessions}
+            selected={calDay}
+            onSelectedChange={setCalDay}
+            emptyHint="Nothing booked on this day."
+            aside={
+              <CalendarDayBooker
+                date={calDay}
+                studios={studios}
+                credits={usable}
+                onBookPaid={(paid) =>
+                  openBooking(paid.studio, {
+                    date: paid.date,
+                    serviceId: paid.serviceId,
+                    locationId: paid.locationId,
+                    slot: paid.slot,
+                  })
+                }
+              />
+            }
+          />
+        ) : view === "credits" ? (
+          <Credits
+            credits={usable}
+            studios={studios}
+            solo={solo}
+            onBook={(studio) => openBooking(studio)}
+          />
+        ) : (
+          <Purchases payments={history} solo={solo} />
+        )}
+      </AccountShell>
+      <OutstandingPaymentDialog
+        title="Pay for this booking"
+        payment={checkout?.payment ?? null}
+        contact={{
+          name: userDisplayName(user),
+          email: user?.email ?? null,
+          phone: user?.phone ?? null,
+        }}
+        onPaid={async () => {
+          if (!checkout) return;
+          const { bookingId, businessId } = checkout;
+          for (let attempt = 0; attempt < 8; attempt += 1) {
+            const pulled = await syncPayment.mutateAsync({ bookingId, businessId });
+            if (isSettledPaymentState(pulled.state)) {
+              setCheckout(null);
+              toast.success("Payment received");
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 750));
+          }
+          setCheckout(null);
+          toast.error(
+            "Your payment went through, but it hasn't shown up yet. Refresh in a moment.",
+          );
+        }}
+        onOpenChange={(open) => {
+          if (!open) setCheckout(null);
+        }}
+      />
+      <BookSessionDrawer
+        studio={bookingStudio}
+        seed={bookingSeed}
+        open={bookingStudio !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBookingStudio(null);
+            setBookingSeed(null);
+          }
+        }}
+      />
+    </>
   );
 }
 
@@ -191,6 +338,9 @@ function Overview({
   history,
   sessions,
   loading,
+  payingId,
+  onPay,
+  onBook,
 }: {
   solo: boolean;
   studios: PortalBusinessSummary[];
@@ -199,6 +349,9 @@ function Overview({
   history: FromStudio<Payment>[];
   sessions: CalendarSession[];
   loading: boolean;
+  payingId: string | null;
+  onPay: (booking: FromStudio<Booking>) => void;
+  onBook: (studio: PortalBusinessSummary) => void;
 }) {
   const next = upcoming[0];
   const creditsLeft = usable.reduce((sum, c) => sum + c.available, 0);
@@ -214,7 +367,7 @@ function Overview({
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Next session"
+          label="Next booking"
           value={
             next
               ? formatInTz(next.start, next.timezone, { day: "numeric", month: "short" })
@@ -230,7 +383,7 @@ function Overview({
         <StatCard
           label="Upcoming"
           value={String(upcoming.length)}
-          hint={upcoming.length === 1 ? "session booked" : "sessions booked"}
+          hint={upcoming.length === 1 ? "booking" : "bookings"}
           icon={<CalendarDays className="size-4.5" />}
         />
         <StatCard
@@ -239,7 +392,7 @@ function Overview({
           hint={
             usable[0]
               ? `Next expires ${formatInTz(usable[0].expiresAt, "Europe/London", { day: "numeric", month: "short" })}`
-              : "No prepaid sessions"
+              : "No prepaid credits"
           }
           icon={<Ticket className="size-4.5" />}
         />
@@ -253,7 +406,7 @@ function Overview({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <SectionCard
-          title="Upcoming sessions"
+          title="Upcoming bookings"
           action={
             <Button variant="ghost" size="sm" asChild>
               <Link to="/account" search={{ view: "calendar" }}>
@@ -269,40 +422,44 @@ function Overview({
             <div className="p-5">
               <EmptyState
                 icon={<CalendarDays className="size-5" />}
-                title="No upcoming sessions"
-                description="Book your next one from the studios listed here."
-                action={solo ? <BookButton studio={studios[0]} /> : undefined}
+                title="No upcoming bookings"
+                description="Book your next one from the businesses listed here."
+                action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
               />
             </div>
           ) : (
             <ul className="divide-y">
               {upcoming.slice(0, 6).map((b) => (
-                <li key={b.id}>
-                  <Link
-                    to="/portal"
-                    search={{ businessId: b.studio.id }}
-                    className="flex items-center justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-secondary/50 sm:px-5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {formatInTz(b.start, b.timezone, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                        {solo ? "" : ` · ${b.studio.tradingName}`}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {bookingNeedsPayment(b, history) ? (
-                        <StatusBadge status="payment_due" />
-                      ) : null}
-                      <StatusBadge status={b.status} />
-                    </div>
-                  </Link>
+                <li
+                  key={b.id}
+                  className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {formatInTz(b.start, b.timezone, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      {solo ? "" : ` · ${b.studio.tradingName}`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {bookingNeedsPayment(b, history) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={payingId === b.id}
+                        onClick={() => onPay(b)}
+                      >
+                        {payingId === b.id ? "Starting…" : "Pay now"}
+                      </Button>
+                    ) : null}
+                    <StatusBadge status={b.status} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -311,8 +468,8 @@ function Overview({
 
         <div className="space-y-5">
           <SectionCard
-            title={solo ? "Book a session" : "Your studios"}
-            description={solo ? undefined : `${studios.length} studios`}
+            title={solo ? "Book now" : "Your businesses"}
+            description={solo ? undefined : `${studios.length} businesses`}
             bodyClassName="p-0 sm:p-0"
           >
             <ul className="divide-y">
@@ -327,16 +484,9 @@ function Overview({
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{studio.tradingName}</p>
-                      <Link
-                        to="/portal"
-                        search={{ businessId: studio.id }}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Messages and records
-                      </Link>
                     </div>
                   </div>
-                  <BookButton studio={studio} />
+                  <BookButton onClick={() => onBook(studio)} />
                 </li>
               ))}
             </ul>
@@ -383,18 +533,20 @@ function Credits({
   credits,
   studios,
   solo,
+  onBook,
 }: {
   credits: FromStudio<PortalCredit>[];
   studios: PortalBusinessSummary[];
   solo: boolean;
+  onBook: (studio: PortalBusinessSummary) => void;
 }) {
   if (credits.length === 0) {
     return (
       <EmptyState
         icon={<Ticket className="size-5" />}
-        title="No prepaid sessions"
-        description="Buy a package from your studio and the sessions land here, ready to book."
-        action={solo ? <BookButton studio={studios[0]} /> : undefined}
+        title="No prepaid credits"
+        description="Buy a package and your credits land here, ready to book."
+        action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
       />
     );
   }
@@ -407,7 +559,7 @@ function Credits({
             <div className="min-w-0">
               <p className="text-3xl font-semibold tracking-tight tabular-nums">{c.available}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                of {c.unitsIssued} {c.unitsIssued === 1 ? "session" : "sessions"} left
+                of {c.unitsIssued} {c.unitsIssued === 1 ? "credit" : "credits"} left
               </p>
             </div>
             <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -472,30 +624,30 @@ function Purchases({ payments, solo }: { payments: FromStudio<Payment>[]; solo: 
 }
 
 function sessionCount(n: number): string {
-  return `${n} ${n === 1 ? "session" : "sessions"}`;
+  return `${n} ${n === 1 ? "credit" : "credits"}`;
 }
 
-function BookButton({ studio }: { studio: PortalBusinessSummary }) {
+function BookButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button asChild size="sm">
-      <Link to="/$slug" params={{ slug: studio.slug }}>
-        <CalendarClock className="size-4" /> Book a session
-      </Link>
+    <Button size="sm" onClick={onClick}>
+      <CalendarClock className="size-4" /> Book now
     </Button>
   );
 }
 
-/**
- * Spending a credit needs the studio's slot picker and the eligibility rules
- * attached to the bucket, both of which live on the per-studio page. Sending
- * them there beats maintaining that machinery in two places.
- */
 function BookWithCredit({ studio, full }: { studio: PortalBusinessSummary; full?: boolean }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Button asChild size="sm" variant="outline" className={full ? "w-full" : undefined}>
-      <Link to="/portal" search={{ businessId: studio.id }}>
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className={full ? "w-full" : undefined}
+        onClick={() => setOpen(true)}
+      >
         <CalendarClock className="size-4" /> Book with a credit
-      </Link>
-    </Button>
+      </Button>
+      {open ? <BookWithCreditDialog businessId={studio.id} onOpenChange={setOpen} /> : null}
+    </>
   );
 }

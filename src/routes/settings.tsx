@@ -5,6 +5,8 @@ import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
+import { BankTransferSetting } from "@/components/BankTransferSetting";
+import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { StatsGhost, TableGhost } from "@/components/ghost";
@@ -19,6 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { BillingPage } from "@/components/BillingPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +36,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { VERTICALS, type VerticalKey } from "@/lib/verticals";
 import { useAuth } from "@/lib/auth/auth-store";
 import {
   useAiDraftPolicies,
@@ -62,6 +66,8 @@ import type {
   PolicyDocumentType,
 } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
+import { toastApiError } from "@/lib/api/errors";
+import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { formatInTz } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { markdownToPlainText, parsePolicyContent } from "@/lib/markdown";
@@ -143,8 +149,13 @@ function policyLabel(type: string): string {
   return POLICY_TYPE_META[type as PolicyDocumentType]?.label ?? type.replace(/_/g, " ");
 }
 
-/** Turn an industry template key like `personal_training` into `Personal Training`. */
+/**
+ * Display label for an industry template key. Known verticals use their product
+ * label (`car_detailing` is branded "Automotive"); unknown keys are title-cased.
+ */
 function formatIndustry(key: string): string {
+  const vertical = VERTICALS[key as VerticalKey];
+  if (vertical) return vertical.label;
   return key
     .split(/[_\s]+/)
     .filter(Boolean)
@@ -299,6 +310,7 @@ function SettingsPage() {
         >
           <TabsList>
             <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="business">Business</TabsTrigger>
             <TabsTrigger value="configuration">Configuration</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
@@ -311,6 +323,9 @@ function SettingsPage() {
           </TabsList>
           <TabsContent value="account" className="mt-4">
             <AccountProfileTab />
+          </TabsContent>
+          <TabsContent value="security" className="mt-4">
+            <SecurityTab />
           </TabsContent>
           <TabsContent value="business" className="mt-4">
             <BusinessProfileTab />
@@ -337,14 +352,7 @@ function SettingsPage() {
             <PaymentsTab />
           </TabsContent>
           <TabsContent value="billing" className="mt-4">
-            <SectionCard title="Recavo subscription">
-              <p className="text-sm text-muted-foreground">
-                Plans, trial, invoices and cancellation live on the billing page.
-              </p>
-              <Button className="mt-4 w-fit" asChild>
-                <Link to="/billing">Open billing</Link>
-              </Button>
-            </SectionCard>
+            <BillingPage />
           </TabsContent>
         </Tabs>
       )}
@@ -385,7 +393,7 @@ function AccountProfileTab() {
   const { user } = useAuth();
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid items-start gap-5 xl:grid-cols-2">
       <SectionCard
         title="Your profile"
         description="Your own account, not this business's settings."
@@ -400,8 +408,122 @@ function AccountProfileTab() {
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
       </SectionCard>
+    </div>
+  );
+}
+
+function SecurityTab() {
+  return (
+    <div className="grid items-start gap-5 xl:grid-cols-2">
+      <PasswordCard />
       <TwoFactorCard />
     </div>
+  );
+}
+
+const MIN_PASSWORD_LENGTH = 8;
+
+function PasswordCard() {
+  const { supabaseUser, updatePassword } = useAuth();
+  // Google-only sign-ins have no password yet, so there is nothing "current" to check.
+  const hasPassword = (supabaseUser?.identities ?? []).some((i) => i.provider === "email");
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const canSubmit =
+    !busy &&
+    (!hasPassword || current.length > 0) &&
+    next.length >= MIN_PASSWORD_LENGTH &&
+    next === confirm;
+
+  const submit = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await updatePassword({
+        ...(hasPassword ? { currentPassword: current } : {}),
+        newPassword: next,
+      });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      toast.success(hasPassword ? "Password updated" : "Password set", {
+        description: hasPassword
+          ? "Use your new password next time you sign in."
+          : "You can now sign in with your email and password as well as Google.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't update your password.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SectionCard
+      title={hasPassword ? "Password" : "Set a password"}
+      description={
+        hasPassword
+          ? "Change the password you sign in with."
+          : "You currently sign in with Google. Add a password to sign in with your email too."
+      }
+    >
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSubmit) void submit();
+        }}
+      >
+        {hasPassword ? (
+          <div className="grid gap-2">
+            <Label htmlFor="pw-current">Current password</Label>
+            <Input
+              id="pw-current"
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+        ) : null}
+        <div className="grid gap-2">
+          <Label htmlFor="pw-next">New password</Label>
+          <Input
+            id="pw-next"
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            aria-invalid={tooShort}
+          />
+          <p className="text-xs text-muted-foreground">
+            At least {MIN_PASSWORD_LENGTH} characters.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="pw-confirm">Confirm new password</Label>
+          <Input
+            id="pw-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            aria-invalid={mismatch}
+          />
+          {mismatch ? <p className="text-xs text-destructive">Passwords don't match.</p> : null}
+        </div>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <Button type="submit" className="w-fit" disabled={!canSubmit}>
+          {busy ? "Saving…" : hasPassword ? "Update password" : "Set password"}
+        </Button>
+      </form>
+    </SectionCard>
   );
 }
 
@@ -613,8 +735,15 @@ function BookingLinkCard({ business }: { business: Business }) {
             className="w-fit"
             disabled={update.isPending || !changed || normalised.length < 3}
             onClick={async () => {
-              await update.mutateAsync({ version: business.version, body: { slug: normalised } });
-              toast.success("Booking link updated");
+              try {
+                await update.mutateAsync({
+                  version: business.version,
+                  body: { slug: normalised },
+                });
+                toast.success("Booking link updated");
+              } catch (err) {
+                toastApiError(err, "Couldn't update the booking link");
+              }
             }}
           >
             {update.isPending ? "Saving…" : "Save link"}
@@ -629,17 +758,8 @@ function ConfigurationTab() {
   const tenant = useTenant();
   const config = tenant.configuration;
   const update = useUpdateConfiguration();
-  // `src/lib/api/schema.d.ts` is generated from a committed openapi.json that predates
-  // this setting, and regenerating it drags in unrelated API drift the portal has yet
-  // to absorb. Read and write the one new field through a narrow local shape until the
-  // schema is refreshed as its own change.
-  const bookingConfig = config?.booking as
-    | {
-        cancellationWindowHours?: number;
-        defaultHoldMinutes?: number;
-        requireOnlinePayment?: boolean;
-      }
-    | undefined;
+  // Branding is not on the committed OpenAPI snapshot yet; read it through a
+  // local shape until the schema is refreshed as its own change.
   const brandingConfig = (
     config as { branding?: { logoUrl?: string | null; accentColour?: string | null } } | undefined
   )?.branding;
@@ -650,9 +770,6 @@ function ConfigurationTab() {
   const [holdMinutes, setHoldMinutes] = useState(String(config?.booking?.defaultHoldMinutes ?? 10));
   const [cancelHours, setCancelHours] = useState(
     String(config?.booking?.cancellationWindowHours ?? 24),
-  );
-  const [requireOnlinePayment, setRequireOnlinePayment] = useState(
-    Boolean(bookingConfig?.requireOnlinePayment),
   );
   const [logoUrl, setLogoUrl] = useState(brandingConfig?.logoUrl ?? "");
   const [accentColour, setAccentColour] = useState(brandingConfig?.accentColour ?? "");
@@ -675,7 +792,6 @@ function ConfigurationTab() {
     setLinkedTerm(config?.terminology?.linkedRecord ?? "Record");
     setHoldMinutes(String(config?.booking?.defaultHoldMinutes ?? 10));
     setCancelHours(String(config?.booking?.cancellationWindowHours ?? 24));
-    setRequireOnlinePayment(Boolean(bookingConfig?.requireOnlinePayment));
     setLogoUrl(brandingConfig?.logoUrl ?? "");
     setAccentColour(brandingConfig?.accentColour ?? "");
     setVatRegistered(Boolean(config?.tax?.vatRegistered));
@@ -687,139 +803,133 @@ function ConfigurationTab() {
     setRegion(config?.legalAddress?.region ?? "");
     setPostalCode(config?.legalAddress?.postalCode ?? "");
     setCountry(config?.legalAddress?.country ?? "GB");
-  }, [
-    config,
-    bookingConfig?.requireOnlinePayment,
-    brandingConfig?.logoUrl,
-    brandingConfig?.accentColour,
-  ]);
+  }, [config, brandingConfig?.logoUrl, brandingConfig?.accentColour]);
 
   const accentValid = accentColour === "" || /^#[0-9a-fA-F]{6}$/.test(accentColour);
   const logoValid = logoUrl === "" || logoUrl.startsWith("https://");
 
-  // Branding has the same generated-schema gap as `requireOnlinePayment` above, so it
-  // rides along on a widened patch type until openapi.json is refreshed.
+  // Branding is not on the generated configuration type yet, so it rides along
+  // on a widened patch until openapi.json is refreshed.
   type ConfigPatch = Parameters<typeof update.mutateAsync>[0] & {
     branding?: { logoUrl: string | null; accentColour: string | null };
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <SectionCard title="Terminology">
-        <div className="grid gap-4">
-          <Field label="Staff label" value={staffTerm} onChange={setStaffTerm} />
-          <Field label="Service label" value={serviceTerm} onChange={setServiceTerm} />
-          <Field label="Booking label" value={bookingTerm} onChange={setBookingTerm} />
-          <Field label="Linked record label" value={linkedTerm} onChange={setLinkedTerm} />
-        </div>
-      </SectionCard>
-      <SectionCard title="Booking rules">
-        <div className="grid gap-4">
-          <Field
-            label="Default hold (minutes)"
-            value={holdMinutes}
-            onChange={setHoldMinutes}
-            type="number"
-          />
-          <Field
-            label="Cancellation window (hours)"
-            value={cancelHours}
-            onChange={setCancelHours}
-            type="number"
-          />
-          <div className="flex items-start justify-between gap-4 rounded-xl border p-3">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Take payment online</p>
+    // Two independent column stacks rather than one row-based grid: rows would
+    // force a gap under whichever card is shorter than its neighbour.
+    <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid gap-5">
+        <SectionCard title="Terminology">
+          <div className="grid gap-4">
+            <Field label="Staff label" value={staffTerm} onChange={setStaffTerm} />
+            <Field label="Service label" value={serviceTerm} onChange={setServiceTerm} />
+            <Field label="Booking label" value={bookingTerm} onChange={setBookingTerm} />
+            <Field label="Linked record label" value={linkedTerm} onChange={setLinkedTerm} />
+          </div>
+        </SectionCard>
+        <SectionCard title="Branding">
+          <div className="grid gap-4">
+            <p className="text-xs text-muted-foreground">
+              Used on the emails your customers receive. Leave either field empty to fall back to
+              RECAVO's.
+            </p>
+            <div className="grid gap-1.5">
+              <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
               <p className="text-xs text-muted-foreground">
-                Priced sessions booked on your public page are paid for by card before they're
-                confirmed. Needs a connected Stripe account that can accept payments.
+                {logoValid
+                  ? "Must be a public https link — email apps cannot load private files."
+                  : "Must start with https://"}
               </p>
             </div>
-            <Switch checked={requireOnlinePayment} onCheckedChange={setRequireOnlinePayment} />
-          </div>
-        </div>
-      </SectionCard>
-      <SectionCard title="Branding">
-        <div className="grid gap-4">
-          <p className="text-xs text-muted-foreground">
-            Used on the emails your customers receive. Leave either field empty to fall back to
-            RECAVO's.
-          </p>
-          <div className="grid gap-1.5">
-            <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
-            <p className="text-xs text-muted-foreground">
-              {logoValid
-                ? "Must be a public https link — email apps cannot load private files."
-                : "Must start with https://"}
-            </p>
-          </div>
-          <div className="grid gap-1.5">
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <Field label="Accent colour" value={accentColour} onChange={setAccentColour} />
+            <div className="grid gap-1.5">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Field label="Accent colour" value={accentColour} onChange={setAccentColour} />
+                </div>
+                <input
+                  type="color"
+                  aria-label="Pick accent colour"
+                  value={accentValid && accentColour ? accentColour : "#019c86"}
+                  onChange={(event) => setAccentColour(event.target.value)}
+                  className="size-10 shrink-0 cursor-pointer rounded-lg border bg-background p-1"
+                />
               </div>
-              <input
-                type="color"
-                aria-label="Pick accent colour"
-                value={accentValid && accentColour ? accentColour : "#019c86"}
-                onChange={(event) => setAccentColour(event.target.value)}
-                className="size-10 shrink-0 cursor-pointer rounded-lg border bg-background p-1"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {accentValid ? "Buttons and highlights in your emails." : "Must be a #rrggbb value."}
-            </p>
-          </div>
-          <div className="rounded-xl border bg-background p-4">
-            <p className="mb-3 text-xs font-medium text-muted-foreground">Email preview</p>
-            {logoValid && logoUrl ? (
-              <img src={logoUrl} alt="" className="mb-2 h-9 w-auto object-contain" />
-            ) : (
-              <p className="mb-2 text-[17px] font-extrabold uppercase tracking-[0.06em]">
-                {tenant.business?.tradingName ?? "Your business"}
+              <p className="text-xs text-muted-foreground">
+                {accentValid
+                  ? "Buttons and highlights in your emails."
+                  : "Must be a #rrggbb value."}
               </p>
-            )}
-            <div
-              className="h-[3px] w-11 rounded-sm"
-              style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <p className="mb-3 text-xs font-medium text-muted-foreground">Email preview</p>
+              {logoValid && logoUrl ? (
+                <img src={logoUrl} alt="" className="mb-2 h-9 w-auto object-contain" />
+              ) : (
+                <p className="mb-2 text-[17px] font-extrabold uppercase tracking-[0.06em]">
+                  {tenant.business?.tradingName ?? "Your business"}
+                </p>
+              )}
+              <div
+                className="h-[3px] w-11 rounded-sm"
+                style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
+              />
+              <p className="mt-4 text-base font-bold">Your sessions are ready</p>
+              <button
+                type="button"
+                disabled
+                className="mt-3 rounded-[10px] px-6 py-3 text-sm font-semibold text-white"
+                style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
+              >
+                Book your sessions
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      </div>
+      <div className="grid gap-5">
+        <SectionCard title="Booking rules">
+          <div className="grid gap-4">
+            <Field
+              label="Default hold (minutes)"
+              value={holdMinutes}
+              onChange={setHoldMinutes}
+              type="number"
             />
-            <p className="mt-4 text-base font-bold">Your sessions are ready</p>
-            <button
-              type="button"
-              disabled
-              className="mt-3 rounded-[10px] px-6 py-3 text-sm font-semibold text-white"
-              style={{ background: accentValid && accentColour ? accentColour : "#019c86" }}
-            >
-              Book your sessions
-            </button>
+            <Field
+              label="Cancellation window (hours)"
+              value={cancelHours}
+              onChange={setCancelHours}
+              type="number"
+            />
+            <TakePaymentOnlineSetting />
           </div>
-        </div>
-      </SectionCard>
-      <SectionCard title="Tax">
-        <div className="grid gap-4">
-          <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
-            <p className="text-sm font-medium">VAT registered</p>
-            <Switch checked={vatRegistered} onCheckedChange={setVatRegistered} />
+        </SectionCard>
+        <SectionCard title="Tax">
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+              <p className="text-sm font-medium">VAT registered</p>
+              <Switch checked={vatRegistered} onCheckedChange={setVatRegistered} />
+            </div>
+            <Field label="VAT number" value={vatNumber} onChange={setVatNumber} />
           </div>
-          <Field label="VAT number" value={vatNumber} onChange={setVatNumber} />
-        </div>
-      </SectionCard>
-      <SectionCard title="Legal address & retention">
-        <div className="grid gap-4">
-          <Field label="Address line 1" value={line1} onChange={setLine1} />
-          <Field label="Address line 2" value={line2} onChange={setLine2} />
-          <Field label="City" value={city} onChange={setCity} />
-          <Field label="Region" value={region} onChange={setRegion} />
-          <Field label="Postal code" value={postalCode} onChange={setPostalCode} />
-          <Field label="Country (ISO-2)" value={country} onChange={setCountry} />
-          <Field
-            label="Closure export window (days)"
-            value={closureDays}
-            onChange={setClosureDays}
-            type="number"
-          />
-        </div>
-      </SectionCard>
+        </SectionCard>
+        <SectionCard title="Legal address & retention">
+          <div className="grid gap-4">
+            <Field label="Address line 1" value={line1} onChange={setLine1} />
+            <Field label="Address line 2" value={line2} onChange={setLine2} />
+            <Field label="City" value={city} onChange={setCity} />
+            <Field label="Region" value={region} onChange={setRegion} />
+            <Field label="Postal code" value={postalCode} onChange={setPostalCode} />
+            <Field label="Country (ISO-2)" value={country} onChange={setCountry} />
+            <Field
+              label="Closure export window (days)"
+              value={closureDays}
+              onChange={setClosureDays}
+              type="number"
+            />
+          </div>
+        </SectionCard>
+      </div>
       <div className="xl:col-span-2">
         <Can
           permission={PERMISSIONS.BUSINESS_UPDATE}
@@ -842,7 +952,9 @@ function ConfigurationTab() {
                 booking: {
                   defaultHoldMinutes: Number(holdMinutes) || 10,
                   cancellationWindowHours: Number(cancelHours) || 0,
-                  requireOnlinePayment,
+                  // Preserve the payments toggle; that control saves on its own and
+                  // a booking patch that omitted it would turn online payments off.
+                  requireOnlinePayment: isOnlinePaymentRequired(config),
                 } as NonNullable<Parameters<typeof update.mutateAsync>[0]["booking"]>,
                 tax: { vatRegistered, vatNumber: vatNumber.trim() || null },
                 retention: { closureWindowDays: Number(closureDays) || 30 },
@@ -1028,7 +1140,9 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
   const [refundNotes, setRefundNotes] = useState("Unused packs transferable within 30 days");
   const [locale, setLocale] = useState(tenant.business?.locale || "en-GB");
   const [industryHint, setIndustryHint] = useState(
-    tenant.business?.industryTemplateKey?.replaceAll("_", " ") || "personal training",
+    tenant.business?.industryTemplateKey
+      ? formatIndustry(tenant.business.industryTemplateKey).toLowerCase()
+      : "personal training",
   );
 
   const current = useCurrentPolicyDocument(type);
@@ -1044,7 +1158,9 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
     setBusinessName(tenant.business?.tradingName || tenant.business?.legalName || "");
     setLocale(tenant.business?.locale || "en-GB");
     setIndustryHint(
-      tenant.business?.industryTemplateKey?.replaceAll("_", " ") || "personal training",
+      tenant.business?.industryTemplateKey
+        ? formatIndustry(tenant.business.industryTemplateKey).toLowerCase()
+        : "personal training",
     );
   }, [
     tenant.business?.tradingName,
@@ -1579,6 +1695,8 @@ function PaymentsTab() {
 
   return (
     <>
+      <TakePaymentOnlineSetting className="xl:col-span-2" />
+      <BankTransferSetting className="xl:col-span-2" />
       <SectionCard
         title="Payment processing"
         action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}
@@ -1629,10 +1747,17 @@ function PaymentsTab() {
           </div>
         )}
       </SectionCard>
-      <SectionCard title="Invoicing and tax">
+      {/* self-start stops the grid stretching this stub card to match the tall
+          Stripe card beside it. */}
+      <SectionCard title="Invoicing and tax" className="self-start">
         <p className="text-sm text-muted-foreground">
           VAT and legal address are managed under Configuration.
         </p>
+        <Button variant="outline" size="sm" className="mt-3 w-fit" asChild>
+          <Link to="/settings" search={{ tab: "configuration" }}>
+            Edit VAT &amp; legal address
+          </Link>
+        </Button>
       </SectionCard>
     </>
   );

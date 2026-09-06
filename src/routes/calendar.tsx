@@ -169,10 +169,12 @@ function CalendarPage() {
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Trainer" />
+              <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All trainers</SelectItem>
+              <SelectItem value="all">
+                All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
+              </SelectItem>
               {(staff.data ?? []).map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.displayName}

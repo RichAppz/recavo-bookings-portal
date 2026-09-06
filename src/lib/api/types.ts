@@ -6,11 +6,17 @@ export type User = schemas["User"];
 export type Business = schemas["Business"];
 export type BusinessSummary = schemas["BusinessSummary"];
 export type BusinessConfiguration = schemas["BusinessConfiguration"];
+/** Pay-by-bank account details stored on business settings (RECA-522). */
+export type BankTransferSettings = NonNullable<BusinessConfiguration["bankTransfer"]>;
+/** Account details + reference shown to a customer paying by bank transfer. */
+export type BankTransferInstructions = schemas["BankTransferInstructions"];
 export type Membership = schemas["Membership"];
 export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
 export type Booking = schemas["Booking"];
+/** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */
+export type ServiceLineItem = Booking["lineItems"][number];
 /** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
 export type BookingHistoryEntry = {
   at?: string;
@@ -55,6 +61,13 @@ export type FailedJob = schemas["FailedJob"];
 export type PolicyDocument = schemas["PolicyDocument"];
 export type Invitation = schemas["Invitation"];
 export type LinkedRecord = schemas["LinkedRecord"];
+export type LinkedRecordOwnership = schemas["LinkedRecordOwnership"];
+
+/** One row of the business-wide record list: the record plus its current owner. */
+export type LinkedRecordWithOwner = {
+  record: LinkedRecord;
+  owner: { id: string; firstName: string; lastName: string | null } | null;
+};
 export type ConsentRecord = schemas["ConsentRecord"];
 export type LinkedRecordDefinition = schemas["LinkedRecordDefinition"];
 export type AuditEvent = schemas["AuditEvent"];

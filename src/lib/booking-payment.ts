@@ -10,6 +10,27 @@ const CLOSED = new Set([
 ]);
 
 /**
+ * `requireOnlinePayment` is not on the committed OpenAPI snapshot yet, so the
+ * generated `BusinessConfiguration` type omits it. Read through this shape
+ * until the schema is refreshed as its own change.
+ */
+export type BookingRulesConfig = {
+  cancellationWindowHours?: number;
+  defaultHoldMinutes?: number;
+  requireOnlinePayment?: boolean;
+};
+
+export function isOnlinePaymentRequired(
+  config: { booking?: BookingRulesConfig } | null | undefined,
+): boolean {
+  return Boolean(config?.booking?.requireOnlinePayment);
+}
+
+export function isSettledPaymentState(state: string | undefined): boolean {
+  return Boolean(state && SETTLED.has(state));
+}
+
+/**
  * Staff "take payment separately" confirms the slot first (`paymentMethod: none`).
  * The client should still see that money is due until a payment settles.
  */

@@ -29,7 +29,7 @@ const STEP_META: Record<
     href: "/staff",
   },
   service: {
-    title: "Create a session type",
+    title: "Create a session",
     description: "Duration, price, and what clients can book.",
     required: true,
     href: "/services",
@@ -50,7 +50,7 @@ const STEP_META: Record<
     title: "Choose your Recavo plan",
     description: "Start a 14-day trial so Recavo can bill your workspace.",
     required: false,
-    href: "/billing",
+    href: "/settings?tab=billing",
   },
   public_booking: {
     title: "Share your booking link",
@@ -180,11 +180,11 @@ export function deriveBusinessOnboarding(input: DeriveOnboardingInput): Business
   if (input.dismissed) {
     return {
       businessId: input.businessId,
-      status: "dismissed",
+      status: "in_progress",
       percentComplete,
       requiredCompleted,
       requiredTotal,
-      dismissedAt: input.dismissedAt ?? new Date().toISOString(),
+      dismissedAt: null,
       steps,
       version: 1,
     };

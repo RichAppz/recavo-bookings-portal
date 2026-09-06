@@ -37,7 +37,29 @@ import {
 import type { Package } from "@/lib/api/types";
 import { formatMoney, parseMoneyToMinor } from "@/lib/format";
 import { validityLabel } from "@/lib/packages";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
+
+/**
+ * Package copy in the business's own words: a credit redeems one booking
+ * ("session" for PT, "job" for automotive), and eligibility is a list of services.
+ */
+function usePackageTerms() {
+  const tenant = useTenant();
+  const bookingNoun = tenant.terminology.booking.trim() || "Booking";
+  const bookingLower = bookingNoun.toLowerCase();
+  const bookingPlural = bookingLower.endsWith("s") ? bookingLower : `${bookingLower}s`;
+  const serviceNoun = tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service";
+  const serviceLower = serviceNoun.toLowerCase();
+  const template = tenant.business?.industryTemplateKey;
+  const namePlaceholder =
+    template === "car_detailing"
+      ? "Monthly Maintenance Wash Plan"
+      : template === "personal_training"
+        ? "Monthly 1-to-1 Package"
+        : `${bookingNoun} Bundle`;
+  return { bookingLower, bookingPlural, serviceLower, namePlaceholder };
+}
 
 export const Route = createFileRoute("/packages")({
   head: () => ({
@@ -45,12 +67,12 @@ export const Route = createFileRoute("/packages")({
       { title: "Packages — RECAVO" },
       {
         name: "description",
-        content: "Prepaid session packages clients can buy up front.",
+        content: "Prepaid packages clients can buy up front.",
       },
       { property: "og:title", content: "RECAVO Packages" },
       {
         property: "og:description",
-        content: "Prepaid session packages clients can buy up front.",
+        content: "Prepaid packages clients can buy up front.",
       },
     ],
   }),
@@ -71,12 +93,13 @@ function PackagesPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Package | null>(null);
   const [quick, setQuick] = useState<QuickAction>(null);
+  const terms = usePackageTerms();
 
   return (
     <>
       <PageHeader
         title="Packages"
-        description="Prepaid blocks of sessions clients can buy up front."
+        description={`Prepaid bundles of ${terms.bookingPlural} clients can buy up front.`}
         actions={
           <>
             <Button variant="outline" onClick={() => setQuick("package")}>
@@ -116,11 +139,11 @@ function PackagesPage() {
           {(packages.data ?? []).map((p) => {
             const eligible =
               p.eligibleServiceIds.length === 0
-                ? "Any session"
+                ? `Any ${terms.serviceLower}`
                 : p.eligibleServiceIds
                     .map((id) => services.data?.find((s) => s.id === id)?.name)
                     .filter(Boolean)
-                    .join(", ") || "Any session";
+                    .join(", ") || `Any ${terms.serviceLower}`;
             return (
               <article key={p.id} className="surface-card flex flex-col p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -151,7 +174,8 @@ function PackagesPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Ticket className="size-4 text-muted-foreground" />
-                    {p.creditsIssued} {p.creditsIssued === 1 ? "session" : "sessions"}
+                    {p.creditsIssued}{" "}
+                    {p.creditsIssued === 1 ? terms.bookingLower : terms.bookingPlural}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Clock className="size-4 text-muted-foreground" />
@@ -160,7 +184,7 @@ function PackagesPage() {
                 </div>
 
                 <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                  <Row label="Sessions" value={eligible} />
+                  <Row label="Eligible services" value={eligible} />
                   <Row label="Transferable" value={p.transferable ? "Yes" : "No"} />
                 </dl>
 
@@ -249,6 +273,7 @@ function PackageDialog({
   const createPackage = useCreatePackage();
   const updatePackage = useUpdatePackage();
   const services = useServices();
+  const terms = usePackageTerms();
 
   const [name, setName] = useState(pkg?.name ?? "");
   const [description, setDescription] = useState(pkg?.description ?? "");
@@ -356,17 +381,17 @@ function PackageDialog({
         <DialogHeader>
           <DialogTitle>{pkg ? "Edit package" : "New package"}</DialogTitle>
           <DialogDescription>
-            Bundle sessions into prepaid credits with an expiry window.
+            Bundle {terms.bookingPlural} into prepaid credits with an expiry window.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
           <div className="grid gap-2">
             <Label htmlFor="p-name">Package name</Label>
             <Input
               id="p-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Monthly 1-to-1 Package"
+              placeholder={terms.namePlaceholder}
               aria-invalid={Boolean(fieldErrors.name)}
             />
             {fieldErrors.name ? (

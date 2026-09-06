@@ -191,11 +191,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const terminology = useMemo(() => {
     const staff = configuration?.terminology?.staff || "Staff";
     const booking = configuration?.terminology?.booking || "Booking";
-    let service = configuration?.terminology?.service || "Service";
-    // Older personal_training templates set both to "Session", which doubles nav labels.
-    if (service.trim().toLowerCase() === booking.trim().toLowerCase()) {
-      service = `${service.trim()} type`;
-    }
+    const service = configuration?.terminology?.service || "Service";
     return {
       staff,
       service,

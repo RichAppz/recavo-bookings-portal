@@ -8,22 +8,32 @@
  * here and selected by argument.
  *
  *   node scripts/cloudflare-deploy-config.mjs staging
+ *   node scripts/cloudflare-deploy-config.mjs production
  *
  * `custom_domain: true` is what makes Cloudflare create and manage the DNS
- * record itself, which is why none of these hostnames are in the zone by hand.
+ * record itself. These hostnames must match `src/lib/hosts.ts` — a wrong pair
+ * here steals DNS from the live staging/production names.
  *
- * There is deliberately no `production` target. Production does not exist yet —
- * no Supabase project, no API, and live Stripe keys nowhere — so the only thing
- * a production deploy could serve is staging's database on a public hostname.
- * dashboard./book.recavo.app are held by the holding page instead (see
- * holding/). Add the target back at launch, alongside a real .env.production.
+ * Hostnames (do not invent dash-separated aliases):
+ *   Staging staff     staging.bookings.recavo.app
+ *   Staging booking   staging.book.recavo.app
+ *   Production staff  bookings.recavo.app
+ *   Production booking book.recavo.app
+ *
+ * Production Auth/API is lcciokzqvatsrckmirdm / booking-api.recavo.app
+ * (see .env.production). Never point this target at staging's Supabase project.
+ * dashboard.recavo.app stays on the holding page (see holding/).
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
 const TARGETS = {
   staging: {
     name: "recavo-portal-staging",
-    domains: ["staging-dashboard.recavo.app", "staging-book.recavo.app"],
+    domains: ["staging.bookings.recavo.app", "staging.book.recavo.app"],
+  },
+  production: {
+    name: "recavo-portal",
+    domains: ["bookings.recavo.app", "book.recavo.app"],
   },
 };
 

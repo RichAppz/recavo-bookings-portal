@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
@@ -9,12 +9,32 @@ import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
 import { AuthChromeGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth/auth-store";
+import { stashPendingReferral } from "@/lib/auth/pending-referral";
 import { isCustomerHost } from "@/lib/hosts";
+
+/** Must match the Supabase project's "OTP Length" auth setting (currently 8). */
+const CODE_LENGTH = 8;
+const RESEND_SECONDS = 30;
+
+/**
+ * Signing in with a password before the sign-up email was confirmed: Supabase
+ * refuses with this specific error. The account and password are fine — the
+ * user just never entered (or received) the code, maybe days ago on another
+ * device — so the answer is a fresh code, not a dead-end error toast.
+ */
+function isEmailNotConfirmed(err: unknown): boolean {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    if ((err as { code?: unknown }).code === "email_not_confirmed") return true;
+  }
+  return err instanceof Error && /email not confirmed/i.test(err.message);
+}
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
+  ref: z.string().optional(),
 });
 
 /**
@@ -25,6 +45,18 @@ function safeRedirect(value: string | undefined): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
   if (value === "/login" || value.startsWith("/login?")) return "/";
   return value;
+}
+
+/**
+ * On book.recavo the home is `/account`. Old emails and leftover links still
+ * point at `/portal` or `/`, and sending a customer there after a code sign-in
+ * is how they ended up on the retired per-studio page.
+ */
+function postLoginPath(value: string | undefined, customerHost: boolean): string {
+  const dest = safeRedirect(value);
+  if (!customerHost) return dest;
+  if (dest === "/" || dest === "/portal" || dest.startsWith("/portal?")) return "/account";
+  return dest;
 }
 
 export const Route = createFileRoute("/login")({
@@ -44,7 +76,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { status } = useAuth();
   const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
+  const { redirect, ref } = Route.useSearch();
   // Which form to show depends on the hostname, which the server render cannot
   // see. Deciding in an effect rather than during render is what keeps the
   // customer host from being served the staff form and swapping it a moment
@@ -56,10 +88,13 @@ function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      void navigate({ to: safeRedirect(redirect) });
-    }
-  }, [status, redirect, navigate]);
+    if (ref?.trim()) stashPendingReferral(ref);
+  }, [ref]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || customer === null) return;
+    void navigate({ to: postLoginPath(redirect, customer) });
+  }, [status, redirect, navigate, customer]);
 
   if (customer === null) {
     return <AuthChromeGhost />;
@@ -84,11 +119,25 @@ function CustomerLogin() {
 }
 
 function StaffLogin() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, confirmSignUp, resendSignUpCode } = useAuth();
+  const { ref } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Sign-in hit an unconfirmed account: a fresh code has been sent and we're
+  // showing the code-entry step instead of the password form.
+  const [awaitingCode, setAwaitingCode] = useState(false);
+  const [code, setCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
+  // Guards the paste-and-submit path, since the code field auto-submits when full.
+  const verifying = useRef(false);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -98,10 +147,119 @@ function StaffLogin() {
       // Navigation happens in the effect above once the session is fully
       // established (after any 2FA challenge and /me load).
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Sign in failed");
+      if (isEmailNotConfirmed(err)) {
+        try {
+          await resendSignUpCode(email.trim());
+          setAwaitingCode(true);
+          setResendIn(RESEND_SECONDS);
+          toast.info("Confirm your email to finish signing up", {
+            description: `We sent a new ${CODE_LENGTH}-digit code to ${email.trim()}.`,
+          });
+        } catch (resendErr) {
+          toast.error(resendErr instanceof Error ? resendErr.message : "Couldn't send a new code");
+        }
+      } else {
+        toast.error(err instanceof Error ? err.message : "Sign in failed");
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  async function verify(value: string) {
+    if (verifying.current) return;
+    verifying.current = true;
+    setBusy(true);
+    try {
+      await confirmSignUp(email.trim(), value);
+      // The auth-state change flips status to "authenticated"; the effect above
+      // then navigates — and anything captured at sign-up (name, business) is
+      // applied from the account's user_metadata.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "That code didn't work");
+      setCode("");
+    } finally {
+      verifying.current = false;
+      setBusy(false);
+    }
+  }
+
+  if (awaitingCode) {
+    return (
+      <AuthShell
+        eyebrow="Almost there"
+        title="Confirm your email"
+        subtitle={`Your account was never confirmed. Enter the ${CODE_LENGTH}-digit code we just sent to finish signing in.`}
+        footer={
+          <span>
+            Wrong account?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setAwaitingCode(false);
+                setCode("");
+              }}
+              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+            >
+              <ArrowLeft className="size-3.5" /> Back to sign in
+            </button>
+          </span>
+        }
+      >
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="code">Enter the code we sent to {email.trim()}</Label>
+            <InputOTP
+              id="code"
+              containerClassName="w-full"
+              maxLength={CODE_LENGTH}
+              value={code}
+              disabled={busy}
+              onChange={(value) => {
+                setCode(value);
+                if (value.length === CODE_LENGTH) void verify(value);
+              }}
+            >
+              <InputOTPGroup className="w-full">
+                {Array.from({ length: CODE_LENGTH }, (_, i) => (
+                  <InputOTPSlot key={i} index={i} className="h-12 flex-1 text-base" />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+            {busy ? (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" /> Checking…
+              </p>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            disabled={resendIn > 0 || busy}
+            className="text-sm font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+            onClick={() => {
+              setBusy(true);
+              resendSignUpCode(email.trim())
+                .then(() => {
+                  setCode("");
+                  setResendIn(RESEND_SECONDS);
+                  toast.success("Code resent", { description: `Sent again to ${email.trim()}.` });
+                })
+                .catch((err: unknown) => {
+                  toast.error(err instanceof Error ? err.message : "Couldn't resend the code");
+                })
+                .finally(() => setBusy(false));
+            }}
+          >
+            {resendIn > 0 ? `Resend code in ${resendIn}s` : "Resend code"}
+          </button>
+
+          <p className="text-xs text-muted-foreground">
+            The code can take a minute to arrive. Check your spam folder if it doesn&apos;t.
+          </p>
+        </div>
+      </AuthShell>
+    );
   }
 
   return (
@@ -112,7 +270,11 @@ function StaffLogin() {
       footer={
         <span>
           New to RECAVO?{" "}
-          <Link to="/register" className="font-medium text-primary hover:underline">
+          <Link
+            to="/register"
+            search={ref?.trim() ? { ref: ref.trim() } : undefined}
+            className="font-medium text-primary hover:underline"
+          >
             Create an account
           </Link>
         </span>

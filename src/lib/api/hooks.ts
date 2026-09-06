@@ -15,6 +15,7 @@ import type {
   AiPolicyDraftRequest,
   AiPolicyDraftResponse,
   AuditEvent,
+  BankTransferInstructions,
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
@@ -41,6 +42,8 @@ import type {
   LinkedRecord,
   LinkedRecordDefinition,
   LinkedRecordDefinitionBundle,
+  LinkedRecordOwnership,
+  LinkedRecordWithOwner,
   Location,
   Membership,
   MembershipWithUser,
@@ -194,12 +197,14 @@ export function useCreateBooking() {
   return useMutation({
     mutationFn: createIdempotentMutationFn(
       async (body: Record<string, unknown>, idempotencyKey: string) => {
-        const res = await api.post<{ booking: Booking }>(
+        // With paymentMethod: bank_transfer the 201 carries account details +
+        // reference for staff to read out to the customer (RECA-522).
+        const res = await api.post<{ booking: Booking; bankTransfer?: BankTransferInstructions }>(
           `/api/v1/businesses/${businessId}/bookings`,
           body,
           { idempotencyKey },
         );
-        return res.data.booking;
+        return res.data;
       },
     ),
     onSuccess: () => {
@@ -258,6 +263,35 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
       });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Staff confirms a pay-by-bank booking once the money lands (RECA-522).
+ * Idempotent; a 422 means it's not awaiting a bank transfer any more (e.g. a
+ * colleague already confirmed it) — the caller should refresh, so no toast here.
+ */
+export function useMarkBankTransferReceived() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<Booking, { bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/bank-transfer-received`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
+    },
   });
 }
 
@@ -332,6 +366,28 @@ export function useTakeBookingPayment() {
   });
 }
 
+export function useSyncBookingPayment() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string }) => {
+      const res = await api.post<{ payment: Payment }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/payment/sync`,
+      );
+      return res.data.payment;
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingPayments(businessId, vars.bookingId),
+      });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "reports"] });
+    },
+  });
+}
+
 /* ---------------- Catalogue / staff / locations ---------------- */
 
 export function useServices() {
@@ -387,7 +443,12 @@ export function useUpdateService() {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
       invalidateOnboarding(qc, businessId);
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      }
+      toastApiError(err);
+    },
   });
 }
 
@@ -608,7 +669,7 @@ export type CustomerUpdateBody = {
   lastName?: string | null;
   email?: string | null;
   phone?: string | null;
-  preferredChannel?: "email" | "phone" | "none";
+  preferredChannel?: "email" | "phone" | "sms" | "none";
   operationalNotifications?: boolean;
   marketingConsent?: boolean;
   marketingConsentSource?: string | null;
@@ -708,12 +769,15 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: createIdempotentMutationFn(
       async (body: Record<string, unknown>, idempotencyKey: string) => {
-        const res = await api.post<{ customer: Customer }>(
+        const res = await api.post<{ customer: Customer; possibleDuplicates?: Customer[] }>(
           `/api/v1/businesses/${businessId}/customers`,
           body,
           { idempotencyKey },
         );
-        return res.data.customer;
+        return {
+          customer: res.data.customer,
+          possibleDuplicates: res.data.possibleDuplicates ?? [],
+        };
       },
     ),
     onSuccess: () => {
@@ -900,6 +964,32 @@ export function useCustomerLinkedRecords(customerId: string | undefined) {
   });
 }
 
+/**
+ * Business-wide record list for the staff Vehicles page: cursor-paginated, each
+ * row carrying its current owner. `search` spans label, field values and owner
+ * name (server-side).
+ */
+export function useLinkedRecordsInfinite(
+  filters: { search?: string; status?: "active" | "archived"; enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  const query = {
+    ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+  };
+  const q = usePaginatedQuery<LinkedRecordWithOwner, "items">({
+    queryKey: queryKeys.linkedRecords(businessId, query),
+    path: `/api/v1/businesses/${businessId}/linked-records`,
+    listKey: "items",
+    query,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+  return {
+    ...q,
+    items: flattenPages(q.data, "items"),
+  };
+}
+
 export function useCreateCustomerLinkedRecord(customerId: string | undefined) {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -915,8 +1005,116 @@ export function useCreateCustomerLinkedRecord(customerId: string | undefined) {
       void qc.invalidateQueries({
         queryKey: queryKeys.customerLinkedRecords(businessId, customerId ?? ""),
       });
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/** Read one linked record by id (includes archived) — for history/detail. */
+export function useLinkedRecord(recordId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.linkedRecord(businessId, recordId ?? ""),
+    enabled: Boolean(businessId && recordId),
+    queryFn: async () => {
+      const res = await api.get<{ record: LinkedRecord }>(
+        `/api/v1/businesses/${businessId}/linked-records/${recordId}`,
+      );
+      return res.data.record;
+    },
+  });
+}
+
+/** PATCH a linked record (values / label / archive) under optimistic concurrency (If-Match). */
+export function usePatchLinkedRecord(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      recordId: string;
+      version: number;
+      body: {
+        displayLabel?: string;
+        values?: Record<string, unknown>;
+        status?: "active" | "archived";
+      };
+    }) => {
+      const res = await api.patch<{ record: LinkedRecord }>(
+        `/api/v1/businesses/${businessId}/linked-records/${vars.recordId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.record;
+    },
+    onSuccess: (record) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecord(businessId, record.id) });
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
+      if (customerId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerLinkedRecords(businessId, customerId),
+        });
+      }
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Transfer a linked record (e.g. a vehicle that changed hands) to another customer
+ * in the same business (RECA-521). If-Match guarded; the record keeps its id so
+ * booking history stays intact. Errors are left to the caller (the transfer dialog
+ * shows inline messages for 409/ALREADY_OWNER rather than a generic toast).
+ */
+export function useTransferLinkedRecord(sourceCustomerId: string | undefined) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      recordId: string;
+      version: number;
+      toCustomerId: string;
+      reason?: string;
+    }) => {
+      const res = await api.post<{ record: LinkedRecord }>(
+        `/api/v1/businesses/${businessId}/linked-records/${vars.recordId}/transfer`,
+        { toCustomerId: vars.toCustomerId, ...(vars.reason ? { reason: vars.reason } : {}) },
+        { ifMatch: vars.version },
+      );
+      return res.data.record;
+    },
+    onSuccess: (record) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecord(businessId, record.id) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.linkedRecordOwnership(businessId, record.id),
+      });
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
+      // Both owners' vehicle lists change: the source loses the record, the new
+      // owner (record.customerId after transfer) gains it.
+      if (sourceCustomerId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerLinkedRecords(businessId, sourceCustomerId),
+        });
+      }
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerLinkedRecords(businessId, record.customerId),
+      });
+    },
+  });
+}
+
+/** Ownership timeline for a linked record (oldest first; current interval has `endedAt: null`). */
+export function useLinkedRecordOwnership(recordId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.linkedRecordOwnership(businessId, recordId ?? ""),
+    enabled: Boolean(businessId && recordId),
+    queryFn: async () => {
+      const res = await api.get<{ ownerships: LinkedRecordOwnership[] }>(
+        `/api/v1/businesses/${businessId}/linked-records/${recordId}/ownership`,
+      );
+      return res.data.ownerships;
+    },
   });
 }
 
@@ -1401,6 +1599,41 @@ export function useMarkNotificationRead() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
     },
+  });
+}
+
+/** Notifications sent to a specific customer (reminders, updates) — RECA-518 inspect. */
+export function useCustomerNotifications(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerNotifications(businessId, customerId ?? ""),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ notifications: Notification[] }>(
+        `/api/v1/businesses/${businessId}/customers/${customerId}/notifications`,
+      );
+      return res.data.notifications;
+    },
+  });
+}
+
+/** Manual sweep of due reminders (needs `business.update`). Returns a send summary. */
+export function useRunReminders() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(async (_: void, idempotencyKey: string) => {
+      const res = await api.post<{ sent: number; skipped: number }>(
+        `/api/v1/businesses/${businessId}/reminders/run`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
@@ -2334,17 +2567,106 @@ export function useBillingCatalogue() {
   });
 }
 
+/**
+ * A sellable bolt-on and where this business stands with it (RECA-526).
+ * `included` — the plan tier bundles the feature; `active` — held via the add-on
+ * (or a platform grant); `available` — purchasable.
+ */
+export type SubscriptionAddon = {
+  key: string;
+  featureKey: string;
+  unitAmountMinor: number;
+  currency: string;
+  interval: "month" | "year";
+  status: "included" | "active" | "available";
+};
+
+export const SMS_ADDON_KEY = "sms";
+export const SMS_FEATURE_KEY = "reminders.sms";
+
+export type SubscriptionView = {
+  subscription: BusinessSubscription | null;
+  plan?: PublicCataloguePlan | null;
+  /** Effective feature map (plan tier + Stripe entitlements + overrides, RECA-526). */
+  features?: Record<string, boolean>;
+  addons?: SubscriptionAddon[];
+};
+
 export function useSubscription() {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: queryKeys.subscription(businessId),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{
-        subscription: BusinessSubscription | null;
-        plan?: PublicCataloguePlan | null;
-      }>(`/api/v1/businesses/${businessId}/subscription`);
+      const res = await api.get<SubscriptionView>(`/api/v1/businesses/${businessId}/subscription`);
       return res.data;
+    },
+  });
+}
+
+/** Buy a bolt-on (e.g. SMS on Solo). Server replays on the same Idempotency-Key (RECA-526). */
+export function useAddSubscriptionAddon() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<SubscriptionView, Error, string>({
+    mutationFn: createIdempotentMutationFn(async (addonKey: string, idempotencyKey: string) => {
+      const res = await api.post<SubscriptionView>(
+        `/api/v1/businesses/${businessId}/subscription/addons/${encodeURIComponent(addonKey)}`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: (view) => {
+      qc.setQueryData(queryKeys.subscription(businessId), view);
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRemoveSubscriptionAddon() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<SubscriptionView, Error, string>({
+    mutationFn: createIdempotentMutationFn(async (addonKey: string, idempotencyKey: string) => {
+      const res = await api.delete<SubscriptionView>(
+        `/api/v1/businesses/${businessId}/subscription/addons/${encodeURIComponent(addonKey)}`,
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: (view) => {
+      qc.setQueryData(queryKeys.subscription(businessId), view);
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export type ReferralStats = {
+  attributedCount: number;
+  convertedCount: number;
+  pendingRewardCount: number;
+  rewardedCount: number;
+};
+
+export type ReferralProgram = {
+  code: string;
+  sharePath: string;
+  stats: ReferralStats;
+};
+
+export function useReferralProgram() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.referral(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ referral: ReferralProgram }>(
+        `/api/v1/businesses/${businessId}/referral`,
+      );
+      return res.data.referral;
     },
   });
 }
@@ -2544,6 +2866,82 @@ export function useBusinessFile(fileId: string | undefined) {
   });
 }
 
+/** Non-deleted files attached to an owner (vehicle photos etc., RECA-524), newest first. */
+export function useOwnerFiles(owner: FileOwner | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.ownerFiles(businessId, owner?.ownerType ?? "", owner?.ownerId ?? ""),
+    enabled: Boolean(businessId && owner),
+    queryFn: async () => {
+      const res = await api.get<{ files: FileResource[] }>(
+        `/api/v1/businesses/${businessId}/files`,
+        { query: { ownerType: owner!.ownerType, ownerId: owner!.ownerId } },
+      );
+      return res.data.files;
+    },
+    // Poll while any row is still being scanned so thumbnails appear as they clear.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((f) => f.scanStatus === "pending") ? 3000 : false,
+  });
+}
+
+/** Soft-deletes an attachment (staff action); the blob is purged server-side. */
+export function useDeleteFile(owner?: FileOwner) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fileId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/files/${fileId}`);
+    },
+    onSuccess: () => {
+      if (owner) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.ownerFiles(businessId, owner.ownerType, owner.ownerId),
+        });
+      }
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Whether the business's effective plan includes a feature (RECA-526).
+ * `undefined` while the subscription is loading — treat as "don't show upsell yet".
+ */
+export function usePlanFeature(featureKey: string): boolean | undefined {
+  const subscription = useSubscription();
+  if (!subscription.isSuccess) return undefined;
+  return subscription.data.features?.[featureKey] === true;
+}
+
+/** The SMS bolt-on row from the subscription view, if the business has a subscription. */
+export function useSmsAddon(): SubscriptionAddon | undefined {
+  const subscription = useSubscription();
+  return subscription.data?.addons?.find((a) => a.key === SMS_ADDON_KEY);
+}
+
+/**
+ * Signed view URL for a clean file, cached just under the server TTL (1h) so image
+ * grids don't re-sign on every render. Only for <img> src — downloads should keep
+ * using {@link useFileDownloadUrl} for a fresh URL per click.
+ */
+export function useFileViewUrl(fileId: string | undefined, enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.fileDownloadUrl(businessId, fileId ?? ""),
+    enabled: Boolean(businessId && fileId && enabled),
+    staleTime: 45 * 60 * 1000,
+    gcTime: 45 * 60 * 1000,
+    queryFn: async () => {
+      const res = await api.post<{ downloadUrl: string; expiresAt: string }>(
+        `/api/v1/businesses/${businessId}/files/${fileId}/download-url`,
+        {},
+      );
+      return res.data;
+    },
+  });
+}
+
 /** Issues a short-lived signed download URL — never cache/reuse the result. */
 export function useFileDownloadUrl() {
   const businessId = useBusinessId();
@@ -2642,22 +3040,29 @@ export function useRequestExport() {
 export async function downloadExportFile(opts: {
   businessId: string;
   exportId: string;
-  token: string;
+  /** Download token; the API only issues it inside `downloadUrl` (`?token=`). */
+  token?: string;
+  /** Relative `/api/v1/...` path or absolute URL as returned by the request call. */
   downloadUrl?: string;
   filename?: string;
   maxAttempts?: number;
 }) {
   const maxAttempts = opts.maxAttempts ?? 8;
-  const path =
-    opts.downloadUrl && opts.downloadUrl.startsWith("/")
-      ? opts.downloadUrl
-      : `/api/v1/businesses/${opts.businessId}/exports/${opts.exportId}/download`;
+  // The token only exists in the URL the API handed back, so lift it out rather than
+  // appending a second `?token=` (which produced `…?token=a?token=b`).
+  let path = `/api/v1/businesses/${opts.businessId}/exports/${opts.exportId}/download`;
+  let token = opts.token;
+  if (opts.downloadUrl) {
+    const parsed = new URL(opts.downloadUrl, "https://placeholder.invalid");
+    if (parsed.pathname.startsWith("/api/")) path = parsed.pathname;
+    token = parsed.searchParams.get("token") ?? token;
+  }
 
   let lastError: unknown;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const res = await api.get<string | Record<string, unknown>>(path, {
-        query: { token: opts.token },
+        query: { token },
       });
       const body = res.data;
       const text =
@@ -3055,6 +3460,7 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
           booking: Booking;
           holdToken: string;
           onlinePaymentRequired?: boolean;
+          bankTransferAvailable?: boolean;
         }>(`/api/v1/public/businesses/${businessId}/booking-holds`, body, {
           public: true,
           idempotencyKey,
@@ -3068,13 +3474,18 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
 export function useConfirmPublicBooking(businessId: string | undefined) {
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (vars: { bookingId: string; holdToken: string }, idempotencyKey: string) => {
-        const res = await api.post<{ booking: Booking }>(
+      async (
+        vars: { bookingId: string; holdToken: string; paymentMethod?: "bank_transfer" },
+        idempotencyKey: string,
+      ) => {
+        // With paymentMethod: bank_transfer the booking lands in awaiting_payment
+        // and the response carries the account details + reference to display.
+        const res = await api.post<{ booking: Booking; bankTransfer?: BankTransferInstructions }>(
           `/api/v1/public/businesses/${businessId}/bookings/confirm`,
           vars,
           { public: true, idempotencyKey },
         );
-        return res.data.booking;
+        return res.data;
       },
     ),
   });
@@ -3091,6 +3502,59 @@ export type PublicBookingPayment = {
   amountMinor: number;
   currency: string;
 };
+
+function nonEmpty(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Stripe.js needs all three of these. A 201 that omits `publishableKey` (API
+ * `STRIPE_PUBLISHABLE_KEY` unset) used to look like "this studio isn't ready".
+ */
+export function stripeCheckoutFrom(
+  raw:
+    | {
+        clientSecret?: string | null;
+        connectedAccountId?: string | null;
+        publishableKey?: string | null;
+        amountMinor?: number | null;
+        currency?: string | null;
+      }
+    | null
+    | undefined,
+): PublicBookingPayment | null {
+  const clientSecret = nonEmpty(raw?.clientSecret);
+  const connectedAccountId = nonEmpty(raw?.connectedAccountId);
+  const publishableKey = nonEmpty(raw?.publishableKey);
+  if (!clientSecret || !connectedAccountId || !publishableKey) return null;
+  return {
+    clientSecret,
+    connectedAccountId,
+    publishableKey,
+    amountMinor: typeof raw?.amountMinor === "number" ? raw.amountMinor : 0,
+    currency: typeof raw?.currency === "string" ? raw.currency : "gbp",
+  };
+}
+
+export function stripeCheckoutUnavailableMessage(
+  raw:
+    | {
+        clientSecret?: string | null;
+        connectedAccountId?: string | null;
+        publishableKey?: string | null;
+      }
+    | null
+    | undefined,
+): string {
+  if (
+    nonEmpty(raw?.clientSecret) &&
+    nonEmpty(raw?.connectedAccountId) &&
+    !nonEmpty(raw?.publishableKey)
+  ) {
+    return "Card checkout isn't configured on the server yet.";
+  }
+  return "Card checkout isn't available for this studio yet.";
+}
 
 export function useStartPublicBookingPayment(businessId: string | undefined) {
   return useMutation({
@@ -3109,22 +3573,42 @@ export function useStartPublicBookingPayment(businessId: string | undefined) {
 
 export function useStartPortalBookingPayment(businessId: string | undefined) {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<PublicBookingPayment, Error, { bookingId: string; businessId?: string }>({
     mutationFn: createIdempotentMutationFn(
-      async (vars: { bookingId: string }, idempotencyKey: string) => {
+      async (vars: { bookingId: string; businessId?: string }, idempotencyKey: string) => {
+        const id = vars.businessId ?? businessId;
         const res = await api.post<PublicBookingPayment>(
           `/api/v1/portal/bookings/${vars.bookingId}/payment`,
           {},
-          { query: { businessId }, idempotencyKey },
+          { query: { businessId: id }, idempotencyKey },
         );
         return res.data;
       },
     ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.portalPayments(businessId ?? "") });
-      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+    onSuccess: (_data, vars) => {
+      const id = vars.businessId ?? businessId ?? "";
+      void qc.invalidateQueries({ queryKey: queryKeys.portalPayments(id) });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(id) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSyncPortalBookingPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; businessId: string }) => {
+      const res = await api.post<{ payment: Payment }>(
+        `/api/v1/portal/bookings/${vars.bookingId}/payment/sync`,
+        undefined,
+        { query: { businessId: vars.businessId } },
+      );
+      return res.data.payment;
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalPayments(vars.businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(vars.businessId) });
+    },
   });
 }
 

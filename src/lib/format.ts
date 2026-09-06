@@ -24,6 +24,20 @@ export function formatMoney(
 }
 
 /** Parse a user-entered decimal amount into integer minor units. */
+/**
+ * "90 min", "3 hours", "2 days" — whole days/hours read as such, oddities stay
+ * in minutes. Detailing services can hold a vehicle for days, so raw minutes
+ * ("2880 min") are unreadable there.
+ */
+export function formatDuration(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (minutes >= 120 && minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} min`;
+}
+
 export function parseMoneyToMinor(input: string | number): number {
   if (typeof input === "number") {
     if (!Number.isFinite(input)) throw new Error("Invalid amount");

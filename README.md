@@ -22,15 +22,32 @@ npm run dev
 
 Point `VITE_API_BASE_URL` at a running RECAVO API (default `http://localhost:3000`). The committed `openapi.json` is a snapshot of `recavo-api/documents/openapi.json`.
 
+## Hostnames
+
+One Worker serves the staff console and the public booking page. The names are
+`bookings.` / `book.` with an optional `staging.` prefix — never dash-separated
+aliases (`staging-dashboard`, `staging-book`). `npm run deploy:staging` and
+`npm run deploy:production` write these routes; a wrong list overwrites DNS.
+
+| Environment | Staff console                       | Public booking                  |
+| ----------- | ----------------------------------- | ------------------------------- |
+| Local       | http://localhost:8080               | same origin                     |
+| Staging     | https://staging.bookings.recavo.app | https://staging.book.recavo.app |
+| Production  | https://bookings.recavo.app         | https://book.recavo.app         |
+
+`dashboard.recavo.app` is the holding page (`holding/`), not the console.
+
 ## Scripts
 
-| Script            | Purpose                                  |
-| ----------------- | ---------------------------------------- |
-| `npm run dev`     | Local Vite/TanStack Start server         |
-| `npm run build`   | Production build                         |
-| `npm run gen:api` | Regenerate API types from `openapi.json` |
-| `npm test`        | Unit tests (API client / problem+json)   |
-| `npm run lint`    | ESLint                                   |
+| Script                      | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`               | Local Vite/TanStack Start server                                              |
+| `npm run build`             | Production build                                                              |
+| `npm run deploy:staging`    | Build and deploy to `staging.bookings.recavo.app` + `staging.book.recavo.app` |
+| `npm run deploy:production` | Build and deploy to `bookings.recavo.app` + `book.recavo.app`                 |
+| `npm run gen:api`           | Regenerates API types from `openapi.json`                                     |
+| `npm test`                  | Unit tests (API client / problem+json)                                        |
+| `npm run lint`              | ESLint                                                                        |
 
 ## Surfaces
 

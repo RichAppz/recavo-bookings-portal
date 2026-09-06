@@ -2,18 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Check, ShieldCheck, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-const HIGHLIGHTS = [
-  "Sessions, payments and clients in one console",
-  "Built for personal trainers and small studios",
-  "Mobile-ready for gym floor and travelling PTs",
-];
-
-const STATS = [
-  { value: "12k+", label: "Sessions a month" },
-  { value: "98%", label: "Show-up rate" },
-  { value: "4.9", label: "Average rating" },
-];
+import { GENERIC_BRAND, type VerticalBrand } from "@/lib/verticals";
 
 /** RECAVO wordmark using the brand logo asset; text colour adapts to the panel. */
 export function BrandMark({ tone }: { tone: "light" | "dark" }) {
@@ -39,12 +28,15 @@ export function AuthShell({
   subtitle,
   children,
   footer,
+  brand = GENERIC_BRAND,
 }: {
   eyebrow: string;
   title: string;
   subtitle: string;
   children: ReactNode;
   footer: ReactNode;
+  /** Drives the brand panel copy; defaults to a generic multi-vertical pitch. */
+  brand?: VerticalBrand;
 }) {
   return (
     <div className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
@@ -66,13 +58,13 @@ export function AuthShell({
         <div className="relative max-w-md">
           <p className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent px-3 py-1 text-xs font-medium text-sidebar-accent-foreground">
             <Sparkles className="size-3.5 text-sidebar-primary" />
-            Built for personal trainers
+            {brand.chip}
           </p>
           <h2 className="mt-6 text-4xl leading-[1.1] font-semibold tracking-tight text-sidebar-foreground">
-            Run your PT business in one place.
+            {brand.headline}
           </h2>
           <ul className="mt-8 space-y-3">
-            {HIGHLIGHTS.map((item) => (
+            {brand.highlights.map((item) => (
               <li key={item} className="flex items-start gap-3 text-sm text-sidebar-foreground/80">
                 <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/20 text-sidebar-primary">
                   <Check className="size-3" strokeWidth={3} />
@@ -84,7 +76,7 @@ export function AuthShell({
         </div>
 
         <div className="relative grid grid-cols-3 gap-4 border-t border-sidebar-border pt-6">
-          {STATS.map((stat) => (
+          {brand.stats.map((stat) => (
             <div key={stat.label}>
               <p className="text-2xl font-semibold tracking-tight text-sidebar-foreground">
                 {stat.value}

@@ -109,9 +109,17 @@ function CheckoutForm({
       confirmParams: { return_url: window.location.href },
     });
     if (result.error) {
-      setError(result.error.message ?? "Your card could not be charged. Please try again.");
-      setSubmitting(false);
-      return;
+      // Stripe's union types drop paymentIntent once `error` is narrowed, but the
+      // object is still there when the intent already settled on a retry.
+      const settledIntent = (result as { paymentIntent?: { status?: string } }).paymentIntent;
+      const alreadyPaid =
+        settledIntent?.status === "succeeded" ||
+        result.error.code === "payment_intent_unexpected_state";
+      if (!alreadyPaid) {
+        setError(result.error.message ?? "Your card could not be charged. Please try again.");
+        setSubmitting(false);
+        return;
+      }
     }
     await onPaid();
     setSubmitting(false);

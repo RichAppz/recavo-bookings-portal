@@ -608,7 +608,9 @@ function StaffDialog({
               <div className="flex items-center justify-between rounded-xl border p-3">
                 <div>
                   <p className="text-sm font-medium">Visible for booking</p>
-                  <p className="text-xs text-muted-foreground">Clients can select this trainer</p>
+                  <p className="text-xs text-muted-foreground">
+                    Clients can select this person when booking
+                  </p>
                 </div>
                 <Switch checked={bookingVisible} onCheckedChange={setBookingVisible} />
               </div>
@@ -618,7 +620,9 @@ function StaffDialog({
             <div className="flex items-center justify-between rounded-xl border p-3">
               <div>
                 <p className="text-sm font-medium">Visible for booking</p>
-                <p className="text-xs text-muted-foreground">Clients can select this trainer</p>
+                <p className="text-xs text-muted-foreground">
+                  Clients can select this person when booking
+                </p>
               </div>
               <Switch checked={bookingVisible} onCheckedChange={setBookingVisible} />
             </div>

@@ -6,6 +6,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -73,6 +74,9 @@ function BookingsPage() {
   const staff = useStaffList();
   const services = useServices();
   const locations = useLocationsList();
+  const tenant = useTenant();
+  // Vertical-aware noun: "Trainer" for PT, "Staff member" for automotive.
+  const staffNoun = tenant.terminology.staff || "Staff member";
 
   const bookings = useBookings({
     from: new Date(`${fromDate}T00:00:00.000Z`).toISOString(),
@@ -125,10 +129,10 @@ function BookingsPage() {
           <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="Trainer" />
+              <SelectValue placeholder={staffNoun} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All trainers</SelectItem>
+              <SelectItem value="all">All {staffNoun.toLowerCase()}s</SelectItem>
               {(staff.data ?? []).map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.displayName}
@@ -207,7 +211,7 @@ function BookingsPage() {
                     "Date and time",
                     "Client",
                     "Service",
-                    "Trainer",
+                    staffNoun,
                     "Location",
                     "Amount",
                     "Status",
@@ -306,7 +310,14 @@ function BookingRow({
         {formatMoney(booking.priceMinor, booking.currency)}
       </td>
       <td className="px-4 py-3">
-        <StatusBadge status={booking.status} />
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <StatusBadge status={booking.status} />
+          {booking.status === "awaiting_payment" && booking.paymentMethod === "bank_transfer" ? (
+            // Pay-by-bank rows never auto-expire; the hint tells staff which of the
+            // awaiting rows are theirs to chase and mark received (RECA-522).
+            <span className="text-xs text-muted-foreground">Bank transfer</span>
+          ) : null}
+        </span>
       </td>
       <td className="px-4 py-3 text-right">
         <Button variant="ghost" size="sm">

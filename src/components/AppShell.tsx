@@ -6,10 +6,12 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  Car,
   ChevronsUpDown,
   ClipboardList,
   CreditCard,
   ExternalLink,
+  Gift,
   LayoutDashboard,
   LifeBuoy,
   Layers,
@@ -49,11 +51,13 @@ import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions"
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import {
   useCustomers,
+  useLinkedRecordDefinition,
   useMarkNotificationRead,
   useNotifications,
   usePortalBusinesses,
@@ -68,70 +72,108 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { cn } from "@/lib/utils";
 
-/** Industry terminology for nav — keep bookings vs catalogue labels distinct. */
+function pluralizeTerm(term: string) {
+  const trimmed = term.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.toLowerCase().endsWith("s") ? trimmed : `${trimmed}s`;
+}
+
+/** Industry terminology for nav — keep the bookings list distinct from the catalogue. */
 function navLabel(
   to: string,
   fallback: string,
-  terminology: { client: string; staff: string; service: string; booking: string },
+  terminology: {
+    client: string;
+    staff: string;
+    service: string;
+    booking: string;
+    linkedRecord: string;
+  },
 ): string {
-  if (to === "/clients") return `${terminology.client}s`;
+  if (to === "/clients") return pluralizeTerm(terminology.client);
+  if (to === "/vehicles") return pluralizeTerm(terminology.linkedRecord);
   if (to === "/staff") return terminology.staff;
-  if (to === "/bookings") return `${terminology.booking}s`;
-  if (to === "/services") {
-    const service = terminology.service.trim();
-    const booking = terminology.booking.trim();
-    if (service.toLowerCase() === booking.toLowerCase()) {
-      return `${service} types`;
-    }
-    return service.toLowerCase().endsWith("s") ? service : `${service}s`;
+  if (to === "/services") return pluralizeTerm(terminology.service.replace(/\s+type$/i, ""));
+  if (to === "/bookings") {
+    const bookingLabel = pluralizeTerm(terminology.booking);
+    const sessionLabel = pluralizeTerm(terminology.service.replace(/\s+type$/i, ""));
+    if (bookingLabel.toLowerCase() === sessionLabel.toLowerCase()) return fallback;
+    return bookingLabel;
   }
   return fallback;
 }
 
-const NAV: Array<{
+type NavItem = {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
   anyOf: string[];
-}> = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, anyOf: [PERMISSIONS.BUSINESS_READ] },
+};
+
+type NavGroup = {
+  heading: string;
+  items: NavItem[];
+};
+
+const NAV: NavGroup[] = [
   {
-    to: "/calendar",
-    label: "Calendar",
-    icon: CalendarDays,
-    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+    heading: "Schedule",
+    items: [
+      { to: "/", label: "Overview", icon: LayoutDashboard, anyOf: [PERMISSIONS.BUSINESS_READ] },
+      {
+        to: "/calendar",
+        label: "Calendar",
+        icon: CalendarDays,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+      },
+      {
+        to: "/bookings",
+        label: "Bookings",
+        icon: ClipboardList,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+      },
+    ],
   },
   {
-    to: "/bookings",
-    label: "Bookings",
-    icon: ClipboardList,
-    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+    heading: "Studio",
+    items: [
+      { to: "/services", label: "Sessions", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
+      {
+        to: "/packages",
+        label: "Packages",
+        icon: Banknote,
+        anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
+      },
+      { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+      // Label follows the record schema's terminology ("Vehicles" for detailing);
+      // hidden entirely when the business has no linked-record schema.
+      { to: "/vehicles", label: "Vehicles", icon: Car, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+      {
+        to: "/staff",
+        label: "Staff",
+        icon: UserRound,
+        anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
+      },
+      { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
+    ],
   },
-  { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-  { to: "/services", label: "Services", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
   {
-    to: "/packages",
-    label: "Packages",
-    icon: Banknote,
-    anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
+    heading: "Business",
+    items: [
+      {
+        to: "/messages",
+        label: "Messages",
+        icon: MessageSquare,
+        anyOf: [PERMISSIONS.CUSTOMER_READ],
+      },
+      { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
+      { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
+      // Billing lives under Settings → Billing; /billing stays routable for Stripe
+      // return URLs and the locked-out landing, but isn't a nav destination.
+      { to: "/referrals", label: "Referrals", icon: Gift, anyOf: [PERMISSIONS.BUSINESS_READ] },
+      { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
+    ],
   },
-  {
-    to: "/staff",
-    label: "Staff",
-    icon: UserRound,
-    anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
-  },
-  { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
-  { to: "/messages", label: "Messages", icon: MessageSquare, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-  { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
-  { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
-  {
-    to: "/billing",
-    label: "Billing",
-    icon: CreditCard,
-    anyOf: [PERMISSIONS.BILLING_MANAGE, PERMISSIONS.BUSINESS_UPDATE],
-  },
-  { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -142,6 +184,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [setupOpenRequest, setSetupOpenRequest] = useState(0);
   const [search, setSearch] = useState("");
   const subscription = useSubscription();
 
@@ -152,6 +195,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  // Gates the Vehicles nav item: only businesses with a linked-record schema get it.
+  const recordDefinition = useLinkedRecordDefinition();
+  const hasLinkedRecords = Boolean(recordDefinition.data?.definition);
+  // Group sessions are a PT concept — a detailer works one car at a time — so
+  // that quick action is hidden for the car-detailing vertical.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
   // Adopt guest purchases before asking what this account owns, or someone who
@@ -197,8 +246,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <CreateFirstBusiness />;
   }
 
-  const accessPending =
-    tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
+  const accessPending = tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
 
   if (!accessPending && billingLocked && !onBilling && !onPlatform) {
     return <Navigate to="/billing" replace />;
@@ -248,33 +296,55 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
 
-        <nav className="no-scrollbar flex-1 space-y-0.5 overflow-y-auto px-3">
+        <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 pb-3">
           {tenant.isLoading
             ? Array.from({ length: 8 }, (_, i) => (
                 <div key={i} className="h-10 animate-pulse rounded-xl bg-sidebar-accent/70" />
               ))
-            : NAV.filter((item) => item.anyOf.some((p) => tenant.can(p))).map((item) => {
-                const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-                const label = navLabel(item.to, item.label, tenant.terminology);
+            : NAV.map((group) => {
+                const items = group.items.filter(
+                  (item) =>
+                    item.anyOf.some((p) => tenant.can(p)) &&
+                    // The record list only exists for businesses with a schema
+                    // (vehicles for detailing); everyone else never sees the item.
+                    (item.to !== "/vehicles" || hasLinkedRecords),
+                );
+                if (items.length === 0) return null;
                 return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                    )}
-                  >
-                    <item.icon className={cn("size-4.5", active && "text-sidebar-primary")} />
-                    {label}
-                    {item.label === "Messages" && unread > 0 ? (
-                      <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
-                        {unread}
-                      </span>
-                    ) : null}
-                  </Link>
+                  <div key={group.heading} className="pt-3 first:pt-1">
+                    <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-[0.14em] text-sidebar-foreground/45 uppercase">
+                      {group.heading}
+                    </p>
+                    <div className="space-y-0.5">
+                      {items.map((item) => {
+                        const active =
+                          item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+                        const label = navLabel(item.to, item.label, tenant.terminology);
+                        return (
+                          <Link
+                            key={item.to}
+                            to={item.to}
+                            className={cn(
+                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                              active
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                            )}
+                          >
+                            <item.icon
+                              className={cn("size-4.5", active && "text-sidebar-primary")}
+                            />
+                            {label}
+                            {item.to === "/messages" && unread > 0 ? (
+                              <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
+                                {unread}
+                              </span>
+                            ) : null}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
         </nav>
@@ -288,8 +358,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Building2 className="size-4.5" /> Platform view
             </Link>
           ) : null}
+          <SetupNavCard
+            onClick={() => {
+              setMobileNav(false);
+              setSetupOpenRequest((n) => n + 1);
+            }}
+          />
           <button
-            onClick={() => setTourOpen(true)}
+            onClick={() => {
+              setMobileNav(false);
+              setSetupOpenRequest((n) => n + 1);
+              setTourOpen(true);
+            }}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
           >
             <LifeBuoy className="size-4.5" /> Help centre
@@ -381,6 +461,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Menu className="size-5" />
             </Button>
 
+            <SetupHeaderButton
+              onClick={() => {
+                setMobileNav(false);
+                setSetupOpenRequest((n) => n + 1);
+              }}
+            />
+
             <div className="relative hidden max-w-sm flex-1 md:block">
               <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -470,9 +557,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                     Add booking
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("client")}>Add client</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("group")}>
-                    Create group session
-                  </DropdownMenuItem>
+                  {!isCarDetailing ? (
+                    <DropdownMenuItem onClick={() => setQuick("group")}>
+                      Create group session
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onClick={() => setQuick("block")}>
                     Block availability
                   </DropdownMenuItem>
@@ -507,7 +596,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
-      <OnboardingChecklist />
+      <OnboardingChecklist openRequest={setupOpenRequest} onOpenTour={() => setTourOpen(true)} />
     </div>
   );
 }

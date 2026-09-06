@@ -20,6 +20,8 @@ export type RequestOptions = {
   accessToken?: string | null;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /** Internal: marks the post-refresh replay of a 401 so it can't loop. */
+  authRetried?: boolean;
 };
 
 export type ApiResult<T> = {
@@ -33,6 +35,18 @@ let mfaHandler: ((error: ApiError) => Promise<boolean>) | null = null;
 /** Register a handler that enrols or challenges TOTP and returns true if the caller should retry. */
 export function setMfaHandler(handler: ((error: ApiError) => Promise<boolean>) | null) {
   mfaHandler = handler;
+}
+
+let authRetryHandler: ((staleToken: string) => Promise<boolean>) | null = null;
+
+/**
+ * Register a handler for expired sessions: given the bearer token a 401 was sent
+ * with, refresh the session and return true once a newer token is in place so the
+ * request should be replayed. Wired up by the auth store (module-level, like the
+ * MFA handler, so this client stays free of React).
+ */
+export function setAuthRetryHandler(handler: ((staleToken: string) => Promise<boolean>) | null) {
+  authRetryHandler = handler;
 }
 
 export function getApiBaseUrl(): string {
@@ -98,16 +112,16 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
   }
 
   let hasAuth = false;
+  let bearerToken: string | null = null;
   if (!isPublic) {
-    const token = tokenOverride === undefined ? getAccessToken() : tokenOverride;
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    bearerToken = tokenOverride === undefined ? getAccessToken() : tokenOverride;
+    if (bearerToken) {
+      headers.Authorization = `Bearer ${bearerToken}`;
       hasAuth = true;
     }
   }
 
-  const startedAt =
-    typeof performance !== "undefined" ? performance.now() : Date.now();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const elapsed = () =>
     Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
 
@@ -163,6 +177,25 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
       const retried = await mfaHandler(error);
       if (retried) {
         return request<T>(options);
+      }
+    }
+
+    // An access token that expired while the machine was asleep goes out before
+    // supabase-js notices and refreshes it (focus refetches race the refresh).
+    // Refresh the session and replay once, instead of surfacing an error the
+    // user can only fix by reloading. Explicit token overrides are exempt: the
+    // caller chose that token deliberately (e.g. a claim flow).
+    if (
+      error.isUnauthenticated &&
+      hasAuth &&
+      bearerToken &&
+      tokenOverride === undefined &&
+      !options.authRetried &&
+      authRetryHandler
+    ) {
+      const refreshed = await authRetryHandler(bearerToken);
+      if (refreshed) {
+        return request<T>({ ...options, authRetried: true });
       }
     }
 

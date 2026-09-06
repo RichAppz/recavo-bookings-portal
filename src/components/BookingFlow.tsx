@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Clock, MapPin, UserRound } from "lucide-react";
+import { ArrowLeft, Check, Clock, CreditCard, Landmark, MapPin, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   usePublicPackages,
   usePortalBusinesses,
   usePortalLink,
+  usePortalMe,
   usePublicServices,
   useStartPublicBookingPayment,
   type PublicBookingPayment,
@@ -29,7 +30,8 @@ import {
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/query-keys";
 import { useAuth } from "@/lib/auth/auth-store";
-import type { AvailabilitySlot, Booking } from "@/lib/api/types";
+import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
+import { BankTransferPanel } from "@/components/BankTransferPanel";
 import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
@@ -50,6 +52,18 @@ function addDays(base: Date, days: number) {
   const d = new Date(base);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+function bookingStartDate(initial?: string): string {
+  const today = isoDate(new Date());
+  return initial && initial >= today ? initial : today;
+}
+
+function dateChoices(selected: string): string[] {
+  const today = isoDate(new Date());
+  const days = Array.from({ length: 14 }, (_, i) => isoDate(addDays(new Date(), i)));
+  if (selected >= today && !days.includes(selected)) return [...days, selected].sort();
+  return days;
 }
 
 /** Live mm:ss countdown to an ISO instant; fires `onExpire` once when it lapses. */
@@ -89,7 +103,15 @@ function formatCountdown(ms: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-type Hold = { booking: Booking; holdToken: string; onlinePaymentRequired?: boolean };
+type Hold = {
+  booking: Booking;
+  holdToken: string;
+  onlinePaymentRequired?: boolean;
+  bankTransferAvailable?: boolean;
+};
+
+/** How the customer settles a priced booking at checkout. */
+type PayMethod = "card" | "bank_transfer" | "in_person";
 
 type StoredJourney = { hold: Hold; contact: BookingContact };
 
@@ -185,6 +207,21 @@ function returnedFromAuthentication(): boolean {
   return new URLSearchParams(window.location.search).has("payment_intent_client_secret");
 }
 
+/** Which studio's in-progress card return is sitting in session storage. */
+export function businessIdPendingCardReturn(businessIds: readonly string[]): string | null {
+  if (typeof window === "undefined" || !returnedFromAuthentication()) return null;
+  return (
+    businessIds.find((id) => Boolean(readStoredJourney(id)) || Boolean(readStoredPurchase(id))) ??
+    null
+  );
+}
+
+function splitDisplayName(name: string | null | undefined): { first: string; last: string } {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: "", last: "" };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
 /** Stripe reports the outcome of the authentication it just took the customer through. */
 function authenticationSucceeded(): boolean {
   return new URLSearchParams(window.location.search).get("redirect_status") === "succeeded";
@@ -203,20 +240,46 @@ export interface BookingFlowProps {
    * itself rather than having the flow guess.
    */
   readonly onClearRedirectParams: () => void;
+  /**
+   * `page` is the public studio link. `embedded` is the signed-in account
+   * drawer — same steps, no public chrome, and it closes instead of leaving
+   * the dashboard.
+   */
+  readonly layout?: "page" | "embedded";
+  /** Fired when a signed-in booking finishes inside the account drawer. */
+  readonly onComplete?: () => void;
+  /** Calendar (and similar) can open already on a day, session or slot. */
+  readonly initialDate?: string;
+  readonly initialServiceId?: string;
+  readonly initialLocationId?: string;
+  readonly initialSlot?: AvailabilitySlot | null;
 }
 
-export function BookingFlow({ businessId, studio, onClearRedirectParams }: BookingFlowProps) {
+export function BookingFlow({
+  businessId,
+  studio,
+  onClearRedirectParams,
+  layout = "page",
+  onComplete,
+  initialDate,
+  initialServiceId,
+  initialLocationId,
+  initialSlot = null,
+}: BookingFlowProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const auth = useAuth();
   const signedIn = auth.status === "authenticated";
-  const [step, setStep] = useState(STEP_CHOOSE);
+  const [step, setStep] = useState(initialSlot ? STEP_DETAILS : STEP_CHOOSE);
   /** Which of the two journeys the customer is on, chosen on the first step. */
   const [mode, setMode] = useState<"service" | "package">("service");
   const [packageId, setPackageId] = useState<string | null>(null);
-  const [serviceId, setServiceId] = useState<string | null>(null);
-  const [locationId, setLocationId] = useState<string | null>(null);
-  const [date, setDate] = useState(isoDate(addDays(new Date(), 1)));
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [serviceId, setServiceId] = useState<string | null>(initialServiceId ?? null);
+  const [locationId, setLocationId] = useState<string | null>(
+    initialLocationId ?? initialSlot?.locationId ?? null,
+  );
+  const [date, setDate] = useState(bookingStartDate(initialDate));
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(initialSlot);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -226,6 +289,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
+  const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
   const locations = usePublicLocations(businessId);
@@ -272,6 +336,10 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
   const [packageBought, setPackageBought] = useState(false);
   const [payment, setPayment] = useState<PublicBookingPayment | null>(null);
   const [settling, setSettling] = useState(false);
+  const [payMethod, setPayMethod] = useState<PayMethod>("card");
+  // Account details + reference returned by a bank-transfer confirm (RECA-522);
+  // drives the "make your transfer" confirmation screen.
+  const [bankInstructions, setBankInstructions] = useState<BankTransferInstructions | null>(null);
   // Returning from bank authentication remounts with empty fields, so the details the
   // customer typed come back from storage instead.
   const [restoredContact, setRestoredContact] = useState<BookingContact | null>(null);
@@ -320,6 +388,8 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
     setHold(null);
     setConfirmedBooking(null);
     setPayment(null);
+    setPayMethod("card");
+    setBankInstructions(null);
     setPackagePayment(null);
     setPackageBought(false);
     setSettling(false);
@@ -347,8 +417,13 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
         marketingConsent,
       },
       {
-        onSuccess: ({ booking, holdToken, onlinePaymentRequired }) => {
-          setHold({ booking, holdToken, onlinePaymentRequired });
+        onSuccess: ({ booking, holdToken, onlinePaymentRequired, bankTransferAvailable }) => {
+          setHold({ booking, holdToken, onlinePaymentRequired, bankTransferAvailable });
+          // Card stays the lead option when it's required; otherwise pay-by-bank
+          // (when offered) beats "sort it out on the day" as the default.
+          setPayMethod(
+            onlinePaymentRequired ? "card" : bankTransferAvailable ? "bank_transfer" : "in_person",
+          );
           setStep(STEP_REVIEW);
         },
         onError: (err) => {
@@ -413,15 +488,55 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
     void queryClient.invalidateQueries({ queryKey: queryKeys.portalBusinesses() });
   };
 
+  /**
+   * Signed-in customers already have an account home. Leaving them on this
+   * public confirmation — or letting Back return them to the studio portal they
+   * booked from — dumps them on a bookings list instead of their dashboard.
+   */
+  const goToDashboardIfSignedIn = (message: string, description?: string) => {
+    refreshPortalLink();
+    if (!signedIn) return false;
+    toast.success(message, description ? { description } : undefined);
+    if (layout === "embedded") {
+      onComplete?.();
+      return true;
+    }
+    void navigate({ to: "/account", replace: true });
+    return true;
+  };
+
   const submitConfirm = () => {
     if (!hold) return;
+    const viaBank = payMethod === "bank_transfer" && hold.bankTransferAvailable === true;
     confirmMutation.mutate(
-      { bookingId: hold.booking.id, holdToken: hold.holdToken },
       {
-        onSuccess: (booking) => {
+        bookingId: hold.booking.id,
+        holdToken: hold.holdToken,
+        ...(viaBank ? { paymentMethod: "bank_transfer" as const } : {}),
+      },
+      {
+        onSuccess: ({ booking, bankTransfer }) => {
           setConfirmedBooking(booking);
+          if (bankTransfer) {
+            // The customer must see the account details + reference now — never
+            // bounce them to their dashboard before the transfer screen.
+            setBankInstructions(bankTransfer);
+            clearStoredHold();
+            refreshPortalLink();
+            setStep(STEP_DONE);
+            return;
+          }
+          if (
+            goToDashboardIfSignedIn(
+              booking.status === "awaiting_payment" ? "Session reserved" : "You're booked in",
+              booking.status === "awaiting_payment"
+                ? "Payment is still due — you can pay from your dashboard."
+                : undefined,
+            )
+          ) {
+            return;
+          }
           setStep(STEP_DONE);
-          refreshPortalLink();
         },
         onError: (err) => {
           if (err instanceof ApiError && (err.code === "BOOKING_CONFLICT" || err.isConflict)) {
@@ -443,14 +558,24 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
     setSettling(true);
     for (let attempt = 0; attempt < 20; attempt += 1) {
       try {
-        const booking = await confirmMutation.mutateAsync({
+        const { booking } = await confirmMutation.mutateAsync({
           bookingId: current.booking.id,
           holdToken: current.holdToken,
         });
         setConfirmedBooking(booking);
-        setStep(STEP_DONE);
         setSettling(false);
         clearStoredHold();
+        if (
+          goToDashboardIfSignedIn(
+            booking.status === "awaiting_payment" ? "Session reserved" : "You're booked in",
+            booking.status === "awaiting_payment"
+              ? "Payment is still due — you can pay from your dashboard."
+              : undefined,
+          )
+        ) {
+          return;
+        }
+        setStep(STEP_DONE);
         return;
       } catch (err) {
         const pending = err instanceof ApiError && err.status === 422;
@@ -503,8 +628,9 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
       if (authenticationSucceeded()) {
         // Credits are issued by the webhook; the card clearing is all this page needs.
         setPackageBought(true);
-        setStep(STEP_DONE);
         writeStoredPurchase(businessId, null);
+        if (goToDashboardIfSignedIn("Package bought")) return;
+        setStep(STEP_DONE);
       } else {
         // Back to the card form with the original intent, so a retry cannot double-charge.
         setStep(STEP_REVIEW);
@@ -521,6 +647,26 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
+  // Auth can still be loading on the return from the bank, so the handoff above
+  // may have seen a signed-out frame. Once the session is back, take them home.
+  useEffect(() => {
+    if (layout === "embedded") return;
+    if (step !== STEP_DONE || !signedIn) return;
+    // A pay-by-bank customer stays to read the account details and reference.
+    if (bankInstructions) return;
+    void navigate({ to: "/account", replace: true });
+  }, [step, signedIn, navigate, layout, bankInstructions]);
+
+  useEffect(() => {
+    if (restoredContact) return;
+    if (signedIn && me.isLoading) return;
+    const fromUser = splitDisplayName(auth.user?.name);
+    setFirstName((v) => v || me.data?.firstName?.trim() || fromUser.first);
+    setLastName((v) => v || me.data?.lastName?.trim() || fromUser.last);
+    setEmail((v) => v || me.data?.emailDisplay?.trim() || auth.user?.email || "");
+    setPhone((v) => v || me.data?.phoneDisplay?.trim() || auth.user?.phone || "");
+  }, [signedIn, me.isLoading, me.data, auth.user, restoredContact]);
+
   useEffect(() => {
     writeStoredPurchase(
       businessId,
@@ -534,10 +680,12 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
   // full window to type a card rather than whatever was left of the original ten minutes.
   useEffect(() => {
     if (step !== STEP_REVIEW || !hold?.onlinePaymentRequired) return;
+    // Paying by bank doesn't need Stripe, so don't mint a PaymentIntent for it.
+    if (payMethod !== "card") return;
     if (payment || paymentMutation.isPending || settling) return;
     void startPayment(hold);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, hold, payment, settling]);
+  }, [step, hold, payment, settling, payMethod]);
 
   const isPackage = mode === "package";
   // Every field on this step is asked for deliberately, so the flow waits for all of
@@ -568,47 +716,52 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
   const needsPayment =
     (hold?.booking.priceMinor ?? confirmedBooking?.priceMinor ?? selectedSlot?.priceMinor ?? 0) > 0;
   const payOnline = hold?.onlinePaymentRequired === true;
+  // The API only flags this for priced bookings at businesses with bank details on file.
+  const bankAvailable = hold?.bankTransferAvailable === true;
+  const embedded = layout === "embedded";
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="border-b bg-nav text-nav-foreground">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            {studio?.branding.logoUrl ? (
-              <img
-                src={studio.branding.logoUrl}
-                alt=""
-                className="size-9 shrink-0 rounded-md object-contain"
-              />
-            ) : null}
-            <div className="min-w-0">
-              {studioName ? (
-                <p className="truncate text-base font-semibold tracking-tight">{studioName}</p>
-              ) : (
-                <Wordmark />
-              )}
-              <p className="text-xs text-nav-foreground/70">Online booking</p>
+    <div className={embedded ? undefined : "min-h-screen bg-background"}>
+      {embedded ? null : (
+        <header className="border-b bg-nav text-nav-foreground">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              {studio?.branding.logoUrl ? (
+                <img
+                  src={studio.branding.logoUrl}
+                  alt=""
+                  className="size-9 shrink-0 rounded-md object-contain"
+                />
+              ) : null}
+              <div className="min-w-0">
+                {studioName ? (
+                  <p className="truncate text-base font-semibold tracking-tight">{studioName}</p>
+                ) : (
+                  <Wordmark />
+                )}
+                <p className="text-xs text-nav-foreground/70">Online booking</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {hasPortalHere ? (
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="text-nav-foreground hover:bg-nav-accent hover:text-nav-foreground"
+                >
+                  <Link to="/account">
+                    <UserRound className="size-4" /> My account
+                  </Link>
+                </Button>
+              ) : null}
+              <Wordmark compact />
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {hasPortalHere ? (
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="text-nav-foreground hover:bg-nav-accent hover:text-nav-foreground"
-              >
-                <Link to="/account">
-                  <UserRound className="size-4" /> My account
-                </Link>
-              </Button>
-            ) : null}
-            <Wordmark compact />
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div className="mx-auto max-w-3xl space-y-6 px-5 py-8">
+      <div className={embedded ? "space-y-6 px-5 py-6" : "mx-auto max-w-3xl space-y-6 px-5 py-8"}>
         <ol className="flex flex-wrap items-center gap-2 text-xs">
           {STEPS.map((s, i) => (
             <li
@@ -634,7 +787,11 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
         {step === STEP_CHOOSE ? (
           <section className="space-y-3">
             <h1 className="text-2xl font-semibold tracking-tight">
-              {studioName ? `Book at ${studioName}` : "Choose a session"}
+              {embedded
+                ? "Choose a session"
+                : studioName
+                  ? `Book at ${studioName}`
+                  : "Choose a session"}
             </h1>
             {services.isLoading ? (
               <CardsGhost count={3} className="h-28" />
@@ -717,9 +874,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
                           <div className="animate-in fade-in slide-in-from-top-1 space-y-3 duration-300">
                             <h2 className="text-sm font-medium">When</h2>
                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                              {Array.from({ length: 14 }, (_, i) =>
-                                isoDate(addDays(new Date(), i + 1)),
-                              ).map((d) => {
+                              {dateChoices(date).map((d) => {
                                 const dt = new Date(`${d}T00:00:00Z`);
                                 const selected = d === date;
                                 return (
@@ -763,7 +918,10 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
                             {availability.isLoading ? (
                               <div className="grid grid-cols-3 gap-2">
                                 {Array.from({ length: 6 }, (_, i) => (
-                                  <div key={i} className="h-10 animate-pulse rounded-md bg-primary/10" />
+                                  <div
+                                    key={i}
+                                    className="h-10 animate-pulse rounded-md bg-primary/10"
+                                  />
                                 ))}
                               </div>
                             ) : slots.length === 0 ? (
@@ -881,7 +1039,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
             <h1 className="text-2xl font-semibold tracking-tight">Your details</h1>
             {isPackage && chosenPackage ? (
               <p className="text-sm text-muted-foreground">
-                So we know whose {chosenPackage.creditsIssued} sessions these are, and where to send
+                So we know whose {chosenPackage.creditsIssued} credits these are, and where to send
                 the receipt.
               </p>
             ) : null}
@@ -1002,8 +1160,8 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
                 contact={contact}
                 onPaid={async () => {
                   setPackageBought(true);
+                  if (goToDashboardIfSignedIn("Package bought")) return;
                   setStep(STEP_DONE);
-                  refreshPortalLink();
                 }}
               />
             ) : (
@@ -1047,39 +1205,68 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
               <div className="rounded-xl border bg-secondary px-4 py-3 text-sm">
                 <p>Payment received — confirming your booking…</p>
               </div>
-            ) : payOnline ? (
-              payment ? (
-                <BookingCheckout
-                  payment={payment}
-                  contact={contact}
-                  onPaid={() => awaitConfirmation(hold)}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {paymentMutation.isPending
-                    ? "Setting up secure payment…"
-                    : "Payment is unavailable right now. Please try again in a moment."}
-                </p>
-              )
             ) : (
               <>
-                {needsPayment ? (
-                  <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm">
-                    <p>
-                      This session costs{" "}
-                      {formatMoney(hold.booking.priceMinor, hold.booking.currency)}, payable to the
-                      studio. Confirming reserves your time.
-                    </p>
-                  </div>
+                {bankAvailable ? (
+                  <PayMethodPicker
+                    value={payMethod}
+                    onChange={setPayMethod}
+                    cardOffered={payOnline}
+                    disabled={confirmMutation.isPending}
+                  />
                 ) : null}
-                <Button
-                  size="xl"
-                  className="w-full"
-                  disabled={confirmMutation.isPending || (msLeft ?? 0) <= 0}
-                  onClick={submitConfirm}
-                >
-                  {confirmMutation.isPending ? "Confirming…" : "Confirm booking"}
-                </Button>
+                {payOnline && payMethod === "card" ? (
+                  payment ? (
+                    <BookingCheckout
+                      payment={payment}
+                      contact={contact}
+                      onPaid={() => awaitConfirmation(hold)}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {paymentMutation.isPending
+                        ? "Setting up secure payment…"
+                        : "Payment is unavailable right now. Please try again in a moment."}
+                    </p>
+                  )
+                ) : bankAvailable && payMethod === "bank_transfer" ? (
+                  <>
+                    <div className="rounded-xl border bg-secondary px-4 py-3 text-left text-sm">
+                      <p>
+                        Confirming reserves your time and shows you the account details, amount and
+                        payment reference for your transfer. We'll email them too.
+                      </p>
+                    </div>
+                    <Button
+                      size="xl"
+                      className="w-full"
+                      disabled={confirmMutation.isPending || (msLeft ?? 0) <= 0}
+                      onClick={submitConfirm}
+                    >
+                      {confirmMutation.isPending ? "Reserving…" : "Confirm & get bank details"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {needsPayment ? (
+                      <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm">
+                        <p>
+                          This session costs{" "}
+                          {formatMoney(hold.booking.priceMinor, hold.booking.currency)}, payable to
+                          the studio. Confirming reserves your time.
+                        </p>
+                      </div>
+                    ) : null}
+                    <Button
+                      size="xl"
+                      className="w-full"
+                      disabled={confirmMutation.isPending || (msLeft ?? 0) <= 0}
+                      onClick={submitConfirm}
+                    >
+                      {confirmMutation.isPending ? "Confirming…" : "Confirm booking"}
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </section>
@@ -1092,7 +1279,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
             </span>
             <h1 className="text-2xl font-semibold tracking-tight">Package bought</h1>
             <p className="text-sm text-muted-foreground">
-              {chosenPackage.creditsIssued} sessions are yours, and your receipt is on its way to{" "}
+              {chosenPackage.creditsIssued} credits are yours, and your receipt is on its way to{" "}
               {email.trim() || "your inbox"}.
             </p>
             <PackageSummary pkg={chosenPackage} />
@@ -1101,7 +1288,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
               // exists to create the account this buyer is using right now.
               <>
                 <Button size="xl" className="w-full" asChild>
-                  <Link to="/account">Book your sessions</Link>
+                  <Link to="/account">Go to my dashboard</Link>
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   They're on your account, ready whenever you are.
@@ -1133,15 +1320,20 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
               <Check className="size-7" />
             </span>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {confirmedBooking.status === "awaiting_payment"
-                ? "Almost there — payment needed"
-                : "You're booked in"}
+              {bankInstructions
+                ? "Reserved — now make your transfer"
+                : confirmedBooking.status === "awaiting_payment"
+                  ? "Almost there — payment needed"
+                  : "You're booked in"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {confirmedBooking.status === "awaiting_payment"
-                ? "Your slot is reserved while the payment finishes going through. We'll email you as soon as it's confirmed."
-                : "We've reserved your session. Bring along anything your trainer asked for and arrive a few minutes early."}
+              {bankInstructions
+                ? "Your time is saved for you. Send the transfer below and the booking is confirmed once the money arrives — we've emailed these details too."
+                : confirmedBooking.status === "awaiting_payment"
+                  ? "Your slot is reserved while the payment finishes going through. We'll email you as soon as it's confirmed."
+                  : "You're all set — we've reserved your booking and emailed you the details."}
             </p>
+            {bankInstructions ? <BankTransferPanel details={bankInstructions} /> : null}
             {service && location ? (
               <Summary
                 serviceName={service.name}
@@ -1151,7 +1343,7 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
                 price={formatMoney(confirmedBooking.priceMinor, confirmedBooking.currency)}
               />
             ) : null}
-            {confirmedBooking.reference ? (
+            {confirmedBooking.reference && !bankInstructions ? (
               <p className="text-xs text-muted-foreground">
                 Booking reference{" "}
                 <span className="font-mono font-medium text-foreground">
@@ -1167,13 +1359,85 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
             </p>
             {hasPortalHere ? (
               <Button size="xl" variant="ghost" className="w-full" asChild>
-                <Link to="/account">View my sessions</Link>
+                <Link to="/account">Go to my dashboard</Link>
               </Button>
             ) : null}
           </section>
         ) : null}
       </div>
-    </main>
+    </div>
+  );
+}
+
+/** Card / bank-transfer choice on the review step (RECA-522). */
+function PayMethodPicker({
+  value,
+  onChange,
+  cardOffered,
+  disabled,
+}: {
+  value: PayMethod;
+  onChange: (method: PayMethod) => void;
+  /** Card is only an option when the business requires online payment. */
+  cardOffered: boolean;
+  disabled?: boolean;
+}) {
+  const options: Array<{ id: PayMethod; label: string; hint: string; icon: React.ReactNode }> = [
+    ...(cardOffered
+      ? [
+          {
+            id: "card" as const,
+            label: "Pay by card",
+            hint: "Pay now — your booking confirms straight away.",
+            icon: <CreditCard className="size-4" />,
+          },
+        ]
+      : [
+          {
+            id: "in_person" as const,
+            label: "Pay on the day",
+            hint: "Settle up with the business directly.",
+            icon: <UserRound className="size-4" />,
+          },
+        ]),
+    {
+      id: "bank_transfer" as const,
+      label: "Pay by bank transfer",
+      hint: "We'll show you the account details and a payment reference.",
+      icon: <Landmark className="size-4" />,
+    },
+  ];
+  return (
+    <div role="radiogroup" aria-label="How would you like to pay?" className="grid gap-2">
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => onChange(opt.id)}
+            className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+              selected ? "border-primary bg-primary-soft/50" : "hover:border-muted-foreground/40"
+            }`}
+          >
+            <span
+              className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${
+                selected ? "bg-primary-soft text-primary" : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              {opt.icon}
+            </span>
+            <span className="min-w-0">
+              <span className="block font-medium">{opt.label}</span>
+              <span className="block text-xs text-muted-foreground">{opt.hint}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1193,7 +1457,7 @@ function PackageSummary({ pkg }: { pkg: PublicPackage }) {
     <dl className="surface-card space-y-2 p-5 text-left text-sm">
       {[
         ["Package", pkg.name],
-        ["Sessions", String(pkg.creditsIssued)],
+        ["Credits", String(pkg.creditsIssued)],
         ["Valid for", validityLabel(pkg.validity)],
         ["Total", formatMoney(pkg.priceMinor, pkg.currency)],
       ].map(([k, v]) => (
