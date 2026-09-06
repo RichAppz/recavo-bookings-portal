@@ -164,6 +164,21 @@ export function customerDisplayName(c: Pick<Customer, "firstName" | "lastName">)
   return [c.firstName, c.lastName].filter(Boolean).join(" ");
 }
 
+/** One-line postal address for lists and headers; empty string when none is stored. */
+export function customerAddressLine(address: Customer["address"] | null | undefined): string {
+  if (!address) return "";
+  return [
+    address.line1,
+    address.line2,
+    address.city,
+    address.region,
+    address.postcode,
+    address.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 /** The account name and email, as embedded on a membership row or held on the session. */
 export type AccountIdentity = {
   name?: string | null;

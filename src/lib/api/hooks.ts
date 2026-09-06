@@ -699,9 +699,22 @@ export function useUpdateResource() {
 
 /* ---------------- Customers ---------------- */
 
+export type CustomerAddressInput = {
+  line1?: string | null;
+  line2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+};
+
 export type CustomerUpdateBody = {
   firstName?: string;
   lastName?: string | null;
+  /** Staff-facing "known as" name (RECA-528). */
+  nickname?: string | null;
+  /** `null` clears the address; omit to leave unchanged. */
+  address?: CustomerAddressInput | null;
   email?: string | null;
   phone?: string | null;
   preferredChannel?: "email" | "phone" | "sms" | "none";

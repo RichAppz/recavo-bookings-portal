@@ -22,6 +22,8 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { CustomerAddressFields } from "@/components/CustomerAddressFields";
+import { addressToForm, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
@@ -125,6 +127,7 @@ import {
   useUpdateCustomerStatus,
 } from "@/lib/api/hooks";
 import {
+  customerAddressLine,
   customerDisplayName,
   userDisplayName,
   type Customer,
@@ -252,12 +255,22 @@ function ClientProfile() {
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{customerDisplayName(client)}</h1>
+            {client.nickname ? (
+              <span className="rounded-full bg-secondary px-2.5 py-0.5 text-sm text-muted-foreground">
+                “{client.nickname}”
+              </span>
+            ) : null}
             <StatusBadge status={client.status} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {[client.emailDisplay, client.phoneDisplay].filter(Boolean).join(" · ") || "No contact"}{" "}
             · Client since {ukDate(client.createdAt.slice(0, 10))}
           </p>
+          {client.address ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {customerAddressLine(client.address)}
+            </p>
+          ) : null}
           {client.userId ? (
             <p className="mt-1 text-xs text-muted-foreground">Has a linked portal account</p>
           ) : null}
@@ -656,6 +669,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   const update = useUpdateCustomer();
   const [firstName, setFirstName] = useState(client.firstName);
   const [lastName, setLastName] = useState(client.lastName ?? "");
+  const [nickname, setNickname] = useState(client.nickname ?? "");
+  const [address, setAddress] = useState<AddressFormState>(addressToForm(client.address));
   const [email, setEmail] = useState(client.emailDisplay ?? "");
   const [phone, setPhone] = useState(client.phoneDisplay ?? "");
   const [preferredChannel, setPreferredChannel] = useState<"email" | "phone" | "sms" | "none">(
@@ -672,6 +687,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   useEffect(() => {
     setFirstName(client.firstName);
     setLastName(client.lastName ?? "");
+    setNickname(client.nickname ?? "");
+    setAddress(addressToForm(client.address));
     setEmail(client.emailDisplay ?? "");
     setPhone(client.phoneDisplay ?? "");
     setPreferredChannel(client.contactPreferences.preferredChannel);
@@ -707,6 +724,24 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             onChange={(e) => setLastName(e.target.value)}
           />
         </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="pf-nickname">Known as</Label>
+          <Input
+            id="pf-nickname"
+            value={nickname}
+            maxLength={80}
+            disabled={disabled}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="e.g. Dave – red Audi"
+          />
+          {fieldErrors.nickname ? (
+            <p className="text-xs text-destructive">{fieldErrors.nickname}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Optional. A name that helps you remember them; never shown to the client.
+            </p>
+          )}
+        </div>
         <div className="grid gap-2">
           <Label htmlFor="pf-email">Email</Label>
           <Input
@@ -732,6 +767,12 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <p className="text-xs text-destructive">{fieldErrors.phone}</p>
           ) : null}
         </div>
+        <CustomerAddressFields
+          idPrefix="pf-addr"
+          value={address}
+          onChange={setAddress}
+          disabled={disabled}
+        />
         <div className="grid gap-2 sm:col-span-2">
           <Label>Preferred channel</Label>
           <Select
@@ -800,6 +841,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
                   body: {
                     firstName: firstName.trim(),
                     lastName: lastName.trim() || null,
+                    nickname: nickname.trim() || null,
+                    address: formToAddress(address),
                     email: email.trim() || null,
                     phone: phone.trim() || null,
                     preferredChannel,

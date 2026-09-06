@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { CustomerAddressFields } from "@/components/CustomerAddressFields";
+import { EMPTY_ADDRESS, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import {
   Select,
   SelectContent,
@@ -122,6 +124,8 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [address, setAddress] = useState<AddressFormState>(EMPTY_ADDRESS);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   // Default to SMS only when the plan can actually send it; otherwise a brand-new
@@ -136,6 +140,8 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
   const reset = () => {
     setFirstName("");
     setLastName("");
+    setNickname("");
+    setAddress(EMPTY_ADDRESS);
     setEmail("");
     setPhone("");
     setPreferredChannel(defaultChannel);
@@ -160,6 +166,8 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
         const { customer, possibleDuplicates } = await createCustomer.mutateAsync({
           firstName,
           lastName: lastName || null,
+          nickname: nickname.trim() || null,
+          address: formToAddress(address),
           email: email || null,
           phone: phone || null,
           preferredChannel,
@@ -213,6 +221,19 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
         </div>
       </div>
       <div className="grid gap-2">
+        <Label htmlFor="c-nickname">Known as</Label>
+        <Input
+          id="c-nickname"
+          value={nickname}
+          maxLength={80}
+          onChange={(e) => setNickname(e.target.value)}
+          placeholder="e.g. Harriet – red Audi"
+        />
+        <p className="text-xs text-muted-foreground">
+          Optional. A name that helps you remember them; never shown to the client.
+        </p>
+      </div>
+      <div className="grid gap-2">
         <Label htmlFor="c-email">Email</Label>
         <Input
           id="c-email"
@@ -231,6 +252,7 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           placeholder="07700 900123"
         />
       </div>
+      <CustomerAddressFields idPrefix="c-addr" value={address} onChange={setAddress} />
       <div className="grid gap-2">
         <Label>Preferred channel</Label>
         <Select

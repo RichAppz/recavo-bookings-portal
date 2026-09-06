@@ -135,7 +135,14 @@ function ClientsPage() {
                           className="flex items-center gap-3 font-medium"
                         >
                           <PersonAvatar name={customerDisplayName(c)} />
-                          {customerDisplayName(c)}
+                          <span>
+                            {customerDisplayName(c)}
+                            {c.nickname ? (
+                              <span className="block text-xs font-normal text-muted-foreground">
+                                “{c.nickname}”
+                              </span>
+                            ) : null}
+                          </span>
                         </Link>
                       </td>
                       <td className="px-4 py-3">
