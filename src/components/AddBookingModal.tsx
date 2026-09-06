@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
+import {
+  CustomerSearchPicker,
+  type LinkedRecordField,
+  QuickAddLinkedRecord,
+  activeSortedFields,
+} from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
+import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,33 +56,6 @@ import {
 } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
-
-function SetupGate({
-  icon,
-  title,
-  description,
-  onNavigate,
-  link,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onNavigate: () => void;
-  link: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
-      <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        {icon}
-      </span>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
-      <div className="mt-4" onClick={onNavigate}>
-        {link}
-      </div>
-    </div>
-  );
-}
 
 export function AddBookingModal({
   open,
@@ -136,9 +115,19 @@ export function AddBookingModal({
   // business has a record schema; required when the service or definition says so.
   const linkedRecordDefinition = useLinkedRecordDefinition();
   const customerRecords = useCustomerLinkedRecords(customerId || undefined);
+  const recordFields = useMemo<LinkedRecordField[]>(
+    () =>
+      activeSortedFields(
+        (linkedRecordDefinition.data?.fields ?? []) as unknown as LinkedRecordField[],
+      ),
+    [linkedRecordDefinition.data],
+  );
+  // Inline "add another" form when the client already has records; with none,
+  // the quick-add form shows on its own.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const serviceList = services.data ?? [];
-  const locationList = locations.data ?? [];
+  const locationList = useMemo(() => locations.data ?? [], [locations.data]);
   const customerList = customers.data?.items ?? [];
   // The chosen client may sit beyond the first page (e.g. opened from their profile).
   const chosenCustomer = useCustomer(customerId || undefined);
@@ -430,45 +419,31 @@ export function AddBookingModal({
             icon={<Layers className="size-5" />}
             title={`Create a ${serviceNoun} first`}
             description="Bookings need something clients can book — duration, price and who can deliver it."
+            step="service"
+            to="/services"
+            search={{ create: true }}
+            cta={`Create ${serviceNoun}`}
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/services" search={{ create: true }}>
-                  <Plus className="size-4" />
-                  Create {serviceNoun}
-                </Link>
-              </Button>
-            }
           />
         ) : noLocations ? (
           <SetupGate
             icon={<MapPin className="size-5" />}
             title="Add a location first"
             description="Pick where this booking happens — your premises, a mobile visit, or a service area."
+            step="location"
+            to="/locations"
+            cta="Add location"
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/locations">
-                  <Plus className="size-4" />
-                  Add location
-                </Link>
-              </Button>
-            }
           />
         ) : noClients ? (
           <SetupGate
             icon={<UserRound className="size-5" />}
             title="Add a client first"
             description="Every booking needs a client on the books."
+            step="client"
+            to="/clients"
+            cta="Add client"
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/clients">
-                  <Plus className="size-4" />
-                  Add client
-                </Link>
-              </Button>
-            }
           />
         ) : (
           <div className="grid gap-4">
@@ -482,6 +457,7 @@ export function AddBookingModal({
                   setCustomerId(c.id);
                   // A record belongs to one client, so it can't survive a client change.
                   setLinkedRecordId("none");
+                  setQuickAddOpen(false);
                 }}
               />
             </div>
@@ -492,37 +468,65 @@ export function AddBookingModal({
                   {recordTerm}
                   {recordRequired ? <span className="text-destructive"> *</span> : null}
                 </Label>
-                {activeRecords.length === 0 ? (
-                  <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                    This client has no {recordTermLower} on record.{" "}
-                    <Link
-                      to="/clients/$clientId"
-                      params={{ clientId: customerId }}
-                      onClick={() => onOpenChange(false)}
-                      className="font-medium text-primary underline underline-offset-4"
-                    >
-                      Add one from their profile
-                    </Link>
-                    {recordRequired ? " before booking." : "."}
-                  </p>
+                {customerRecords.isSuccess && activeRecords.length === 0 ? (
+                  <QuickAddLinkedRecord
+                    key={customerId}
+                    customerId={customerId}
+                    fields={recordFields}
+                    term={recordTerm}
+                    onAdded={(record) => {
+                      setLinkedRecordId(record.id);
+                      toast.success(`${recordTerm} added`, {
+                        description: `${record.displayLabel} is on this booking. Add more details from the client's profile whenever you like.`,
+                      });
+                    }}
+                  />
+                ) : quickAddOpen ? (
+                  <QuickAddLinkedRecord
+                    key={customerId}
+                    customerId={customerId}
+                    fields={recordFields}
+                    term={recordTerm}
+                    autoFocus
+                    onCancel={() => setQuickAddOpen(false)}
+                    onAdded={(record) => {
+                      setLinkedRecordId(record.id);
+                      setQuickAddOpen(false);
+                      toast.success(`${recordTerm} added`, {
+                        description: `${record.displayLabel} is on this booking.`,
+                      });
+                    }}
+                  />
                 ) : (
-                  <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {recordRequired ? null : (
-                        <SelectItem value="none">No {recordTermLower}</SelectItem>
-                      )}
-                      {activeRecords.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.displayLabel}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue
+                          placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {recordRequired ? null : (
+                          <SelectItem value="none">No {recordTermLower}</SelectItem>
+                        )}
+                        {activeRecords.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.displayLabel}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setQuickAddOpen(true)}
+                      aria-label={`Add another ${recordTermLower}`}
+                    >
+                      <Plus className="size-4" />
+                      Add
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : null}

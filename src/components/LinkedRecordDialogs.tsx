@@ -34,6 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import {
+  useCreateCustomerLinkedRecord,
   useCustomer,
   useCustomers,
   useLinkedRecordOwnership,
@@ -679,5 +680,231 @@ export function LinkedRecordFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The handful of fields worth asking for when the customer is standing at the
+ * counter: everything required, then the first optional short-text fields, three
+ * at most. For the vehicle template that's Registration, Make, Model.
+ */
+export function quickAddFields(fields: LinkedRecordField[]): LinkedRecordField[] {
+  const usable = fields.filter((f) => !UNSUPPORTED_FIELD_TYPES.has(f.dataType));
+  const required = usable.filter((f) => f.required);
+  const optional = usable.filter((f) => !f.required && f.dataType === "short_text");
+  return [...required, ...optional].slice(0, Math.max(3, required.length));
+}
+
+/**
+ * Compact inline form for adding a linked record without leaving the current
+ * flow — the Add booking modal uses it so a vehicle can be created mid-booking.
+ * Anything beyond the quick fields can be filled in later from the client's profile
+ * or right now via "More details", which opens the full form on top.
+ */
+export function QuickAddLinkedRecord({
+  customerId,
+  fields,
+  term,
+  onAdded,
+  onCancel,
+  autoFocus,
+}: {
+  customerId: string;
+  fields: LinkedRecordField[];
+  term: string;
+  onAdded: (record: LinkedRecord) => void;
+  /** Present when the form can be dismissed (the client already has records). */
+  onCancel?: () => void;
+  autoFocus?: boolean;
+}) {
+  const create = useCreateCustomerLinkedRecord(customerId);
+  const quick = useMemo(() => quickAddFields(fields), [fields]);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Snapshot of the quick values taken when "More details" opens, so the full form
+  // starts pre-filled without resetting on every re-render while it's open.
+  const [fullInitial, setFullInitial] = useState<{
+    displayLabel: string;
+    values: Record<string, unknown>;
+  } | null>(null);
+  const lower = term.toLowerCase();
+
+  const submit = async () => {
+    const nextErrors: Record<string, string> = {};
+    const payload: Record<string, unknown> = {};
+    for (const f of quick) {
+      const coerced = coerceFieldValue(f, values[f.fieldKey]?.trim());
+      if (f.required && (coerced === undefined || coerced === "")) {
+        nextErrors[f.fieldKey] = "Required";
+        continue;
+      }
+      if (coerced !== undefined) payload[f.fieldKey] = coerced;
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+    setErrors({});
+    // "Ford Focus · AB12 CDE" reads better than the field order would give.
+    const descriptive = quick
+      .filter((f) => !f.required)
+      .map((f) => payload[f.fieldKey])
+      .filter((v) => v !== undefined && v !== "")
+      .join(" ");
+    const identifying = quick
+      .filter((f) => f.required)
+      .map((f) => payload[f.fieldKey])
+      .filter((v) => v !== undefined && v !== "")
+      .join(" ");
+    const displayLabel = [descriptive, identifying].filter(Boolean).join(" · ") || term;
+    const record = await create.mutateAsync({ displayLabel, values: payload });
+    setValues({});
+    onAdded(record);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  // One message for the whole row: "Registration is required", or the server's
+  // complaint about a specific field.
+  const firstError = (() => {
+    for (const f of quick) {
+      const local = errors[f.fieldKey];
+      if (local) return local === "Required" ? `${f.label} is required.` : `${f.label}: ${local}`;
+      const server = fieldErrorFor(create.error, f.fieldKey);
+      if (server) return `${f.label}: ${server}`;
+    }
+    return null;
+  })();
+
+  const requiredLabels = quick.filter((f) => f.required).map((f) => f.label.toLowerCase());
+  const requiredHint =
+    requiredLabels.length === 0
+      ? "All optional — add more later."
+      : `Only the ${requiredLabels.join(" and ")} is needed now.`;
+
+  return (
+    <div className="rounded-lg border border-dashed p-3">
+      {/* Fields in one row (labels as placeholders), then a single status line with
+          the actions. Errors are reported in the status line, not under each field,
+          so the row never shifts. */}
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: quick.map((f) => (f.required ? "1.25fr" : "1fr")).join(" "),
+        }}
+      >
+        {quick.map((f, i) => {
+          const id = `quick-lr-${f.fieldKey}`;
+          const invalid = Boolean(errors[f.fieldKey] ?? fieldErrorFor(create.error, f.fieldKey));
+          return f.dataType === "single_select" ? (
+            <Select
+              key={f.fieldKey}
+              value={values[f.fieldKey] ?? ""}
+              onValueChange={(v) => setValues((p) => ({ ...p, [f.fieldKey]: v }))}
+            >
+              <SelectTrigger
+                id={id}
+                aria-label={f.label}
+                aria-invalid={invalid || undefined}
+                className={cn("h-9 min-w-0", invalid && "border-destructive")}
+              >
+                <SelectValue placeholder={f.label} />
+              </SelectTrigger>
+              <SelectContent>
+                {(f.constraints?.options ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              key={f.fieldKey}
+              id={id}
+              aria-label={f.label}
+              aria-invalid={invalid || undefined}
+              className={cn(
+                "h-9 min-w-0",
+                invalid && "border-destructive focus-visible:ring-destructive/40",
+              )}
+              autoFocus={autoFocus && i === 0}
+              type={f.dataType === "integer" || f.dataType === "decimal" ? "number" : "text"}
+              value={values[f.fieldKey] ?? ""}
+              maxLength={f.constraints?.maxLength}
+              placeholder={f.label}
+              onChange={(e) => {
+                setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }));
+                if (errors[f.fieldKey]) setErrors((p) => ({ ...p, [f.fieldKey]: "" }));
+              }}
+              onKeyDown={onKeyDown}
+              disabled={create.isPending}
+            />
+          );
+        })}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p
+          className={cn(
+            "min-w-0 truncate text-xs",
+            firstError ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {firstError ?? requiredHint}
+        </p>
+        <div className="flex shrink-0 items-center gap-3">
+          {onCancel ? (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="text-xs font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50"
+            onClick={() => setFullInitial({ displayLabel: "", values: { ...values } })}
+            disabled={create.isPending}
+          >
+            More details
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            onClick={() => void submit()}
+            disabled={create.isPending}
+          >
+            {create.isPending ? "Adding…" : `Add ${lower}`}
+          </Button>
+        </div>
+      </div>
+
+      <LinkedRecordFormDialog
+        open={fullInitial !== null}
+        onOpenChange={(o) => {
+          if (!o) setFullInitial(null);
+        }}
+        fields={fields}
+        term={term}
+        initial={fullInitial ?? undefined}
+        submitting={create.isPending}
+        submitError={create.error}
+        onSubmit={async (data) => {
+          const record = await create.mutateAsync(data);
+          setFullInitial(null);
+          setValues({});
+          onAdded(record);
+        }}
+      />
+    </div>
   );
 }
