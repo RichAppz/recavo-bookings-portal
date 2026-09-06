@@ -63,6 +63,31 @@ export function formatInTz(
   return new Intl.DateTimeFormat(locale, { ...opts, timeZone }).format(new Date(iso));
 }
 
+/** True when a booking ends on a later calendar day than it starts (in its own timezone). */
+export function spansDays(startIso: string, endIso: string, timeZone: string): boolean {
+  const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
+  // An end exactly on midnight still belongs to the previous day.
+  const lastInstant = new Date(new Date(endIso).getTime() - 60_000).toISOString();
+  return day(startIso) !== day(lastInstant);
+}
+
+/**
+ * "17 Sept 2026, 09:00 – 10:00" for a same-day booking; multi-day jobs (a two-day
+ * detailing) spell out the return day too: "17 Sept 2026, 09:00 – 19 Sept, 09:00".
+ */
+export function formatBookingSpan(startIso: string, endIso: string, timeZone: string): string {
+  const start = formatInTz(startIso, timeZone, { dateStyle: "medium", timeStyle: "short" });
+  const end = spansDays(startIso, endIso, timeZone)
+    ? formatInTz(endIso, timeZone, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : formatInTz(endIso, timeZone, { timeStyle: "short" });
+  return `${start} – ${end}`;
+}
+
 /** Format time-only in a timezone. */
 export function formatTimeInTz(iso: string, timeZone: string, locale = "en-GB"): string {
   return formatInTz(iso, timeZone, { hour: "2-digit", minute: "2-digit", hour12: false }, locale);

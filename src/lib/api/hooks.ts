@@ -295,6 +295,41 @@ export function useMarkBankTransferReceived() {
   });
 }
 
+export type RecordPaymentMethod = "bank_transfer" | "cash" | "card" | "other";
+
+/**
+ * Staff record money received outside the platform — typically the balance after
+ * a deposit (RECA-523). Omitting `amountMinor` settles the full outstanding balance.
+ * Requires status confirmed/completed; 422 when already settled.
+ */
+export function useRecordBookingPayment() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Booking,
+      { bookingId: string; amountMinor?: number; method: RecordPaymentMethod }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ booking: Booking }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/record-payment`,
+        {
+          ...(vars.amountMinor != null ? { amountMinor: vars.amountMinor } : {}),
+          method: vars.method,
+        },
+        { idempotencyKey },
+      );
+      return res.data.booking;
+    }),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
+    },
+  });
+}
+
 export function useBookingHistory(bookingId: string | undefined) {
   const businessId = useBusinessId();
   return useQuery({
@@ -3250,7 +3285,11 @@ export function useRunFilesRetention() {
 export type PublicService = Pick<
   CatalogueService,
   "id" | "name" | "description" | "category" | "durationMinutes" | "basePriceMinor" | "currency"
-> & { colour: string | null };
+> & {
+  colour: string | null;
+  /** Optional until every API build returns it (RECA-523). */
+  depositMinor?: number | null;
+};
 
 export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
 
@@ -3461,6 +3500,7 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
           holdToken: string;
           onlinePaymentRequired?: boolean;
           bankTransferAvailable?: boolean;
+          amountDueNowMinor?: number;
         }>(`/api/v1/public/businesses/${businessId}/booking-holds`, body, {
           public: true,
           idempotencyKey,

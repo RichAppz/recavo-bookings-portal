@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -36,7 +37,15 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
-import { formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { configuredDepositMinor } from "@/lib/booking-payment";
+import {
+  formatDuration,
+  formatInTz,
+  formatMoney,
+  isoDate,
+  parseMoneyToMinor,
+  spansDays,
+} from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
@@ -85,6 +94,9 @@ export function AddBookingModal({
   const [date, setDate] = useState(isoDate(new Date()));
   const [slotKey, setSlotKey] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"none" | "credit" | "bank_transfer">("none");
+  // Deposit override (pounds, as typed). null = follow the services' configured
+  // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
+  const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [mode, setMode] = useState<"create" | "hold">("create");
   const [notes, setNotes] = useState("");
@@ -145,7 +157,10 @@ export function AddBookingModal({
   const availableToAdd = serviceList.filter(
     (s) => s.id !== serviceId && !additional.some((a) => a.serviceId === s.id),
   );
+  // A date input reports "" while someone is part-way through typing a date;
+  // an invalid Date would throw on toISOString and take the page down.
   const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(dayStart.getTime());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
   const availability = useAvailability({
@@ -153,9 +168,9 @@ export function AddBookingModal({
     locationId: locationId || undefined,
     variantId: variantId !== "none" ? variantId : undefined,
     staffId: staffId !== "all" ? staffId : undefined,
-    from: dayStart.toISOString(),
-    to: dayEnd.toISOString(),
-    enabled: open,
+    from: validDate ? dayStart.toISOString() : "",
+    to: validDate ? dayEnd.toISOString() : "",
+    enabled: open && validDate,
   });
 
   const slots = useMemo(
@@ -180,6 +195,38 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
+  // The API sums the booked services' deposits unless staff override it here.
+  const defaultDepositMinor = configuredDepositMinor(
+    [
+      ...(service ? [service] : []),
+      ...additional.map((a) => serviceById.get(a.serviceId)).filter((s) => s != null),
+    ],
+    rolledTotalMinor,
+  );
+  const depositOverridden = depositInput !== null;
+  const depositMinor: number | null = (() => {
+    if (paymentMethod === "credit") return null;
+    if (!depositOverridden) return defaultDepositMinor;
+    if (!depositInput.trim()) return null;
+    try {
+      const minor = parseMoneyToMinor(depositInput);
+      return minor > 0 && minor < rolledTotalMinor ? minor : null;
+    } catch {
+      return null;
+    }
+  })();
+  const depositInvalid =
+    depositOverridden &&
+    depositInput.trim() !== "" &&
+    (() => {
+      try {
+        const minor = parseMoneyToMinor(depositInput);
+        return minor < 0 || minor >= rolledTotalMinor;
+      } catch {
+        return true;
+      }
+    })();
+
   const handleConflict = () => {
     toast.error("That slot was just taken", {
       description: "Availability has been refreshed — pick another time.",
@@ -197,6 +244,7 @@ export function AddBookingModal({
     setLocationId("");
     setSlotKey(null);
     setPaymentMethod("none");
+    setDepositInput(null);
     setMode("create");
     setNotes("");
     setAdditional([]);
@@ -206,6 +254,13 @@ export function AddBookingModal({
   const submit = async () => {
     if (!customerId || !service || !locationId || !selectedSlot) {
       toast.error("Choose a client, service, location and time slot");
+      return;
+    }
+
+    if (depositInvalid) {
+      toast.error("Check the deposit", {
+        description: "It must be less than the total — clear it to take the full amount.",
+      });
       return;
     }
 
@@ -255,6 +310,11 @@ export function AddBookingModal({
       leadCustomerId: customerId,
       ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
       paymentMethod,
+      // Only send an override when staff changed it; otherwise the API applies
+      // the services' configured deposits (0 = force no deposit).
+      ...(depositOverridden && paymentMethod !== "credit"
+        ? { depositMinor: depositMinor ?? 0 }
+        : {}),
       notesInternal: notes || null,
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
@@ -665,7 +725,9 @@ export function AddBookingModal({
                 </div>
               ) : slots.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  {emptySlotsMessage(service?.availabilityWindows, date)}
+                  {validDate
+                    ? emptySlotsMessage(service?.availabilityWindows, date)
+                    : "Pick a date to see available times."}
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -696,6 +758,29 @@ export function AddBookingModal({
                   })}
                 </div>
               )}
+              {selectedSlot &&
+              spansDays(
+                selectedSlot.start,
+                selectedSlot.end,
+                selectedSlot.displayTimezone || timezone,
+              ) ? (
+                <p className="text-xs text-muted-foreground">
+                  Drop-off{" "}
+                  {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
+                    weekday: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {" · "}ready{" "}
+                  {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              ) : null}
               {selectedSlot ? (
                 <p className="text-xs text-muted-foreground">
                   Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
@@ -739,11 +824,55 @@ export function AddBookingModal({
               </Select>
               {paymentMethod === "bank_transfer" ? (
                 <p className="text-xs text-muted-foreground">
-                  The booking waits as “awaiting payment”. You'll get the account details and
-                  reference to read out, and the customer is emailed them too.
+                  The booking waits as “awaiting payment”
+                  {depositMinor != null && service
+                    ? ` until the ${formatMoney(depositMinor, service.currency)} deposit arrives`
+                    : ""}
+                  . You'll get the account details and reference to read out, and the customer is
+                  emailed them too.
                 </p>
               ) : null}
             </div>
+
+            {service && paymentMethod !== "credit" && rolledTotalMinor > 0 ? (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="booking-deposit">Deposit to secure (£)</Label>
+                  {depositOverridden ? (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-4 hover:underline"
+                      onClick={() => setDepositInput(null)}
+                    >
+                      Use {serviceNoun.toLowerCase()} default
+                    </button>
+                  ) : null}
+                </div>
+                <Input
+                  id="booking-deposit"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={
+                    depositOverridden
+                      ? depositInput
+                      : defaultDepositMinor != null
+                        ? String(defaultDepositMinor / 100)
+                        : ""
+                  }
+                  onChange={(e) => setDepositInput(e.target.value)}
+                  aria-invalid={depositInvalid}
+                />
+                <p
+                  className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {depositInvalid
+                    ? `Enter an amount under ${formatMoney(rolledTotalMinor, service.currency)}, or clear it to take the full amount.`
+                    : depositMinor != null
+                      ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(rolledTotalMinor - depositMinor, service.currency)} balance to collect later.`
+                      : `No deposit — the full ${formatMoney(rolledTotalMinor, service.currency)} is due.`}
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label htmlFor="booking-notes">Internal notes</Label>

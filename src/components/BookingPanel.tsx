@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -55,6 +56,7 @@ import {
   useLinkedRecord,
   useLocationsList,
   useMarkBankTransferReceived,
+  useRecordBookingPayment,
   useServices,
   useStaffList,
   stripeCheckoutFrom,
@@ -62,6 +64,7 @@ import {
   useTakeBookingPayment,
   useSyncBookingPayment,
   type PublicBookingPayment,
+  type RecordPaymentMethod,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
 import {
@@ -70,9 +73,19 @@ import {
   type BookingHistoryEntry,
   type Staff,
 } from "@/lib/api/types";
-import { bookingNeedsPayment, isSettledPaymentState } from "@/lib/booking-payment";
+import {
+  bookingNeedsPayment,
+  bookingSettlement,
+  isSettledPaymentState,
+} from "@/lib/booking-payment";
 import { emptySlotsMessage } from "@/lib/availability-windows";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import {
+  formatBookingSpan,
+  formatInTz,
+  formatMoney,
+  isoDate,
+  parseMoneyToMinor,
+} from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -98,6 +111,7 @@ export function BookingPanel({
   const [cancelReason, setCancelReason] = useState("");
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
   const [tab, setTab] = useState("details");
   const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
 
@@ -111,6 +125,7 @@ export function BookingPanel({
   const takePayment = useTakeBookingPayment();
   const syncPayment = useSyncBookingPayment();
   const markReceived = useMarkBankTransferReceived();
+  const recordPayment = useRecordBookingPayment();
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
@@ -132,6 +147,11 @@ export function BookingPanel({
   const hasSucceededPayment = (payments.data ?? []).some(
     (p) => p.state === "succeeded" || p.state === "partially_refunded" || p.state === "refunded",
   );
+  // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
+  const settlement = booking ? bookingSettlement(booking) : null;
+  const canRecordPayment =
+    Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
+    (booking?.status === "confirmed" || booking?.status === "completed");
 
   const historyEntries = [...(history.data ?? [])].sort((a, b) => {
     const ta = new Date(historyTimestamp(a) ?? 0).getTime();
@@ -163,7 +183,11 @@ export function BookingPanel({
     if (!booking) return;
     try {
       await markReceived.mutateAsync({ bookingId: booking.id });
-      toast.success("Bank transfer received — booking confirmed");
+      toast.success(
+        settlement?.depositMinor != null
+          ? "Deposit received — booking confirmed"
+          : "Bank transfer received — booking confirmed",
+      );
       setConfirmReceived(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
@@ -244,8 +268,7 @@ export function BookingPanel({
               <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
               <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
               <p className="text-sm text-muted-foreground">
-                {formatInTz(booking.start, timezone, { dateStyle: "medium", timeStyle: "short" })} –{" "}
-                {formatInTz(booking.end, timezone, { timeStyle: "short" })}
+                {formatBookingSpan(booking.start, booking.end, timezone)}
               </p>
             </div>
           )}
@@ -272,7 +295,16 @@ export function BookingPanel({
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
                 <StatusBadge status={booking.attendanceStatus} />
-                {bookingNeedsPayment(booking, payments.data ?? []) && !bankPending ? (
+                {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
+                    {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
+                    {formatMoney(settlement.outstandingMinor, booking.currency)} to collect
+                  </span>
+                ) : settlement?.state === "paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
+                    Paid in full
+                  </span>
+                ) : bookingNeedsPayment(booking, payments.data ?? []) && !bankPending ? (
                   <StatusBadge status="payment_due" />
                 ) : null}
                 {bankPending ? (
@@ -353,6 +385,22 @@ export function BookingPanel({
                       label="Amount"
                       value={formatMoney(booking.priceMinor, booking.currency)}
                     />
+                    {settlement && settlement.depositMinor != null ? (
+                      <Detail
+                        label="Deposit"
+                        value={formatMoney(settlement.depositMinor, booking.currency)}
+                      />
+                    ) : null}
+                    {settlement && settlement.state !== "credit" && settlement.state !== "free" ? (
+                      <Detail
+                        label="Outstanding"
+                        value={
+                          settlement.outstandingMinor > 0
+                            ? formatMoney(settlement.outstandingMinor, booking.currency)
+                            : "Paid in full"
+                        }
+                      />
+                    ) : null}
                     <Detail
                       label="Duration"
                       value={`${booking.serviceSnapshot.durationMinutes} minutes`}
@@ -457,12 +505,24 @@ export function BookingPanel({
                     <p className="text-xs text-muted-foreground">
                       Paid using a package credit — no card payment required.
                     </p>
-                  ) : booking.paymentMethod === "bank_transfer" ? (
+                  ) : settlement && settlement.state === "paid" ? (
+                    <div className="rounded-xl border p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Paid in full — {formatMoney(settlement.paidMinor, booking.currency)}{" "}
+                        received.
+                      </p>
+                    </div>
+                  ) : bankPending && settlement ? (
                     <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
-                        {bankPending
-                          ? `Waiting for a bank transfer of ${formatMoney(booking.priceMinor, booking.currency)}${booking.reference ? `, reference ${booking.reference}` : ""}. Check your account, then mark it received.`
-                          : "Paid by bank transfer, confirmed manually."}
+                        Waiting for a bank transfer of{" "}
+                        {formatMoney(settlement.dueNowMinor, booking.currency)}
+                        {settlement.depositMinor != null ? " (deposit)" : ""}
+                        {booking.reference ? `, reference ${booking.reference}` : ""}. Check your
+                        account, then mark it received.
+                        {settlement.depositMinor != null
+                          ? ` The remaining ${formatMoney(settlement.priceMinor - settlement.depositMinor, booking.currency)} is collected later.`
+                          : ""}
                       </p>
                       {bankPending ? (
                         <Button
@@ -476,24 +536,40 @@ export function BookingPanel({
                         </Button>
                       ) : null}
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                  ) : settlement ? (
+                    <div className="space-y-3 rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
-                        {hasSucceededPayment
-                          ? "Payment received for this booking."
-                          : `Payment of ${formatMoney(booking.priceMinor, booking.currency)} is due.`}
+                        {settlement.state === "deposit_paid"
+                          ? `Deposit of ${formatMoney(settlement.depositMinor ?? 0, booking.currency)} received — ${formatMoney(settlement.outstandingMinor, booking.currency)} balance to collect.`
+                          : settlement.state === "part_paid"
+                            ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far — ${formatMoney(settlement.outstandingMinor, booking.currency)} still to collect.`
+                            : hasSucceededPayment
+                              ? "Payment received for this booking."
+                              : `Payment of ${formatMoney(settlement.outstandingMinor, booking.currency)} is due.`}
                       </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={takePayment.isPending || hasSucceededPayment}
-                        onClick={handleTakePayment}
-                      >
-                        <CreditCard className="size-4" />
-                        {takePayment.isPending ? "Starting…" : "Take payment"}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            takePayment.isPending ||
+                            settlement.outstandingMinor <= 0 ||
+                            (hasSucceededPayment && settlement.depositMinor == null)
+                          }
+                          onClick={handleTakePayment}
+                        >
+                          <CreditCard className="size-4" />
+                          {takePayment.isPending ? "Starting…" : "Take card payment"}
+                        </Button>
+                        {canRecordPayment ? (
+                          <Button size="sm" variant="outline" onClick={() => setRecordOpen(true)}>
+                            <Landmark className="size-4" />
+                            Record payment
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {payments.isLoading ? (
                     <TableGhost rows={3} />
@@ -559,6 +635,16 @@ export function BookingPanel({
                   onClick={() => run(confirmAction)}
                 >
                   <CheckCircle2 className="size-4" /> Confirm booking
+                </Button>
+              ) : null}
+              {canRecordPayment && !bankPending ? (
+                <Button
+                  variant="outline"
+                  className="col-span-2"
+                  onClick={() => setRecordOpen(true)}
+                >
+                  <Landmark className="size-4" /> Record payment ·{" "}
+                  {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
                 </Button>
               ) : null}
               <Button
@@ -673,9 +759,15 @@ export function BookingPanel({
             <AlertDialogTitle>Mark the bank transfer as received?</AlertDialogTitle>
             <AlertDialogDescription>
               Confirm you've seen{" "}
-              {booking ? formatMoney(booking.priceMinor, booking.currency) : "the payment"}
+              {booking && settlement
+                ? formatMoney(settlement.dueNowMinor, booking.currency)
+                : "the payment"}
+              {settlement?.depositMinor != null ? " (the deposit)" : ""}
               {booking?.reference ? ` with reference ${booking.reference}` : ""} arrive in your
               account. The booking is confirmed straight away and the client is emailed.
+              {booking && settlement?.depositMinor != null
+                ? ` The remaining ${formatMoney(settlement.priceMinor - settlement.depositMinor, booking.currency)} stays outstanding until you record it.`
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -692,6 +784,38 @@ export function BookingPanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {booking && settlement ? (
+        <RecordPaymentDialog
+          open={recordOpen}
+          onOpenChange={setRecordOpen}
+          bookingId={booking.id}
+          currency={booking.currency}
+          outstandingMinor={settlement.outstandingMinor}
+          pending={recordPayment.isPending}
+          onSubmit={async (amountMinor, method) => {
+            try {
+              await recordPayment.mutateAsync({ bookingId: booking.id, amountMinor, method });
+              toast.success(
+                amountMinor >= settlement.outstandingMinor
+                  ? "Payment recorded — paid in full"
+                  : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+              );
+              setRecordOpen(false);
+            } catch (err) {
+              if (err instanceof ApiError && err.status === 422) {
+                toast.error("Nothing left to record on this booking", {
+                  description: "Refreshing its latest state.",
+                });
+                setRecordOpen(false);
+                void bookingQuery.refetch();
+                return;
+              }
+              toastApiError(err);
+            }
+          }}
+        />
+      ) : null}
 
       {booking ? (
         <RescheduleDialog
@@ -797,6 +921,126 @@ function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone:
         </p>
       </div>
     </li>
+  );
+}
+
+const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "card", label: "Card (taken elsewhere)" },
+  { value: "other", label: "Other" },
+];
+
+/**
+ * Staff log money received outside the platform — the balance after a deposit,
+ * or a partial payment. Defaults to settling the full outstanding amount.
+ */
+function RecordPaymentDialog({
+  open,
+  onOpenChange,
+  bookingId,
+  currency,
+  outstandingMinor,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  bookingId: string;
+  currency: string;
+  outstandingMinor: number;
+  pending: boolean;
+  onSubmit: (amountMinor: number, method: RecordPaymentMethod) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(String(outstandingMinor / 100));
+  const [method, setMethod] = useState<RecordPaymentMethod>("cash");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setAmount(String(outstandingMinor / 100));
+      setMethod("cash");
+      setError(null);
+    }
+  }, [open, bookingId, outstandingMinor]);
+
+  const submit = async () => {
+    let minor: number;
+    try {
+      minor = parseMoneyToMinor(amount);
+    } catch {
+      setError("Enter a valid amount");
+      return;
+    }
+    if (minor <= 0) {
+      setError("Enter an amount above zero");
+      return;
+    }
+    if (minor > outstandingMinor) {
+      setError(`That's more than the ${formatMoney(outstandingMinor, currency)} outstanding`);
+      return;
+    }
+    setError(null);
+    await onSubmit(minor, method);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Record a payment</DialogTitle>
+          <DialogDescription>
+            Log money you've taken for this booking — cash, a bank transfer or a card taken
+            elsewhere. {formatMoney(outstandingMinor, currency)} is outstanding.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="record-amount">Amount (£)</Label>
+            <Input
+              id="record-amount"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              aria-invalid={Boolean(error)}
+            />
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {parseFloat(amount) * 100 < outstandingMinor && !error ? (
+              <button
+                type="button"
+                className="text-left text-xs text-primary underline-offset-4 hover:underline"
+                onClick={() => setAmount(String(outstandingMinor / 100))}
+              >
+                Settle the full {formatMoney(outstandingMinor, currency)}
+              </button>
+            ) : null}
+          </div>
+          <div className="grid gap-2">
+            <Label>How was it paid?</Label>
+            <Select value={method} onValueChange={(v) => setMethod(v as RecordPaymentMethod)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RECORD_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={pending} onClick={() => void submit()}>
+            {pending ? "Recording…" : "Record payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

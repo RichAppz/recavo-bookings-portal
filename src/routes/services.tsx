@@ -6,6 +6,8 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,7 @@ import {
   useServices,
   useStaffList,
   useUpdateService,
+  useUpdateStaff,
 } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import {
@@ -42,7 +45,7 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
-import type { CatalogueService } from "@/lib/api/types";
+import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
@@ -72,6 +75,11 @@ function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
   }
   if (minutes >= 60 && minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" };
   return { value: String(minutes), unit: "minutes" };
+}
+
+/** Deposit input shows blank for "no deposit" so the field reads as optional. */
+function depositToInput(minor: number | null | undefined): string {
+  return minor && minor > 0 ? String(minor / 100) : "";
 }
 
 const searchSchema = z.object({
@@ -208,6 +216,11 @@ function ServicesPage() {
                   {formatMoney(s.basePriceMinor, s.currency)}
                   {s.capacityMax > 1 ? " pp" : ""}
                 </span>
+                {s.depositMinor && s.depositMinor > 0 ? (
+                  <span className="text-muted-foreground">
+                    {formatMoney(s.depositMinor, s.currency)} deposit
+                  </span>
+                ) : null}
                 {isDetailing && s.capacityMax === 1 ? null : (
                   <span className="flex items-center gap-1.5">
                     <Users className="size-4 text-muted-foreground" />
@@ -237,12 +250,7 @@ function ServicesPage() {
                       ? tenant.terminology.staff
                       : `${tenant.terminology.staff}s`
                   }
-                  value={
-                    s.eligibleStaffIds
-                      .map((id) => staff.data?.find((m) => m.id === id)?.displayName)
-                      .filter(Boolean)
-                      .join(", ") || "Any"
-                  }
+                  value={describeDeliverers(s, staff.data ?? [])}
                 />
                 <Row
                   label="Locations"
@@ -275,7 +283,7 @@ function ServicesPage() {
                         {
                           serviceId: s.id,
                           version: s.version,
-                          body: { active: v, depositMinor: 0 },
+                          body: { active: v },
                         },
                         {
                           onSuccess: () =>
@@ -362,8 +370,35 @@ function ServiceDialog({
   const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
   const createService = useCreateService();
   const updateService = useUpdateService();
+  const updateStaff = useUpdateStaff();
+  const staffList = useStaffList();
+  const activeStaff = useMemo(
+    () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
+    [staffList.data],
+  );
   const [name, setName] = useState(service?.name ?? "");
+  // Who delivers it. Empty `eligibleStaffIds` on the API means everyone, which is
+  // the default — owners shouldn't have to visit each staff record to switch a
+  // new service on.
+  const [staffMode, setStaffMode] = useState<"all" | "selected">(
+    service && service.eligibleStaffIds.length > 0 ? "selected" : "all",
+  );
+  const [staffIds, setStaffIds] = useState<string[]>(service?.eligibleStaffIds ?? []);
+  const staffPluralLower = (() => {
+    const t = tenant.terminology.staff.trim().toLowerCase() || "staff member";
+    return t.endsWith("s") ? t : `${t}s`;
+  })();
+  const reconcileNames = useMemo(
+    () =>
+      staffNeedingReconcile(
+        service?.id ?? null,
+        staffMode === "selected" ? staffIds : [],
+        activeStaff,
+      ).map((m) => m.displayName),
+    [service?.id, staffMode, staffIds, activeStaff],
+  );
   const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
+  const [deposit, setDeposit] = useState(depositToInput(service?.depositMinor));
   // Detailers state how long they keep the vehicle ("2 days"); the split keeps
   // the stored minutes editable in whichever unit reads naturally.
   const initialDuration = splitDuration(service?.durationMinutes ?? 60);
@@ -389,7 +424,10 @@ function ServiceDialog({
 
   const resetFrom = (s: CatalogueService | null) => {
     setName(s?.name ?? "");
+    setStaffMode(s && s.eligibleStaffIds.length > 0 ? "selected" : "all");
+    setStaffIds(s?.eligibleStaffIds ?? []);
     setPrice(String(s ? s.basePriceMinor / 100 : 50));
+    setDeposit(depositToInput(s?.depositMinor));
     const split = splitDuration(s?.durationMinutes ?? 60);
     setDuration(isDetailing ? split.value : String(s?.durationMinutes ?? 60));
     setDurationUnit(isDetailing ? split.unit : "minutes");
@@ -435,6 +473,29 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
+    // Deposit: what the customer pays to secure the booking; the balance is
+    // collected later. Blank/0 = pay in full. A deposit at or above the price is
+    // just "pay in full" too, so refuse it here rather than storing a confusing one.
+    let depositMinor = 0;
+    if (deposit.trim()) {
+      try {
+        depositMinor = parseMoneyToMinor(deposit);
+      } catch {
+        setFieldErrors((prev) => ({ ...prev, depositMinor: "Enter a valid deposit" }));
+        toast.error("Enter a valid deposit");
+        throw new Error("validation");
+      }
+      if (depositMinor >= basePriceMinor) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          depositMinor:
+            "The deposit must be less than the price — leave blank to take full payment.",
+        }));
+        toast.error("Deposit must be less than the price");
+        throw new Error("validation");
+      }
+    }
+
     const durationMinutes = Math.round((Number(duration) || 0) * UNIT_MINUTES[durationUnit]) || 60;
     // Detailing jobs are one vehicle at a time; the field is hidden, so keep
     // whatever the record already has rather than inventing a new value.
@@ -449,9 +510,6 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
-    // depositMinor is offline/manual-only and the API rejects values > 0
-    // (TOO_BIG on create, UNSUPPORTED on update) until online deposit
-    // capture ships — always send 0.
     const variantsPayload = variants
       .filter((v) => v.name.trim())
       .map((v) => ({
@@ -463,31 +521,61 @@ function ServiceDialog({
         priceMinor: v.priceMinor.trim() ? parseMoneyToMinor(v.priceMinor) : null,
       }));
 
+    const eligibleStaffIds = staffMode === "selected" ? staffIds : [];
+    if (staffMode === "selected" && staffIds.length === 0) {
+      setFieldErrors((prev) => ({ ...prev, eligibleStaffIds: "Pick at least one person." }));
+      toast.error(`Choose who delivers this ${lower}`);
+      throw new Error("validation");
+    }
+
     const body: Record<string, unknown> = {
       name,
+      eligibleStaffIds,
       description: description || null,
       durationMinutes,
       basePriceMinor,
       capacityMax,
       active,
       publicVisible,
-      depositMinor: 0,
+      depositMinor,
       variants: variantsPayload,
       availabilityWindows: windows,
     };
 
     setFieldErrors({});
     try {
+      let saved: CatalogueService;
       if (service) {
-        await updateService.mutateAsync({
+        saved = await updateService.mutateAsync({
           serviceId: service.id,
           version: service.version,
           body,
         });
         toast.success(`${noun} updated`);
       } else {
-        await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
+        saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
         toast.success(`${noun} created`);
+      }
+      // A staff record with its own service list would silently veto this service
+      // even though it was just assigned to them here. Bring those lists into line
+      // so this dialog is the one place that decides who delivers what.
+      const toReconcile = staffNeedingReconcile(saved.id, eligibleStaffIds, activeStaff);
+      if (toReconcile.length > 0) {
+        const results = await Promise.allSettled(
+          toReconcile.map((m) =>
+            updateStaff.mutateAsync({
+              staffId: m.id,
+              version: m.version,
+              body: { eligibleServiceIds: [...m.eligibleServiceIds, saved.id] },
+            }),
+          ),
+        );
+        const failed = results.filter((r) => r.status === "rejected").length;
+        if (failed > 0) {
+          toast.warning(
+            `${failed} staff record${failed === 1 ? "" : "s"} couldn't be updated — check their services list.`,
+          );
+        }
       }
     } catch (err) {
       // The mutation hooks already toast the error. On 409, the services list is
@@ -610,12 +698,25 @@ function ServiceDialog({
               </div>
             )}
           </div>
-          {fieldErrors.depositMinor ? (
-            <p className="text-xs text-destructive">
-              Deposit: {fieldErrors.depositMinor} — online deposits aren't supported yet, so
-              deposits are always kept at £0.
+          <div className="grid gap-2">
+            <Label htmlFor="s-deposit">Deposit to book (£)</Label>
+            <Input
+              id="s-deposit"
+              value={deposit}
+              onChange={(e) => setDeposit(e.target.value)}
+              placeholder="0"
+              inputMode="decimal"
+              aria-invalid={Boolean(fieldErrors.depositMinor)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {deposit.trim() && Number(deposit) > 0
+                ? `Customers pay £${deposit.trim()} to secure the booking and the balance later. Leave blank to take the full price up front.`
+                : "Optional. Take part of the price now to secure the booking and collect the rest on the day."}
             </p>
-          ) : null}
+            {fieldErrors.depositMinor ? (
+              <p className="text-xs text-destructive">{fieldErrors.depositMinor}</p>
+            ) : null}
+          </div>
 
           <div className="grid gap-2 border-t pt-4">
             <div className="flex items-center justify-between">
@@ -722,6 +823,76 @@ function ServiceDialog({
             )}
           </div>
 
+          <div className="grid gap-3 border-t pt-4">
+            <Label>Who delivers this {lower}</Label>
+            <RadioGroup
+              value={staffMode}
+              onValueChange={(v) => setStaffMode(v as "all" | "selected")}
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              <label
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                  staffMode === "all" && "border-primary/40 bg-primary-soft/40",
+                )}
+              >
+                <RadioGroupItem value="all" className="mt-0.5" />
+                <span className="grid gap-0.5">
+                  <span className="text-sm font-medium">All {staffPluralLower}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Anyone on the team, including people you add later.
+                  </span>
+                </span>
+              </label>
+              <label
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                  staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
+                )}
+              >
+                <RadioGroupItem value="selected" className="mt-0.5" />
+                <span className="grid gap-0.5">
+                  <span className="text-sm font-medium">Only certain people</span>
+                  <span className="text-xs text-muted-foreground">
+                    Pick who can be booked for it.
+                  </span>
+                </span>
+              </label>
+            </RadioGroup>
+            {staffMode === "selected" ? (
+              activeStaff.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No {staffPluralLower} yet — add your team first.
+                </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {activeStaff.map((m) => (
+                    <label key={m.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={staffIds.includes(m.id)}
+                        onCheckedChange={(checked) =>
+                          setStaffIds((ids) =>
+                            checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
+                          )
+                        }
+                      />
+                      {m.displayName}
+                    </label>
+                  ))}
+                </div>
+              )
+            ) : null}
+            {fieldErrors.eligibleStaffIds ? (
+              <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
+            ) : null}
+            {reconcileNames.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
+                restricted services list — saving will add this {lower} to it.
+              </p>
+            ) : null}
+          </div>
+
           <WeeklyWindowsEditor
             windows={windows}
             onChange={setWindows}
@@ -767,4 +938,36 @@ function ServiceDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Staff who are meant to deliver a service (everyone when `eligibleStaffIds` is
+ * empty) but whose own `eligibleServiceIds` list is restricted and misses it. With
+ * a null service id (creating) we can only report who *will* need the update.
+ */
+function staffNeedingReconcile(
+  serviceId: string | null,
+  eligibleStaffIds: readonly string[],
+  staff: readonly Staff[],
+): Staff[] {
+  return staff.filter(
+    (m) =>
+      (eligibleStaffIds.length === 0 || eligibleStaffIds.includes(m.id)) &&
+      m.eligibleServiceIds.length > 0 &&
+      (serviceId === null || !m.eligibleServiceIds.includes(serviceId)),
+  );
+}
+
+/** Who can actually be booked for a service once both sides' restrictions apply. */
+function describeDeliverers(service: CatalogueService, staff: readonly Staff[]): string {
+  const active = staff.filter((m) => m.status === "active");
+  if (active.length === 0) return service.eligibleStaffIds.length === 0 ? "All staff" : "—";
+  const can = active.filter(
+    (m) =>
+      (service.eligibleStaffIds.length === 0 || service.eligibleStaffIds.includes(m.id)) &&
+      (m.eligibleServiceIds.length === 0 || m.eligibleServiceIds.includes(service.id)),
+  );
+  if (can.length === 0) return "Nobody yet";
+  if (can.length === active.length && service.eligibleStaffIds.length === 0) return "All staff";
+  return can.map((m) => m.displayName).join(", ");
 }

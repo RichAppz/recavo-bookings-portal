@@ -32,7 +32,8 @@ import { queryKeys } from "@/lib/api/query-keys";
 import { useAuth } from "@/lib/auth/auth-store";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { bookingSettlement } from "@/lib/booking-payment";
+import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
 
@@ -108,7 +109,24 @@ type Hold = {
   holdToken: string;
   onlinePaymentRequired?: boolean;
   bankTransferAvailable?: boolean;
+  /** What checkout collects right now — the deposit when one is set (RECA-523). */
+  amountDueNowMinor?: number;
 };
+
+/** "Pay £50 now, £100 later" rows for the summary when a booking carries a deposit. */
+function depositRows(
+  booking: Pick<Booking, "priceMinor" | "currency" | "status" | "paymentMethod"> & {
+    depositMinor?: number | null;
+    paidMinor?: number;
+  },
+): { dueNow: string; balance: string } | undefined {
+  const s = bookingSettlement(booking);
+  if (s.depositMinor == null) return undefined;
+  return {
+    dueNow: formatMoney(s.depositMinor, booking.currency),
+    balance: formatMoney(s.priceMinor - s.depositMinor, booking.currency),
+  };
+}
 
 /** How the customer settles a priced booking at checkout. */
 type PayMethod = "card" | "bank_transfer" | "in_person";
@@ -417,8 +435,20 @@ export function BookingFlow({
         marketingConsent,
       },
       {
-        onSuccess: ({ booking, holdToken, onlinePaymentRequired, bankTransferAvailable }) => {
-          setHold({ booking, holdToken, onlinePaymentRequired, bankTransferAvailable });
+        onSuccess: ({
+          booking,
+          holdToken,
+          onlinePaymentRequired,
+          bankTransferAvailable,
+          amountDueNowMinor,
+        }) => {
+          setHold({
+            booking,
+            holdToken,
+            onlinePaymentRequired,
+            bankTransferAvailable,
+            amountDueNowMinor,
+          });
           // Card stays the lead option when it's required; otherwise pay-by-bank
           // (when offered) beats "sort it out on the day" as the default.
           setPayMethod(
@@ -718,6 +748,7 @@ export function BookingFlow({
   const payOnline = hold?.onlinePaymentRequired === true;
   // The API only flags this for priced bookings at businesses with bank details on file.
   const bankAvailable = hold?.bankTransferAvailable === true;
+  const holdDeposit = hold ? depositRows(hold.booking) : undefined;
   const embedded = layout === "embedded";
 
   return (
@@ -836,8 +867,15 @@ export function BookingFlow({
                           {s.durationMinutes} minutes
                         </span>
                       </span>
-                      <span className="text-lg font-semibold whitespace-nowrap">
-                        {formatMoney(s.basePriceMinor, s.currency)}
+                      <span className="text-right whitespace-nowrap">
+                        <span className="block text-lg font-semibold">
+                          {formatMoney(s.basePriceMinor, s.currency)}
+                        </span>
+                        {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {formatMoney(s.depositMinor, s.currency)} deposit
+                          </span>
+                        ) : null}
                       </span>
                     </button>
 
@@ -1126,8 +1164,20 @@ export function BookingFlow({
                 serviceName={service.name}
                 locationName={location.name}
                 start={selectedSlot.start}
+                end={selectedSlot.end}
                 timezone={selectedSlot.displayTimezone}
                 price={formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                deposit={
+                  service.depositMinor && service.depositMinor < selectedSlot.priceMinor
+                    ? {
+                        dueNow: formatMoney(service.depositMinor, selectedSlot.currency),
+                        balance: formatMoney(
+                          selectedSlot.priceMinor - service.depositMinor,
+                          selectedSlot.currency,
+                        ),
+                      }
+                    : undefined
+                }
               />
             ) : null}
             <Button
@@ -1197,8 +1247,10 @@ export function BookingFlow({
                 serviceName={service.name}
                 locationName={location.name}
                 start={hold.booking.start}
+                end={hold.booking.end}
                 timezone={hold.booking.timezone}
                 price={formatMoney(hold.booking.priceMinor, hold.booking.currency)}
+                deposit={depositRows(hold.booking)}
               />
             ) : null}
             {settling ? (
@@ -1233,8 +1285,9 @@ export function BookingFlow({
                   <>
                     <div className="rounded-xl border bg-secondary px-4 py-3 text-left text-sm">
                       <p>
-                        Confirming reserves your time and shows you the account details, amount and
-                        payment reference for your transfer. We'll email them too.
+                        {holdDeposit
+                          ? `Confirming reserves your time and shows you the account details and payment reference for your ${holdDeposit.dueNow} deposit. The remaining ${holdDeposit.balance} is settled with the business later. We'll email the details too.`
+                          : "Confirming reserves your time and shows you the account details, amount and payment reference for your transfer. We'll email them too."}
                       </p>
                     </div>
                     <Button
@@ -1251,9 +1304,9 @@ export function BookingFlow({
                     {needsPayment ? (
                       <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm">
                         <p>
-                          This session costs{" "}
-                          {formatMoney(hold.booking.priceMinor, hold.booking.currency)}, payable to
-                          the studio. Confirming reserves your time.
+                          {holdDeposit
+                            ? `This costs ${formatMoney(hold.booking.priceMinor, hold.booking.currency)} — a ${holdDeposit.dueNow} deposit secures it and the ${holdDeposit.balance} balance is payable to the business. Confirming reserves your time.`
+                            : `This costs ${formatMoney(hold.booking.priceMinor, hold.booking.currency)}, payable to the business. Confirming reserves your time.`}
                         </p>
                       </div>
                     ) : null}
@@ -1339,8 +1392,10 @@ export function BookingFlow({
                 serviceName={service.name}
                 locationName={location.name}
                 start={confirmedBooking.start}
+                end={confirmedBooking.end}
                 timezone={confirmedBooking.timezone}
                 price={formatMoney(confirmedBooking.priceMinor, confirmedBooking.currency)}
+                deposit={depositRows(confirmedBooking)}
               />
             ) : null}
             {confirmedBooking.reference && !bankInstructions ? (
@@ -1474,31 +1529,42 @@ function Summary({
   serviceName,
   locationName,
   start,
+  end,
   timezone,
   price,
+  deposit,
 }: {
   serviceName: string;
   locationName: string;
   start: string;
+  end?: string;
   timezone: string;
   price: string;
+  /** Present when a deposit secures the booking and the balance is paid later. */
+  deposit?: { dueNow: string; balance: string };
 }) {
+  const whenOpts: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  const multiDay = end ? spansDays(start, end, timezone) : false;
   return (
     <dl className="surface-card space-y-2 p-5 text-left text-sm">
       {[
-        ["Session", serviceName],
-        ["Studio", locationName],
-        [
-          "When",
-          formatInTz(start, timezone, {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        ],
+        ["Service", serviceName],
+        ["Where", locationName],
+        [multiDay ? "Drop off" : "When", formatInTz(start, timezone, whenOpts)],
+        ...(multiDay && end ? [["Ready by", formatInTz(end, timezone, whenOpts)]] : []),
         ["Total", price],
+        ...(deposit
+          ? [
+              ["Deposit to pay now", deposit.dueNow],
+              ["Balance to pay later", deposit.balance],
+            ]
+          : []),
       ].map(([k, v]) => (
         <div key={k} className="flex justify-between gap-4">
           <dt className="text-muted-foreground">{k}</dt>

@@ -45,7 +45,7 @@ import {
   useUpdateStaff,
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
-import { formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
+import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -213,29 +213,54 @@ function StaffPage() {
               </SectionCard>
 
               <div className="grid gap-5 md:grid-cols-2">
-                <SectionCard title="Services delivered">
-                  {member.eligibleServiceIds.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No services assigned yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {member.eligibleServiceIds.map((id) => {
-                        const svc = services.data?.find((s) => s.id === id);
-                        return (
+                <SectionCard
+                  title="Services delivered"
+                  description={
+                    member.eligibleServiceIds.length === 0
+                      ? "Every service, including any you add later."
+                      : "Only the services listed here — untick everything in Edit profile to allow every service."
+                  }
+                >
+                  {(() => {
+                    // Both sides restrict: the staff record's own list (empty = any)
+                    // and each service's "who delivers this" setting.
+                    const deliverable = (services.data ?? []).filter(
+                      (svc) =>
+                        svc.active &&
+                        (member.eligibleServiceIds.length === 0 ||
+                          member.eligibleServiceIds.includes(svc.id)) &&
+                        (svc.eligibleStaffIds.length === 0 ||
+                          svc.eligibleStaffIds.includes(member.id)),
+                    );
+                    if ((services.data ?? []).length === 0) {
+                      return (
+                        <p className="text-sm text-muted-foreground">No services created yet.</p>
+                      );
+                    }
+                    if (deliverable.length === 0) {
+                      return (
+                        <p className="text-sm text-muted-foreground">
+                          Not assigned to any service. Choose who delivers each service when editing
+                          it.
+                        </p>
+                      );
+                    }
+                    return (
+                      <ul className="space-y-2">
+                        {deliverable.map((svc) => (
                           <li
-                            key={id}
+                            key={svc.id}
                             className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm"
                           >
-                            <span>{svc?.name ?? id}</span>
-                            {svc ? (
-                              <span className="text-xs text-muted-foreground">
-                                {svc.durationMinutes} min
-                              </span>
-                            ) : null}
+                            <span>{svc.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDuration(svc.durationMinutes)}
+                            </span>
                           </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+                        ))}
+                      </ul>
+                    );
+                  })()}
                 </SectionCard>
 
                 <SectionCard title="Locations">
@@ -649,7 +674,8 @@ function StaffDialog({
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Leave all unchecked to allow any service.
+              Leave all unchecked to allow any service. You can also choose who delivers a service
+              when editing the service itself.
             </p>
           </div>
 
