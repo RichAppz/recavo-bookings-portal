@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { Layers, Package, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SetupGate } from "@/components/SetupGate";
 import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
 import {
   Dialog,
@@ -77,6 +79,7 @@ function Shell({
   onSubmit,
   submitLabel,
   disabled,
+  gate,
 }: {
   open: boolean;
   onClose: () => void;
@@ -86,6 +89,8 @@ function Shell({
   onSubmit: () => Promise<void> | void;
   submitLabel: string;
   disabled?: boolean;
+  /** When set, the action can't be done yet — show this instead of the form. */
+  gate?: React.ReactNode;
 }) {
   const [saving, setSaving] = useState(false);
   return (
@@ -95,29 +100,49 @@ function Shell({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">{children}</div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={saving || disabled}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await onSubmit();
-                onClose();
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "Saving…" : submitLabel}
-          </Button>
-        </DialogFooter>
+        {gate ? (
+          <>
+            {gate}
+            <DialogFooter>
+              <Button variant="ghost" onClick={onClose}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-4">{children}</div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                disabled={saving || disabled}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await onSubmit();
+                    onClose();
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? "Saving…" : submitLabel}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
+}
+
+/** First missing prerequisite for a quick action, or null when it can go ahead. */
+function firstGate(
+  checks: Array<{ when: boolean; gate: React.ReactNode }>,
+): React.ReactNode | null {
+  return checks.find((c) => c.when)?.gate ?? null;
 }
 
 function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -311,6 +336,37 @@ function SellPackageDialog({
     setPaymentRef("");
   };
 
+  const gate = firstGate([
+    {
+      when: packages.isSuccess && (packages.data ?? []).length === 0,
+      gate: (
+        <SetupGate
+          icon={<Package className="size-5" />}
+          title="Create a package first"
+          description="A package is a block of credits clients buy up front. Set one up, then you can sell it here."
+          step="package"
+          to="/packages"
+          cta="Create package"
+          onNavigate={onClose}
+        />
+      ),
+    },
+    {
+      when: customers.isSuccess && (customers.data?.items ?? []).length === 0,
+      gate: (
+        <SetupGate
+          icon={<UserRound className="size-5" />}
+          title="Add a client first"
+          description="Packages are sold to a client on your books."
+          step="client"
+          to="/clients"
+          cta="Add client"
+          onNavigate={onClose}
+        />
+      ),
+    },
+  ]);
+
   return (
     <Shell
       open={open}
@@ -318,6 +374,7 @@ function SellPackageDialog({
         onClose();
         reset();
       }}
+      gate={gate}
       title="Sell package"
       description={
         mode === "checkout"
@@ -448,10 +505,57 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
   const createBooking = useCreateBooking();
   const groupServices = (services.data ?? []).filter((s) => s.capacityMax > 1);
 
+  const gate = firstGate([
+    {
+      when: services.isSuccess && groupServices.length === 0,
+      gate: (
+        <SetupGate
+          icon={<Layers className="size-5" />}
+          title="Create a group service first"
+          description="Group sessions come from a service with a capacity above one. Create one, then publish sessions here."
+          step="service"
+          to="/services"
+          search={{ create: true }}
+          cta="Create service"
+          onNavigate={onClose}
+        />
+      ),
+    },
+    {
+      when: staff.isSuccess && (staff.data ?? []).length === 0,
+      gate: (
+        <SetupGate
+          icon={<Users className="size-5" />}
+          title="Add a staff member first"
+          description="Someone has to run the session — add a staff member with working hours."
+          step="staff_availability"
+          to="/staff"
+          cta="Add staff"
+          onNavigate={onClose}
+        />
+      ),
+    },
+    {
+      when: customers.isSuccess && (customers.data?.items ?? []).length === 0,
+      gate: (
+        <SetupGate
+          icon={<UserRound className="size-5" />}
+          title="Add a client first"
+          description="A group session needs its first attendee on your books."
+          step="client"
+          to="/clients"
+          cta="Add client"
+          onNavigate={onClose}
+        />
+      ),
+    },
+  ]);
+
   return (
     <Shell
       open={open}
       onClose={onClose}
+      gate={gate}
       title="Create group session"
       description="Publish a group session and add the first attendee."
       submitLabel="Create session"
@@ -557,10 +661,28 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
   const addTimeOff = useAddStaffTimeOff();
   const member = (staff.data ?? []).find((s) => s.id === staffId);
 
+  const gate = firstGate([
+    {
+      when: staff.isSuccess && (staff.data ?? []).length === 0,
+      gate: (
+        <SetupGate
+          icon={<Users className="size-5" />}
+          title="Add a staff member first"
+          description="Time is blocked against a staff member's working hours."
+          step="staff_availability"
+          to="/staff"
+          cta="Add staff"
+          onNavigate={onClose}
+        />
+      ),
+    },
+  ]);
+
   return (
     <Shell
       open={open}
       onClose={onClose}
+      gate={gate}
       title="Block availability"
       description="Stop new bookings being taken during a period."
       submitLabel="Block time"

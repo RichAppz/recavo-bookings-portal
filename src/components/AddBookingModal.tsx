@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
-import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
+import { Layers, MapPin, UserRound, X } from "lucide-react";
+import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,33 +51,6 @@ import {
 } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
-
-function SetupGate({
-  icon,
-  title,
-  description,
-  onNavigate,
-  link,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onNavigate: () => void;
-  link: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
-      <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        {icon}
-      </span>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
-      <div className="mt-4" onClick={onNavigate}>
-        {link}
-      </div>
-    </div>
-  );
-}
 
 export function AddBookingModal({
   open,
@@ -138,7 +112,7 @@ export function AddBookingModal({
   const customerRecords = useCustomerLinkedRecords(customerId || undefined);
 
   const serviceList = services.data ?? [];
-  const locationList = locations.data ?? [];
+  const locationList = useMemo(() => locations.data ?? [], [locations.data]);
   const customerList = customers.data?.items ?? [];
   // The chosen client may sit beyond the first page (e.g. opened from their profile).
   const chosenCustomer = useCustomer(customerId || undefined);
@@ -430,45 +404,31 @@ export function AddBookingModal({
             icon={<Layers className="size-5" />}
             title={`Create a ${serviceNoun} first`}
             description="Bookings need something clients can book — duration, price and who can deliver it."
+            step="service"
+            to="/services"
+            search={{ create: true }}
+            cta={`Create ${serviceNoun}`}
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/services" search={{ create: true }}>
-                  <Plus className="size-4" />
-                  Create {serviceNoun}
-                </Link>
-              </Button>
-            }
           />
         ) : noLocations ? (
           <SetupGate
             icon={<MapPin className="size-5" />}
             title="Add a location first"
             description="Pick where this booking happens — your premises, a mobile visit, or a service area."
+            step="location"
+            to="/locations"
+            cta="Add location"
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/locations">
-                  <Plus className="size-4" />
-                  Add location
-                </Link>
-              </Button>
-            }
           />
         ) : noClients ? (
           <SetupGate
             icon={<UserRound className="size-5" />}
             title="Add a client first"
             description="Every booking needs a client on the books."
+            step="client"
+            to="/clients"
+            cta="Add client"
             onNavigate={() => onOpenChange(false)}
-            link={
-              <Button asChild>
-                <Link to="/clients">
-                  <Plus className="size-4" />
-                  Add client
-                </Link>
-              </Button>
-            }
           />
         ) : (
           <div className="grid gap-4">
