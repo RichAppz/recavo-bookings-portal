@@ -60,9 +60,9 @@ const STEP_META: Record<
   },
   stripe_connect: {
     title: "Get paid",
-    description: "Connect Stripe so you can take payments.",
+    description: "Connect Stripe or add your bank details so clients can pay you.",
     required: false,
-    href: "/payments",
+    href: "/settings?tab=payments",
   },
   policies: {
     title: "Publish cancellation & terms",
@@ -108,6 +108,8 @@ export type DeriveOnboardingInput = {
   packages: Package[];
   policies: PolicyDocument[];
   connect: ConnectAccount | null | undefined;
+  /** Pay-by-bank switched on with complete account details (RECA-522). */
+  bankTransferReady?: boolean;
   saasEntitled?: boolean;
   skippedKeys?: OnboardingStepKey[];
   dismissed?: boolean;
@@ -134,8 +136,11 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
         input.locations.some((l) => l.active && l.publicVisible)
       );
     case "stripe_connect":
+      // Either route to getting paid counts — card via Stripe or pay-by-bank.
       return Boolean(
-        input.connect?.chargesEnabled || input.connect?.onboardingState === "complete",
+        input.connect?.chargesEnabled ||
+          input.connect?.onboardingState === "complete" ||
+          input.bankTransferReady,
       );
     case "saas_subscription":
       return Boolean(input.saasEntitled);

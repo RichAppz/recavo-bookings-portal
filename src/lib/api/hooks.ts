@@ -1950,6 +1950,8 @@ export function useUpdateConfiguration() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+      // Bank details complete the "Get paid" checklist step (RECA-522).
+      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
   });
@@ -2260,6 +2262,14 @@ export function useBusinessOnboarding() {
   const policies = usePolicyDocuments();
   const connect = useConnectAccount();
   const subscription = useSubscription();
+  const tenant = useTenant();
+  const bankTransfer = tenant.configuration?.bankTransfer;
+  const bankTransferReady = Boolean(
+    bankTransfer?.enabled &&
+      bankTransfer.accountName &&
+      bankTransfer.sortCode &&
+      bankTransfer.accountNumber,
+  );
 
   const from = useMemo(() => {
     const d = new Date();
@@ -2297,6 +2307,7 @@ export function useBusinessOnboarding() {
       packages: packages.data ?? [],
       policies: policies.data ?? [],
       connect: connect.data,
+      bankTransferReady,
       saasEntitled: isSaasSubscriptionComplete(subscription.data?.subscription),
       skippedKeys: getSkippedStepsLocally(businessId),
       dismissed: isOnboardingDismissedLocally(businessId),
@@ -2319,6 +2330,7 @@ export function useBusinessOnboarding() {
     bookings.isSuccess,
     bookings.data,
     connect.data,
+    bankTransferReady,
     subscription.data,
     localEpoch,
   ]);
