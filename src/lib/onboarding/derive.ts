@@ -91,6 +91,15 @@ const STEP_ORDER: OnboardingStepKey[] = [
   "package",
 ];
 
+/**
+ * Steps dropped for a vertical, mirroring the API's EXCLUDED_BY_TEMPLATE.
+ * Automotive businesses sell one-off jobs (no credit packages) and mostly
+ * book over the phone, so a public booking page isn't a step to chase.
+ */
+const EXCLUDED_BY_TEMPLATE: Record<string, ReadonlySet<OnboardingStepKey>> = {
+  car_detailing: new Set<OnboardingStepKey>(["package", "public_booking"]),
+};
+
 const CANCELLED_BOOKING = new Set([
   "cancelled_by_customer",
   "cancelled_by_business",
@@ -110,6 +119,7 @@ export type DeriveOnboardingInput = {
   connect: ConnectAccount | null | undefined;
   /** Pay-by-bank switched on with complete account details (RECA-522). */
   bankTransferReady?: boolean;
+  industryTemplateKey?: string | null;
   saasEntitled?: boolean;
   skippedKeys?: OnboardingStepKey[];
   dismissed?: boolean;
@@ -139,8 +149,8 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
       // Either route to getting paid counts — card via Stripe or pay-by-bank.
       return Boolean(
         input.connect?.chargesEnabled ||
-          input.connect?.onboardingState === "complete" ||
-          input.bankTransferReady,
+        input.connect?.onboardingState === "complete" ||
+        input.bankTransferReady,
       );
     case "saas_subscription":
       return Boolean(input.saasEntitled);
@@ -161,7 +171,10 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
  */
 export function deriveBusinessOnboarding(input: DeriveOnboardingInput): BusinessOnboarding {
   const skipped = new Set(input.skippedKeys ?? []);
-  const steps: OnboardingStep[] = STEP_ORDER.map((key) => {
+  const excluded = input.industryTemplateKey
+    ? EXCLUDED_BY_TEMPLATE[input.industryTemplateKey]
+    : undefined;
+  const steps: OnboardingStep[] = STEP_ORDER.filter((key) => !excluded?.has(key)).map((key) => {
     const meta = STEP_META[key];
     const completed = stepCompleted(key, input);
     return {

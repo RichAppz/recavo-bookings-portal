@@ -2308,6 +2308,7 @@ export function useBusinessOnboarding() {
       policies: policies.data ?? [],
       connect: connect.data,
       bankTransferReady,
+      industryTemplateKey: tenant.business?.industryTemplateKey,
       saasEntitled: isSaasSubscriptionComplete(subscription.data?.subscription),
       skippedKeys: getSkippedStepsLocally(businessId),
       dismissed: isOnboardingDismissedLocally(businessId),
@@ -2331,6 +2332,7 @@ export function useBusinessOnboarding() {
     bookings.data,
     connect.data,
     bankTransferReady,
+    tenant.business?.industryTemplateKey,
     subscription.data,
     localEpoch,
   ]);
