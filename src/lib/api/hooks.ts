@@ -743,6 +743,8 @@ export type CustomerUpdateBody = {
   nickname?: string | null;
   /** `null` clears the address; omit to leave unchanged. */
   address?: CustomerAddressInput | null;
+  /** Profile picture: an image file owned by this customer (RECA-530). `null` removes it. */
+  avatarFileId?: string | null;
   email?: string | null;
   phone?: string | null;
   preferredChannel?: "email" | "phone" | "sms" | "none";
