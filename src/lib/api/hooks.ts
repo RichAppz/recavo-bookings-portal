@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { paths } from "./schema";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -860,6 +861,38 @@ export function useCreateCustomer() {
     },
     onError: (err) => toastApiError(err),
   });
+}
+
+/* ---------------- Customer import (RECA-529) ---------------- */
+
+export type CustomerImportBody =
+  paths["/api/v1/businesses/{businessId}/customers/import"]["post"]["requestBody"]["content"]["application/json"];
+export type CustomerImportResponse =
+  paths["/api/v1/businesses/{businessId}/customers/import"]["post"]["responses"]["200"]["content"]["application/json"];
+export type CustomerImportRowResult = CustomerImportResponse["results"][number];
+
+/**
+ * Posts one batch of mapped rows. Dry runs need no key; real runs must pass a key that
+ * is reused on retry so a flaky connection cannot import the batch twice.
+ */
+export async function importCustomersBatch(
+  businessId: string,
+  body: CustomerImportBody,
+  idempotencyKey?: string,
+): Promise<CustomerImportResponse> {
+  const res = await api.post<CustomerImportResponse>(
+    `/api/v1/businesses/${businessId}/customers/import`,
+    body,
+    idempotencyKey ? { idempotencyKey } : undefined,
+  );
+  return res.data;
+}
+
+/** Call after a real import so the clients list and counts refresh. */
+export function useInvalidateCustomers() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return () => invalidateCustomerQueries(qc, businessId);
 }
 
 /** Full customer PATCH with If-Match. */

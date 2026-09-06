@@ -13697,12 +13697,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "slug": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 60,
-                    "description": "Public booking-page slug. Normalised server-side (lowercase, a-z0-9 and dashes). 409 CONFLICT with field `slug` / `TAKEN` when another business already uses it."
-                  },
                   "legalName": {
                     "type": "string",
                     "minLength": 1
@@ -17662,6 +17656,540 @@
                     },
                     "nextCursor": {
                       "$ref": "#/components/schemas/NextCursor"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/customers/import": {
+      "post": {
+        "summary": "Bulk import customers",
+        "description": "Imports up to 500 already-mapped rows (RECA-529). The portal parses the CSV, lets the user map columns, and posts batches here. Rows are processed independently: a bad row is reported in `results`, never fatal to the batch. Send `dryRun: true` first to preview how each row will be classified. Real runs require an `Idempotency-Key`; a retried upload with the same key replays the stored result rather than importing twice.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Required unless `dryRun: true`."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rows"
+                ],
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "firstName"
+                      ],
+                      "properties": {
+                        "firstName": {
+                          "type": "string",
+                          "maxLength": 100,
+                          "description": "Blank is reported as a per-row `REQUIRED` failure, not a 400."
+                        },
+                        "lastName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 100
+                        },
+                        "nickname": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 80
+                        },
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 254
+                        },
+                        "phone": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 40
+                        },
+                        "address": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "line1": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 200
+                            },
+                            "line2": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 200
+                            },
+                            "city": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 100
+                            },
+                            "region": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 100
+                            },
+                            "postcode": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 20
+                            },
+                            "country": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 60
+                            }
+                          },
+                          "description": "Postal address. Omit to leave unchanged (update) / empty (create); send `null` or all-blank parts to clear it. Parts are trimmed and blanks normalise to null."
+                        },
+                        "notes": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 4000,
+                          "description": "Saved as an internal customer note."
+                        },
+                        "tags": {
+                          "type": "array",
+                          "maxItems": 20,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 60
+                          },
+                          "description": "Tag names; matched case-insensitively and created on demand."
+                        },
+                        "preferredChannel": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "phone",
+                            "sms",
+                            "none"
+                          ],
+                          "description": "Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement."
+                        },
+                        "operationalNotifications": {
+                          "type": "boolean"
+                        },
+                        "marketingConsent": {
+                          "type": "boolean",
+                          "description": "Recorded with consent source `import`."
+                        },
+                        "externalId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 120,
+                          "description": "The source system id; kept in the customer notes for cross-reference."
+                        },
+                        "vehicle": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "Attached as a linked record when the business has an active vehicle definition and `registration` is present; otherwise reported as a row warning.",
+                          "properties": {
+                            "registration": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 12
+                            },
+                            "make": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 40
+                            },
+                            "model": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 40
+                            },
+                            "year": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 1900,
+                              "maximum": 2100
+                            },
+                            "colour": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 30
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "duplicateStrategy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "update",
+                      "create"
+                    ],
+                    "default": "skip",
+                    "description": "What to do with a row whose normalised email or phone matches an existing customer (UK numbers match in both `07…` and `+447…` spellings). `update` needs customer.update."
+                  },
+                  "dryRun": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Validate and classify rows without writing. No Idempotency-Key required."
+                  },
+                  "source": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 120,
+                    "description": "Where the data came from, e.g. \"Squeegee export\"; stored as acquisitionSource."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-row outcome and summary counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "summary",
+                    "results"
+                  ],
+                  "properties": {
+                    "summary": {
+                      "type": "object",
+                      "required": [
+                        "total",
+                        "created",
+                        "updated",
+                        "skipped",
+                        "failed",
+                        "dryRun"
+                      ],
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "created": {
+                          "type": "integer"
+                        },
+                        "updated": {
+                          "type": "integer"
+                        },
+                        "skipped": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "dryRun": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "index",
+                          "status",
+                          "customerId",
+                          "matchedCustomerId",
+                          "errors",
+                          "warnings"
+                        ],
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "description": "Position in the submitted `rows` array."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "created",
+                              "updated",
+                              "skipped",
+                              "failed",
+                              "would_create",
+                              "would_update",
+                              "would_skip"
+                            ]
+                          },
+                          "customerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
+                          "matchedCustomerId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "description": "Existing customer the row matched on email/phone, if any."
+                          },
+                          "errors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "field",
+                                "code"
+                              ],
+                              "properties": {
+                                "field": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Non-fatal notes, e.g. a vehicle or tag that could not be attached."
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -23679,290 +24207,6 @@
         }
       }
     },
-    "/api/v1/businesses/{businessId}/linked-records": {
-      "get": {
-        "summary": "List linked records for the business",
-        "description": "Business-wide, cursor-paginated list of linked records (e.g. all vehicles) with each record's current owner embedded, so a staff Vehicles page needs no per-row customer lookups. `search` matches the display label, field values (registration, make, model, …) or the owner name. Location-scoped staff only see records owned by customers in their scope (RECA-419).",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "businessId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Matches display label, field values, or owner name."
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "active",
-                "archived"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page (`nextCursor`)."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of records with owners",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "items",
-                    "nextCursor"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "record",
-                          "owner"
-                        ],
-                        "properties": {
-                          "record": {
-                            "$ref": "#/components/schemas/LinkedRecord"
-                          },
-                          "owner": {
-                            "type": [
-                              "object",
-                              "null"
-                            ],
-                            "required": [
-                              "id",
-                              "firstName",
-                              "lastName"
-                            ],
-                            "properties": {
-                              "id": {
-                                "type": "string",
-                                "format": "uuid"
-                              },
-                              "firstName": {
-                                "type": "string"
-                              },
-                              "lastName": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              }
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "nextCursor": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "201": {
-            "description": "Created",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "No content",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed (VALIDATION_FAILED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated (UNAUTHENTICATED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "402": {
-            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Not found (NOT_FOUND)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable (UNPROCESSABLE)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited (RATE_LIMITED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error (INTERNAL)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/businesses/{businessId}/linked-records/{recordId}": {
       "get": {
         "summary": "Get a linked record by id",
@@ -29801,7 +30045,7 @@
       },
       "get": {
         "summary": "List bookings (staff calendar)",
-        "description": "Returns bookings overlapping the half-open UTC window `[from, to)` (start < to and end > from), so multi-day jobs appear on every day they cover. Allow-listed filters: `staffId`, `locationId`, `status`, plus cursor/`limit` (cursor encodes `{isoStart}|{id}` — treat as opaque). Location-scoped memberships are filtered to assigned locations (RECA-446).",
+        "description": "Half-open UTC window `[from, to)` on booking start. Allow-listed filters: `staffId`, `locationId`, `status`, plus cursor/`limit` (cursor encodes `{isoStart}|{id}` — treat as opaque). Location-scoped memberships are filtered to assigned locations (RECA-446).",
         "security": [
           {
             "bearerAuth": []
@@ -37811,13 +38055,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -37922,6 +38159,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -38423,13 +38667,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -38534,6 +38771,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -38801,13 +39045,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -38912,6 +39149,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -39189,13 +39433,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -39300,6 +39537,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -39751,13 +39995,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -39862,6 +40099,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -40119,13 +40363,6 @@
                     "addons"
                   ],
                   "properties": {
-                    "features": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "boolean"
-                      },
-                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                    },
                     "subscription": {
                       "nullable": true,
                       "type": "object",
@@ -40230,6 +40467,13 @@
                     "plan": {
                       "type": "object",
                       "nullable": true
+                    },
+                    "features": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      },
+                      "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                     },
                     "addons": {
                       "type": "array",
@@ -40902,13 +41146,6 @@
                         "addons"
                       ],
                       "properties": {
-                        "features": {
-                          "type": "object",
-                          "additionalProperties": {
-                            "type": "boolean"
-                          },
-                          "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
-                        },
                         "subscription": {
                           "nullable": true,
                           "type": "object",
@@ -41013,6 +41250,13 @@
                         "plan": {
                           "type": "object",
                           "nullable": true
+                        },
+                        "features": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "boolean"
+                          },
+                          "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-526). Example key: `reminders.sms`."
                         },
                         "addons": {
                           "type": "array",
@@ -43398,237 +43642,6 @@
         }
       }
     },
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}/resend": {
-      "post": {
-        "summary": "Resend the booking’s current message to the customer",
-        "description": "Staff re-send whatever the booking’s state calls for (RECA-525): bank transfer instructions while awaiting payment, the confirmation or payment request once confirmed, the cancellation notice if cancelled. Email always; SMS needs the reminders.sms plan feature, a mobile number on the customer and no opt-out from operational messages. 409 when the status has nothing to resend (held, completed, no-show); 422 when the channel cannot reach the customer or the provider rejected the message.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "businessId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "bookingId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "channel": {
-                    "type": "string",
-                    "enum": [
-                      "email",
-                      "sms"
-                    ],
-                    "default": "email"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The notification that was sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "notification",
-                    "templateKey"
-                  ],
-                  "properties": {
-                    "notification": {
-                      "$ref": "#/components/schemas/Notification"
-                    },
-                    "templateKey": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "201": {
-            "description": "Created",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "No content",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed (VALIDATION_FAILED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated (UNAUTHENTICATED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "402": {
-            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Not found (NOT_FOUND)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable (UNPROCESSABLE)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited (RATE_LIMITED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error (INTERNAL)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/businesses/{businessId}/reminders/run": {
       "post": {
         "summary": "Run due reminders for this business (privileged)",
@@ -45595,7 +45608,7 @@
     "/api/v1/businesses/{businessId}/files": {
       "post": {
         "summary": "Create signed file upload intent",
-        "description": "Creates tenant-scoped file metadata and a short-lived signed upload URL (RECA-82 / ADR 0010). Enforces MIME/size allow-list before insert. Object keys are `{businessId}/{uuidv7}`. Malware scan is enqueued only after POST …/complete (RECA-84). `ownerType: linked_record` (vehicle photos) requires the `custom_records.images` plan feature (Business/Growth) — otherwise 403 FEATURE_NOT_AVAILABLE (RECA-524).",
+        "description": "Creates tenant-scoped file metadata and a short-lived signed upload URL (RECA-82 / ADR 0010). Enforces MIME/size allow-list before insert. Object keys are `{businessId}/{uuidv7}`. Malware scan is enqueued only after POST …/complete (RECA-84).",
         "security": [
           {
             "bearerAuth": []
@@ -45681,228 +45694,6 @@
                 }
               }
             },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "No content",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed (VALIDATION_FAILED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated (UNAUTHENTICATED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "402": {
-            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Not found (NOT_FOUND)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable (UNPROCESSABLE)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited (RATE_LIMITED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error (INTERNAL)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "summary": "List files attached to an owner",
-        "description": "Non-deleted files for one owner (e.g. vehicle photos on a linked record), newest first (RECA-524). The owner filter is mandatory — there is no business-wide file listing. Includes rows still scanning or blocked so clients can show why an attachment is unusable; use file `status`/`scanStatus` before requesting a download URL.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "businessId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "ownerType",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "customer",
-                "booking",
-                "linked_record",
-                "business"
-              ]
-            }
-          },
-          {
-            "name": "ownerId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Files attached to the owner",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "files"
-                  ],
-                  "properties": {
-                    "files": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/File"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "201": {
-            "description": "Created",
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -46283,196 +46074,6 @@
       }
     },
     "/api/v1/businesses/{businessId}/files/{fileId}": {
-      "delete": {
-        "summary": "Delete a file",
-        "description": "Staff removal of an attachment (RECA-524). Soft-deletes the metadata row (audit trail preserved, action `file.deleted`) and best-effort purges the blob from object storage. Requires business.update; location-scoped ACL applies. Already-deleted → 404.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "businessId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "fileId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "201": {
-            "description": "Created",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "File deleted",
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed (VALIDATION_FAILED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated (UNAUTHENTICATED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "402": {
-            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Not found (NOT_FOUND)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable (UNPROCESSABLE)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited (RATE_LIMITED)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error (INTERNAL)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "headers": {
-              "x-request-id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          }
-        }
-      },
       "get": {
         "summary": "Get file metadata",
         "description": "Returns usable file metadata. Fail-closed until malware scan is clean and status is `available` (RECA-84). Pending/failed scans → 422; infected/rejected → 403. Location-scoped ACL hooks apply (RECA-83 / RECA-422).",

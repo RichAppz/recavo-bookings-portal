@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, UserPlus } from "lucide-react";
+import { Search, Upload, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
@@ -62,9 +62,16 @@ function ClientsPage() {
         title="Clients"
         description="Everyone booking with your business."
         actions={
-          <Button onClick={() => setQuick("client")}>
-            <UserPlus className="size-4" /> Add client
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/clients/import">
+                <Upload className="size-4" /> Import
+              </Link>
+            </Button>
+            <Button onClick={() => setQuick("client")}>
+              <UserPlus className="size-4" /> Add client
+            </Button>
+          </>
         }
       />
 
