@@ -263,8 +263,20 @@ export function parseYesNo(value: string): boolean | undefined {
   return undefined;
 }
 
+/**
+ * Some systems export values wrapped in literal quotes that survive CSV parsing
+ * (`""Joanna""` → `"Joanna"`). Strip any surrounding straight or curly quotes.
+ */
+export function cleanCell(value: string): string {
+  let v = value.trim();
+  while (v.length >= 2 && /^["'“”‘’]/.test(v) && /["'“”‘’]$/.test(v)) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
 function cell(row: string[], index: number): string {
-  return (row[index] ?? "").trim();
+  return cleanCell(row[index] ?? "");
 }
 
 function blankToNull(value: string): string | null {

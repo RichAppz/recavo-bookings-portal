@@ -146,7 +146,7 @@ function ClientsPage() {
                             {customerDisplayName(c)}
                             {c.nickname ? (
                               <span className="block text-xs font-normal text-muted-foreground">
-                                “{c.nickname}”
+                                Known as {c.nickname}
                               </span>
                             ) : null}
                           </span>

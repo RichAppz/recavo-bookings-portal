@@ -4,6 +4,7 @@ import { parseCsv } from "./csv.ts";
 import {
   autoMap,
   buildImportRow,
+  cleanCell,
   mappingHasName,
   parseYesNo,
   splitFullName,
@@ -142,6 +143,18 @@ describe("import column mapping (RECA-529)", () => {
     assert.equal(row.lastName, "Jane Cole");
     assert.deepEqual(splitFullName("Cher"), { firstName: "Cher", lastName: null });
     assert.deepEqual(splitFullName("  "), { firstName: "", lastName: null });
+  });
+
+  it("strips stray surrounding quotes from cell values", () => {
+    assert.equal(cleanCell('"Joanna"'), "Joanna");
+    assert.equal(cleanCell("“Roy 5 series”"), "Roy 5 series");
+    assert.equal(cleanCell("'A3'"), "A3");
+    assert.equal(cleanCell('""BMW""'), "BMW");
+    assert.equal(cleanCell('Joanna "Jo" Smith'), 'Joanna "Jo" Smith');
+    const mapping = autoMap(["First Name", "Known as"]);
+    const row = buildImportRow(['"Joanna"', "“1 series”"], mapping);
+    assert.equal(row.firstName, "Joanna");
+    assert.equal(row.nickname, "1 series");
   });
 
   it("parses yes/no cells and leaves blanks to the server default", () => {

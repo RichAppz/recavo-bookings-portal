@@ -257,7 +257,7 @@ function ClientProfile() {
             <h1 className="text-2xl font-semibold tracking-tight">{customerDisplayName(client)}</h1>
             {client.nickname ? (
               <span className="rounded-full bg-secondary px-2.5 py-0.5 text-sm text-muted-foreground">
-                “{client.nickname}”
+                Known as {client.nickname}
               </span>
             ) : null}
             <StatusBadge status={client.status} />
