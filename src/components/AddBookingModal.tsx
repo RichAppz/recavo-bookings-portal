@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
-import { Layers, MapPin, UserRound, X } from "lucide-react";
+import {
+  CustomerSearchPicker,
+  type LinkedRecordField,
+  QuickAddLinkedRecord,
+  activeSortedFields,
+} from "@/components/LinkedRecordDialogs";
+import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
 import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,6 +115,16 @@ export function AddBookingModal({
   // business has a record schema; required when the service or definition says so.
   const linkedRecordDefinition = useLinkedRecordDefinition();
   const customerRecords = useCustomerLinkedRecords(customerId || undefined);
+  const recordFields = useMemo<LinkedRecordField[]>(
+    () =>
+      activeSortedFields(
+        (linkedRecordDefinition.data?.fields ?? []) as unknown as LinkedRecordField[],
+      ),
+    [linkedRecordDefinition.data],
+  );
+  // Inline "add another" form when the client already has records; with none,
+  // the quick-add form shows on its own.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const serviceList = services.data ?? [];
   const locationList = useMemo(() => locations.data ?? [], [locations.data]);
@@ -442,6 +457,7 @@ export function AddBookingModal({
                   setCustomerId(c.id);
                   // A record belongs to one client, so it can't survive a client change.
                   setLinkedRecordId("none");
+                  setQuickAddOpen(false);
                 }}
               />
             </div>
@@ -452,37 +468,65 @@ export function AddBookingModal({
                   {recordTerm}
                   {recordRequired ? <span className="text-destructive"> *</span> : null}
                 </Label>
-                {activeRecords.length === 0 ? (
-                  <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                    This client has no {recordTermLower} on record.{" "}
-                    <Link
-                      to="/clients/$clientId"
-                      params={{ clientId: customerId }}
-                      onClick={() => onOpenChange(false)}
-                      className="font-medium text-primary underline underline-offset-4"
-                    >
-                      Add one from their profile
-                    </Link>
-                    {recordRequired ? " before booking." : "."}
-                  </p>
+                {customerRecords.isSuccess && activeRecords.length === 0 ? (
+                  <QuickAddLinkedRecord
+                    key={customerId}
+                    customerId={customerId}
+                    fields={recordFields}
+                    term={recordTerm}
+                    onAdded={(record) => {
+                      setLinkedRecordId(record.id);
+                      toast.success(`${recordTerm} added`, {
+                        description: `${record.displayLabel} is on this booking. Add more details from the client's profile whenever you like.`,
+                      });
+                    }}
+                  />
+                ) : quickAddOpen ? (
+                  <QuickAddLinkedRecord
+                    key={customerId}
+                    customerId={customerId}
+                    fields={recordFields}
+                    term={recordTerm}
+                    autoFocus
+                    onCancel={() => setQuickAddOpen(false)}
+                    onAdded={(record) => {
+                      setLinkedRecordId(record.id);
+                      setQuickAddOpen(false);
+                      toast.success(`${recordTerm} added`, {
+                        description: `${record.displayLabel} is on this booking.`,
+                      });
+                    }}
+                  />
                 ) : (
-                  <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {recordRequired ? null : (
-                        <SelectItem value="none">No {recordTermLower}</SelectItem>
-                      )}
-                      {activeRecords.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.displayLabel}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue
+                          placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {recordRequired ? null : (
+                          <SelectItem value="none">No {recordTermLower}</SelectItem>
+                        )}
+                        {activeRecords.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.displayLabel}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => setQuickAddOpen(true)}
+                      aria-label={`Add another ${recordTermLower}`}
+                    >
+                      <Plus className="size-4" />
+                      Add
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : null}

@@ -34,6 +34,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import {
+  useCreateCustomerLinkedRecord,
   useCustomer,
   useCustomers,
   useLinkedRecordOwnership,
@@ -679,5 +680,184 @@ export function LinkedRecordFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The handful of fields worth asking for when the customer is standing at the
+ * counter: everything required, then the first optional short-text fields, three
+ * at most. For the vehicle template that's Registration, Make, Model.
+ */
+export function quickAddFields(fields: LinkedRecordField[]): LinkedRecordField[] {
+  const usable = fields.filter((f) => !UNSUPPORTED_FIELD_TYPES.has(f.dataType));
+  const required = usable.filter((f) => f.required);
+  const optional = usable.filter((f) => !f.required && f.dataType === "short_text");
+  return [...required, ...optional].slice(0, Math.max(3, required.length));
+}
+
+/**
+ * Compact inline form for adding a linked record without leaving the current
+ * flow — the Add booking modal uses it so a vehicle can be created mid-booking.
+ * Anything beyond the quick fields can be filled in later from the client's profile
+ * or right now via "More details", which opens the full form on top.
+ */
+export function QuickAddLinkedRecord({
+  customerId,
+  fields,
+  term,
+  onAdded,
+  onCancel,
+  autoFocus,
+}: {
+  customerId: string;
+  fields: LinkedRecordField[];
+  term: string;
+  onAdded: (record: LinkedRecord) => void;
+  /** Present when the form can be dismissed (the client already has records). */
+  onCancel?: () => void;
+  autoFocus?: boolean;
+}) {
+  const create = useCreateCustomerLinkedRecord(customerId);
+  const quick = useMemo(() => quickAddFields(fields), [fields]);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Snapshot of the quick values taken when "More details" opens, so the full form
+  // starts pre-filled without resetting on every re-render while it's open.
+  const [fullInitial, setFullInitial] = useState<{
+    displayLabel: string;
+    values: Record<string, unknown>;
+  } | null>(null);
+  const lower = term.toLowerCase();
+
+  const submit = async () => {
+    const nextErrors: Record<string, string> = {};
+    const payload: Record<string, unknown> = {};
+    for (const f of quick) {
+      const coerced = coerceFieldValue(f, values[f.fieldKey]?.trim());
+      if (f.required && (coerced === undefined || coerced === "")) {
+        nextErrors[f.fieldKey] = "Required";
+        continue;
+      }
+      if (coerced !== undefined) payload[f.fieldKey] = coerced;
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+    setErrors({});
+    // "Ford Focus · AB12 CDE" reads better than the field order would give.
+    const descriptive = quick
+      .filter((f) => !f.required)
+      .map((f) => payload[f.fieldKey])
+      .filter((v) => v !== undefined && v !== "")
+      .join(" ");
+    const identifying = quick
+      .filter((f) => f.required)
+      .map((f) => payload[f.fieldKey])
+      .filter((v) => v !== undefined && v !== "")
+      .join(" ");
+    const displayLabel = [descriptive, identifying].filter(Boolean).join(" · ") || term;
+    const record = await create.mutateAsync({ displayLabel, values: payload });
+    setValues({});
+    onAdded(record);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-dashed bg-secondary/30 p-3">
+      <div className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]">
+        {quick.map((f, i) => {
+          const id = `quick-lr-${f.fieldKey}`;
+          const error = errors[f.fieldKey] ?? fieldErrorFor(create.error, f.fieldKey);
+          return (
+            <div key={f.fieldKey} className="grid gap-1">
+              <Label htmlFor={id} className="text-xs">
+                {f.label}
+                {f.required ? <span className="text-destructive"> *</span> : null}
+              </Label>
+              {f.dataType === "single_select" ? (
+                <Select
+                  value={values[f.fieldKey] ?? ""}
+                  onValueChange={(v) => setValues((p) => ({ ...p, [f.fieldKey]: v }))}
+                >
+                  <SelectTrigger id={id} className="h-9">
+                    <SelectValue placeholder="Choose…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(f.constraints?.options ?? []).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id={id}
+                  className="h-9"
+                  autoFocus={autoFocus && i === 0}
+                  type={f.dataType === "integer" || f.dataType === "decimal" ? "number" : "text"}
+                  value={values[f.fieldKey] ?? ""}
+                  maxLength={f.constraints?.maxLength}
+                  placeholder={f.required ? "" : "Optional"}
+                  onChange={(e) => setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }))}
+                  onKeyDown={onKeyDown}
+                  disabled={create.isPending}
+                />
+              )}
+              {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Just the basics — add more from their profile any time.
+        </p>
+        <div className="flex items-center gap-1">
+          {onCancel ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setFullInitial({ displayLabel: "", values: { ...values } })}
+            disabled={create.isPending}
+          >
+            More details
+          </Button>
+          <Button type="button" size="sm" onClick={() => void submit()} disabled={create.isPending}>
+            {create.isPending ? "Adding…" : `Add ${lower}`}
+          </Button>
+        </div>
+      </div>
+
+      <LinkedRecordFormDialog
+        open={fullInitial !== null}
+        onOpenChange={(o) => {
+          if (!o) setFullInitial(null);
+        }}
+        fields={fields}
+        term={term}
+        initial={fullInitial ?? undefined}
+        submitting={create.isPending}
+        submitError={create.error}
+        onSubmit={async (data) => {
+          const record = await create.mutateAsync(data);
+          setFullInitial(null);
+          setValues({});
+          onAdded(record);
+        }}
+      />
+    </div>
   );
 }
