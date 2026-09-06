@@ -40,8 +40,8 @@ export function StatCard({
 }) {
   const positive = (change ?? 0) >= 0;
   return (
-    <div className="surface-card p-5">
-      <div className="flex items-start justify-between gap-3">
+    <div className="surface-card flex h-full flex-col p-5">
+      <div className="flex min-h-9 items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         {icon ? (
           <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -50,7 +50,7 @@ export function StatCard({
         ) : null}
       </div>
       <p className="mt-3 text-3xl font-semibold tracking-tight">{value}</p>
-      <div className="mt-2 flex items-center gap-2 text-xs">
+      <div className="mt-auto flex items-center gap-2 pt-2 text-xs">
         {change !== undefined ? (
           <span
             className={cn(

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui-bits";
@@ -42,13 +42,25 @@ function gridStart(year: number, month: number): Date {
 export function SessionCalendar({
   sessions,
   emptyHint,
+  selected: selectedProp,
+  onSelectedChange,
+  aside,
 }: {
   readonly sessions: readonly CalendarSession[];
   readonly emptyHint?: string;
+  readonly selected?: string | null;
+  readonly onSelectedChange?: (date: string) => void;
+  readonly aside?: ReactNode;
 }) {
   const today = new Date();
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
-  const [selected, setSelected] = useState<string | null>(isoDate(today));
+  const [internalSelected, setInternalSelected] = useState<string | null>(isoDate(today));
+  const selected = selectedProp !== undefined ? selectedProp : internalSelected;
+
+  function select(date: string) {
+    if (selectedProp === undefined) setInternalSelected(date);
+    onSelectedChange?.(date);
+  }
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarSession[]>();
@@ -94,7 +106,7 @@ export function SessionCalendar({
               size="sm"
               onClick={() => {
                 setCursor({ year: today.getFullYear(), month: today.getMonth() });
-                setSelected(todayKey);
+                select(todayKey);
               }}
             >
               Today
@@ -130,7 +142,7 @@ export function SessionCalendar({
               <button
                 key={key}
                 type="button"
-                onClick={() => setSelected(key)}
+                onClick={() => select(key)}
                 className={cn(
                   // The card draws its own edge, so the grid drops the borders
                   // that would otherwise double up along the right and bottom.
@@ -182,7 +194,7 @@ export function SessionCalendar({
               : "Pick a day"}
           </h2>
         </header>
-        <div className="min-w-0 space-y-3 p-4 sm:p-5">
+        <div className="min-w-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
           {selectedSessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {emptyHint ?? "Nothing booked on this day."}
@@ -202,6 +214,7 @@ export function SessionCalendar({
               </div>
             ))
           )}
+          {aside}
         </div>
       </section>
     </div>

@@ -38,6 +38,16 @@ export const queryKeys = {
     ["biz", businessId, "customers", customerId, "consents"] as const,
   customerLinkedRecords: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId, "linked-records"] as const,
+  customerNotifications: (businessId: string, customerId: string) =>
+    ["biz", businessId, "customers", customerId, "notifications"] as const,
+  /** Prefix for every business-wide record list — invalidate after any record write. */
+  linkedRecordsAll: (businessId: string) => ["biz", businessId, "linked-records", "list"] as const,
+  linkedRecords: (businessId: string, query: Record<string, string>) =>
+    ["biz", businessId, "linked-records", "list", query] as const,
+  linkedRecord: (businessId: string, recordId: string) =>
+    ["biz", businessId, "linked-records", recordId] as const,
+  linkedRecordOwnership: (businessId: string, recordId: string) =>
+    ["biz", businessId, "linked-records", recordId, "ownership"] as const,
 
   services: (businessId: string) => ["biz", businessId, "services"] as const,
   service: (businessId: string, serviceId: string) =>
@@ -81,6 +91,7 @@ export const queryKeys = {
     ["biz", businessId, "exports", exportId] as const,
 
   subscription: (businessId: string) => ["biz", businessId, "subscription"] as const,
+  referral: (businessId: string) => ["biz", businessId, "referral"] as const,
   plans: () => ["plans"] as const,
   billingCatalogue: () => ["billing", "catalogue"] as const,
 
@@ -104,6 +115,10 @@ export const queryKeys = {
   deadLetterOutbox: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "admin", "outbox", "dead-letter", filters ?? {}] as const,
   file: (businessId: string, fileId: string) => ["biz", businessId, "files", fileId] as const,
+  ownerFiles: (businessId: string, ownerType: string, ownerId: string) =>
+    ["biz", businessId, "files", "owner", ownerType, ownerId] as const,
+  fileDownloadUrl: (businessId: string, fileId: string) =>
+    ["biz", businessId, "files", fileId, "download-url"] as const,
 
   // Public / portal surfaces
   /** Keyed by handle, not id: resolving the handle is the point of the request. */

@@ -6,6 +6,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,7 +25,8 @@ import {
   useStaffList,
 } from "@/lib/api/hooks";
 import { customerDisplayName, type Booking } from "@/lib/api/types";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { bookingSettlement } from "@/lib/booking-payment";
+import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
 export const Route = createFileRoute("/bookings")({
   head: () => ({
@@ -73,6 +75,9 @@ function BookingsPage() {
   const staff = useStaffList();
   const services = useServices();
   const locations = useLocationsList();
+  const tenant = useTenant();
+  // Vertical-aware noun: "Trainer" for PT, "Staff member" for automotive.
+  const staffNoun = tenant.terminology.staff || "Staff member";
 
   const bookings = useBookings({
     from: new Date(`${fromDate}T00:00:00.000Z`).toISOString(),
@@ -125,10 +130,10 @@ function BookingsPage() {
           <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger>
-              <SelectValue placeholder="Trainer" />
+              <SelectValue placeholder={staffNoun} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All trainers</SelectItem>
+              <SelectItem value="all">All {staffNoun.toLowerCase()}s</SelectItem>
               {(staff.data ?? []).map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.displayName}
@@ -207,7 +212,7 @@ function BookingsPage() {
                     "Date and time",
                     "Client",
                     "Service",
-                    "Trainer",
+                    staffNoun,
                     "Location",
                     "Amount",
                     "Status",
@@ -282,12 +287,24 @@ function BookingRow({
 }) {
   const customer = useCustomer(booking.leadCustomerId);
   const timezone = booking.timezone || "Europe/London";
+  const settlement = bookingSettlement(booking);
 
   return (
     <tr onClick={onSelect} className="cursor-pointer transition-colors hover:bg-secondary/50">
       <td className="px-4 py-3 font-medium whitespace-nowrap">{booking.reference}</td>
       <td className="px-4 py-3 tabular-nums whitespace-nowrap">
         {formatInTz(booking.start, timezone, { dateStyle: "medium", timeStyle: "short" })}
+        {spansDays(booking.start, booking.end, timezone) ? (
+          <span className="block text-xs text-muted-foreground">
+            until{" "}
+            {formatInTz(booking.end, timezone, {
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        ) : null}
       </td>
       <td className="px-4 py-3">
         <span className="flex items-center gap-2 whitespace-nowrap">
@@ -304,9 +321,25 @@ function BookingRow({
       <td className="px-4 py-3 whitespace-nowrap">{locationName}</td>
       <td className="px-4 py-3 whitespace-nowrap tabular-nums">
         {formatMoney(booking.priceMinor, booking.currency)}
+        {settlement.state === "deposit_paid" || settlement.state === "part_paid" ? (
+          <span className="block text-xs text-warning-foreground">
+            {formatMoney(settlement.outstandingMinor, booking.currency)} to collect
+          </span>
+        ) : settlement.depositMinor != null && settlement.state === "unpaid" ? (
+          <span className="block text-xs text-muted-foreground">
+            {formatMoney(settlement.depositMinor, booking.currency)} deposit
+          </span>
+        ) : null}
       </td>
       <td className="px-4 py-3">
-        <StatusBadge status={booking.status} />
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <StatusBadge status={booking.status} />
+          {booking.status === "awaiting_payment" && booking.paymentMethod === "bank_transfer" ? (
+            // Pay-by-bank rows never auto-expire; the hint tells staff which of the
+            // awaiting rows are theirs to chase and mark received (RECA-522).
+            <span className="text-xs text-muted-foreground">Bank transfer</span>
+          ) : null}
+        </span>
       </td>
       <td className="px-4 py-3 text-right">
         <Button variant="ghost" size="sm">

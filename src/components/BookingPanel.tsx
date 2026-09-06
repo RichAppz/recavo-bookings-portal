@@ -5,12 +5,24 @@ import {
   CalendarClock,
   CheckCircle2,
   CreditCard,
+  Landmark,
+  Mail,
   MessageSquare,
+  Send,
+  Smartphone,
   UserX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
@@ -30,6 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -51,10 +64,21 @@ import {
   useBookingHistory,
   useBookingPayments,
   useCustomer,
+  useLinkedRecord,
   useLocationsList,
+  useMarkBankTransferReceived,
+  usePlanFeature,
+  useRecordBookingPayment,
+  useResendBookingMessage,
+  useServices,
   useStaffList,
+  stripeCheckoutFrom,
+  stripeCheckoutUnavailableMessage,
   useTakeBookingPayment,
+  useSyncBookingPayment,
   type PublicBookingPayment,
+  type RecordPaymentMethod,
+  type ResendChannel,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
 import {
@@ -63,8 +87,19 @@ import {
   type BookingHistoryEntry,
   type Staff,
 } from "@/lib/api/types";
-import { bookingNeedsPayment } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import {
+  bookingNeedsPayment,
+  bookingSettlement,
+  isSettledPaymentState,
+} from "@/lib/booking-payment";
+import { emptySlotsMessage } from "@/lib/availability-windows";
+import {
+  formatBookingSpan,
+  formatInTz,
+  formatMoney,
+  isoDate,
+  parseMoneyToMinor,
+} from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -89,6 +124,8 @@ export function BookingPanel({
   const [cancelBy, setCancelBy] = useState<"business" | "customer">("business");
   const [cancelReason, setCancelReason] = useState("");
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [confirmReceived, setConfirmReceived] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
   const [tab, setTab] = useState("details");
   const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
 
@@ -100,9 +137,16 @@ export function BookingPanel({
   const rescheduleAction = useBookingAction("reschedule");
   const attendanceAction = useBookingAction("attendance");
   const takePayment = useTakeBookingPayment();
+  const syncPayment = useSyncBookingPayment();
+  const markReceived = useMarkBankTransferReceived();
+  const recordPayment = useRecordBookingPayment();
+  const resend = useResendBookingMessage();
+  const smsEntitled = usePlanFeature("reminders.sms");
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
+  // The vehicle (or other linked record) on the job — resolves even after archive (RECA-90).
+  const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
 
@@ -112,9 +156,59 @@ export function BookingPanel({
   const trainer = staffList.data?.find((s) => s.id === booking?.staffId);
   const location = locations.data?.find((l) => l.id === booking?.locationId);
   const isFinal = booking ? FINAL_BOOKING_STATUSES.has(booking.status) : false;
+  // Pay-by-bank bookings sit in awaiting_payment with no expiry until staff either
+  // mark the money received or cancel (RECA-522).
+  const bankPending =
+    booking?.paymentMethod === "bank_transfer" && booking.status === "awaiting_payment";
   const hasSucceededPayment = (payments.data ?? []).some(
     (p) => p.state === "succeeded" || p.state === "partially_refunded" || p.state === "refunded",
   );
+  // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
+  const settlement = booking ? bookingSettlement(booking) : null;
+  const canRecordPayment =
+    Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
+    (booking?.status === "confirmed" || booking?.status === "completed");
+  // What "Resend" would send, mirroring the API's choice by status (RECA-525).
+  const resendLabel: string | null = (() => {
+    switch (booking?.status) {
+      case "awaiting_payment":
+        return bankPending ? "payment instructions" : "payment request";
+      case "confirmed":
+        return settlement && settlement.state === "unpaid" && booking.source !== "public"
+          ? "payment request"
+          : "confirmation";
+      case "cancelled_by_customer":
+      case "cancelled_by_business":
+      case "late_cancelled":
+        return "cancellation notice";
+      default:
+        return null;
+    }
+  })();
+  const customerPhone = customer.data?.phoneNormalised ?? null;
+  const customerEmail = customer.data?.emailNormalised ?? null;
+  const smsOptedOut = customer.data?.contactPreferences?.operationalNotifications === false;
+  const smsBlocked = !smsEntitled
+    ? "Not included in your plan"
+    : !customerPhone
+      ? "No mobile number on file"
+      : smsOptedOut
+        ? "Customer has opted out of texts"
+        : null;
+
+  const sendAgain = async (channel: ResendChannel) => {
+    if (!booking) return;
+    try {
+      await resend.mutateAsync({ bookingId: booking.id, channel });
+      toast.success(
+        `${resendLabel ? resendLabel[0]!.toUpperCase() + resendLabel.slice(1) : "Message"} sent by ${
+          channel === "sms" ? "text" : "email"
+        }`,
+      );
+    } catch (err) {
+      toastApiError(err);
+    }
+  };
 
   const historyEntries = [...(history.data ?? [])].sort((a, b) => {
     const ta = new Date(historyTimestamp(a) ?? 0).getTime();
@@ -142,6 +236,30 @@ export function BookingPanel({
     }
   };
 
+  const submitMarkReceived = async () => {
+    if (!booking) return;
+    try {
+      await markReceived.mutateAsync({ bookingId: booking.id });
+      toast.success(
+        settlement?.depositMinor != null
+          ? "Deposit received — booking confirmed"
+          : "Bank transfer received — booking confirmed",
+      );
+      setConfirmReceived(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        // Someone else confirmed (or the booking changed) since this panel loaded.
+        toast.error("This booking is no longer awaiting a bank transfer", {
+          description: "Refreshing its latest state.",
+        });
+        setConfirmReceived(false);
+        void bookingQuery.refetch();
+        return;
+      }
+      toastApiError(err);
+    }
+  };
+
   const submitCancel = async () => {
     if (!booking) return;
     try {
@@ -163,18 +281,31 @@ export function BookingPanel({
   const handleTakePayment = async () => {
     if (!booking) return;
     try {
-      const result = await takePayment.mutateAsync({ bookingId: booking.id });
-      if (!result.clientSecret || !result.connectedAccountId || !result.publishableKey) {
-        toast.error("Card checkout isn't available for this business yet.");
-        return;
+      try {
+        const existing = await syncPayment.mutateAsync({ bookingId: booking.id });
+        if (isSettledPaymentState(existing.state)) {
+          toast.success("Payment received");
+          void bookingQuery.refetch();
+          void payments.refetch();
+          return;
+        }
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 404)) {
+          toastApiError(err);
+          return;
+        }
       }
-      setCheckout({
-        clientSecret: result.clientSecret,
-        connectedAccountId: result.connectedAccountId,
-        publishableKey: result.publishableKey,
+      const result = await takePayment.mutateAsync({ bookingId: booking.id });
+      const started = stripeCheckoutFrom({
+        ...result,
         amountMinor: result.amountMinor ?? booking.priceMinor,
         currency: result.currency ?? booking.currency,
       });
+      if (!started) {
+        toast.error(stripeCheckoutUnavailableMessage(result));
+        return;
+      }
+      setCheckout(started);
     } catch {
       // Mutation onError already surfaced the problem.
     }
@@ -194,8 +325,7 @@ export function BookingPanel({
               <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
               <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
               <p className="text-sm text-muted-foreground">
-                {formatInTz(booking.start, timezone, { dateStyle: "medium", timeStyle: "short" })} –{" "}
-                {formatInTz(booking.end, timezone, { timeStyle: "short" })}
+                {formatBookingSpan(booking.start, booking.end, timezone)}
               </p>
             </div>
           )}
@@ -222,8 +352,24 @@ export function BookingPanel({
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
                 <StatusBadge status={booking.attendanceStatus} />
-                {bookingNeedsPayment(booking, payments.data ?? []) ? (
+                {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
+                    {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
+                    {formatMoney(settlement.outstandingMinor, booking.currency)} to collect
+                  </span>
+                ) : settlement?.state === "paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
+                    Paid in full
+                  </span>
+                ) : bookingNeedsPayment(booking, payments.data ?? []) && !bankPending ? (
                   <StatusBadge status="payment_due" />
+                ) : null}
+                {bankPending ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
+                    <Landmark className="size-3" />
+                    Waiting for bank transfer
+                    {booking.reference ? ` · ref ${booking.reference}` : ""}
+                  </span>
                 ) : null}
               </div>
 
@@ -271,22 +417,86 @@ export function BookingPanel({
                   </div>
 
                   <dl className="grid grid-cols-2 gap-y-3 text-sm">
-                    <Detail label="Trainer" value={trainer?.displayName ?? "—"} />
+                    <Detail
+                      label={tenant.terminology.staff || "Staff"}
+                      value={trainer?.displayName ?? "—"}
+                    />
                     <Detail label="Location" value={location?.name ?? "—"} />
+                    {booking.linkedRecordId ? (
+                      <Detail
+                        label={tenant.terminology.linkedRecord}
+                        value={linkedRecord.data?.displayLabel ?? "…"}
+                      />
+                    ) : null}
                     <Detail
                       label="Payment method"
-                      value={booking.paymentMethod === "credit" ? "Package credit" : "Card / other"}
+                      value={
+                        booking.paymentMethod === "credit"
+                          ? "Package credit"
+                          : booking.paymentMethod === "bank_transfer"
+                            ? "Bank transfer"
+                            : "Card / other"
+                      }
                     />
                     <Detail
                       label="Amount"
                       value={formatMoney(booking.priceMinor, booking.currency)}
                     />
+                    {settlement && settlement.depositMinor != null ? (
+                      <Detail
+                        label="Deposit"
+                        value={formatMoney(settlement.depositMinor, booking.currency)}
+                      />
+                    ) : null}
+                    {settlement && settlement.state !== "credit" && settlement.state !== "free" ? (
+                      <Detail
+                        label="Outstanding"
+                        value={
+                          settlement.outstandingMinor > 0
+                            ? formatMoney(settlement.outstandingMinor, booking.currency)
+                            : "Paid in full"
+                        }
+                      />
+                    ) : null}
                     <Detail
                       label="Duration"
                       value={`${booking.serviceSnapshot.durationMinutes} minutes`}
                     />
                     <Detail label="Source" value={booking.source} />
                   </dl>
+
+                  {(booking.lineItems?.length ?? 0) > 1 ? (
+                    <>
+                      <Separator />
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">
+                          Services on this job
+                        </p>
+                        <ul className="divide-y rounded-xl border">
+                          {booking.lineItems.map((li) => (
+                            <li
+                              key={`${li.serviceId}-${li.position}`}
+                              className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                            >
+                              <span className="min-w-0">
+                                {li.name}
+                                {li.variantName ? (
+                                  <span className="text-muted-foreground"> · {li.variantName}</span>
+                                ) : null}
+                                <span className="text-xs text-muted-foreground">
+                                  {" "}
+                                  · {li.durationMinutes} min
+                                </span>
+                              </span>
+                              <span className="tabular-nums">
+                                {formatMoney(li.priceMinor, li.currency)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : null}
 
                   <Separator />
 
@@ -352,24 +562,71 @@ export function BookingPanel({
                     <p className="text-xs text-muted-foreground">
                       Paid using a package credit — no card payment required.
                     </p>
-                  ) : (
+                  ) : settlement && settlement.state === "paid" ? (
+                    <div className="rounded-xl border p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Paid in full — {formatMoney(settlement.paidMinor, booking.currency)}{" "}
+                        received.
+                      </p>
+                    </div>
+                  ) : bankPending && settlement ? (
                     <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
-                        {hasSucceededPayment
-                          ? "Payment received for this booking."
-                          : `Payment of ${formatMoney(booking.priceMinor, booking.currency)} is due.`}
+                        Waiting for a bank transfer of{" "}
+                        {formatMoney(settlement.dueNowMinor, booking.currency)}
+                        {settlement.depositMinor != null ? " (deposit)" : ""}
+                        {booking.reference ? `, reference ${booking.reference}` : ""}. Check your
+                        account, then mark it received.
+                        {settlement.depositMinor != null
+                          ? ` The remaining ${formatMoney(settlement.priceMinor - settlement.depositMinor, booking.currency)} is collected later.`
+                          : ""}
                       </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={takePayment.isPending || hasSucceededPayment}
-                        onClick={handleTakePayment}
-                      >
-                        <CreditCard className="size-4" />
-                        {takePayment.isPending ? "Starting…" : "Take payment"}
-                      </Button>
+                      {bankPending ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={markReceived.isPending}
+                          onClick={() => setConfirmReceived(true)}
+                        >
+                          <Landmark className="size-4" />
+                          Mark received
+                        </Button>
+                      ) : null}
                     </div>
-                  )}
+                  ) : settlement ? (
+                    <div className="space-y-3 rounded-xl border p-3">
+                      <p className="text-xs text-muted-foreground">
+                        {settlement.state === "deposit_paid"
+                          ? `Deposit of ${formatMoney(settlement.depositMinor ?? 0, booking.currency)} received — ${formatMoney(settlement.outstandingMinor, booking.currency)} balance to collect.`
+                          : settlement.state === "part_paid"
+                            ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far — ${formatMoney(settlement.outstandingMinor, booking.currency)} still to collect.`
+                            : hasSucceededPayment
+                              ? "Payment received for this booking."
+                              : `Payment of ${formatMoney(settlement.outstandingMinor, booking.currency)} is due.`}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            takePayment.isPending ||
+                            settlement.outstandingMinor <= 0 ||
+                            (hasSucceededPayment && settlement.depositMinor == null)
+                          }
+                          onClick={handleTakePayment}
+                        >
+                          <CreditCard className="size-4" />
+                          {takePayment.isPending ? "Starting…" : "Take card payment"}
+                        </Button>
+                        {canRecordPayment ? (
+                          <Button size="sm" variant="outline" onClick={() => setRecordOpen(true)}>
+                            <Landmark className="size-4" />
+                            Record payment
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {payments.isLoading ? (
                     <TableGhost rows={3} />
@@ -417,9 +674,17 @@ export function BookingPanel({
             </div>
 
             <footer className="grid grid-cols-2 gap-2 border-t p-4">
-              {booking.status === "awaiting_payment" ||
-              booking.status === "held" ||
-              booking.status === "draft" ? (
+              {bankPending ? (
+                <Button
+                  className="col-span-2"
+                  disabled={markReceived.isPending}
+                  onClick={() => setConfirmReceived(true)}
+                >
+                  <Landmark className="size-4" /> Mark bank transfer received
+                </Button>
+              ) : booking.status === "awaiting_payment" ||
+                booking.status === "held" ||
+                booking.status === "draft" ? (
                 <Button
                   variant="outline"
                   className="col-span-2"
@@ -427,6 +692,16 @@ export function BookingPanel({
                   onClick={() => run(confirmAction)}
                 >
                   <CheckCircle2 className="size-4" /> Confirm booking
+                </Button>
+              ) : null}
+              {canRecordPayment && !bankPending ? (
+                <Button
+                  variant="outline"
+                  className="col-span-2"
+                  onClick={() => setRecordOpen(true)}
+                >
+                  <Landmark className="size-4" /> Record payment ·{" "}
+                  {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
                 </Button>
               ) : null}
               <Button
@@ -451,6 +726,43 @@ export function BookingPanel({
               >
                 <CalendarClock className="size-4" /> Reschedule
               </Button>
+              {resendLabel ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="col-span-2" disabled={resend.isPending}>
+                      <Send className="size-4" />
+                      {resend.isPending ? "Sending…" : `Resend ${resendLabel}`}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      Send the {resendLabel} again to{" "}
+                      {customer.data ? customerDisplayName(customer.data) : "the customer"}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={!customerEmail}
+                      onSelect={() => void sendAgain("email")}
+                    >
+                      <Mail className="size-4" />
+                      <span className="flex-1">Email</span>
+                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
+                        {customerEmail ?? "No email on file"}
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={Boolean(smsBlocked)}
+                      onSelect={() => void sendAgain("sms")}
+                    >
+                      <Smartphone className="size-4" />
+                      <span className="flex-1">Text message</span>
+                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
+                        {smsBlocked ?? customerPhone}
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
               <Button variant="outline" asChild>
                 <Link to="/messages" onClick={onClose}>
                   <MessageSquare className="size-4" /> Message
@@ -535,6 +847,70 @@ export function BookingPanel({
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={confirmReceived} onOpenChange={setConfirmReceived}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark the bank transfer as received?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirm you've seen{" "}
+              {booking && settlement
+                ? formatMoney(settlement.dueNowMinor, booking.currency)
+                : "the payment"}
+              {settlement?.depositMinor != null ? " (the deposit)" : ""}
+              {booking?.reference ? ` with reference ${booking.reference}` : ""} arrive in your
+              account. The booking is confirmed straight away and the client is emailed.
+              {booking && settlement?.depositMinor != null
+                ? ` The remaining ${formatMoney(settlement.priceMinor - settlement.depositMinor, booking.currency)} stays outstanding until you record it.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not yet</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={markReceived.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void submitMarkReceived();
+              }}
+            >
+              {markReceived.isPending ? "Confirming…" : "Money received"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {booking && settlement ? (
+        <RecordPaymentDialog
+          open={recordOpen}
+          onOpenChange={setRecordOpen}
+          bookingId={booking.id}
+          currency={booking.currency}
+          outstandingMinor={settlement.outstandingMinor}
+          pending={recordPayment.isPending}
+          onSubmit={async (amountMinor, method) => {
+            try {
+              await recordPayment.mutateAsync({ bookingId: booking.id, amountMinor, method });
+              toast.success(
+                amountMinor >= settlement.outstandingMinor
+                  ? "Payment recorded — paid in full"
+                  : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+              );
+              setRecordOpen(false);
+            } catch (err) {
+              if (err instanceof ApiError && err.status === 422) {
+                toast.error("Nothing left to record on this booking", {
+                  description: "Refreshing its latest state.",
+                });
+                setRecordOpen(false);
+                void bookingQuery.refetch();
+                return;
+              }
+              toastApiError(err);
+            }
+          }}
+        />
+      ) : null}
+
       {booking ? (
         <RescheduleDialog
           open={rescheduleOpen}
@@ -555,10 +931,27 @@ export function BookingPanel({
           phone: customer.data?.phoneDisplay ?? null,
         }}
         onPaid={async () => {
+          if (!booking) return;
+          for (let attempt = 0; attempt < 8; attempt += 1) {
+            try {
+              const pulled = await syncPayment.mutateAsync({ bookingId: booking.id });
+              if (isSettledPaymentState(pulled.state)) {
+                setCheckout(null);
+                toast.success("Payment received");
+                return;
+              }
+            } catch (err) {
+              if (!(err instanceof ApiError) || err.status !== 404) {
+                toastApiError(err);
+                return;
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 750));
+          }
           setCheckout(null);
-          toast.success("Payment received");
-          void bookingQuery.refetch();
-          void payments.refetch();
+          toast.error(
+            "Your payment went through, but it hasn't shown up yet. Refresh in a moment.",
+          );
         }}
         onOpenChange={(open) => {
           if (!open) setCheckout(null);
@@ -625,6 +1018,126 @@ function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone:
   );
 }
 
+const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "card", label: "Card (taken elsewhere)" },
+  { value: "other", label: "Other" },
+];
+
+/**
+ * Staff log money received outside the platform — the balance after a deposit,
+ * or a partial payment. Defaults to settling the full outstanding amount.
+ */
+function RecordPaymentDialog({
+  open,
+  onOpenChange,
+  bookingId,
+  currency,
+  outstandingMinor,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  bookingId: string;
+  currency: string;
+  outstandingMinor: number;
+  pending: boolean;
+  onSubmit: (amountMinor: number, method: RecordPaymentMethod) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(String(outstandingMinor / 100));
+  const [method, setMethod] = useState<RecordPaymentMethod>("cash");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setAmount(String(outstandingMinor / 100));
+      setMethod("cash");
+      setError(null);
+    }
+  }, [open, bookingId, outstandingMinor]);
+
+  const submit = async () => {
+    let minor: number;
+    try {
+      minor = parseMoneyToMinor(amount);
+    } catch {
+      setError("Enter a valid amount");
+      return;
+    }
+    if (minor <= 0) {
+      setError("Enter an amount above zero");
+      return;
+    }
+    if (minor > outstandingMinor) {
+      setError(`That's more than the ${formatMoney(outstandingMinor, currency)} outstanding`);
+      return;
+    }
+    setError(null);
+    await onSubmit(minor, method);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Record a payment</DialogTitle>
+          <DialogDescription>
+            Log money you've taken for this booking — cash, a bank transfer or a card taken
+            elsewhere. {formatMoney(outstandingMinor, currency)} is outstanding.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="record-amount">Amount (£)</Label>
+            <Input
+              id="record-amount"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              aria-invalid={Boolean(error)}
+            />
+            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {parseFloat(amount) * 100 < outstandingMinor && !error ? (
+              <button
+                type="button"
+                className="text-left text-xs text-primary underline-offset-4 hover:underline"
+                onClick={() => setAmount(String(outstandingMinor / 100))}
+              >
+                Settle the full {formatMoney(outstandingMinor, currency)}
+              </button>
+            ) : null}
+          </div>
+          <div className="grid gap-2">
+            <Label>How was it paid?</Label>
+            <Select value={method} onValueChange={(v) => setMethod(v as RecordPaymentMethod)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RECORD_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={pending} onClick={() => void submit()}>
+            {pending ? "Recording…" : "Record payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RescheduleDialog({
   open,
   onOpenChange,
@@ -643,6 +1156,10 @@ function RescheduleDialog({
   const [staffId, setStaffId] = useState(booking.staffId);
   const [date, setDate] = useState(isoDate(new Date(booking.start)));
   const [slotStart, setSlotStart] = useState<string | null>(null);
+  const tenant = useTenant();
+  const staffNoun = tenant.terminology.staff || "Staff member";
+  const services = useServices();
+  const catalogue = (services.data ?? []).find((s) => s.id === booking.serviceSnapshot.serviceId);
 
   useEffect(() => {
     if (open) {
@@ -709,7 +1226,7 @@ function RescheduleDialog({
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label>Trainer</Label>
+              <Label>{staffNoun}</Label>
               <Select
                 value={staffId}
                 onValueChange={(v) => {
@@ -721,7 +1238,7 @@ function RescheduleDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any trainer</SelectItem>
+                  <SelectItem value="any">Any {staffNoun.toLowerCase()}</SelectItem>
                   {staffOptions.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.displayName}
@@ -757,7 +1274,7 @@ function RescheduleDialog({
               <p className="text-xs text-destructive">Couldn't load availability.</p>
             ) : slots.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No availability on this date. Try another day.
+                {emptySlotsMessage(catalogue?.availabilityWindows, date)}
               </p>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

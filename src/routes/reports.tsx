@@ -176,7 +176,6 @@ function ReportsPage() {
       await downloadExportFile({
         businessId: tenant.businessId,
         exportId: exp.id,
-        token: exp.downloadToken,
         downloadUrl,
         filename: `${exp.type}-${exp.id.slice(0, 8)}.csv`,
       });
@@ -269,7 +268,9 @@ function ReportsPage() {
             description={planGate}
             action={
               <Button asChild>
-                <Link to="/billing">Go to billing</Link>
+                <Link to="/settings" search={{ tab: "billing" }}>
+                  Go to billing
+                </Link>
               </Button>
             }
           />

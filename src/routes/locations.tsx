@@ -444,7 +444,7 @@ function NewLocationDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add location</DialogTitle>
           <DialogDescription>Create a new site your clients can book at.</DialogDescription>
@@ -540,7 +540,7 @@ function EditLocationDialog({
 
   return (
     <Dialog open={Boolean(location)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit location</DialogTitle>
           <DialogDescription>Update hours, visibility and status.</DialogDescription>

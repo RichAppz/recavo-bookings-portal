@@ -1,25 +1,45 @@
-import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
   ArrowLeft,
+  ArrowRightLeft,
   CalendarPlus,
+  Camera,
+  Check,
   ChevronDown,
   Copy,
   Download,
+  History,
   MessageSquare,
   Minus,
+  MoreHorizontal,
   Package,
+  Pencil,
   Plus,
   ShieldOff,
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { CustomerAddressFields } from "@/components/CustomerAddressFields";
+import { addressToForm, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { FileAttachments } from "@/components/FileAttachments";
+import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
+import {
+  activeSortedFields,
+  LinkedRecordFormDialog,
+  OwnershipHistoryDialog,
+  summariseValues,
+  TransferLinkedRecordDialog,
+  type LinkedRecordField,
+} from "@/components/LinkedRecordDialogs";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,9 +50,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -44,7 +88,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { ApiError } from "@/lib/api";
+import { ApiError, queryKeys, toastApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   useAddCustomerNote,
   useAdjustEntitlement,
@@ -60,20 +105,37 @@ import {
   useCustomerDsarExport,
   useCustomerLinkedRecords,
   useCustomerNotes,
+  useCustomerNotifications,
+  useCustomers,
   useCustomerTagsCatalogue,
   useEntitlementLedger,
   useLinkCustomerPortal,
+  useLinkedRecordDefinition,
+  useLinkedRecordOwnership,
+  useMemberships,
   useMessages,
   useOpenConversation,
   usePackages,
+  usePatchLinkedRecord,
+  useTransferLinkedRecord,
   usePaymentsList,
   useRecordCustomerConsent,
+  useRunReminders,
   useSendMessage,
   useUnassignCustomerTag,
   useUpdateCustomer,
   useUpdateCustomerStatus,
 } from "@/lib/api/hooks";
-import { customerDisplayName, type Customer, type EntitlementView } from "@/lib/api/types";
+import {
+  customerAddressLine,
+  customerDisplayName,
+  userDisplayName,
+  type Customer,
+  type EntitlementView,
+  type LinkedRecord,
+  type LinkedRecordOwnership,
+  type Notification,
+} from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
 import { formatInTz, formatMoney, ukDate } from "@/lib/format";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
@@ -115,6 +177,7 @@ function ClientProfile() {
   const [confirmAnonymise, setConfirmAnonymise] = useState(false);
 
   const customer = useCustomer(clientId);
+  const linkedRecordDefinition = useLinkedRecordDefinition();
   const bookings = useCustomerBookings(clientId);
   const credits = useCustomerCredits(clientId);
   const packages = usePackages();
@@ -192,12 +255,22 @@ function ClientProfile() {
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{customerDisplayName(client)}</h1>
+            {client.nickname ? (
+              <span className="rounded-full bg-secondary px-2.5 py-0.5 text-sm text-muted-foreground">
+                Known as {client.nickname}
+              </span>
+            ) : null}
             <StatusBadge status={client.status} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {[client.emailDisplay, client.phoneDisplay].filter(Boolean).join(" · ") || "No contact"}{" "}
             · Client since {ukDate(client.createdAt.slice(0, 10))}
           </p>
+          {client.address ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {customerAddressLine(client.address)}
+            </p>
+          ) : null}
           {client.userId ? (
             <p className="mt-1 text-xs text-muted-foreground">Has a linked portal account</p>
           ) : null}
@@ -243,11 +316,14 @@ function ClientProfile() {
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="consents">Consents</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
-          <TabsTrigger value="linked">Linked records</TabsTrigger>
+          <TabsTrigger value="linked">
+            {linkedRecordDefinition.data?.definition.pluralLabel ?? "Linked records"}
+          </TabsTrigger>
           <TabsTrigger value="portal">Portal</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
@@ -287,7 +363,16 @@ function ClientProfile() {
                         </p>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{b.serviceSnapshot.name}</p>
+                        <p className="text-sm font-medium">
+                          {(b.lineItems?.length ?? 0) > 1
+                            ? b.lineItems.map((li) => li.name).join(" + ")
+                            : b.serviceSnapshot.name}
+                        </p>
+                        {(b.lineItems?.length ?? 0) > 1 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {b.lineItems.length} services · {formatMoney(b.priceMinor, b.currency)}
+                          </p>
+                        ) : null}
                       </div>
                       <StatusBadge status={b.status} />
                     </button>
@@ -493,6 +578,10 @@ function ClientProfile() {
         <TabsContent value="messages" className="mt-4">
           <ClientMessages customerId={client.id} disabled={anonymised} />
         </TabsContent>
+
+        <TabsContent value="notifications" className="mt-4">
+          <CustomerNotificationsTab customerId={client.id} />
+        </TabsContent>
       </Tabs>
 
       <div className="flex flex-wrap gap-2">
@@ -580,29 +669,29 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   const update = useUpdateCustomer();
   const [firstName, setFirstName] = useState(client.firstName);
   const [lastName, setLastName] = useState(client.lastName ?? "");
+  const [nickname, setNickname] = useState(client.nickname ?? "");
+  const [address, setAddress] = useState<AddressFormState>(addressToForm(client.address));
   const [email, setEmail] = useState(client.emailDisplay ?? "");
   const [phone, setPhone] = useState(client.phoneDisplay ?? "");
-  const [preferredChannel, setPreferredChannel] = useState<"email" | "phone" | "none">(
-    client.contactPreferences.preferredChannel === "sms"
-      ? "none"
-      : client.contactPreferences.preferredChannel,
+  const [preferredChannel, setPreferredChannel] = useState<"email" | "phone" | "sms" | "none">(
+    client.contactPreferences.preferredChannel,
   );
   const [operationalNotifications, setOperationalNotifications] = useState(
     client.contactPreferences.operationalNotifications,
   );
   const [marketingConsent, setMarketingConsent] = useState(client.marketingConsent.granted);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Picking SMS on a plan without it opens the bolt-on/upgrade prompt (RECA-527).
+  const smsGate = useSmsChannelGate(setPreferredChannel);
 
   useEffect(() => {
     setFirstName(client.firstName);
     setLastName(client.lastName ?? "");
+    setNickname(client.nickname ?? "");
+    setAddress(addressToForm(client.address));
     setEmail(client.emailDisplay ?? "");
     setPhone(client.phoneDisplay ?? "");
-    setPreferredChannel(
-      client.contactPreferences.preferredChannel === "sms"
-        ? "none"
-        : client.contactPreferences.preferredChannel,
-    );
+    setPreferredChannel(client.contactPreferences.preferredChannel);
     setOperationalNotifications(client.contactPreferences.operationalNotifications);
     setMarketingConsent(client.marketingConsent.granted);
     setFieldErrors({});
@@ -635,6 +724,24 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             onChange={(e) => setLastName(e.target.value)}
           />
         </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="pf-nickname">Known as</Label>
+          <Input
+            id="pf-nickname"
+            value={nickname}
+            maxLength={80}
+            disabled={disabled}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="e.g. Dave – red Audi"
+          />
+          {fieldErrors.nickname ? (
+            <p className="text-xs text-destructive">{fieldErrors.nickname}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Optional. A name that helps you remember them; never shown to the client.
+            </p>
+          )}
+        </div>
         <div className="grid gap-2">
           <Label htmlFor="pf-email">Email</Label>
           <Input
@@ -660,12 +767,18 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <p className="text-xs text-destructive">{fieldErrors.phone}</p>
           ) : null}
         </div>
+        <CustomerAddressFields
+          idPrefix="pf-addr"
+          value={address}
+          onChange={setAddress}
+          disabled={disabled}
+        />
         <div className="grid gap-2 sm:col-span-2">
           <Label>Preferred channel</Label>
           <Select
             value={preferredChannel}
             disabled={disabled}
-            onValueChange={(v) => setPreferredChannel(v as "email" | "phone" | "none")}
+            onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
           >
             <SelectTrigger className="max-w-xs">
               <SelectValue />
@@ -673,6 +786,7 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <SelectContent>
               <SelectItem value="email">Email</SelectItem>
               <SelectItem value="phone">Phone</SelectItem>
+              <SelectItem value="sms">SMS</SelectItem>
               <SelectItem value="none">None</SelectItem>
             </SelectContent>
           </Select>
@@ -680,8 +794,11 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            SMS is not available until delivery ships.
+            {smsGate.smsEntitled === false
+              ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
+              : "SMS needs a phone number — reminders fall back to email until one is saved."}
           </p>
+          {smsGate.dialog}
         </div>
         <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
           <div>
@@ -724,6 +841,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
                   body: {
                     firstName: firstName.trim(),
                     lastName: lastName.trim() || null,
+                    nickname: nickname.trim() || null,
+                    address: formToAddress(address),
                     email: email.trim() || null,
                     phone: phone.trim() || null,
                     preferredChannel,
@@ -939,58 +1058,262 @@ function CustomerLinkedRecordsTab({
   customerId: string;
   disabled: boolean;
 }) {
+  const tenant = useTenant();
+  const term = tenant.terminology.linkedRecord;
   const records = useCustomerLinkedRecords(customerId);
+  const definition = useLinkedRecordDefinition();
   const create = useCreateCustomerLinkedRecord(customerId);
-  const [label, setLabel] = useState("");
+  const patch = usePatchLinkedRecord(customerId);
+
+  const fields = useMemo<LinkedRecordField[]>(
+    () => activeSortedFields((definition.data?.fields ?? []) as unknown as LinkedRecordField[]),
+    [definition.data],
+  );
+  const hasSchema = fields.length > 0;
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<LinkedRecord | null>(null);
+  const [transferringId, setTransferringId] = useState<string | null>(null);
+  const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
+  const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
+
+  // Resolve the transfer target from the live list so that after a 409 (stale
+  // version) the refetched record — with its bumped version — flows into the
+  // dialog and a retry can succeed.
+  const transferring = transferringId
+    ? ((records.data ?? []).find((r) => r.id === transferringId) ?? null)
+    : null;
 
   return (
     <SectionCard
-      title="Linked records"
-      description="Instance records for this client. Schema/templates are configured in Settings."
-    >
-      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
-        <div className="mb-6 flex flex-wrap items-end gap-2">
-          <div className="grid min-w-[220px] flex-1 gap-2">
-            <Label>Display label</Label>
-            <Input
-              value={label}
-              disabled={disabled}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Bella (dog)"
-            />
-          </div>
-          <Button
-            disabled={disabled || create.isPending || !label.trim()}
-            onClick={async () => {
-              await create.mutateAsync({ displayLabel: label.trim(), values: {} });
-              setLabel("");
-              toast.success("Linked record created");
-            }}
-          >
-            Add record
+      title={`${term} records`}
+      description={`${term} records for this client. The schema and templates are configured in Settings.`}
+      action={
+        <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+          <Button size="sm" disabled={disabled || !hasSchema} onClick={() => setAddOpen(true)}>
+            <Plus className="size-4" /> Add {term.toLowerCase()}
           </Button>
-        </div>
-      </Can>
-      {records.isLoading ? (
-        <div className="surface-card overflow-hidden">
-          <TableGhost rows={3} />
+        </Can>
+      }
+      bodyClassName="p-0"
+    >
+      {records.isLoading || definition.isLoading ? (
+        <TableGhost rows={3} />
+      ) : !hasSchema ? (
+        <div className="p-6">
+          <EmptyState
+            title={`No ${term.toLowerCase()} schema yet`}
+            description="Enable a record schema in Settings before adding records for this client."
+          />
         </div>
       ) : (records.data ?? []).length === 0 ? (
-        <EmptyState
-          title="No linked records"
-          description="Add a record when one is needed for booking."
-        />
+        <div className="p-6">
+          <EmptyState
+            title={`No ${term.toLowerCase()} records`}
+            description={`Add a ${term.toLowerCase()} so it can be attached when booking.`}
+          />
+        </div>
       ) : (
-        <ul className="divide-y rounded-xl border">
-          {(records.data ?? []).map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">{r.displayLabel}</p>
+        <ul className="divide-y">
+          {(records.data ?? []).map((r) => {
+            const summary = summariseValues(fields, (r.values ?? {}) as Record<string, unknown>);
+            return (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{r.displayLabel}</p>
+                  {summary ? (
+                    <p className="truncate text-xs text-muted-foreground">{summary}</p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    Updated {ukDate(r.updatedAt.slice(0, 10))}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={r.status} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8"
+                        aria-label={`Actions for ${r.displayLabel}`}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+                        <DropdownMenuItem disabled={disabled} onSelect={() => setEditing(r)}>
+                          <Pencil className="size-4" /> Edit
+                        </DropdownMenuItem>
+                        {r.status === "active" ? (
+                          <DropdownMenuItem
+                            disabled={disabled}
+                            onSelect={() => setTransferringId(r.id)}
+                          >
+                            <ArrowRightLeft className="size-4" /> Transfer to another client
+                          </DropdownMenuItem>
+                        ) : null}
+                      </Can>
+                      <Can permission={PERMISSIONS.CUSTOMER_READ}>
+                        <DropdownMenuItem onSelect={() => setPhotosFor(r)}>
+                          <Camera className="size-4" /> Photos
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setHistoryFor(r)}>
+                          <History className="size-4" /> Ownership history
+                        </DropdownMenuItem>
+                      </Can>
+                      <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+                        {r.status === "active" ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={disabled || patch.isPending}
+                              onSelect={async () => {
+                                await patch.mutateAsync({
+                                  recordId: r.id,
+                                  version: r.version,
+                                  body: { status: "archived" },
+                                });
+                                toast.success(`${term} archived`);
+                              }}
+                            >
+                              <Archive className="size-4" /> Archive
+                            </DropdownMenuItem>
+                          </>
+                        ) : null}
+                      </Can>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <LinkedRecordFormDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        fields={fields}
+        term={term}
+        submitting={create.isPending}
+        submitError={create.error}
+        onSubmit={async (data) => {
+          await create.mutateAsync(data);
+          setAddOpen(false);
+          toast.success(`${term} added`);
+        }}
+      />
+
+      <LinkedRecordFormDialog
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditing(null);
+        }}
+        fields={fields}
+        term={term}
+        initial={
+          editing
+            ? {
+                displayLabel: editing.displayLabel,
+                values: (editing.values ?? {}) as Record<string, unknown>,
+              }
+            : undefined
+        }
+        submitting={patch.isPending}
+        submitError={patch.error}
+        onSubmit={async (data) => {
+          if (!editing) return;
+          await patch.mutateAsync({
+            recordId: editing.id,
+            version: editing.version,
+            body: data,
+          });
+          setEditing(null);
+          toast.success(`${term} updated`);
+        }}
+      />
+
+      <TransferLinkedRecordDialog
+        record={transferring}
+        sourceCustomerId={customerId}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setTransferringId(null);
+        }}
+      />
+
+      <OwnershipHistoryDialog
+        record={historyFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setHistoryFor(null);
+        }}
+      />
+
+      <LinkedRecordPhotosDialog
+        record={photosFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setPhotosFor(null);
+        }}
+      />
+    </SectionCard>
+  );
+}
+
+function CustomerNotificationsTab({ customerId }: { customerId: string }) {
+  const notifications = useCustomerNotifications(customerId);
+  const runReminders = useRunReminders();
+  const list = notifications.data ?? [];
+
+  return (
+    <SectionCard
+      title="Notifications"
+      description="Reminders and updates sent to this client. SMS falls back to email until the bolt-on is active."
+      action={
+        <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={runReminders.isPending}
+            onClick={async () => {
+              const res = await runReminders.mutateAsync();
+              await notifications.refetch();
+              toast.success(`Reminder sweep complete — ${res.sent} sent, ${res.skipped} skipped`);
+            }}
+          >
+            {runReminders.isPending ? "Running…" : "Run reminder sweep"}
+          </Button>
+        </Can>
+      }
+      bodyClassName="p-0"
+    >
+      {notifications.isLoading ? (
+        <TableGhost rows={4} />
+      ) : list.length === 0 ? (
+        <div className="p-6">
+          <EmptyState
+            title="No notifications yet"
+            description="Reminders appear here once they've been sent to this client."
+          />
+        </div>
+      ) : (
+        <ul className="divide-y">
+          {list.map((n: Notification) => (
+            <li key={n.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{n.subject || n.templateKey}</p>
                 <p className="text-xs text-muted-foreground">
-                  Updated {ukDate(r.updatedAt.slice(0, 10))}
+                  {n.channel === "in_app" ? "In-app" : n.channel.toUpperCase()} ·{" "}
+                  {ukDate(n.createdAt.slice(0, 10))}
+                  {n.readAt ? " · read" : ""}
                 </p>
               </div>
-              <StatusBadge status={r.status} />
             </li>
           ))}
         </ul>

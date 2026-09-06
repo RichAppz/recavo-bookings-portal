@@ -2,6 +2,9 @@
  * Register collects a name before the API user exists. Stash it so we can PATCH
  * /api/v1/me once the session is authenticated (immediate signup or after email
  * verification).
+ *
+ * localStorage (not sessionStorage) so it survives the email-confirmation link
+ * opening in a fresh tab. Cleared once the name is applied to the profile.
  */
 const KEY = "recavo.pendingProfile";
 
@@ -11,15 +14,15 @@ export type PendingProfile = {
 
 export function stashPendingProfile(value: PendingProfile): void {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(value));
+    localStorage.setItem(KEY, JSON.stringify(value));
   } catch {
-    // sessionStorage unavailable (SSR / privacy mode) — best-effort.
+    // localStorage unavailable (SSR / privacy mode) — best-effort.
   }
 }
 
 export function readPendingProfile(): PendingProfile | null {
   try {
-    const raw = sessionStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as PendingProfile) : null;
   } catch {
     return null;
@@ -28,7 +31,7 @@ export function readPendingProfile(): PendingProfile | null {
 
 export function clearPendingProfile(): void {
   try {
-    sessionStorage.removeItem(KEY);
+    localStorage.removeItem(KEY);
   } catch {
     // no-op
   }

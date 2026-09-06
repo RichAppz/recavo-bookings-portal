@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, MessageSquareText } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import {
@@ -23,15 +23,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  SMS_ADDON_KEY,
+  useAddSubscriptionAddon,
   useBillingCatalogue,
   useBillingPortal,
   useCancelSubscription,
+  useRemoveSubscriptionAddon,
   useResumeSubscription,
   useStartCheckout,
   useSubscription,
   useSubscriptionChangeApply,
   useSubscriptionChangePreview,
   type BusinessSubscription,
+  type SubscriptionAddon,
 } from "@/lib/api/hooks";
 import type {
   PublicCataloguePlan,
@@ -45,39 +49,96 @@ import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
-const PLAN_PITCH: Record<string, { tagline: string; popular?: boolean; bullets: string[] }> = {
-  solo: {
-    tagline: "One trainer, one location, full control.",
-    bullets: [
-      "Online booking page and calendar",
-      "Card payments with deposits",
-      "Client records, goals and session notes",
-      "Automated reminders",
-      "Core revenue reporting",
-    ],
+type PlanPitch = { tagline: string; popular?: boolean; bullets: string[] };
+
+/**
+ * Plan pitch copy varies by trade. The first bullet (capacity) is generated
+ * from the tenant's staff terminology; these are the trade-specific extras.
+ * Keyed by the business `industryTemplateKey`; unknown trades fall back to the
+ * personal-training set.
+ */
+const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
+  personal_training: {
+    solo: {
+      tagline: "One trainer, one location, full control.",
+      bullets: [
+        "Online booking page and calendar",
+        "Card payments with deposits",
+        "Client records, goals and session notes",
+        "Email reminders (SMS bolt-on +£10/mo)",
+        "Core revenue reporting",
+      ],
+    },
+    business: {
+      tagline: "Studio teams with coaches and more than one site.",
+      popular: true,
+      bullets: [
+        "Trainer availability and role permissions",
+        "Packages, credits and memberships",
+        "Group sessions and out-call training",
+        "SMS + email reminders included",
+        "Progress tracking and measurements",
+        "Full reporting suite",
+      ],
+    },
+    growth: {
+      tagline: "Larger gyms or multi-site operators.",
+      bullets: [
+        "Advanced admin and permissions",
+        "SMS + email reminders included",
+        "Custom branding",
+        "Priority support and onboarding help",
+        "Data exports",
+        "Advanced automations",
+      ],
+    },
   },
-  business: {
-    tagline: "Studio teams with coaches and more than one site.",
-    popular: true,
-    bullets: [
-      "Trainer availability and role permissions",
-      "Packages, credits and memberships",
-      "Group sessions and out-call training",
-      "Progress tracking and measurements",
-      "Full reporting suite",
-    ],
-  },
-  growth: {
-    tagline: "Larger gyms or multi-site operators.",
-    bullets: [
-      "Advanced admin and permissions",
-      "Custom branding",
-      "Priority support and onboarding help",
-      "Data exports",
-      "Advanced automations",
-    ],
+  car_detailing: {
+    solo: {
+      tagline: "One-person outfit, one location, full control.",
+      bullets: [
+        "Online booking page and calendar",
+        "Card payments with deposits",
+        "Customer records with vehicle history",
+        "Email reminders (SMS bolt-on +£10/mo)",
+        "Core revenue reporting",
+      ],
+    },
+    business: {
+      tagline: "Teams with more than one bay or van.",
+      popular: true,
+      bullets: [
+        "Staff availability and role permissions",
+        "Multi-service jobs with rolled-up pricing",
+        "Vehicles saved to every customer",
+        "SMS + email reminders included",
+        "Full reporting suite",
+      ],
+    },
+    growth: {
+      tagline: "Larger workshops or multi-site operators.",
+      bullets: [
+        "Advanced admin and permissions",
+        "SMS + email reminders included",
+        "Custom branding",
+        "Priority support and onboarding help",
+        "Data exports",
+        "Advanced automations",
+      ],
+    },
   },
 };
+
+const DEFAULT_PLAN_PITCH = PLAN_PITCH_BY_INDUSTRY.personal_training;
+
+function planPitch(
+  industryTemplateKey: string | undefined,
+  planCode: string,
+): PlanPitch | undefined {
+  const set =
+    (industryTemplateKey && PLAN_PITCH_BY_INDUSTRY[industryTemplateKey]) || DEFAULT_PLAN_PITCH;
+  return set[planCode];
+}
 
 const CHANGE_KIND_COPY: Record<SubscriptionChangePreview["changeKind"], string> = {
   upgrade: "Upgrade",
@@ -128,6 +189,101 @@ function accessCopy(sub: BusinessSubscription | null | undefined): string {
     default:
       return "Manage your Recavo plan, invoices and cancellation.";
   }
+}
+
+/**
+ * Bolt-ons sold on top of the plan (RECA-527). Today that is SMS reminders: bundled
+ * in Business and Growth, £10/month on Solo. Reads/writes the same entitlement the
+ * client-channel gate and the reminder worker use, so what it shows is what sends.
+ */
+function AddonsCard({
+  addons,
+  currentPlanName,
+  disabled,
+}: {
+  addons: SubscriptionAddon[];
+  currentPlanName: string | null;
+  disabled: boolean;
+}) {
+  const add = useAddSubscriptionAddon();
+  const remove = useRemoveSubscriptionAddon();
+  const sms = addons.find((a) => a.key === SMS_ADDON_KEY);
+  if (!sms) return null;
+
+  const price = `${formatMoney(sms.unitAmountMinor, sms.currency, { compact: true })}/${sms.interval}`;
+  const busy = add.isPending || remove.isPending;
+
+  return (
+    <SectionCard
+      title="Add-ons"
+      description="Extras you can switch on without changing plan. Prorated onto your current bill."
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4">
+        <div className="flex items-start gap-3">
+          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div>
+            <p className="text-sm font-medium">SMS reminders</p>
+            <p className="text-xs text-muted-foreground">
+              {sms.status === "included"
+                ? `Included in ${currentPlanName ?? "your plan"}. Clients set to SMS get texted before every booking.`
+                : sms.status === "active"
+                  ? `Active · ${price}. Clients set to SMS get texted before every booking.`
+                  : `Text clients before every booking instead of relying on email. ${price}, or included with Business and Growth.`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {sms.status === "included" ? (
+            <StatusBadge status="active" />
+          ) : sms.status === "active" ? (
+            <>
+              <StatusBadge status="active" />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={disabled || busy}>
+                    Remove
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove SMS reminders?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Clients set to SMS will get email reminders instead from now on. The unused
+                      part of this month is credited to your next invoice.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep SMS</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={async () => {
+                        await remove.mutateAsync(SMS_ADDON_KEY);
+                        toast.success("SMS reminders removed");
+                      }}
+                    >
+                      Remove add-on
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              disabled={disabled || busy}
+              onClick={async () => {
+                await add.mutateAsync(SMS_ADDON_KEY);
+                toast.success("SMS reminders added", {
+                  description: `${price} has been added to your subscription.`,
+                });
+              }}
+            >
+              {add.isPending ? "Adding…" : `Add for ${price}`}
+            </Button>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
 }
 
 export function BillingPage() {
@@ -288,6 +444,14 @@ export function BillingPage() {
         </SectionCard>
       ) : null}
 
+      {!blocked && current && subscription.data?.addons?.length ? (
+        <AddonsCard
+          addons={subscription.data.addons}
+          currentPlanName={currentPlan?.name ?? plan?.name ?? null}
+          disabled={!canManage}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
         <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
@@ -317,7 +481,10 @@ export function BillingPage() {
           {plans.map((p) => {
             const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
             const isCurrent = currentPlan?.code === p.code;
-            const pitch = PLAN_PITCH[p.code] ?? { tagline: p.name, bullets: [] };
+            const pitch = planPitch(tenant.business?.industryTemplateKey, p.code) ?? {
+              tagline: p.name,
+              bullets: [],
+            };
             const popular = Boolean(pitch.popular);
             const bullets = [capacityBullet(p, tenant.terminology.staff), ...pitch.bullets];
             return (

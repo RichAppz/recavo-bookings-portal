@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
+import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import {
 } from "@/lib/api/hooks";
 import type { Payment } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
+import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -133,6 +135,8 @@ function PaymentsPage() {
   return (
     <>
       <PageHeader title="Payments" description="Charges taken across bookings and package sales." />
+
+      <TakePaymentOnlineSetting />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Gross (shown)" value={formatMoney(totals.gross, currency)} />
@@ -304,7 +308,11 @@ function PaymentsPage() {
           <div className="p-6">
             <EmptyState
               title="No payments yet"
-              description="Payments will appear here once clients start paying online."
+              description={
+                isOnlinePaymentRequired(tenant.configuration)
+                  ? "Payments will appear here once clients start paying online."
+                  : "Online payments are off, so clients are not charged when they book. Turn them on above."
+              }
             />
           </div>
         ) : (

@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { CustomerAddressFields } from "@/components/CustomerAddressFields";
+import { EMPTY_ADDRESS, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import {
   Select,
   SelectContent,
@@ -25,9 +30,11 @@ import {
   useCreateBooking,
   useCreateCustomer,
   useCustomers,
+  SMS_FEATURE_KEY,
   useIssuePackagePurchase,
   useLocationsList,
   usePackages,
+  usePlanFeature,
   useSendMessage,
   useServices,
   useStaffList,
@@ -114,16 +121,40 @@ function Shell({
 }
 
 function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [address, setAddress] = useState<AddressFormState>(EMPTY_ADDRESS);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  // Default to SMS only when the plan can actually send it; otherwise a brand-new
+  // client would trip the upgrade prompt before anyone typed a name (RECA-527).
+  const smsEntitled = usePlanFeature(SMS_FEATURE_KEY);
+  const defaultChannel: ContactChannel = smsEntitled ? "sms" : "email";
+  const [preferredChannel, setPreferredChannel] = useState<ContactChannel>(defaultChannel);
+  const [operationalNotifications, setOperationalNotifications] = useState(true);
   const createCustomer = useCreateCustomer();
+  const smsGate = useSmsChannelGate(setPreferredChannel);
+
+  const reset = () => {
+    setFirstName("");
+    setLastName("");
+    setNickname("");
+    setAddress(EMPTY_ADDRESS);
+    setEmail("");
+    setPhone("");
+    setPreferredChannel(defaultChannel);
+    setOperationalNotifications(true);
+  };
 
   return (
     <Shell
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        onClose();
+        reset();
+      }}
       title="Add client"
       description="Create a client record. They can be invited to the booking page later."
       submitLabel="Add client"
@@ -132,17 +163,41 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           toast.error("A first name is required");
           return;
         }
-        await createCustomer.mutateAsync({
+        const { customer, possibleDuplicates } = await createCustomer.mutateAsync({
           firstName,
           lastName: lastName || null,
+          nickname: nickname.trim() || null,
+          address: formToAddress(address),
           email: email || null,
           phone: phone || null,
+          preferredChannel,
+          operationalNotifications,
         });
-        toast.success("Client added");
-        setFirstName("");
-        setLastName("");
-        setEmail("");
-        setPhone("");
+        if (possibleDuplicates.length > 0) {
+          const first = possibleDuplicates[0];
+          toast.warning(
+            `Client added — ${possibleDuplicates.length} similar ${
+              possibleDuplicates.length === 1 ? "record" : "records"
+            } already exist`,
+            {
+              description: `Did you mean ${customerDisplayName(first)}? Check you haven't created a duplicate.`,
+              action: {
+                label: "View match",
+                onClick: () =>
+                  void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
+              },
+            },
+          );
+        } else {
+          toast.success("Client added", {
+            action: {
+              label: "Open",
+              onClick: () =>
+                void navigate({ to: "/clients/$clientId", params: { clientId: customer.id } }),
+            },
+          });
+        }
+        reset();
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -164,6 +219,19 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             placeholder="Cole"
           />
         </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <Label htmlFor="c-nickname">Known as</Label>
+          <Input
+            id="c-nickname"
+            value={nickname}
+            maxLength={80}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="e.g. Harriet – red Audi"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. A name that helps you remember them; never shown to the client.
+          </p>
+        </div>
       </div>
       <div className="grid gap-2">
         <Label htmlFor="c-email">Email</Label>
@@ -184,6 +252,37 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           placeholder="07700 900123"
         />
       </div>
+      <CustomerAddressFields idPrefix="c-addr" value={address} onChange={setAddress} />
+      <div className="grid gap-2">
+        <Label>Preferred channel</Label>
+        <Select
+          value={preferredChannel}
+          onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="phone">Phone</SelectItem>
+            <SelectItem value="sms">SMS</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {smsEntitled === false
+            ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
+            : "SMS needs a mobile number — reminders fall back to email until one is saved."}
+        </p>
+        {smsGate.dialog}
+      </div>
+      <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+        <div>
+          <p className="text-sm font-medium">Operational notifications</p>
+          <p className="text-xs text-muted-foreground">Booking reminders and service updates.</p>
+        </div>
+        <Switch checked={operationalNotifications} onCheckedChange={setOperationalNotifications} />
+      </label>
     </Shell>
   );
 }

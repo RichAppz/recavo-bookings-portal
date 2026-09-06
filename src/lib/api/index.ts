@@ -1,4 +1,4 @@
-export { api, request, getApiBaseUrl, setMfaHandler } from "./client";
+export { api, request, getApiBaseUrl, setMfaHandler, setAuthRetryHandler } from "./client";
 export type { RequestOptions, ApiResult } from "./client";
 export { buildQueryString, type QueryValue } from "./query-string";
 export {

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/billing")({
       { title: "Billing — RECAVO" },
       {
         name: "description",
-        content: "Choose a Recavo plan and start a 14-day trial for your PT business.",
+        content: "Choose a Recavo plan and start a 14-day trial for your business.",
       },
     ],
   }),

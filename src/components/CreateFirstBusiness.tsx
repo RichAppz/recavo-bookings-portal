@@ -1,58 +1,156 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
-import { clearPendingBusiness, readPendingBusiness } from "@/lib/auth/pending-business";
+import { api, ApiError, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
+import {
+  clearPendingBusiness,
+  clearSignUpBusinessMetadata,
+  pendingBusinessFromMetadata,
+  readPendingBusiness,
+} from "@/lib/auth/pending-business";
+import {
+  clearPendingReferral,
+  displayReferralCode,
+  readPendingReferral,
+} from "@/lib/auth/pending-referral";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { VerticalPicker } from "@/components/VerticalPicker";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
+import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
-/** Soft launch: PT-only. Industry picker stays out of the UI for now. */
-const DEFAULT_INDUSTRY = "personal_training";
+function referralFieldError(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const field = error.fieldErrors.find((fe) => fe.field === "referralCode");
+  if (field?.code === "INVALID") return "That referral code isn't valid";
+  if (field?.code === "FORBIDDEN") return "You can't use your own referral code";
+  return null;
+}
 
 /**
  * First-run onboarding for a signed-in account with no business membership.
  * Calls POST /api/v1/businesses, which provisions the owner membership and
  * applies the personal training industry template.
  */
+type CreateVars = {
+  legalName: string;
+  tradingName?: string;
+  industryTemplateKey: string;
+  referralCode?: string;
+};
+
 export function CreateFirstBusiness() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, supabaseUser } = useAuth();
   const [legalName, setLegalName] = useState("");
   const [tradingName, setTradingName] = useState("");
-
-  // Prefill from the business name captured during registration.
-  useEffect(() => {
-    const pending = readPendingBusiness();
-    if (!pending) return;
-    setLegalName(pending.legalName);
-    clearPendingBusiness();
-  }, []);
+  const [vertical, setVertical] = useState<VerticalKey>(DEFAULT_VERTICAL);
+  const [referralCode, setReferralCode] = useState("");
+  // What registration captured: the localStorage stash when the user came back
+  // in the same browser, else the sign-up user_metadata (works across devices —
+  // e.g. signed up on a laptop, confirmed the email on a phone).
+  const readCarriedBusiness = () =>
+    readPendingBusiness() ?? pendingBusinessFromMetadata(supabaseUser?.user_metadata);
+  // Show the "setting up…" state immediately (no form flash) when registration
+  // already captured a complete business.
+  const [autoCreating, setAutoCreating] = useState(() => {
+    const pending = readCarriedBusiness();
+    return Boolean(pending && pending.legalName.trim());
+  });
+  const initDone = useRef(false);
 
   const create = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: CreateVars) => {
+      const code = vars.referralCode?.trim();
       const res = await api.post<{ business?: { id: string } }>(
         "/api/v1/businesses",
         {
-          legalName: legalName.trim(),
-          ...(tradingName.trim() ? { tradingName: tradingName.trim() } : {}),
-          industryTemplateKey: DEFAULT_INDUSTRY,
+          legalName: vars.legalName.trim(),
+          ...(vars.tradingName?.trim() ? { tradingName: vars.tradingName.trim() } : {}),
+          industryTemplateKey: vars.industryTemplateKey,
+          ...(code ? { referralCode: code } : {}),
         },
         { idempotencyKey: newIdempotencyKey() },
       );
       return res.data;
     },
     onSuccess: async () => {
+      clearPendingBusiness();
+      void clearSignUpBusinessMetadata();
+      clearPendingReferral();
       toast.success("Business created");
       await queryClient.invalidateQueries({ queryKey: queryKeys.myBusinesses() });
       await navigate({ to: "/billing" });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      // Auto-provision failed: drop the stash (and its user_metadata copy) so we
+      // don't retry a bad payload on every mount, and fall back to the
+      // (prefilled) form for a manual fix.
+      setAutoCreating(false);
+      clearPendingBusiness();
+      void clearSignUpBusinessMetadata();
+      const referralMessage = referralFieldError(err);
+      if (referralMessage) {
+        toast.error(referralMessage);
+        return;
+      }
+      toastApiError(err);
+    },
   });
+
+  // Carry over everything from registration: prefill the form and, when the
+  // business is fully specified, provision it straight away.
+  useEffect(() => {
+    if (initDone.current) return;
+    initDone.current = true;
+
+    const pendingReferral = readPendingReferral();
+    const referralDisplay = pendingReferral ? displayReferralCode(pendingReferral) : "";
+    if (referralDisplay) setReferralCode(referralDisplay);
+
+    const pending = readCarriedBusiness();
+    if (!pending) return;
+
+    setLegalName(pending.legalName);
+    if (pending.industryTemplateKey in VERTICALS) {
+      setVertical(pending.industryTemplateKey as VerticalKey);
+    }
+
+    if (pending.legalName.trim()) {
+      setAutoCreating(true);
+      create.mutate({
+        legalName: pending.legalName,
+        industryTemplateKey: pending.industryTemplateKey,
+        referralCode: referralDisplay || undefined,
+      });
+    }
+    // create is stable for the component's lifetime; run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (autoCreating) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="flex justify-center">
+            <Wordmark />
+          </div>
+          <div className="rounded-2xl border bg-card p-8 text-center">
+            <Loader2 className="mx-auto size-6 animate-spin text-primary" />
+            <h1 className="mt-4 text-lg font-semibold tracking-tight">Setting up your business…</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Finishing what you started at sign-up — this only takes a moment.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -61,10 +159,10 @@ export function CreateFirstBusiness() {
           <Wordmark />
         </div>
         <div className="rounded-2xl border bg-card p-6">
-          <h1 className="text-xl font-semibold tracking-tight">Set up your PT business</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Set up your business</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your account isn't linked to a business yet. Add your studio or trading name to get
-            started with sessions, clients and payments.
+            Your account isn't linked to a business yet. Pick your trade and add your name to get
+            started with bookings, clients and payments.
           </p>
 
           <form
@@ -75,17 +173,31 @@ export function CreateFirstBusiness() {
                 toast.error("Enter a business name");
                 return;
               }
-              create.mutate();
+              create.mutate({
+                legalName,
+                tradingName,
+                industryTemplateKey: vertical,
+                referralCode,
+              });
             }}
           >
+            <div className="flex flex-col gap-4">
+              <Label>What do you do?</Label>
+              <VerticalPicker value={vertical} onChange={setVertical} disabled={create.isPending} />
+              <p className="text-xs text-muted-foreground">
+                Sets your labels and defaults — automotive adds a Vehicle record to each client
+                automatically.
+              </p>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="legalName">Studio or business name</Label>
+              <Label htmlFor="legalName">{VERTICALS[vertical].businessLabel}</Label>
               <Input
                 id="legalName"
                 required
                 value={legalName}
                 onChange={(e) => setLegalName(e.target.value)}
-                placeholder="Peak Performance PT"
+                placeholder={VERTICALS[vertical].businessPlaceholder}
               />
             </div>
 
@@ -97,6 +209,20 @@ export function CreateFirstBusiness() {
                 onChange={(e) => setTradingName(e.target.value)}
                 placeholder="Peak PT"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">Referral code (optional)</Label>
+              <Input
+                id="referralCode"
+                autoComplete="off"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value)}
+                placeholder="ABCD-EFGH"
+              />
+              <p className="text-xs text-muted-foreground">
+                You&apos;ll get the normal 14-day trial. Leave this blank if nobody referred you.
+              </p>
             </div>
 
             <Button type="submit" className="w-full" disabled={create.isPending}>
