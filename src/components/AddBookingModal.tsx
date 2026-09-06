@@ -148,6 +148,20 @@ export function AddBookingModal({
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
   const noClients = customers.isSuccess && customerList.length === 0;
+
+  // Nothing to choose when there's a single location, and a top-bar location
+  // filter is a clear statement of intent — pre-fill either, but never override
+  // a choice already made in the form.
+  useEffect(() => {
+    if (!open || locationId) return;
+    const active = locationList.filter((l) => l.active);
+    const pick =
+      (tenant.currentLocationId !== "all" &&
+        locationList.find((l) => l.id === tenant.currentLocationId)?.id) ||
+      (active.length === 1 ? active[0]!.id : undefined) ||
+      (locationList.length === 1 ? locationList[0]!.id : undefined);
+    if (pick) setLocationId(pick);
+  }, [open, locationId, locationList, tenant.currentLocationId]);
   const setupBlocked = noServices || noLocations || noClients;
 
   const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
