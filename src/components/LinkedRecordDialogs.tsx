@@ -54,25 +54,42 @@ import { toast } from "sonner";
 
 /**
  * Search-as-you-type client picker (Popover + Command). Shared by the transfer
- * dialog and the Vehicles page's add-record dialog.
+ * dialog, the Vehicles page's add-record dialog and Add booking. Pass
+ * `suggestions` (e.g. the first page of clients) to list them before the user
+ * types; one character filters that list locally, two or more search the server.
  */
 export function CustomerSearchPicker({
   value,
   onSelect,
   excludeCustomerId,
+  suggestions,
   placeholder = "Search for a client…",
 }: {
   value: Customer | null;
   onSelect: (customer: Customer) => void;
   /** Hidden from results — e.g. the current owner during a transfer. */
   excludeCustomerId?: string;
+  /** Shown before typing, and filtered locally on a single character. */
+  suggestions?: Customer[];
   placeholder?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const searching = search.trim().length > 1;
-  const results = useCustomers({ search: search.trim(), enabled: pickerOpen && searching });
-  const candidates = (results.data?.items ?? []).filter((c) => c.id !== excludeCustomerId);
+  const term = search.trim();
+  const searching = term.length > 1;
+  const results = useCustomers({ search: term, enabled: pickerOpen && searching });
+  const localMatches = (suggestions ?? []).filter((c) => {
+    if (!term) return true;
+    const needle = term.toLowerCase();
+    return (
+      customerDisplayName(c).toLowerCase().includes(needle) ||
+      (c.emailDisplay ?? "").toLowerCase().includes(needle) ||
+      (c.phoneNormalised ?? "").includes(needle)
+    );
+  });
+  const pool = searching ? (results.data?.items ?? []) : localMatches;
+  const candidates = pool.filter((c) => c.id !== excludeCustomerId);
+  const hasSuggestions = (suggestions?.length ?? 0) > 0;
 
   return (
     <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -97,11 +114,11 @@ export function CustomerSearchPicker({
             onValueChange={setSearch}
           />
           <CommandList>
-            {!searching ? (
+            {!searching && !hasSuggestions ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">
                 Type at least 2 characters to search.
               </p>
-            ) : results.isLoading ? (
+            ) : searching && results.isLoading ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">Searching…</p>
             ) : candidates.length === 0 ? (
               <CommandEmpty>No clients match.</CommandEmpty>

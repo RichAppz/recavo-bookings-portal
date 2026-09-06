@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ import {
   useCreateBooking,
   useCreateBookingHold,
   useCustomerLinkedRecords,
+  useCustomer,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
@@ -123,6 +125,10 @@ export function AddBookingModal({
   const serviceList = services.data ?? [];
   const locationList = locations.data ?? [];
   const customerList = customers.data?.items ?? [];
+  // The chosen client may sit beyond the first page (e.g. opened from their profile).
+  const chosenCustomer = useCustomer(customerId || undefined);
+  const selectedCustomer =
+    customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
   const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
@@ -439,25 +445,16 @@ export function AddBookingModal({
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Client</Label>
-              <Select
-                value={customerId}
-                onValueChange={(v) => {
-                  setCustomerId(v);
+              <CustomerSearchPicker
+                value={selectedCustomer}
+                suggestions={customerList}
+                placeholder="Choose or search for a client"
+                onSelect={(c) => {
+                  setCustomerId(c.id);
                   // A record belongs to one client, so it can't survive a client change.
                   setLinkedRecordId("none");
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customerList.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {customerDisplayName(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
 
             {hasLinkedRecords && customerId ? (
