@@ -138,6 +138,20 @@ export function AddBookingModal({
   const noLocations = locations.isSuccess && locationList.length === 0;
   const noClients = customers.isSuccess && customerList.length === 0;
 
+  // A one-person business has nothing to choose: pick them and drop the field.
+  // "Any staff member" and the single member are the same search, but pinning
+  // the id means the availability quote and booking name them explicitly.
+  const activeStaff = useMemo(
+    () => (staff.data ?? []).filter((s) => s.status === "active"),
+    [staff.data],
+  );
+  const soleStaff = staff.isSuccess && activeStaff.length === 1 ? activeStaff[0] : null;
+  useEffect(() => {
+    if (!open || !soleStaff) return;
+    if (staffId !== soleStaff.id) setStaffId(soleStaff.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, soleStaff?.id]);
+
   // Nothing to choose when there's a single location, and a top-bar location
   // filter is a clear statement of intent — pre-fill either, but never override
   // a choice already made in the form.
@@ -609,28 +623,30 @@ export function AddBookingModal({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label>{staffNoun}</Label>
-                <Select
-                  value={staffId}
-                  onValueChange={(v) => {
-                    setStaffId(v);
-                    setSlotKey(null);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any {staffLower}</SelectItem>
-                    {(staff.data ?? []).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {soleStaff ? null : (
+                <div className="grid gap-2">
+                  <Label>{staffNoun}</Label>
+                  <Select
+                    value={staffId}
+                    onValueChange={(v) => {
+                      setStaffId(v);
+                      setSlotKey(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Any {staffLower}</SelectItem>
+                      {(staff.data ?? []).map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="booking-date">Date</Label>
                 <input
