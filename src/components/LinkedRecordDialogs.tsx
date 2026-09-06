@@ -769,73 +769,120 @@ export function QuickAddLinkedRecord({
     }
   };
 
+  // One message for the whole row: "Registration is required", or the server's
+  // complaint about a specific field.
+  const firstError = (() => {
+    for (const f of quick) {
+      const local = errors[f.fieldKey];
+      if (local) return local === "Required" ? `${f.label} is required.` : `${f.label}: ${local}`;
+      const server = fieldErrorFor(create.error, f.fieldKey);
+      if (server) return `${f.label}: ${server}`;
+    }
+    return null;
+  })();
+
+  const requiredLabels = quick.filter((f) => f.required).map((f) => f.label.toLowerCase());
+  const requiredHint =
+    requiredLabels.length === 0
+      ? "All optional — add more later."
+      : `Only the ${requiredLabels.join(" and ")} is needed now.`;
+
   return (
-    <div className="rounded-lg border border-dashed bg-secondary/30 p-3">
-      <div className="grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]">
+    <div className="rounded-lg border border-dashed p-3">
+      {/* Fields in one row (labels as placeholders), then a single status line with
+          the actions. Errors are reported in the status line, not under each field,
+          so the row never shifts. */}
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: quick.map((f) => (f.required ? "1.25fr" : "1fr")).join(" "),
+        }}
+      >
         {quick.map((f, i) => {
           const id = `quick-lr-${f.fieldKey}`;
-          const error = errors[f.fieldKey] ?? fieldErrorFor(create.error, f.fieldKey);
-          return (
-            <div key={f.fieldKey} className="grid gap-1">
-              <Label htmlFor={id} className="text-xs">
-                {f.label}
-                {f.required ? <span className="text-destructive"> *</span> : null}
-              </Label>
-              {f.dataType === "single_select" ? (
-                <Select
-                  value={values[f.fieldKey] ?? ""}
-                  onValueChange={(v) => setValues((p) => ({ ...p, [f.fieldKey]: v }))}
-                >
-                  <SelectTrigger id={id} className="h-9">
-                    <SelectValue placeholder="Choose…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(f.constraints?.options ?? []).map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id={id}
-                  className="h-9"
-                  autoFocus={autoFocus && i === 0}
-                  type={f.dataType === "integer" || f.dataType === "decimal" ? "number" : "text"}
-                  value={values[f.fieldKey] ?? ""}
-                  maxLength={f.constraints?.maxLength}
-                  placeholder={f.required ? "" : "Optional"}
-                  onChange={(e) => setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }))}
-                  onKeyDown={onKeyDown}
-                  disabled={create.isPending}
-                />
+          const invalid = Boolean(errors[f.fieldKey] ?? fieldErrorFor(create.error, f.fieldKey));
+          return f.dataType === "single_select" ? (
+            <Select
+              key={f.fieldKey}
+              value={values[f.fieldKey] ?? ""}
+              onValueChange={(v) => setValues((p) => ({ ...p, [f.fieldKey]: v }))}
+            >
+              <SelectTrigger
+                id={id}
+                aria-label={f.label}
+                aria-invalid={invalid || undefined}
+                className={cn("h-9 min-w-0", invalid && "border-destructive")}
+              >
+                <SelectValue placeholder={f.label} />
+              </SelectTrigger>
+              <SelectContent>
+                {(f.constraints?.options ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              key={f.fieldKey}
+              id={id}
+              aria-label={f.label}
+              aria-invalid={invalid || undefined}
+              className={cn(
+                "h-9 min-w-0",
+                invalid && "border-destructive focus-visible:ring-destructive/40",
               )}
-              {error ? <p className="text-xs text-destructive">{error}</p> : null}
-            </div>
+              autoFocus={autoFocus && i === 0}
+              type={f.dataType === "integer" || f.dataType === "decimal" ? "number" : "text"}
+              value={values[f.fieldKey] ?? ""}
+              maxLength={f.constraints?.maxLength}
+              placeholder={f.label}
+              onChange={(e) => {
+                setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }));
+                if (errors[f.fieldKey]) setErrors((p) => ({ ...p, [f.fieldKey]: "" }));
+              }}
+              onKeyDown={onKeyDown}
+              disabled={create.isPending}
+            />
           );
         })}
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Just the basics — add more from their profile any time.
+
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p
+          className={cn(
+            "min-w-0 truncate text-xs",
+            firstError ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {firstError ?? requiredHint}
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-3">
           {onCancel ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+              onClick={onCancel}
+            >
               Cancel
-            </Button>
+            </button>
           ) : null}
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
+            className="text-xs font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50"
             onClick={() => setFullInitial({ displayLabel: "", values: { ...values } })}
             disabled={create.isPending}
           >
             More details
-          </Button>
-          <Button type="button" size="sm" onClick={() => void submit()} disabled={create.isPending}>
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            onClick={() => void submit()}
+            disabled={create.isPending}
+          >
             {create.isPending ? "Adding…" : `Add ${lower}`}
           </Button>
         </div>
