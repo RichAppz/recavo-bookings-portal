@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
@@ -82,10 +82,16 @@ export function AddBookingModal({
   open,
   onOpenChange,
   defaultCustomerId,
+  defaultDate,
+  defaultStaffId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultCustomerId?: string;
+  /** ISO date (YYYY-MM-DD) to start on — e.g. the day clicked in the calendar. */
+  defaultDate?: string;
+  /** Pre-select a staff member — e.g. the calendar's current staff filter. */
+  defaultStaffId?: string;
 }) {
   const tenant = useTenant();
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
@@ -93,8 +99,17 @@ export function AddBookingModal({
   const [variantId, setVariantId] = useState<string>("none");
   const [staffId, setStaffId] = useState("all");
   const [locationId, setLocationId] = useState("");
-  const [date, setDate] = useState(isoDate(new Date()));
+  const [date, setDate] = useState(defaultDate ?? isoDate(new Date()));
   const [slotKey, setSlotKey] = useState<string | null>(null);
+
+  // Defaults come from wherever the modal was opened (a calendar day, a client's
+  // profile) and differ between opens, so apply them each time it opens.
+  useEffect(() => {
+    if (!open) return;
+    setDate(defaultDate ?? isoDate(new Date()));
+    setStaffId(defaultStaffId ?? "all");
+    setSlotKey(null);
+  }, [open, defaultDate, defaultStaffId]);
   const [paymentMethod, setPaymentMethod] = useState<"none" | "credit" | "bank_transfer">("none");
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
