@@ -25,12 +25,14 @@ import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PortalRouteImport } from './routes/portal'
+import { Route as ReferralsRouteImport } from './routes/referrals'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResetRouteImport } from './routes/reset'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as VehiclesRouteImport } from './routes/vehicles'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as BillingSetupRouteImport } from './routes/billing.setup'
@@ -38,6 +40,7 @@ import { Route as BillingSuccessRouteImport } from './routes/billing.success'
 import { Route as ClaimTokenRouteImport } from './routes/claim.$token'
 import { Route as ClientsIndexRouteImport } from './routes/clients.index'
 import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
+import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as ConnectRefreshBusinessIdRouteImport } from './routes/connect.refresh.$businessId'
 import { Route as ConnectReturnBusinessIdRouteImport } from './routes/connect.return.$businessId'
 
@@ -121,6 +124,11 @@ const PortalRoute = PortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReferralsRoute = ReferralsRouteImport.update({
+  id: '/referrals',
+  path: '/referrals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -149,6 +157,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VehiclesRoute = VehiclesRouteImport.update({
+  id: '/vehicles',
+  path: '/vehicles',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingIndexRoute = BillingIndexRouteImport.update({
@@ -186,6 +199,11 @@ const ClientsClientIdRoute = ClientsClientIdRouteImport.update({
   path: '/clients/$clientId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClientsImportRoute = ClientsImportRouteImport.update({
+  id: '/clients/import',
+  path: '/clients/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectRefreshBusinessIdRoute =
   ConnectRefreshBusinessIdRouteImport.update({
     id: '/refresh/$businessId',
@@ -215,17 +233,20 @@ export interface FileRoutesByFullPath {
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
   '/portal': typeof PortalRoute
+  '/referrals': typeof ReferralsRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
+  '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
+  '/clients/import': typeof ClientsImportRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -247,17 +268,20 @@ export interface FileRoutesByTo {
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
   '/portal': typeof PortalRoute
+  '/referrals': typeof ReferralsRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
+  '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
+  '/clients/import': typeof ClientsImportRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -281,17 +305,20 @@ export interface FileRoutesById {
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
   '/portal': typeof PortalRoute
+  '/referrals': typeof ReferralsRoute
   '/register': typeof RegisterRoute
   '/reports': typeof ReportsRoute
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
+  '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
+  '/clients/import': typeof ClientsImportRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -316,17 +343,20 @@ export interface FileRouteTypes {
     | '/payments'
     | '/platform'
     | '/portal'
+    | '/referrals'
     | '/register'
     | '/reports'
     | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
+    | '/vehicles'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
     | '/claim/$token'
     | '/clients/$clientId'
+    | '/clients/import'
     | '/billing/'
     | '/clients/'
     | '/connect/refresh/$businessId'
@@ -348,17 +378,20 @@ export interface FileRouteTypes {
     | '/payments'
     | '/platform'
     | '/portal'
+    | '/referrals'
     | '/register'
     | '/reports'
     | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
+    | '/vehicles'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
     | '/claim/$token'
     | '/clients/$clientId'
+    | '/clients/import'
     | '/billing'
     | '/clients'
     | '/connect/refresh/$businessId'
@@ -381,17 +414,20 @@ export interface FileRouteTypes {
     | '/payments'
     | '/platform'
     | '/portal'
+    | '/referrals'
     | '/register'
     | '/reports'
     | '/reset'
     | '/services'
     | '/settings'
     | '/staff'
+    | '/vehicles'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
     | '/claim/$token'
     | '/clients/$clientId'
+    | '/clients/import'
     | '/billing/'
     | '/clients/'
     | '/connect/refresh/$businessId'
@@ -415,14 +451,17 @@ export interface RootRouteChildren {
   PaymentsRoute: typeof PaymentsRoute
   PlatformRoute: typeof PlatformRoute
   PortalRoute: typeof PortalRoute
+  ReferralsRoute: typeof ReferralsRoute
   RegisterRoute: typeof RegisterRoute
   ReportsRoute: typeof ReportsRoute
   ResetRoute: typeof ResetRoute
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
   StaffRoute: typeof StaffRoute
+  VehiclesRoute: typeof VehiclesRoute
   ClaimTokenRoute: typeof ClaimTokenRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
+  ClientsImportRoute: typeof ClientsImportRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
 }
 
@@ -540,6 +579,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/referrals': {
+      id: '/referrals'
+      path: '/referrals'
+      fullPath: '/referrals'
+      preLoaderRoute: typeof ReferralsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -580,6 +626,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vehicles': {
+      id: '/vehicles'
+      path: '/vehicles'
+      fullPath: '/vehicles'
+      preLoaderRoute: typeof VehiclesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing/': {
@@ -629,6 +682,13 @@ declare module '@tanstack/react-router' {
       path: '/clients/$clientId'
       fullPath: '/clients/$clientId'
       preLoaderRoute: typeof ClientsClientIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clients/import': {
+      id: '/clients/import'
+      path: '/clients/import'
+      fullPath: '/clients/import'
+      preLoaderRoute: typeof ClientsImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connect/refresh/$businessId': {
@@ -695,14 +755,17 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentsRoute: PaymentsRoute,
   PlatformRoute: PlatformRoute,
   PortalRoute: PortalRoute,
+  ReferralsRoute: ReferralsRoute,
   RegisterRoute: RegisterRoute,
   ReportsRoute: ReportsRoute,
   ResetRoute: ResetRoute,
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
   StaffRoute: StaffRoute,
+  VehiclesRoute: VehiclesRoute,
   ClaimTokenRoute: ClaimTokenRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
+  ClientsImportRoute: ClientsImportRoute,
   ClientsIndexRoute: ClientsIndexRoute,
 }
 export const routeTree = rootRouteImport

@@ -4,15 +4,9 @@ import { mfaStepFor, verifiedTotp } from "./mfa.ts";
 
 describe("mfaStepFor", () => {
   it("proceeds when the session is already AAL2", () => {
+    assert.equal(mfaStepFor({ currentLevel: "aal2", nextLevel: "aal2" }, { totp: [] }), "proceed");
     assert.equal(
-      mfaStepFor({ currentLevel: "aal2", nextLevel: "aal2" }, { totp: [] }),
-      "proceed",
-    );
-    assert.equal(
-      mfaStepFor(
-        { currentLevel: "aal2" },
-        { totp: [{ id: "f1", status: "verified" }] },
-      ),
+      mfaStepFor({ currentLevel: "aal2" }, { totp: [{ id: "f1", status: "verified" }] }),
       "proceed",
     );
   });
@@ -31,10 +25,7 @@ describe("mfaStepFor", () => {
     assert.equal(mfaStepFor({ currentLevel: "aal1", nextLevel: "aal1" }, { totp: [] }), "enroll");
     assert.equal(mfaStepFor({ currentLevel: "aal1" }, null), "enroll");
     assert.equal(
-      mfaStepFor(
-        { currentLevel: "aal1" },
-        { totp: [{ id: "pending", status: "unverified" }] },
-      ),
+      mfaStepFor({ currentLevel: "aal1" }, { totp: [{ id: "pending", status: "unverified" }] }),
       "enroll",
     );
   });

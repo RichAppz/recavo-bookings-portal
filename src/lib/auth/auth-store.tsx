@@ -10,7 +10,15 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
-import { api, setAccessToken, setMfaHandler, queryKeys, ApiError, toastApiError } from "@/lib/api";
+import {
+  api,
+  setAccessToken,
+  setAuthRetryHandler,
+  setMfaHandler,
+  queryKeys,
+  ApiError,
+  toastApiError,
+} from "@/lib/api";
 import type { User, UserProfileUpdate } from "@/lib/api/types";
 import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
 import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
@@ -40,13 +48,24 @@ type AuthContextValue = {
     password: string,
     metadata?: Record<string, unknown>,
     emailRedirectTo?: string,
-  ) => Promise<void>;
+  ) => Promise<{ session: Session | null }>;
+  /** Redeems the confirmation code from a sign-up email, signing the person in. */
+  confirmSignUp: (email: string, code: string) => Promise<void>;
+  /** Re-sends the sign-up confirmation code. */
+  resendSignUpCode: (email: string) => Promise<void>;
   /** Emails a six-digit code. Creates the account if the address is new. */
   sendEmailCode: (email: string) => Promise<void>;
   /** Redeems the code from {@link sendEmailCode}, signing the person in. */
   verifyEmailCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  /**
+   * Change (or, for OAuth-only accounts, set) the signed-in user's password.
+   * When `currentPassword` is given it is verified first so a borrowed session
+   * can't silently take over the account. Accounts with 2FA enrolled are stepped
+   * up to AAL2 before the change, as Supabase requires.
+   */
+  updatePassword: (input: { currentPassword?: string; newPassword: string }) => Promise<void>;
   /** PATCH /api/v1/me — update name, phone, locale or timezone on the account profile. */
   updateProfile: (body: UserProfileUpdate) => Promise<User>;
   /**
@@ -300,6 +319,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (userId && loadedForUserIdRef.current === userId) {
         authLog("applySession: already loaded this user → skip /me");
         setStatus("authenticated");
+        // A refreshed token can arrive moments after focus refetches already
+        // failed with 401 (waking from sleep: the stale token goes out before
+        // supabase-js refreshes it). Errored queries are never refetched
+        // automatically, which is how the full-screen "Couldn't load your
+        // businesses" card gets stuck — retry them now the token is good.
+        void queryClient.invalidateQueries({
+          predicate: (q) => q.state.status === "error",
+          refetchType: "active",
+        });
         return;
       }
 
@@ -354,10 +382,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let me = await fetchMe(AbortSignal.timeout(SESSION_BOOTSTRAP_TIMEOUT_MS));
 
         // Apply the name collected at registration once we have an API session.
+        // Prefer the local stash; fall back to the sign-up user_metadata, which
+        // survives confirming the email on a different device or browser.
         const pending = readPendingProfile();
-        if (pending && !me.name && pending.name) {
+        const metadataName =
+          typeof next.user?.user_metadata?.full_name === "string"
+            ? next.user.user_metadata.full_name.trim()
+            : "";
+        const pendingName = pending?.name.trim() || metadataName;
+        if (!me.name && pendingName) {
           try {
-            const res = await api.patch<{ user: User }>("/api/v1/me", { name: pending.name });
+            const res = await api.patch<{ user: User }>("/api/v1/me", { name: pendingName });
             me = res.data.user;
             clearPendingProfile();
             authLog("applied pending profile from registration");
@@ -457,53 +492,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setMfaHandler(null);
   }, [stepUpIfEnrolled]);
 
-  const verifyMfa = useCallback(async (code: string) => {
-    const supabase = getSupabase();
-    const { data: factors } = await supabase.auth.mfa.listFactors();
-    const factorId = mfaEnrollmentRef.current?.factorId ?? verifiedTotp(factors)?.id;
-    if (!factorId) {
-      toast.error("No TOTP factor enrolled", {
-        description: "Enrol 2FA in account settings first.",
+  // Shared in-flight refresh: when a stale token goes out after wake-from-sleep,
+  // every focus refetch 401s at once, and they should all wait on ONE refresh
+  // rather than each triggering their own.
+  const authRefreshRef = useRef<Promise<boolean> | null>(null);
+  const refreshAfter401 = useCallback((staleToken: string): Promise<boolean> => {
+    if (!isSupabaseConfigured()) return Promise.resolve(false);
+    if (!authRefreshRef.current) {
+      authRefreshRef.current = (async () => {
+        try {
+          const supabase = getSupabase();
+          // The visibility handler or another tab may have refreshed already —
+          // getSession() also refreshes itself when the stored token is expired.
+          const { data } = await supabase.auth.getSession();
+          let next = data.session;
+          if (!next || next.access_token === staleToken) {
+            const { data: refreshed, error } = await supabase.auth.refreshSession();
+            if (error) {
+              authLog("refreshAfter401: refresh failed", error);
+              return false;
+            }
+            next = refreshed.session;
+          }
+          if (!next?.access_token || next.access_token === staleToken) return false;
+          setAccessToken(next.access_token);
+          setSession(next);
+          authLog("refreshAfter401: replaced stale token");
+          return true;
+        } catch (err) {
+          authLog("refreshAfter401 failed", err);
+          return false;
+        } finally {
+          authRefreshRef.current = null;
+        }
+      })();
+    }
+    return authRefreshRef.current;
+  }, []);
+
+  // 401 interceptor: refresh the session once and let the API client replay the
+  // request, instead of stranding the user on an error screen a reload fixes.
+  useEffect(() => {
+    setAuthRetryHandler((staleToken) => refreshAfter401(staleToken));
+    return () => setAuthRetryHandler(null);
+  }, [refreshAfter401]);
+
+  const verifyMfa = useCallback(
+    async (code: string) => {
+      const supabase = getSupabase();
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const factorId = mfaEnrollmentRef.current?.factorId ?? verifiedTotp(factors)?.id;
+      if (!factorId) {
+        toast.error("No TOTP factor enrolled", {
+          description: "Enrol 2FA in account settings first.",
+        });
+        mfaResolveRef.current?.(false);
+        mfaResolveRef.current = null;
+        adoptEnrollment(null);
+        setMfaRequired(false);
+        return false;
+      }
+
+      const challenge = await supabase.auth.mfa.challenge({ factorId });
+      if (challenge.error || !challenge.data) {
+        toast.error("Unable to start 2FA challenge");
+        mfaResolveRef.current?.(false);
+        mfaResolveRef.current = null;
+        adoptEnrollment(null);
+        setMfaRequired(false);
+        return false;
+      }
+
+      const verified = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challenge.data.id,
+        code,
       });
-      mfaResolveRef.current?.(false);
-      mfaResolveRef.current = null;
+
+      if (verified.error) {
+        toast.error("Invalid authentication code");
+        return false;
+      }
+
+      // Refresh session so subsequent requests carry aal2.
+      const { data } = await supabase.auth.getSession();
+      setAccessToken(data.session?.access_token ?? null);
+      setSession(data.session);
+      setMfaEnrolled(true);
       adoptEnrollment(null);
-      setMfaRequired(false);
-      return false;
-    }
-
-    const challenge = await supabase.auth.mfa.challenge({ factorId });
-    if (challenge.error || !challenge.data) {
-      toast.error("Unable to start 2FA challenge");
-      mfaResolveRef.current?.(false);
+      mfaResolveRef.current?.(true);
       mfaResolveRef.current = null;
-      adoptEnrollment(null);
       setMfaRequired(false);
-      return false;
-    }
-
-    const verified = await supabase.auth.mfa.verify({
-      factorId,
-      challengeId: challenge.data.id,
-      code,
-    });
-
-    if (verified.error) {
-      toast.error("Invalid authentication code");
-      return false;
-    }
-
-    // Refresh session so subsequent requests carry aal2.
-    const { data } = await supabase.auth.getSession();
-    setAccessToken(data.session?.access_token ?? null);
-    setSession(data.session);
-    setMfaEnrolled(true);
-    adoptEnrollment(null);
-    mfaResolveRef.current?.(true);
-    mfaResolveRef.current = null;
-    setMfaRequired(false);
-    return true;
-  }, [adoptEnrollment]);
+      return true;
+    },
+    [adoptEnrollment],
+  );
 
   const clearMfa = useCallback(() => {
     const pending = mfaEnrollmentRef.current;
@@ -587,15 +670,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...(metadata ? { data: metadata } : {}),
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       };
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         ...(Object.keys(options).length > 0 ? { options } : {}),
       });
       if (error) throw error;
+      // When email confirmation is required, Supabase returns no session here;
+      // the caller uses this to route into the code-entry step.
+      return { session: data.session };
     },
     [],
   );
+
+  /**
+   * Confirm a sign-up by its emailed code. Uses `type: 'signup'` to match the
+   * "Confirm signup" template's token — distinct from the passwordless email
+   * OTP used by {@link verifyEmailCode}.
+   */
+  const confirmSignUp = useCallback(async (email: string, code: string) => {
+    authLog("confirmSignUp: verifyOtp(signup)");
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
+    if (error) {
+      authLog("confirmSignUp error", error);
+      throw error;
+    }
+  }, []);
+
+  const resendSignUpCode = useCallback(async (email: string) => {
+    authLog("resendSignUpCode: resend(signup)");
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    if (error) {
+      authLog("resendSignUpCode error", error);
+      throw error;
+    }
+  }, []);
 
   /**
    * Sign-in for customers, who arrive from a link, buy once, and come back
@@ -665,6 +776,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const updatePassword = useCallback(
+    async ({ currentPassword, newPassword }: { currentPassword?: string; newPassword: string }) => {
+      const supabase = getSupabase();
+      const email = session?.user.email;
+      if (currentPassword !== undefined) {
+        if (!email) throw new Error("Your account has no email address to verify against.");
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: currentPassword,
+        });
+        if (error) {
+          authLog("updatePassword: current password rejected", error);
+          throw new Error("Your current password is incorrect.");
+        }
+      }
+      // Supabase refuses password changes on an AAL1 session once a TOTP factor exists.
+      const ok = await ensureAal2();
+      if (!ok) throw new Error("Two-factor verification is required to change your password.");
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        authLog("updatePassword error", error);
+        throw error;
+      }
+    },
+    [session, ensureAal2],
+  );
+
   const updateProfile = useCallback(
     async (body: UserProfileUpdate) => {
       // PATCH returns the same envelope as GET, so the response can replace
@@ -687,10 +825,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithGoogle,
       signUp,
+      confirmSignUp,
+      resendSignUpCode,
       sendEmailCode,
       verifyEmailCode,
       signOut,
       resetPassword,
+      updatePassword,
       updateProfile,
       ensureAal2,
       unenrollMfa,
@@ -711,10 +852,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithGoogle,
       signUp,
+      confirmSignUp,
+      resendSignUpCode,
       sendEmailCode,
       verifyEmailCode,
       signOut,
       resetPassword,
+      updatePassword,
       updateProfile,
       ensureAal2,
       unenrollMfa,

@@ -17,6 +17,7 @@ import {
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useBookings, useServices, useStaffList } from "@/lib/api/hooks";
 import { addDays, formatInTz, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
+import type { Booking } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -130,6 +131,26 @@ function CalendarPage() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
   };
 
+  /**
+   * Which calendar days a booking touches. Multi-day jobs (a two-day ceramic
+   * coating) show on every day they cover, not just the drop-off day. An end
+   * exactly on midnight belongs to the previous day, hence the minute shaved off.
+   */
+  const coversDay = (b: Booking, iso: string) => {
+    const first = isoDateInTz(b.start, timezone);
+    const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
+    const last = isoDateInTz(lastInstant, timezone);
+    return first <= iso && iso <= last;
+  };
+  const startsOn = (b: Booking, iso: string) => isoDateInTz(b.start, timezone) === iso;
+  const endsOn = (b: Booking, iso: string) => {
+    const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
+    return isoDateInTz(lastInstant, timezone) === iso;
+  };
+  const isMultiDay = (b: Booking) => !endsOn(b, isoDateInTz(b.start, timezone));
+  const endLabel = (b: Booking) =>
+    formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+
   return (
     <>
       <PageHeader
@@ -169,10 +190,12 @@ function CalendarPage() {
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Trainer" />
+              <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All trainers</SelectItem>
+              <SelectItem value="all">
+                All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
+              </SelectItem>
               {(staff.data ?? []).map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.displayName}
@@ -224,7 +247,7 @@ function CalendarPage() {
               const iso = isoDate(day);
               const outside = day.getMonth() !== anchor.getMonth();
               const dayBookings = filtered
-                .filter((b) => isoDateInTz(b.start, timezone) === iso)
+                .filter((b) => coversDay(b, iso))
                 .sort((a, b) => a.start.localeCompare(b.start));
               return (
                 <div
@@ -272,10 +295,25 @@ function CalendarPage() {
                             cancelled && "opacity-45 line-through",
                           )}
                         >
-                          <span className="font-semibold tabular-nums">
-                            {formatInTz(b.start, timezone, { hour: "2-digit", minute: "2-digit" })}
-                          </span>
+                          {startsOn(b, iso) ? (
+                            <span className="font-semibold tabular-nums">
+                              {formatInTz(b.start, timezone, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-muted-foreground"
+                              aria-label="Continues from earlier"
+                            >
+                              ↳
+                            </span>
+                          )}
                           <span className="truncate">{b.serviceSnapshot.name}</span>
+                          {isMultiDay(b) && !endsOn(b, iso) ? (
+                            <span className="ml-auto text-muted-foreground">→</span>
+                          ) : null}
                         </button>
                       );
                     })}
@@ -329,7 +367,7 @@ function CalendarPage() {
 
               {days.map((day) => {
                 const iso = isoDate(day);
-                const dayBookings = filtered.filter((b) => isoDateInTz(b.start, timezone) === iso);
+                const dayBookings = filtered.filter((b) => coversDay(b, iso));
                 return (
                   <div key={iso} className="relative flex-1 border-l">
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
@@ -352,7 +390,17 @@ function CalendarPage() {
                         b.status === "cancelled_by_customer" ||
                         b.status === "cancelled_by_business" ||
                         b.status === "late_cancelled";
-                      const startMin = minutesOf(b.start, timezone);
+                      // Clip the block to today's column: a job that began yesterday
+                      // runs from the top of the grid, one that ends tomorrow runs off
+                      // the bottom.
+                      const startsToday = startsOn(b, iso);
+                      const endsToday = endsOn(b, iso);
+                      const topMin = startsToday ? minutesOf(b.start, timezone) : START_HOUR * 60;
+                      const bottomMin = endsToday
+                        ? Math.min(minutesOf(b.end, timezone) || END_HOUR * 60, END_HOUR * 60)
+                        : END_HOUR * 60;
+                      const startMin = topMin;
+                      const heightMin = Math.max(bottomMin - topMin, 30);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
                       return (
                         <button
@@ -364,11 +412,16 @@ function CalendarPage() {
                           )}
                           style={{
                             top: ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
-                            height: (b.serviceSnapshot.durationMinutes / 60) * HOUR_HEIGHT - 4,
+                            height: (heightMin / 60) * HOUR_HEIGHT - 4,
                           }}
                         >
                           <p className="truncate text-[11px] font-semibold">
-                            {formatInTz(b.start, timezone, { hour: "2-digit", minute: "2-digit" })}{" "}
+                            {startsToday
+                              ? formatInTz(b.start, timezone, {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "↳"}{" "}
                             {b.serviceSnapshot.name}
                           </p>
                           <p className="truncate text-[11px] text-muted-foreground">
@@ -376,6 +429,11 @@ function CalendarPage() {
                               ? `${b.seatCount}/${b.attendees.length} booked`
                               : trainer?.displayName}
                           </p>
+                          {isMultiDay(b) ? (
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {endsToday ? `Ready ${endLabel(b)}` : `Until ${endLabel(b)}`}
+                            </p>
+                          ) : null}
                         </button>
                       );
                     })}

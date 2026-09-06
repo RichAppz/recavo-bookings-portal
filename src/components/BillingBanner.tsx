@@ -47,7 +47,9 @@ export function BillingBanner() {
             : null}
         </p>
         <Button size="sm" variant="outline" asChild className="shrink-0 bg-background">
-          <Link to="/billing">View plan</Link>
+          <Link to="/settings" search={{ tab: "billing" }}>
+            View plan
+          </Link>
         </Button>
       </div>
     );
@@ -78,7 +80,9 @@ export function BillingBanner() {
         </Button>
       ) : (
         <Button size="sm" variant="outline" asChild className="shrink-0 bg-background">
-          <Link to="/billing">Billing</Link>
+          <Link to="/settings" search={{ tab: "billing" }}>
+            Billing
+          </Link>
         </Button>
       )}
     </div>

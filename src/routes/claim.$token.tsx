@@ -122,8 +122,12 @@ function ClaimPage() {
           </span>
         }
       >
-        <Button size="lg" className="h-11 w-full rounded-xl" onClick={() => navigate({ to: "/" })}>
-          Back to RECAVO
+        <Button
+          size="lg"
+          className="h-11 w-full rounded-xl"
+          onClick={() => navigate({ to: status === "authenticated" ? "/account" : "/" })}
+        >
+          {status === "authenticated" ? "Go to my account" : "Back to RECAVO"}
         </Button>
       </CustomerAuthLayout>
     );

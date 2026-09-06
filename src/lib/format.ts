@@ -24,6 +24,20 @@ export function formatMoney(
 }
 
 /** Parse a user-entered decimal amount into integer minor units. */
+/**
+ * "90 min", "3 hours", "2 days" — whole days/hours read as such, oddities stay
+ * in minutes. Detailing services can hold a vehicle for days, so raw minutes
+ * ("2880 min") are unreadable there.
+ */
+export function formatDuration(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (minutes >= 120 && minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} min`;
+}
+
 export function parseMoneyToMinor(input: string | number): number {
   if (typeof input === "number") {
     if (!Number.isFinite(input)) throw new Error("Invalid amount");
@@ -47,6 +61,31 @@ export function formatInTz(
   locale = "en-GB",
 ): string {
   return new Intl.DateTimeFormat(locale, { ...opts, timeZone }).format(new Date(iso));
+}
+
+/** True when a booking ends on a later calendar day than it starts (in its own timezone). */
+export function spansDays(startIso: string, endIso: string, timeZone: string): boolean {
+  const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
+  // An end exactly on midnight still belongs to the previous day.
+  const lastInstant = new Date(new Date(endIso).getTime() - 60_000).toISOString();
+  return day(startIso) !== day(lastInstant);
+}
+
+/**
+ * "17 Sept 2026, 09:00 – 10:00" for a same-day booking; multi-day jobs (a two-day
+ * detailing) spell out the return day too: "17 Sept 2026, 09:00 – 19 Sept, 09:00".
+ */
+export function formatBookingSpan(startIso: string, endIso: string, timeZone: string): string {
+  const start = formatInTz(startIso, timeZone, { dateStyle: "medium", timeStyle: "short" });
+  const end = spansDays(startIso, endIso, timeZone)
+    ? formatInTz(endIso, timeZone, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : formatInTz(endIso, timeZone, { timeStyle: "short" });
+  return `${start} – ${end}`;
 }
 
 /** Format time-only in a timezone. */

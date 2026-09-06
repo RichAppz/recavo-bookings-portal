@@ -29,7 +29,7 @@ const STEP_META: Record<
     href: "/staff",
   },
   service: {
-    title: "Create a session type",
+    title: "Create a session",
     description: "Duration, price, and what clients can book.",
     required: true,
     href: "/services",
@@ -50,7 +50,7 @@ const STEP_META: Record<
     title: "Choose your Recavo plan",
     description: "Start a 14-day trial so Recavo can bill your workspace.",
     required: false,
-    href: "/billing",
+    href: "/settings?tab=billing",
   },
   public_booking: {
     title: "Share your booking link",
@@ -60,9 +60,9 @@ const STEP_META: Record<
   },
   stripe_connect: {
     title: "Get paid",
-    description: "Connect Stripe so you can take payments.",
+    description: "Connect Stripe or add your bank details so clients can pay you.",
     required: false,
-    href: "/payments",
+    href: "/settings?tab=payments",
   },
   policies: {
     title: "Publish cancellation & terms",
@@ -91,6 +91,15 @@ const STEP_ORDER: OnboardingStepKey[] = [
   "package",
 ];
 
+/**
+ * Steps dropped for a vertical, mirroring the API's EXCLUDED_BY_TEMPLATE.
+ * Automotive businesses sell one-off jobs (no credit packages) and mostly
+ * book over the phone, so a public booking page isn't a step to chase.
+ */
+const EXCLUDED_BY_TEMPLATE: Record<string, ReadonlySet<OnboardingStepKey>> = {
+  car_detailing: new Set<OnboardingStepKey>(["package", "public_booking"]),
+};
+
 const CANCELLED_BOOKING = new Set([
   "cancelled_by_customer",
   "cancelled_by_business",
@@ -108,6 +117,9 @@ export type DeriveOnboardingInput = {
   packages: Package[];
   policies: PolicyDocument[];
   connect: ConnectAccount | null | undefined;
+  /** Pay-by-bank switched on with complete account details (RECA-522). */
+  bankTransferReady?: boolean;
+  industryTemplateKey?: string | null;
   saasEntitled?: boolean;
   skippedKeys?: OnboardingStepKey[];
   dismissed?: boolean;
@@ -134,8 +146,11 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
         input.locations.some((l) => l.active && l.publicVisible)
       );
     case "stripe_connect":
+      // Either route to getting paid counts — card via Stripe or pay-by-bank.
       return Boolean(
-        input.connect?.chargesEnabled || input.connect?.onboardingState === "complete",
+        input.connect?.chargesEnabled ||
+        input.connect?.onboardingState === "complete" ||
+        input.bankTransferReady,
       );
     case "saas_subscription":
       return Boolean(input.saasEntitled);
@@ -156,7 +171,10 @@ function stepCompleted(key: OnboardingStepKey, input: DeriveOnboardingInput): bo
  */
 export function deriveBusinessOnboarding(input: DeriveOnboardingInput): BusinessOnboarding {
   const skipped = new Set(input.skippedKeys ?? []);
-  const steps: OnboardingStep[] = STEP_ORDER.map((key) => {
+  const excluded = input.industryTemplateKey
+    ? EXCLUDED_BY_TEMPLATE[input.industryTemplateKey]
+    : undefined;
+  const steps: OnboardingStep[] = STEP_ORDER.filter((key) => !excluded?.has(key)).map((key) => {
     const meta = STEP_META[key];
     const completed = stepCompleted(key, input);
     return {
@@ -180,11 +198,11 @@ export function deriveBusinessOnboarding(input: DeriveOnboardingInput): Business
   if (input.dismissed) {
     return {
       businessId: input.businessId,
-      status: "dismissed",
+      status: "in_progress",
       percentComplete,
       requiredCompleted,
       requiredTotal,
-      dismissedAt: input.dismissedAt ?? new Date().toISOString(),
+      dismissedAt: null,
       steps,
       version: 1,
     };

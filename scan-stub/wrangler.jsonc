@@ -1,0 +1,7 @@
+{
+  // Staging-only malware scan stub — see index.js. Deployed manually via
+  // `npx wrangler deploy -c scan-stub/wrangler.jsonc`.
+  "name": "recavo-staging-scan-stub",
+  "main": "index.js",
+  "compatibility_date": "2026-01-01"
+}
