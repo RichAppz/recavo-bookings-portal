@@ -18298,6 +18298,11 @@ export interface paths {
                         allDay?: boolean;
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
                         priceMinor?: number;
+                        /**
+                         * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
+                         * @default true
+                         */
+                        notifyCustomer?: boolean;
                     };
                 };
             };
@@ -18498,6 +18503,11 @@ export interface paths {
                         allDay?: boolean;
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
                         priceMinor?: number;
+                        /**
+                         * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
+                         * @default true
+                         */
+                        notifyCustomer?: boolean;
                     };
                 };
             };
