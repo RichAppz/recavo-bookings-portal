@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
+import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,9 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useBookings, useServices, useStaffList } from "@/lib/api/hooks";
+import { useBookings, useCalendarBlocks, useServices, useStaffList } from "@/lib/api/hooks";
 import { addDays, formatInTz, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
-import type { Booking } from "@/lib/api/types";
+import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +52,28 @@ const START_HOUR = 6;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
+/** Anything with a `[start, end)` window that can be laid onto the grid. */
+type Spanning = { start: string; end: string };
+
+/**
+ * Event chips are painted in the event's own colour, tinted and hatched so they read
+ * as "not a job" next to booking chips even for someone who picks a similar hue.
+ */
+function eventChipStyle(colour: string): CSSProperties {
+  return {
+    borderLeftColor: colour,
+    backgroundColor: `${colour}1F`,
+    backgroundImage: `repeating-linear-gradient(135deg, transparent 0 6px, ${colour}14 6px 8px)`,
+  };
+}
+
+/** Snap a click's Y offset on a day column to the nearest quarter hour, as HH:MM. */
+function timeAtOffset(offsetY: number): string {
+  const minutes = START_HOUR * 60 + Math.floor((offsetY / HOUR_HEIGHT) * 4) * 15;
+  const clamped = Math.min(Math.max(minutes, START_HOUR * 60), END_HOUR * 60 - 15);
+  return `${`${Math.floor(clamped / 60)}`.padStart(2, "0")}:${`${clamped % 60}`.padStart(2, "0")}`;
+}
+
 /** Six Monday-first weeks from the Monday on or before the 1st. */
 function monthGrid(anchor: Date): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -66,10 +90,30 @@ function CalendarPage() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
+  const [addTime, setAddTime] = useState<string | undefined>(undefined);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarBlock | null>(null);
   /** Open Add booking on a given day (defaults to the day in view, or today). */
   const openAdd = (iso?: string) => {
     setAddDate(iso);
     setAddOpen(true);
+  };
+  const openAddEvent = (iso?: string, time?: string) => {
+    setAddDate(iso);
+    setAddTime(time);
+    setEditingEvent(null);
+    setEventOpen(true);
+  };
+  /** An empty slot could be either a booking or an event, so ask first (RECA-531). */
+  const openChooser = (iso?: string, time?: string) => {
+    setAddDate(iso);
+    setAddTime(time);
+    setChooserOpen(true);
+  };
+  const openEvent = (block: CalendarBlock) => {
+    setEditingEvent(block);
+    setEventOpen(true);
   };
 
   const services = useServices();
@@ -92,6 +136,14 @@ function CalendarPage() {
     // and a calendar that quietly omits sessions is worse than no calendar.
     limit: 200,
   });
+
+  // Events sit beside bookings on the same grid; the server guarantees they never overlap.
+  const blocks = useCalendarBlocks({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    staffId: staffFilter !== "all" ? staffFilter : undefined,
+  });
+  const events = blocks.data ?? [];
 
   const filtered = (bookings.data?.bookings ?? []).filter(
     (b) => serviceFilter === "all" || b.serviceSnapshot.serviceId === serviceFilter,
@@ -142,30 +194,61 @@ function CalendarPage() {
    * coating) show on every day they cover, not just the drop-off day. An end
    * exactly on midnight belongs to the previous day, hence the minute shaved off.
    */
-  const coversDay = (b: Booking, iso: string) => {
+  const coversDay = (b: Spanning, iso: string) => {
     const first = isoDateInTz(b.start, timezone);
     const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
     const last = isoDateInTz(lastInstant, timezone);
     return first <= iso && iso <= last;
   };
-  const startsOn = (b: Booking, iso: string) => isoDateInTz(b.start, timezone) === iso;
-  const endsOn = (b: Booking, iso: string) => {
+  const startsOn = (b: Spanning, iso: string) => isoDateInTz(b.start, timezone) === iso;
+  const endsOn = (b: Spanning, iso: string) => {
     const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
     return isoDateInTz(lastInstant, timezone) === iso;
   };
-  const isMultiDay = (b: Booking) => !endsOn(b, isoDateInTz(b.start, timezone));
-  const endLabel = (b: Booking) =>
+  const isMultiDay = (b: Spanning) => !endsOn(b, isoDateInTz(b.start, timezone));
+  const endLabel = (b: Spanning) =>
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const timeLabel = (iso: string) =>
+    formatInTz(iso, timezone, { hour: "2-digit", minute: "2-digit" });
+
+  /**
+   * Clip an item to today's column: one that began yesterday runs from the top of the
+   * grid, one that ends tomorrow runs off the bottom.
+   */
+  const columnBox = (b: Spanning, iso: string) => {
+    const startsToday = startsOn(b, iso);
+    const endsToday = endsOn(b, iso);
+    const topMin = startsToday ? minutesOf(b.start, timezone) : START_HOUR * 60;
+    const bottomMin = endsToday
+      ? Math.min(minutesOf(b.end, timezone) || END_HOUR * 60, END_HOUR * 60)
+      : END_HOUR * 60;
+    const heightMin = Math.max(bottomMin - topMin, 30);
+    return {
+      startsToday,
+      endsToday,
+      top: ((topMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
+      height: (heightMin / 60) * HOUR_HEIGHT - 4,
+    };
+  };
+  const bookingLabel = tenant.terminology.booking || "Booking";
 
   return (
     <>
       <PageHeader
         title="Calendar"
-        description="Click any booking for the full detail panel. Use the top bar to filter by location."
+        description={`Click any ${bookingLabel.toLowerCase()} or event to open it; click an empty slot to add one. Use the top bar to filter by location.`}
         actions={
-          <Button onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>
-            <CalendarPlus className="size-4" /> Add booking
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => openAddEvent(view === "day" ? isoDate(anchor) : undefined)}
+            >
+              <Clock className="size-4" /> Add event
+            </Button>
+            <Button onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>
+              <CalendarPlus className="size-4" /> Add {bookingLabel.toLowerCase()}
+            </Button>
+          </div>
         }
       />
 
@@ -232,6 +315,12 @@ function CalendarPage() {
         </p>
       ) : null}
 
+      {blocks.isError ? (
+        <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
+          Couldn't load events for this range; bookings are still shown.
+        </p>
+      ) : null}
+
       {bookings.isError ? (
         <div className="surface-card p-6 text-sm text-destructive">
           Couldn't load bookings for this range.
@@ -255,6 +344,15 @@ function CalendarPage() {
               const dayBookings = filtered
                 .filter((b) => coversDay(b, iso))
                 .sort((a, b) => a.start.localeCompare(b.start));
+              const dayEvents = events
+                .filter((e) => coversDay(e, iso))
+                .sort((a, b) => a.start.localeCompare(b.start));
+              const dayItems: (
+                { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock }
+              )[] = [
+                ...dayBookings.map((item) => ({ kind: "booking" as const, item })),
+                ...dayEvents.map((item) => ({ kind: "event" as const, item })),
+              ].sort((a, b) => a.item.start.localeCompare(b.item.start));
               return (
                 <div
                   key={iso}
@@ -287,15 +385,45 @@ function CalendarPage() {
                   {/* Quick add for this day; shows on hover (always on touch, which has no hover). */}
                   <button
                     type="button"
-                    onClick={() => openAdd(iso)}
+                    onClick={() => openChooser(iso)}
                     className="absolute top-1.5 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                    aria-label={`Add booking on ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                    aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
                   >
                     <Plus className="size-3.5" />
                   </button>
 
                   <div className="relative mt-1 flex flex-col gap-0.5">
-                    {dayBookings.slice(0, 3).map((b) => {
+                    {dayItems.slice(0, 3).map((entry) => {
+                      if (entry.kind === "event") {
+                        const ev = entry.item;
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => openEvent(ev)}
+                            style={eventChipStyle(ev.colour)}
+                            className="flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight"
+                          >
+                            {startsOn(ev, iso) ? (
+                              <span className="font-semibold tabular-nums">
+                                {timeLabel(ev.start)}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-muted-foreground"
+                                aria-label="Continues from earlier"
+                              >
+                                ↳
+                              </span>
+                            )}
+                            <span className="truncate">{ev.title}</span>
+                            {isMultiDay(ev) && !endsOn(ev, iso) ? (
+                              <span className="ml-auto text-muted-foreground">→</span>
+                            ) : null}
+                          </button>
+                        );
+                      }
+                      const b = entry.item;
                       const cancelled =
                         b.status === "cancelled_by_customer" ||
                         b.status === "cancelled_by_business" ||
@@ -332,13 +460,13 @@ function CalendarPage() {
                         </button>
                       );
                     })}
-                    {dayBookings.length > 3 ? (
+                    {dayItems.length > 3 ? (
                       <button
                         type="button"
                         onClick={() => openDay(day)}
                         className="cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline"
                       >
-                        +{dayBookings.length - 3} more
+                        +{dayItems.length - 3} more
                       </button>
                     ) : null}
                   </div>
@@ -383,17 +511,19 @@ function CalendarPage() {
               {days.map((day) => {
                 const iso = isoDate(day);
                 const dayBookings = filtered.filter((b) => coversDay(b, iso));
+                const dayEvents = events.filter((e) => coversDay(e, iso));
                 return (
                   <div key={iso} className="relative flex-1 border-l">
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
                       <div key={i} className="border-b" style={{ height: HOUR_HEIGHT }} />
                     ))}
-                    {/* Empty space in a column adds a booking on that day; blocks sit above it. */}
+                    {/* Empty space in a column asks "booking or event?" for the hour
+                        clicked; chips sit above it. */}
                     <button
                       type="button"
-                      onClick={() => openAdd(iso)}
+                      onClick={(e) => openChooser(iso, timeAtOffset(e.nativeEvent.offsetY))}
                       className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/40"
-                      aria-label={`Add booking on ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                      aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
                     />
 
                     {iso === todayIso &&
@@ -407,22 +537,38 @@ function CalendarPage() {
                       </div>
                     ) : null}
 
+                    {dayEvents.map((ev) => {
+                      const box = columnBox(ev, iso);
+                      const owner = staff.data?.find((s) => s.id === ev.staffId);
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          onClick={() => openEvent(ev)}
+                          className="absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left"
+                          style={{ ...eventChipStyle(ev.colour), top: box.top, height: box.height }}
+                        >
+                          <p className="truncate text-[11px] font-semibold">
+                            {box.startsToday ? timeLabel(ev.start) : "↳"} {ev.title}
+                          </p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {owner?.displayName ?? "Event"}
+                          </p>
+                          {isMultiDay(ev) ? (
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              Until {endLabel(ev)}
+                            </p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+
                     {dayBookings.map((b) => {
                       const cancelled =
                         b.status === "cancelled_by_customer" ||
                         b.status === "cancelled_by_business" ||
                         b.status === "late_cancelled";
-                      // Clip the block to today's column: a job that began yesterday
-                      // runs from the top of the grid, one that ends tomorrow runs off
-                      // the bottom.
-                      const startsToday = startsOn(b, iso);
-                      const endsToday = endsOn(b, iso);
-                      const topMin = startsToday ? minutesOf(b.start, timezone) : START_HOUR * 60;
-                      const bottomMin = endsToday
-                        ? Math.min(minutesOf(b.end, timezone) || END_HOUR * 60, END_HOUR * 60)
-                        : END_HOUR * 60;
-                      const startMin = topMin;
-                      const heightMin = Math.max(bottomMin - topMin, 30);
+                      const { startsToday, endsToday, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
                       return (
                         <button
@@ -432,19 +578,10 @@ function CalendarPage() {
                             "absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] border-primary bg-primary-soft px-2 py-1 text-left",
                             cancelled && "opacity-45 line-through",
                           )}
-                          style={{
-                            top: ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
-                            height: (heightMin / 60) * HOUR_HEIGHT - 4,
-                          }}
+                          style={{ top, height }}
                         >
                           <p className="truncate text-[11px] font-semibold">
-                            {startsToday
-                              ? formatInTz(b.start, timezone, {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "↳"}{" "}
-                            {b.serviceSnapshot.name}
+                            {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
                           </p>
                           <p className="truncate text-[11px] text-muted-foreground">
                             {b.attendees.length > 1
@@ -468,6 +605,10 @@ function CalendarPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <span className="size-2.5 rounded-sm" style={{ backgroundColor: DEFAULT_EVENT_COLOUR }} />
+          Event (own colour, hatched)
+        </span>
         {(services.data ?? []).map((s) => (
           <span key={s.id} className="flex items-center gap-2">
             <span
@@ -479,10 +620,35 @@ function CalendarPage() {
         ))}
       </div>
 
+      <AddToCalendarChooser
+        open={chooserOpen}
+        onOpenChange={setChooserOpen}
+        date={addDate}
+        time={addTime}
+        onBooking={() => {
+          setChooserOpen(false);
+          openAdd(addDate);
+        }}
+        onEvent={() => {
+          setChooserOpen(false);
+          openAddEvent(addDate, addTime);
+        }}
+      />
       <AddBookingModal
         open={addOpen}
         onOpenChange={setAddOpen}
         defaultDate={addDate}
+        defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
+      />
+      <EventModal
+        open={eventOpen}
+        onOpenChange={(o) => {
+          setEventOpen(o);
+          if (!o) setEditingEvent(null);
+        }}
+        block={editingEvent}
+        defaultDate={addDate}
+        defaultTime={addTime}
         defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
       />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />

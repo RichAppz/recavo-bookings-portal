@@ -1980,6 +1980,105 @@
           }
         }
       },
+      "CalendarBlock": {
+        "type": "object",
+        "description": "Personal time on a staff diary (dentist, school run). Occupies the staff member exactly like a booking — the two can never overlap — but carries no customer, service or payment. Render in `colour`; `kind` distinguishes it from a Booking in a merged calendar feed.",
+        "required": [
+          "kind",
+          "id",
+          "businessId",
+          "staffId",
+          "locationId",
+          "title",
+          "notes",
+          "colour",
+          "start",
+          "end",
+          "status",
+          "createdActorId",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "block"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "staffId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "locationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Site the block applies to; null = the whole diary."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Dentist"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "colour": {
+            "type": "string",
+            "pattern": "^#[0-9A-F]{6}$",
+            "example": "#64748B",
+            "description": "Upper-case #RRGGBB; defaults to slate grey (#64748B) when omitted on create."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC, inclusive."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC, exclusive."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "cancelled"
+            ]
+          },
+          "createdActorId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CatalogueService": {
         "type": "object",
         "required": [
@@ -32885,6 +32984,1193 @@
                       "items": {
                         "$ref": "#/components/schemas/Booking"
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/calendar-blocks": {
+      "post": {
+        "summary": "Create a calendar block (event)",
+        "description": "Blocks out personal time for a staff member — e.g. a dentist appointment — so no job can be booked over it. Reserves the slot through the same exclusion constraint as bookings: overlapping a booking or another block returns `409 BOOKING_CONFLICT`. Requires `Idempotency-Key` and `booking.create`. Location-scoped members must supply a `locationId` they are assigned to; `colour` defaults to `#64748B` (RECA-531).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "staffId",
+                  "title",
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "staffId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "locationId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "notes": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "colour": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Exclusive; must be after `start` and within 31 days of it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Block created (replayed for the same Idempotency-Key)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "block"
+                  ],
+                  "properties": {
+                    "block": {
+                      "$ref": "#/components/schemas/CalendarBlock"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List calendar blocks (staff diary events)",
+        "description": "Active blocks overlapping the half-open UTC window `[from, to)`, oldest first. Read alongside `GET /bookings` for the same window and merge on the client; blocks carry `kind: \"block\"` and their own `colour` so they render distinctly from jobs. Location-scoped memberships see blocks at their sites plus diary-wide (null location) blocks (RECA-531).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive start of the half-open UTC window."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Exclusive end of the half-open UTC window."
+          },
+          {
+            "name": "staffId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blocks in the window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "blocks"
+                  ],
+                  "properties": {
+                    "blocks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CalendarBlock"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/calendar-blocks/{blockId}": {
+      "get": {
+        "summary": "Get a calendar block",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "blockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "block"
+                  ],
+                  "properties": {
+                    "block": {
+                      "$ref": "#/components/schemas/CalendarBlock"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a calendar block",
+        "description": "Partial update: retitle, recolour, add notes, or move (`start`/`end`/`staffId`). Moving needs `booking.reschedule` and re-reserves the slot — a taken target returns `409 BOOKING_CONFLICT` and the block stays where it was. Requires `Idempotency-Key`. Cancelled blocks cannot be changed (RECA-531).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "blockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "staffId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "locationId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "notes": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "colour": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "block"
+                  ],
+                  "properties": {
+                    "block": {
+                      "$ref": "#/components/schemas/CalendarBlock"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/calendar-blocks/{blockId}/cancel": {
+      "post": {
+        "summary": "Cancel a calendar block",
+        "description": "Frees the slot for bookings. Idempotent: cancelling an already-cancelled block returns it unchanged. Requires `Idempotency-Key` and `booking.cancel` (RECA-531).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "blockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "block"
+                  ],
+                  "properties": {
+                    "block": {
+                      "$ref": "#/components/schemas/CalendarBlock"
                     }
                   }
                 }
