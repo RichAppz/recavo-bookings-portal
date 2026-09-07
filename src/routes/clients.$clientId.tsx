@@ -367,7 +367,9 @@ function ClientProfile() {
                           {formatInTz(b.start, b.timezone, { dateStyle: "medium" })}
                         </p>
                         <p className="text-xs text-muted-foreground tabular-nums">
-                          {formatInTz(b.start, b.timezone, { timeStyle: "short" })}
+                          {b.allDay
+                            ? "All day"
+                            : formatInTz(b.start, b.timezone, { timeStyle: "short" })}
                         </p>
                       </div>
                       <div className="min-w-0 flex-1">
