@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RECAVO Portal</string>
+    <string name="title_activity_main">RECAVO Portal</string>
+    <string name="package_name">app.recavo.portal</string>
+    <string name="custom_url_scheme">app.recavo.portal</string>
+</resources>

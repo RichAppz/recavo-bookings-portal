@@ -30,6 +30,18 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Capacitor / native mobile build artifacts (the ios/ and android/ projects are
+# tracked, but generated build output and dependencies are not)
+ios/App/Pods/
+ios/App/App/public/
+ios/DerivedData/
+android/.gradle/
+android/app/build/
+android/build/
+android/app/src/main/assets/public/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

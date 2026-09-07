@@ -23,9 +23,18 @@ import type { User, UserProfileUpdate } from "@/lib/api/types";
 import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
 import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import { NATIVE_AUTH_REDIRECT, isNativeApp, runNativeOAuth } from "@/lib/native";
 import { toast } from "sonner";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
+
+/**
+ * How a Google sign-in attempt ended.
+ * - `redirecting`: web — the page is navigating to Google; nothing more to do.
+ * - `signed-in`: native — the session was established; auth state follows.
+ * - `cancelled`: native — the user closed the sign-in sheet; reset the UI.
+ */
+export type GoogleSignInOutcome = "redirecting" | "signed-in" | "cancelled";
 
 export type MfaMode = "challenge" | "enroll";
 
@@ -42,7 +51,7 @@ type AuthContextValue = {
   accessToken: string | null;
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: (redirectTo?: string) => Promise<void>;
+  signInWithGoogle: (redirectTo?: string) => Promise<GoogleSignInOutcome>;
   signUp: (
     email: string,
     password: string,
@@ -637,21 +646,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authLog("signIn: password accepted (awaiting auth-state event)");
   }, []);
 
-  const signInWithGoogle = useCallback(async (redirectTo?: string) => {
-    authLog("signInWithGoogle: starting OAuth redirect");
-    const supabase = getSupabase();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo:
-          redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
-        // Without this Google silently reuses whichever account is already
-        // signed in to the browser, so there is no way to pick a different one.
-        queryParams: { prompt: "select_account" },
-      },
-    });
-    if (error) throw error;
-  }, []);
+  const signInWithGoogle = useCallback(
+    async (redirectTo?: string): Promise<GoogleSignInOutcome> => {
+      const supabase = getSupabase();
+      // Without this Google silently reuses whichever account is already
+      // signed in to the browser, so there is no way to pick a different one.
+      const queryParams = { prompt: "select_account" };
+
+      if (isNativeApp()) {
+        // Inside the Capacitor shell the WebView must not navigate to Google:
+        // Capacitor hands off-host navigations to Safari, where the session would
+        // land and never reach the app. Run the OAuth page in the in-app browser
+        // sheet instead, with Supabase redirecting to the app's URL scheme, then
+        // exchange the PKCE code here — the verifier lives in this WebView.
+        authLog("signInWithGoogle: opening OAuth in native browser sheet");
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true, queryParams },
+        });
+        if (error) throw error;
+        if (!data.url) throw new Error("Google sign-in did not return an authorisation URL");
+
+        const result = await runNativeOAuth(data.url);
+        if ("cancelled" in result) {
+          authLog("signInWithGoogle: browser sheet dismissed before completing");
+          return "cancelled";
+        }
+        if ("error" in result) throw new Error(result.error);
+
+        authLog("signInWithGoogle: exchanging code for session");
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.code);
+        if (exchangeError) throw exchangeError;
+        // The session surfaces through onAuthStateChange → applySession.
+        return "signed-in";
+      }
+
+      authLog("signInWithGoogle: starting OAuth redirect");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo:
+            redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
+          queryParams,
+        },
+      });
+      if (error) throw error;
+      return "redirecting";
+    },
+    [],
+  );
 
   /**
    * `emailRedirectTo` matters when the sign-up carries something the confirmation
