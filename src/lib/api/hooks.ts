@@ -1249,6 +1249,39 @@ export function useLinkedRecord(recordId: string | undefined) {
   });
 }
 
+/**
+ * The linked records behind a set of ids, as a lookup map — for list views (the
+ * calendar) that want a vehicle's registration on every chip without a request
+ * per row. Shares `useLinkedRecord`'s cache key, so a record already opened in
+ * the booking panel costs nothing here and vice versa. Records still loading
+ * are simply absent from the map.
+ */
+export function useLinkedRecordsById(recordIds: readonly (string | null | undefined)[]) {
+  const businessId = useBusinessId();
+  const ids = useMemo(
+    () => Array.from(new Set(recordIds.filter((id): id is string => Boolean(id)))).sort(),
+    [recordIds],
+  );
+  return useQueries({
+    queries: ids.map((recordId) => ({
+      queryKey: queryKeys.linkedRecord(businessId, recordId),
+      enabled: Boolean(businessId),
+      staleTime: 5 * 60_000,
+      queryFn: async () => {
+        const res = await api.get<{ record: LinkedRecord }>(
+          `/api/v1/businesses/${businessId}/linked-records/${recordId}`,
+        );
+        return res.data.record;
+      },
+    })),
+    combine: (results) => {
+      const map = new Map<string, LinkedRecord>();
+      for (const r of results) if (r.data) map.set(r.data.id, r.data);
+      return map;
+    },
+  });
+}
+
 /** PATCH a linked record (values / label / archive) under optimistic concurrency (If-Match). */
 export function usePatchLinkedRecord(customerId: string | undefined) {
   const businessId = useBusinessId();

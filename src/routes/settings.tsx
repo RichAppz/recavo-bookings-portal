@@ -992,7 +992,7 @@ function TeamTab() {
   const [role, setRole] = useState<string>(SYSTEM_ROLES.STAFF);
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid items-start gap-5 xl:grid-cols-2">
       <SectionCard title="Memberships">
         {memberships.isLoading ? (
           <TableGhost rows={4} />
@@ -1379,7 +1379,7 @@ function PoliciesTab({ assist = false }: { assist?: boolean }) {
         )}
       </Can>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid items-start gap-5 xl:grid-cols-2">
         <SectionCard
           title="Policy documents"
           action={
@@ -1525,7 +1525,7 @@ function PrivacyTab() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid items-start gap-5 xl:grid-cols-2">
       <SectionCard title="Latest privacy notice">
         {!latest.data ? (
           <EmptyState title="No privacy notice" />

@@ -76,6 +76,56 @@ export function bookingSettlement(
   return { state, priceMinor, paidMinor, depositMinor: deposit, outstandingMinor, dueNowMinor };
 }
 
+/** The at-a-glance colour family a settlement falls into (calendar chips, legends). */
+export type PaymentTone = "paid" | "partial" | "unpaid" | "none";
+
+/**
+ * Collapses a settlement to a colour tone. Closed bookings (cancelled/expired)
+ * read as `none`: money on a booking that will never happen is not something
+ * staff should be chasing from the calendar.
+ */
+export function paymentTone(
+  settlement: Pick<BookingSettlement, "state">,
+  status: Booking["status"],
+): PaymentTone {
+  if (CLOSED.has(status)) return "none";
+  switch (settlement.state) {
+    case "paid":
+      return "paid";
+    case "deposit_paid":
+    case "part_paid":
+      return "partial";
+    case "unpaid":
+      return "unpaid";
+    case "free":
+    case "credit":
+      return "none";
+  }
+}
+
+/** Short human label for a settlement, e.g. "Deposit paid · £40.00 to collect". */
+export function paymentLabel(
+  settlement: BookingSettlement,
+  currency: string,
+  formatMoney: (minor: number, currency: string) => string,
+): string {
+  const owed = formatMoney(settlement.outstandingMinor, currency);
+  switch (settlement.state) {
+    case "paid":
+      return "Paid in full";
+    case "deposit_paid":
+      return `Deposit paid · ${owed} to collect`;
+    case "part_paid":
+      return `Part paid · ${owed} to collect`;
+    case "unpaid":
+      return `Unpaid · ${owed} due`;
+    case "credit":
+      return "Paid with credit";
+    case "free":
+      return "No payment due";
+  }
+}
+
 /**
  * The deposit a booking of these services would carry, per the API's rule: the
  * services' deposits summed, and only meaningful strictly between 0 and the total.

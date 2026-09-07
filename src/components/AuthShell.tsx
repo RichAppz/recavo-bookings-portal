@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Check, ShieldCheck, Sparkles } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { GENERIC_BRAND, type VerticalBrand } from "@/lib/verticals";
 
 /** RECAVO wordmark using the brand logo asset; text colour adapts to the panel. */
@@ -88,12 +87,11 @@ export function AuthShell({
       </aside>
 
       {/* Form panel */}
-      <main className="flex flex-col px-5 py-8 sm:px-10">
-        <div className="flex items-center justify-between">
+      <main className="pt-safe-8 pb-safe-8 flex flex-col px-5 sm:px-10">
+        <div className="flex items-center">
           <Link to="/" className="lg:invisible">
             <BrandMark tone="light" />
           </Link>
-          <ThemeToggle />
         </div>
 
         <div className="flex flex-1 items-center justify-center py-10">

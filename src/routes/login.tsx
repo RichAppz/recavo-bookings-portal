@@ -286,7 +286,9 @@ function StaffLogin() {
         onClick={async () => {
           setBusy(true);
           try {
-            await signInWithGoogle();
+            // In the mobile app the sheet can be dismissed without signing in,
+            // in which case this page stays put and must come back to life.
+            if ((await signInWithGoogle()) === "cancelled") setBusy(false);
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Google sign-in failed");
             setBusy(false);

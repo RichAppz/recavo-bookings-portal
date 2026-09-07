@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { CalendarCheck, Check, ShieldCheck } from "lucide-react";
 import { BrandMark } from "@/components/AuthShell";
-import { ThemeToggle } from "@/components/ThemeToggle";
-
 const HIGHLIGHTS = [
   "Every studio you train at, under one login",
   "See what you've booked and what you've already paid for",
@@ -91,12 +89,11 @@ export function CustomerAuthLayout({
         </div>
       </aside>
 
-      <main className="flex flex-col px-5 py-8 sm:px-10">
-        <div className="flex items-center justify-between">
+      <main className="pt-safe-8 pb-safe-8 flex flex-col px-5 sm:px-10">
+        <div className="flex items-center">
           <Link to="/" className="lg:invisible">
             <BrandMark tone="light" />
           </Link>
-          <ThemeToggle />
         </div>
 
         <div className="flex flex-1 items-center justify-center py-10">
