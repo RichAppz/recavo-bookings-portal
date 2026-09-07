@@ -657,8 +657,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Inside the Capacitor shell the WebView must not navigate to Google:
         // Capacitor hands off-host navigations to Safari, where the session would
         // land and never reach the app. Run the OAuth page in the in-app browser
-        // sheet instead, with Supabase redirecting to the app's URL scheme, then
-        // exchange the PKCE code here — the verifier lives in this WebView.
+        // sheet instead, with Supabase redirecting to the app's URL scheme, and
+        // install whatever comes back here (tokens for the implicit flow, or a
+        // PKCE code — whose verifier lives in this WebView).
         authLog("signInWithGoogle: opening OAuth in native browser sheet");
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
@@ -674,9 +675,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if ("error" in result) throw new Error(result.error);
 
-        authLog("signInWithGoogle: exchanging code for session");
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.code);
-        if (exchangeError) throw exchangeError;
+        if ("tokens" in result) {
+          authLog("signInWithGoogle: installing session from callback tokens");
+          const { error: sessionError } = await supabase.auth.setSession(result.tokens);
+          if (sessionError) throw sessionError;
+        } else {
+          authLog("signInWithGoogle: exchanging code for session");
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.code);
+          if (exchangeError) throw exchangeError;
+        }
         // The session surfaces through onAuthStateChange → applySession.
         return "signed-in";
       }

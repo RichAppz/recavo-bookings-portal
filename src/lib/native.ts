@@ -65,7 +65,10 @@ function onInAppBrowserDismissed(handler: () => void): Unsubscribe {
   });
 }
 
-export type NativeOAuthResult = { code: string } | { error: string } | { cancelled: true };
+export type NativeOAuthTokens = { access_token: string; refresh_token: string };
+export type NativeOAuthCallback =
+  { code: string } | { tokens: NativeOAuthTokens } | { error: string };
+export type NativeOAuthResult = NativeOAuthCallback | { cancelled: true };
 
 /**
  * Runs an OAuth round-trip in the system in-app browser sheet
@@ -74,8 +77,9 @@ export type NativeOAuthResult = { code: string } | { error: string } | { cancell
  * unlike the WebView.
  *
  * Resolves when the provider redirects back to NATIVE_AUTH_REDIRECT (with the
- * PKCE code or the provider's error), or with `cancelled` when the user closes
- * the sheet without finishing. The sheet is closed before resolving.
+ * session tokens, a PKCE code, or the provider's error), or with `cancelled`
+ * when the user closes the sheet without finishing. The sheet is closed before
+ * resolving.
  */
 export async function runNativeOAuth(url: string): Promise<NativeOAuthResult> {
   const { Browser } = await import("@capacitor/browser");
@@ -111,13 +115,23 @@ export async function runNativeOAuth(url: string): Promise<NativeOAuthResult> {
 }
 
 /**
- * Parses the Supabase OAuth callback carried by a deep link. Custom-scheme URLs
- * do not always parse with `new URL`, so the query is read by hand.
+ * Parses the Supabase OAuth callback carried by a deep link.
+ *
+ * With the client's default implicit flow Supabase puts the session in the
+ * fragment (`#access_token=…&refresh_token=…`); with PKCE it puts a `?code=`
+ * in the query. Errors can land in either. Custom-scheme URLs do not always
+ * parse with `new URL`, so both parts are read by hand.
  */
-export function parseAuthCallback(url: string): { code: string } | { error: string } | null {
+export function parseAuthCallback(url: string): NativeOAuthCallback | null {
   if (!url.startsWith(NATIVE_AUTH_REDIRECT)) return null;
-  const query = url.split("?")[1]?.split("#")[0] ?? "";
+  const [beforeHash, hash = ""] = url.split("#");
+  const query = beforeHash.split("?")[1] ?? "";
   const params = new URLSearchParams(query);
+  for (const [key, value] of new URLSearchParams(hash)) params.append(key, value);
+
+  const access_token = params.get("access_token");
+  const refresh_token = params.get("refresh_token");
+  if (access_token && refresh_token) return { tokens: { access_token, refresh_token } };
   const code = params.get("code");
   if (code) return { code };
   const error = params.get("error_description") ?? params.get("error");
