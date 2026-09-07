@@ -32,9 +32,7 @@ import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
 import {
   useAvailability,
-  useBookingAction,
   useCreateBooking,
-  useCreateBookingHold,
   useCustomerLinkedRecords,
   useCustomer,
   useCustomers,
@@ -95,7 +93,6 @@ export function AddBookingModal({
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
   const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
-  const [mode, setMode] = useState<"create" | "hold">("create");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Account details + reference from a pay-by-bank 201, read out to the customer
@@ -110,8 +107,6 @@ export function AddBookingModal({
   const locations = useLocationsList();
   const customers = useCustomers();
   const createBooking = useCreateBooking();
-  const createHold = useCreateBookingHold();
-  const confirmAction = useBookingAction("confirm");
   // Vehicle (or other linked record) on the job — RECA-90. Only offered when the
   // business has a record schema; required when the service or definition says so.
   const linkedRecordDefinition = useLinkedRecordDefinition();
@@ -284,7 +279,6 @@ export function AddBookingModal({
     setSlotKey(null);
     setPaymentMethod("none");
     setDepositInput(null);
-    setMode("create");
     setNotes("");
     setAdditional([]);
     setBankResult(null);
@@ -362,24 +356,14 @@ export function AddBookingModal({
 
     setSubmitting(true);
     try {
-      // Holds reject bank_transfer — the method is chosen at final booking only.
-      if (mode === "hold" && paymentMethod !== "bank_transfer") {
-        const held = await createHold.mutateAsync(body);
-        await confirmAction.mutateAsync({
-          bookingId: held.id,
-          ifMatch: held.version,
-        });
-        toast.success("Slot held and booking confirmed");
-      } else {
-        const { bankTransfer } = await createBooking.mutateAsync(body);
-        if (bankTransfer) {
-          // Keep the dialog open on the details so staff can read them out.
-          setBankResult(bankTransfer);
-          toast.success("Booking reserved — awaiting bank transfer");
-          return;
-        }
-        toast.success("Booking created");
+      const { bankTransfer } = await createBooking.mutateAsync(body);
+      if (bankTransfer) {
+        // Keep the dialog open on the details so staff can read them out.
+        setBankResult(bankTransfer);
+        toast.success("Booking reserved — awaiting bank transfer");
+        return;
       }
+      toast.success("Booking created");
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -409,7 +393,7 @@ export function AddBookingModal({
               ? "The booking is reserved. Read these details out to the customer — they've been emailed too."
               : setupBlocked
                 ? "Finish a quick bit of setup first — then you can take bookings."
-                : "Search availability, pick a quote slot, then create directly or hold then confirm."}
+                : "Pick the client and service, choose a time, and the booking is confirmed straight away."}
           </DialogDescription>
         </DialogHeader>
 
@@ -560,39 +544,41 @@ export function AddBookingModal({
                   }}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>Variant</Label>
-                <Select
-                  value={variantId}
-                  onValueChange={(v) => {
-                    setVariantId(v);
-                    setSlotKey(null);
-                  }}
-                  disabled={!service || service.variants.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Default" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Default (no variant)</SelectItem>
-                    {(service?.variants ?? []).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {[
-                          v.name,
-                          // Blank duration/price fall back to the service default,
-                          // so only show what the variant actually overrides.
-                          v.durationMinutes != null ? formatDuration(v.durationMinutes) : null,
-                          v.priceMinor != null
-                            ? formatMoney(v.priceMinor, service!.currency)
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only worth a field when the service actually has variants. */}
+              {service && service.variants.length > 0 ? (
+                <div className="grid gap-2">
+                  <Label>Variant</Label>
+                  <Select
+                    value={variantId}
+                    onValueChange={(v) => {
+                      setVariantId(v);
+                      setSlotKey(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Default" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Default (no variant)</SelectItem>
+                      {(service?.variants ?? []).map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {[
+                            v.name,
+                            // Blank duration/price fall back to the service default,
+                            // so only show what the variant actually overrides.
+                            v.durationMinutes != null ? formatDuration(v.durationMinutes) : null,
+                            v.priceMinor != null
+                              ? formatMoney(v.priceMinor, service!.currency)
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               <div className="grid gap-2">
                 <Label>Location</Label>
                 <Select
@@ -650,20 +636,6 @@ export function AddBookingModal({
                   }}
                   className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label>Flow</Label>
-                <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="create">Create confirmed</SelectItem>
-                    <SelectItem value="hold" disabled={paymentMethod === "bank_transfer"}>
-                      Hold then confirm
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
@@ -827,8 +799,6 @@ export function AddBookingModal({
                 onValueChange={(v) => {
                   const next = v as typeof paymentMethod;
                   if (next === "credit") setAdditional([]);
-                  // Holds reject bank_transfer, so the flow falls back to direct create.
-                  if (next === "bank_transfer") setMode("create");
                   setPaymentMethod(next);
                 }}
               >
@@ -921,13 +891,7 @@ export function AddBookingModal({
             </Button>
             {setupBlocked || catalogueLoading ? null : (
               <Button onClick={submit} disabled={submitting || !selectedSlot}>
-                {submitting
-                  ? mode === "hold"
-                    ? "Holding…"
-                    : "Creating…"
-                  : mode === "hold"
-                    ? "Hold & confirm"
-                    : "Create booking"}
+                {submitting ? "Creating…" : "Create booking"}
               </Button>
             )}
           </DialogFooter>
