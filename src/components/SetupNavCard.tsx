@@ -6,11 +6,11 @@ import type { BusinessOnboarding } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 /**
- * How long the "You're set up" card lingers after the checklist is finished. Long
- * enough to enjoy the tick, short enough that it isn't sidebar furniture forever.
- * The checklist itself stays reachable from Help centre.
+ * How long the "You're set up" card lingers after the checklist is finished: an hour,
+ * long enough to see the tick, then it gets out of the way. The checklist itself stays
+ * reachable from Help centre.
  */
-const LINGER_MS = 3 * 24 * 60 * 60 * 1000;
+const LINGER_MS = 60 * 60 * 1000;
 const COMPLETED_KEY = (businessId: string) => `recavo.setup.completedAt.${businessId}`;
 
 function isComplete(data: BusinessOnboarding | undefined): boolean {
