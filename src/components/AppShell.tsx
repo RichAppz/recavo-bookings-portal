@@ -9,6 +9,7 @@ import {
   Car,
   ChevronsUpDown,
   ClipboardList,
+  Clock,
   CreditCard,
   ExternalLink,
   Gift,
@@ -46,6 +47,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { EventModal } from "@/components/EventModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
@@ -131,6 +133,13 @@ const NAV: NavGroup[] = [
         icon: ClipboardList,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
       },
+      // Staff events share the diary with bookings, so they share its permissions.
+      {
+        to: "/events",
+        label: "Events",
+        icon: Clock,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+      },
     ],
   },
   {
@@ -181,6 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
@@ -559,6 +569,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       Create group session
                     </DropdownMenuItem>
                   ) : null}
+                  <DropdownMenuItem onClick={() => setEventOpen(true)}>Add event</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("block")}>
                     Block availability
                   </DropdownMenuItem>
@@ -591,6 +602,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <EventModal open={eventOpen} onOpenChange={setEventOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
       <OnboardingChecklist openRequest={setupOpenRequest} onOpenTour={() => setTourOpen(true)} />
