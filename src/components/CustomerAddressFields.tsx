@@ -18,8 +18,8 @@ export function CustomerAddressFields({
 
   return (
     <fieldset className="grid gap-3 sm:col-span-2">
-      <legend className="text-sm font-medium">Address</legend>
-      <p className="-mt-1 text-xs text-muted-foreground">Optional. Handy for mobile jobs.</p>
+      <legend className="mb-1 text-sm font-medium">Address</legend>
+      <p className="text-xs text-muted-foreground">Optional. Handy for mobile jobs.</p>
       <div className="grid gap-2">
         <Label htmlFor={`${idPrefix}-line1`} className="sr-only">
           Address line 1
