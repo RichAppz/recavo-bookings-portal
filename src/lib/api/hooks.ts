@@ -20,6 +20,7 @@ import type {
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
+  CalendarBlock,
   Business,
   BusinessConfiguration,
   BusinessLifecycle,
@@ -236,6 +237,118 @@ export function useCreateBookingHold() {
       if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
       toastApiError(err);
     },
+  });
+}
+
+/**
+ * Staff events ("calendar blocks", RECA-531) overlapping the visible range. Read
+ * alongside `useBookings` for the same window; the two never overlap server-side.
+ */
+export function useCalendarBlocks(filters: {
+  from: string;
+  to: string;
+  staffId?: string;
+  enabled?: boolean;
+}) {
+  const businessId = useBusinessId();
+  const locationId = useLocationFilter();
+  const query = {
+    from: filters.from,
+    to: filters.to,
+    ...(filters.staffId ? { staffId: filters.staffId } : {}),
+    ...(locationId ? { locationId } : {}),
+  };
+  return useQuery({
+    queryKey: queryKeys.calendarBlocks(businessId, query),
+    enabled: Boolean(businessId) && filters.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ blocks: CalendarBlock[] }>(
+        `/api/v1/businesses/${businessId}/calendar-blocks`,
+        { query },
+      );
+      return res.data.blocks;
+    },
+  });
+}
+
+export type CalendarBlockInput = {
+  staffId: string;
+  title: string;
+  start: string;
+  end: string;
+  locationId?: string | null;
+  notes?: string | null;
+  colour?: string | null;
+};
+
+/** Refresh both feeds: a new block also removes availability from the booking side. */
+function invalidateCalendarBlocks(qc: ReturnType<typeof useQueryClient>, businessId: string) {
+  void qc.invalidateQueries({ queryKey: queryKeys.calendarBlocksAll(businessId) });
+  void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+}
+
+export function useCreateCalendarBlock() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: CalendarBlockInput, idempotencyKey: string) => {
+        const res = await api.post<{ block: CalendarBlock }>(
+          `/api/v1/businesses/${businessId}/calendar-blocks`,
+          body,
+          { idempotencyKey },
+        );
+        return res.data.block;
+      },
+    ),
+    onSuccess: () => invalidateCalendarBlocks(qc, businessId),
+    onError: (err) => {
+      // The form shows "that time is taken" inline; everything else toasts.
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
+  });
+}
+
+export function useUpdateCalendarBlock() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: { blockId: string; body: Partial<CalendarBlockInput> },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.patch<{ block: CalendarBlock }>(
+          `/api/v1/businesses/${businessId}/calendar-blocks/${vars.blockId}`,
+          vars.body,
+          { idempotencyKey },
+        );
+        return res.data.block;
+      },
+    ),
+    onSuccess: () => invalidateCalendarBlocks(qc, businessId),
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
+  });
+}
+
+export function useCancelCalendarBlock() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(async (blockId: string, idempotencyKey: string) => {
+      const res = await api.post<{ block: CalendarBlock }>(
+        `/api/v1/businesses/${businessId}/calendar-blocks/${blockId}/cancel`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data.block;
+    }),
+    onSuccess: () => invalidateCalendarBlocks(qc, businessId),
+    onError: (err) => toastApiError(err),
   });
 }
 
