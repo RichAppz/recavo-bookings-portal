@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { Clock, Eye, EyeOff, Plus, Trash2, Users } from "lucide-react";
+import { Check, Clock, Eye, EyeOff, Plus, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,24 @@ function serviceNoun(service: string) {
  */
 type DurationUnit = "minutes" | "hours" | "days";
 const UNIT_MINUTES: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };
+
+/**
+ * Preset swatches for the calendar dot. Chosen to stay distinguishable from each
+ * other and from the payment colours the calendar chips already use (teal,
+ * green, amber, red), so a service dot never reads as a payment state.
+ */
+const SERVICE_COLOURS = [
+  "#2563eb", // blue
+  "#7c3aed", // violet
+  "#db2777", // pink
+  "#0891b2", // cyan
+  "#ea580c", // orange
+  "#4d7c0f", // olive
+  "#78350f", // brown
+  "#475569", // slate
+];
+
+const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
   if (minutes >= 1440 && minutes % 1440 === 0) {
@@ -183,13 +201,14 @@ function ServicesPage() {
           action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
         />
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
           {(services.data ?? []).map((s) => (
             <article key={s.id} className="surface-card flex flex-col p-5">
               <div className="flex items-start justify-between gap-3">
                 <span
                   className="size-2.5 rounded-full"
-                  style={{ backgroundColor: s.colour ?? "var(--color-chart-2)" }}
+                  // Same fallback as the calendar dot, so the card matches what staff see there.
+                  style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
                 />
                 <div className="flex items-center gap-2">
                   {s.publicVisible ? (
@@ -412,6 +431,8 @@ function ServiceDialog({
   const [description, setDescription] = useState(service?.description ?? "");
   const [active, setActive] = useState(service?.active ?? true);
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
+  // Calendar swatch; null = "no colour", which renders the theme default.
+  const [colour, setColour] = useState<string | null>(service?.colour ?? null);
   const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service, isDetailing));
   // Creating: start from the business's opening hours so the offer matches the
   // door hours without retyping them. Editing: whatever is saved.
@@ -435,6 +456,7 @@ function ServiceDialog({
     setDescription(s?.description ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
+    setColour(s?.colour ?? null);
     setVariants(toVariantRows(s, isDetailing));
     setWindows(defaultWindows(s));
     setFieldErrors({});
@@ -537,6 +559,7 @@ function ServiceDialog({
       capacityMax,
       active,
       publicVisible,
+      colour,
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: windows,
@@ -629,6 +652,70 @@ function ServiceDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="s-colour">Calendar colour</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {SERVICE_COLOURS.map((hex) => {
+                const selected = colour?.toLowerCase() === hex;
+                return (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => setColour(hex)}
+                    aria-label={`Use colour ${hex}`}
+                    aria-pressed={selected}
+                    className={cn(
+                      "inline-flex size-7 cursor-pointer items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow hover:ring-2 hover:ring-ring/50",
+                      selected && "ring-2 ring-ring",
+                    )}
+                    style={{ backgroundColor: hex }}
+                  >
+                    {selected ? <Check className="size-3.5 text-white" strokeWidth={3} /> : null}
+                  </button>
+                );
+              })}
+              {/* Anything off-palette: the native picker, shown as one more swatch. */}
+              <label
+                className={cn(
+                  "relative inline-flex size-7 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-input ring-offset-2 ring-offset-background hover:ring-2 hover:ring-ring/50",
+                  colour && !SERVICE_COLOURS.includes(colour.toLowerCase()) && "ring-2 ring-ring",
+                )}
+                style={
+                  colour && !SERVICE_COLOURS.includes(colour.toLowerCase())
+                    ? { backgroundColor: colour, borderStyle: "solid" }
+                    : undefined
+                }
+                title="Custom colour"
+              >
+                <input
+                  id="s-colour"
+                  type="color"
+                  value={colour && HEX_COLOUR.test(colour) ? colour : "#2563eb"}
+                  onChange={(e) => setColour(e.target.value)}
+                  className="absolute inset-0 size-full cursor-pointer opacity-0"
+                  aria-label="Custom colour"
+                />
+                {!colour || SERVICE_COLOURS.includes(colour.toLowerCase()) ? (
+                  <Plus className="pointer-events-none size-3.5 text-muted-foreground" />
+                ) : null}
+              </label>
+              {colour ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setColour(null)}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Marks this {lower} on the calendar and legend. Payment status sets the chip colour;
+              this is the dot.
+            </p>
           </div>
           <div className={cn("grid gap-4", isDetailing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
             <div className="grid gap-2">

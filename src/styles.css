@@ -188,3 +188,21 @@
     display: none;
   }
 }
+
+/* Safe-area padding for the iOS notch / status bar and home indicator. Zero in
+   a normal browser tab; non-zero inside the Capacitor shell or a home-screen
+   PWA, where viewport-fit=cover (see __root.tsx) lets the page run edge to
+   edge. `pt-safe-*` adds the inset on top of the usual spacing scale so it can
+   replace an existing `pt-N` without stacking two padding-top declarations. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pt-safe-* {
+  padding-top: calc(env(safe-area-inset-top, 0px) + --spacing(--value(integer)));
+}
+@utility pb-safe-* {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(--value(integer)));
+}

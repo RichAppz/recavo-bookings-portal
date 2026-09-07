@@ -17,9 +17,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useBookings, useCalendarBlocks, useServices, useStaffList } from "@/lib/api/hooks";
-import { addDays, formatInTz, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
-import type { Booking, CalendarBlock } from "@/lib/api/types";
+import {
+  useBookings,
+  useCalendarBlocks,
+  useLinkedRecordsById,
+  useServices,
+  useStaffList,
+} from "@/lib/api/hooks";
+import { addDays, formatInTz, formatMoney, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
+import type { Booking, CalendarBlock, LinkedRecord } from "@/lib/api/types";
+import {
+  bookingSettlement,
+  paymentLabel,
+  paymentTone,
+  type PaymentTone,
+} from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +63,76 @@ export const Route = createFileRoute("/calendar")({
 const START_HOUR = 6;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
+
+/**
+ * Payment status is the one thing staff most need to read off the calendar
+ * without opening a booking, so it owns the chip colour: green when nothing is
+ * owed (paid, free, credit, cancelled), amber deposit or part paid, red
+ * nothing received.
+ */
+// "Nothing to collect" (free, credit, cancelled) shares the settled green: to
+// the person reading the calendar both mean "no money to chase", and teal next
+// to green was too close to tell apart.
+const PAYMENT_CHIP: Record<PaymentTone, string> = {
+  paid: "border-success bg-success-soft",
+  partial: "border-warning bg-warning-soft",
+  unpaid: "border-destructive bg-destructive-soft",
+  none: "border-success bg-success-soft",
+};
+
+const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
+  { tone: "paid", label: "Paid / nothing to collect" },
+  { tone: "partial", label: "Deposit / part paid" },
+  { tone: "unpaid", label: "Unpaid" },
+];
+
+const PAYMENT_DOT: Record<PaymentTone, string> = {
+  paid: "bg-success",
+  partial: "bg-warning",
+  unpaid: "bg-destructive",
+  none: "bg-success",
+};
+
+const SERVICE_FALLBACK_COLOUR = "var(--color-chart-1)";
+
+/** The service's colour swatch, shared by the chips and the legend. */
+function ServiceDot({ colour, className }: { colour: string; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("inline-block size-2 shrink-0 rounded-full", className)}
+      style={{ backgroundColor: colour }}
+    />
+  );
+}
+
+/**
+ * What identifies the linked record at a glance. The vehicle template's
+ * `registration` field is the thing a detailer recognises a job by, so it wins;
+ * other record types (pets, …) fall back to the record's own label.
+ */
+function recordTag(record: LinkedRecord | undefined): string | null {
+  if (!record) return null;
+  const reg = record.values?.registration;
+  if (typeof reg === "string" && reg.trim()) return reg.trim().toUpperCase();
+  return record.displayLabel || null;
+}
+
+const isCancelled = (b: Booking) =>
+  b.status === "cancelled_by_customer" ||
+  b.status === "cancelled_by_business" ||
+  b.status === "late_cancelled";
+
+/** Tone, classes and a spoken label for one booking's chip. */
+function chipPayment(b: Booking) {
+  const settlement = bookingSettlement(b);
+  const tone = paymentTone(settlement, b.status);
+  return {
+    tone,
+    className: PAYMENT_CHIP[tone],
+    label: paymentLabel(settlement, b.currency, formatMoney),
+  };
+}
 
 /** Anything with a `[start, end)` window that can be laid onto the grid. */
 type Spanning = { start: string; end: string };
@@ -149,6 +231,21 @@ function CalendarPage() {
     (b) => serviceFilter === "all" || b.serviceSnapshot.serviceId === serviceFilter,
   );
 
+  // One batched lookup for every vehicle (or other linked record) in view, so
+  // chips can show the registration without opening the booking.
+  const linkedRecords = useLinkedRecordsById(filtered.map((b) => b.linkedRecordId));
+  const tagFor = (b: Booking) =>
+    b.linkedRecordId ? recordTag(linkedRecords.get(b.linkedRecordId)) : null;
+
+  // Service identity rides along as a dot inside each chip; the chip's
+  // border/background belong to payment status. A service with no colour set
+  // still gets a dot so the row of chips reads consistently.
+  const serviceColour = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of services.data ?? []) map.set(s.id, s.colour ?? SERVICE_FALLBACK_COLOUR);
+    return (b: Booking) => map.get(b.serviceSnapshot.serviceId) ?? SERVICE_FALLBACK_COLOUR;
+  }, [services.data]);
+
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const todayIso = isoDate(new Date());
@@ -226,6 +323,7 @@ function CalendarPage() {
     return {
       startsToday,
       endsToday,
+      heightMin,
       top: ((topMin - START_HOUR * 60) / 60) * HOUR_HEIGHT,
       height: (heightMin / 60) * HOUR_HEIGHT - 4,
     };
@@ -277,21 +375,24 @@ function CalendarPage() {
           </TabsList>
         </Tabs>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-          <Select value={staffFilter} onValueChange={setStaffFilter}>
-            <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
-              </SelectItem>
-              {(staff.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.displayName}
+          {/* A one-person business has nothing to filter by; the control is noise. */}
+          {(staff.data?.length ?? 0) > 1 ? (
+            <Select value={staffFilter} onValueChange={setStaffFilter}>
+              <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {(staff.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select value={serviceFilter} onValueChange={setServiceFilter}>
             <SelectTrigger className="w-full sm:w-[190px]">
               <SelectValue placeholder="Service" />
@@ -424,20 +525,23 @@ function CalendarPage() {
                         );
                       }
                       const b = entry.item;
-                      const cancelled =
-                        b.status === "cancelled_by_customer" ||
-                        b.status === "cancelled_by_business" ||
-                        b.status === "late_cancelled";
+                      const cancelled = isCancelled(b);
+                      const payment = chipPayment(b);
+                      const tag = tagFor(b);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
+                          title={payment.label}
+                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
                           className={cn(
-                            "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] border-primary bg-primary-soft px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
                         >
+                          <ServiceDot colour={serviceColour(b)} />
                           {startsOn(b, iso) ? (
                             <span className="font-semibold tabular-nums">
                               {formatInTz(b.start, timezone, {
@@ -453,6 +557,7 @@ function CalendarPage() {
                               ↳
                             </span>
                           )}
+                          {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
                           <span className="truncate">{b.serviceSnapshot.name}</span>
                           {isMultiDay(b) && !endsOn(b, iso) ? (
                             <span className="ml-auto text-muted-foreground">→</span>
@@ -564,25 +669,37 @@ function CalendarPage() {
                     })}
 
                     {dayBookings.map((b) => {
-                      const cancelled =
-                        b.status === "cancelled_by_customer" ||
-                        b.status === "cancelled_by_business" ||
-                        b.status === "late_cancelled";
-                      const { startsToday, endsToday, top, height } = columnBox(b, iso);
+                      const cancelled = isCancelled(b);
+                      const payment = chipPayment(b);
+                      const tag = tagFor(b);
+                      const { startsToday, endsToday, heightMin, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
                       return (
                         <button
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
+                          title={payment.label}
+                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
                           className={cn(
-                            "absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] border-primary bg-primary-soft px-2 py-1 text-left",
+                            // flex-col so the text sits at the top of a tall block; a
+                            // button centres its content vertically by default.
+                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left",
+                            payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
                           style={{ top, height }}
                         >
-                          <p className="truncate text-[11px] font-semibold">
-                            {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
+                          <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
+                            <ServiceDot colour={serviceColour(b)} />
+                            <span className="truncate">
+                              {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
+                            </span>
                           </p>
+                          {tag ? (
+                            <p className="truncate text-[11px] font-semibold tracking-wide">
+                              {tag}
+                            </p>
+                          ) : null}
                           <p className="truncate text-[11px] text-muted-foreground">
                             {b.attendees.length > 1
                               ? `${b.seatCount}/${b.attendees.length} booked`
@@ -592,6 +709,14 @@ function CalendarPage() {
                             <p className="truncate text-[11px] text-muted-foreground">
                               {endsToday ? `Ready ${endLabel(b)}` : `Until ${endLabel(b)}`}
                             </p>
+                          ) : null}
+                          {/* Money still owed is worth a line of its own when the
+                              block is tall enough to hold one (≥ 1h). Settled and
+                              no-charge bookings say it with colour alone. */}
+                          {!cancelled &&
+                          (payment.tone === "unpaid" || payment.tone === "partial") &&
+                          heightMin >= 60 ? (
+                            <p className="truncate text-[11px] font-medium">{payment.label}</p>
                           ) : null}
                         </button>
                       );
@@ -604,20 +729,34 @@ function CalendarPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-2">
-          <span className="size-2.5 rounded-sm" style={{ backgroundColor: DEFAULT_EVENT_COLOUR }} />
-          Event (own colour, hatched)
-        </span>
-        {(services.data ?? []).map((s) => (
-          <span key={s.id} className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-medium">Payment (chip colour):</span>
+          {PAYMENT_LEGEND.map(({ tone, label }) => (
+            <span key={tone} className="flex items-center gap-2">
+              <span className={cn("size-2.5 rounded-full", PAYMENT_DOT[tone])} />
+              {label}
+            </span>
+          ))}
+          <span className="flex items-center gap-2">
             <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
+              className="size-2.5 rounded-sm"
+              style={{ backgroundColor: DEFAULT_EVENT_COLOUR }}
             />
-            {s.name}
+            Event (own colour, hatched)
           </span>
-        ))}
+        </div>
+        {(services.data ?? []).length > 0 ? (
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="font-medium">Service (dot):</span>
+            {(services.data ?? []).map((s) => (
+              <span key={s.id} className="flex items-center gap-2">
+                <ServiceDot colour={s.colour ?? SERVICE_FALLBACK_COLOUR} className="size-2.5" />
+                {s.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <AddToCalendarChooser

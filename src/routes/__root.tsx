@@ -81,7 +81,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // viewport-fit=cover lets the page extend under the notch/status bar on
+      // iOS (Capacitor shell + home-screen PWA); the pt-safe/pb-safe utilities
+      // in styles.css then pad the chrome back out of the unsafe area.
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Overview — RECAVO" },
       {
         name: "description",
