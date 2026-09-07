@@ -7595,6 +7595,17 @@ export interface paths {
                             iban?: string | null;
                             bic?: string | null;
                         };
+                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+                        reminders?: {
+                            rules: {
+                                minutesBefore: number;
+                                /**
+                                 * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                                 * @enum {string}
+                                 */
+                                channel: "preferred" | "email" | "sms";
+                            }[];
+                        };
                     };
                 };
             };
@@ -32851,6 +32862,17 @@ export interface components {
                 accountNumber?: string | null;
                 iban?: string | null;
                 bic?: string | null;
+            };
+            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+            reminders?: {
+                rules: {
+                    minutesBefore: number;
+                    /**
+                     * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                     * @enum {string}
+                     */
+                    channel: "preferred" | "email" | "sms";
+                }[];
             };
         };
         BankTransferInstructions: {
