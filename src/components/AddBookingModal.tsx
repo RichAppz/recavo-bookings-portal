@@ -7,6 +7,7 @@ import {
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
+import { ServiceSearchPicker } from "@/components/ServiceSearchPicker";
 import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -548,26 +549,16 @@ export function AddBookingModal({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Service</Label>
-                <Select
+                <ServiceSearchPicker
+                  services={serviceList}
                   value={serviceId}
-                  onValueChange={(v) => {
-                    setServiceId(v);
+                  onSelect={(s) => {
+                    setServiceId(s.id);
                     setVariantId("none");
                     setSlotKey(null);
                     setAdditional([]);
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Variant</Label>
@@ -729,23 +720,14 @@ export function AddBookingModal({
                   );
                 })}
                 {availableToAdd.length > 0 ? (
-                  <Select
-                    value=""
-                    onValueChange={(v) =>
-                      setAdditional((prev) => [...prev, { serviceId: v, variantId: null }])
+                  <ServiceSearchPicker
+                    services={availableToAdd}
+                    value={null}
+                    placeholder="Add another service"
+                    onSelect={(s) =>
+                      setAdditional((prev) => [...prev, { serviceId: s.id, variantId: null }])
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Add another service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableToAdd.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 ) : null}
                 {additional.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
