@@ -15,6 +15,8 @@ export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
 export type Booking = schemas["Booking"];
+/** Staff-side "event" on the diary (dentist, school run) that keeps jobs off the slot (RECA-531). */
+export type CalendarBlock = schemas["CalendarBlock"];
 /** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */
 export type ServiceLineItem = Booking["lineItems"][number];
 /** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
