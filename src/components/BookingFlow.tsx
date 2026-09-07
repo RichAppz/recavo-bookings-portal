@@ -482,13 +482,19 @@ export function BookingFlow({ businessId, studio, onClearRedirectParams }: Booki
     }
   };
 
-  useEffect(() => {
-    writeStoredJourney(businessId, hold ? { hold, contact } : null);
-  }, [businessId, hold, contact]);
-
   // Card authentication takes the customer to their bank and back to a fresh page,
   // so the journey is rebuilt from storage rather than from React state.
   const resumed = useRef(false);
+
+  useEffect(() => {
+    // A fresh mount on the way back from the bank has no hold in state yet — the
+    // effect below is about to restore it from this very record. Writing the
+    // empty state here first would delete the journey a moment before it is
+    // read, and the customer would land on step one having already paid.
+    if (!hold && !resumed.current && returnedFromAuthentication()) return;
+    writeStoredJourney(businessId, hold ? { hold, contact } : null);
+  }, [businessId, hold, contact]);
+
   useEffect(() => {
     if (resumed.current || !returnedFromAuthentication()) return;
     resumed.current = true;

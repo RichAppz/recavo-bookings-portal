@@ -106,8 +106,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     }
   }
 
-  const startedAt =
-    typeof performance !== "undefined" ? performance.now() : Date.now();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const elapsed = () =>
     Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt);
 

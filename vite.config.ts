@@ -20,6 +20,12 @@ export default defineConfig({
   },
   vite: {
     server: {
+      // The Playwright suite drives the app on book.recavo.test and
+      // dashboard.recavo.test (mapped to loopback by Chromium's host resolver)
+      // so that `isCustomerHost` sees the hostname it does in production.
+      // Vite rejects an unknown Host header, which would fail the run before a
+      // single assertion.
+      allowedHosts: [".recavo.test"],
       proxy: {
         "/api": {
           target: apiTarget,

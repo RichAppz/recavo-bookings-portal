@@ -6,7 +6,19 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vinxi",
+      "playwright-report",
+      "test-results",
+      // Generated, and rewritten wholesale by `npm run gen:api` and the router
+      // plugin. Linting them only ever reports on the generator's formatting.
+      "src/lib/api/schema.d.ts",
+      "src/routeTree.gen.ts",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -37,4 +49,11 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  {
+    // Playwright fixtures take a callback named `use`, which the React rule
+    // reads as a hook called outside a component. There are no React hooks in
+    // the browser-side test support at all.
+    files: ["tests/e2e/**/*.ts"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
+  },
 );

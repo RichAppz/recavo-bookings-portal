@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # `node scripts/seed-demo.ts` and the test files rely on Node running
+  # TypeScript directly, which needs a recent runtime.
+  NODE_VERSION: "24"
+
+jobs:
+  # Split from the tests so a formatting slip reports as a formatting slip
+  # rather than hiding at the top of a ten-minute browser run.
+  static:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  unit:
+    name: Unit and component tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    name: Browser journeys
+    runs-on: ubuntu-latest
+    # Generous next to the ~1 minute the suite takes, but a hung dev server
+    # should be killed rather than left to burn the job's default six hours.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      # Chromium only: the suite covers our behaviour, not cross-browser
+      # rendering, and the other two triple the install for no extra signal.
+      - run: npx playwright install --with-deps chromium
+
+      # No API, no database, no secrets. Everything the app would call is
+      # intercepted in the page, so this is safe to run on a fork's pull
+      # request. The `smoke` project, which needs a real API, is excluded by
+      # the `test:e2e` script rather than by anything here.
+      - run: npm run test:e2e
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

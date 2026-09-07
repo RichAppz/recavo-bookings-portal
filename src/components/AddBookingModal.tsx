@@ -95,8 +95,7 @@ export function AddBookingModal({
   const serviceList = services.data ?? [];
   const locationList = locations.data ?? [];
   const customerList = customers.data?.items ?? [];
-  const catalogueLoading =
-    services.isLoading || locations.isLoading || customers.isLoading;
+  const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
   const noClients = customers.isSuccess && customerList.length === 0;
@@ -259,221 +258,221 @@ export function AddBookingModal({
             }
           />
         ) : (
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label>Client</Label>
-            <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {customerList.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {customerDisplayName(c)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Client</Label>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerList.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {customerDisplayName(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Service</Label>
-              <Select
-                value={serviceId}
-                onValueChange={(v) => {
-                  setServiceId(v);
-                  setVariantId("none");
-                  setSlotKey(null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {serviceList.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Service</Label>
+                <Select
+                  value={serviceId}
+                  onValueChange={(v) => {
+                    setServiceId(v);
+                    setVariantId("none");
+                    setSlotKey(null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {serviceList.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Variant</Label>
+                <Select
+                  value={variantId}
+                  onValueChange={(v) => {
+                    setVariantId(v);
+                    setSlotKey(null);
+                  }}
+                  disabled={!service || service.variants.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Default (no variant)</SelectItem>
+                    {(service?.variants ?? []).map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name} · {v.durationMinutes} min ·{" "}
+                        {formatMoney(v.priceMinor ?? 0, service!.currency)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Location</Label>
+                <Select
+                  value={locationId}
+                  onValueChange={(v) => {
+                    setLocationId(v);
+                    setSlotKey(null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locationList.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Trainer</Label>
+                <Select
+                  value={staffId}
+                  onValueChange={(v) => {
+                    setStaffId(v);
+                    setSlotKey(null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any trainer</SelectItem>
+                    {(staff.data ?? []).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="booking-date">Date</Label>
+                <input
+                  id="booking-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    setSlotKey(null);
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Flow</Label>
+                <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="create">Create confirmed</SelectItem>
+                    <SelectItem value="hold">Hold then confirm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
             <div className="grid gap-2">
-              <Label>Variant</Label>
-              <Select
-                value={variantId}
-                onValueChange={(v) => {
-                  setVariantId(v);
-                  setSlotKey(null);
-                }}
-                disabled={!service || service.variants.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Default" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Default (no variant)</SelectItem>
-                  {(service?.variants ?? []).map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name} · {v.durationMinutes} min ·{" "}
-                      {formatMoney(v.priceMinor ?? 0, service!.currency)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Available times</Label>
+              {!serviceId || !locationId ? (
+                <p className="text-xs text-muted-foreground">
+                  Choose a service and location to see availability.
+                </p>
+              ) : availability.isLoading ? (
+                <p className="text-xs text-muted-foreground">Loading availability…</p>
+              ) : slots.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No availability on this date. Try another day.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {slots.map((s) => {
+                    const key = `${s.start}:${s.staffId}`;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSlotKey(key)}
+                        className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
+                          key === slotKey
+                            ? "border-primary bg-primary-soft text-primary"
+                            : "hover:bg-secondary"
+                        }`}
+                        title={
+                          s.remainingCapacity > 1
+                            ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
+                            : formatMoney(s.priceMinor, s.currency)
+                        }
+                      >
+                        {formatInTz(s.start, s.displayTimezone || timezone, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedSlot ? (
+                <p className="text-xs text-muted-foreground">
+                  Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                  {selectedSlot.remainingCapacity > 1
+                    ? ` · ${selectedSlot.remainingCapacity} places left`
+                    : ""}
+                  {selectedSlot.slotToken ? " · slot token attached" : ""}
+                </p>
+              ) : null}
             </div>
+
             <div className="grid gap-2">
-              <Label>Location</Label>
+              <Label>Payment method</Label>
               <Select
-                value={locationId}
-                onValueChange={(v) => {
-                  setLocationId(v);
-                  setSlotKey(null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locationList.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Trainer</Label>
-              <Select
-                value={staffId}
-                onValueChange={(v) => {
-                  setStaffId(v);
-                  setSlotKey(null);
-                }}
+                value={paymentMethod}
+                onValueChange={(v) => setPaymentMethod(v as typeof paymentMethod)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Any trainer</SelectItem>
-                  {(staff.data ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.displayName}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="none">
+                    Take payment separately
+                    {service ? ` — ${formatMoney(service.basePriceMinor, service.currency)}` : ""}
+                  </SelectItem>
+                  <SelectItem value="credit">Use package credit</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
             <div className="grid gap-2">
-              <Label htmlFor="booking-date">Date</Label>
-              <input
-                id="booking-date"
-                type="date"
-                value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setSlotKey(null);
-                }}
-                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+              <Label htmlFor="booking-notes">Internal notes</Label>
+              <Textarea
+                id="booking-notes"
+                placeholder="Visible to staff only"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
-              <Label>Flow</Label>
-              <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="create">Create confirmed</SelectItem>
-                  <SelectItem value="hold">Hold then confirm</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-
-          <div className="grid gap-2">
-            <Label>Available times</Label>
-            {!serviceId || !locationId ? (
-              <p className="text-xs text-muted-foreground">
-                Choose a service and location to see availability.
-              </p>
-            ) : availability.isLoading ? (
-              <p className="text-xs text-muted-foreground">Loading availability…</p>
-            ) : slots.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No availability on this date. Try another day.
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {slots.map((s) => {
-                  const key = `${s.start}:${s.staffId}`;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSlotKey(key)}
-                      className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                        key === slotKey
-                          ? "border-primary bg-primary-soft text-primary"
-                          : "hover:bg-secondary"
-                      }`}
-                      title={
-                        s.remainingCapacity > 1
-                          ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
-                          : formatMoney(s.priceMinor, s.currency)
-                      }
-                    >
-                      {formatInTz(s.start, s.displayTimezone || timezone, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {selectedSlot ? (
-              <p className="text-xs text-muted-foreground">
-                Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
-                {selectedSlot.remainingCapacity > 1
-                  ? ` · ${selectedSlot.remainingCapacity} places left`
-                  : ""}
-                {selectedSlot.slotToken ? " · slot token attached" : ""}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Payment method</Label>
-            <Select
-              value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as typeof paymentMethod)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">
-                  Take payment separately
-                  {service ? ` — ${formatMoney(service.basePriceMinor, service.currency)}` : ""}
-                </SelectItem>
-                <SelectItem value="credit">Use package credit</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="booking-notes">Internal notes</Label>
-            <Textarea
-              id="booking-notes"
-              placeholder="Visible to staff only"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
         )}
 
         <DialogFooter>

@@ -8,6 +8,15 @@
 !.env.production
 !.env.staging
 
+# Test output. `.smoke-seed.json` records the ids of a locally seeded studio,
+# which mean nothing on anyone else's machine.
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.smoke-seed.json
+coverage/
+
 # Logs
 logs
 *.log
