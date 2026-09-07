@@ -88,6 +88,63 @@ export function formatBookingSpan(startIso: string, endIso: string, timeZone: st
   return `${start} – ${end}`;
 }
 
+/**
+ * "Mon 7 Sept 2026" for a one-day all-day job, "Mon 7 – Tue 8 Sept 2026" across days
+ * (RECA-532). `endIso` is exclusive, so the last day shown is the day before it.
+ */
+export function formatAllDaySpan(startIso: string, endIso: string, timeZone: string): string {
+  const lastInstant = new Date(new Date(endIso).getTime() - 60_000).toISOString();
+  const day = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
+  // en-GB puts a comma after the weekday once a year is present ("Mon, 7 Sept 2026");
+  // the shorter forms don't, so strip it for one consistent style.
+  const full = (iso: string) =>
+    formatInTz(iso, timeZone, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).replace(",", "");
+  if (day(startIso) === day(lastInstant)) return full(startIso);
+  const sameMonth = day(startIso).slice(0, 7) === day(lastInstant).slice(0, 7);
+  const left = sameMonth
+    ? formatInTz(startIso, timeZone, { weekday: "short", day: "numeric" })
+    : formatInTz(startIso, timeZone, { weekday: "short", day: "numeric", month: "short" });
+  return `${left} – ${full(lastInstant)}`;
+}
+
+/**
+ * The one-line "when" for a booking: all-day jobs read as dates ("Mon 7 – Tue 8 Sept
+ * 2026 · All day"), everything else as a time span (RECA-532).
+ */
+export function formatBookingWhen(
+  booking: { start: string; end: string; allDay?: boolean },
+  timeZone: string,
+): string {
+  return booking.allDay
+    ? `${formatAllDaySpan(booking.start, booking.end, timeZone)} · All day`
+    : formatBookingSpan(booking.start, booking.end, timeZone);
+}
+
+/** "2 days 3 hrs", "1 hr 30 min", "45 min" — for a live duration readout (RECA-532). */
+export function formatDurationLong(minutes: number): string {
+  if (minutes <= 0) return "0 min";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} ${days === 1 ? "day" : "days"}`);
+  if (hours) parts.push(`${hours} ${hours === 1 ? "hr" : "hrs"}`);
+  if (mins) parts.push(`${mins} min`);
+  return parts.join(" ");
+}
+
+/** Local wall-clock `YYYY-MM-DD` + `HH:MM` → ISO instant (browser zone), or null if unparsable. */
+export function localDateTimeToIso(date: string, time: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const d = new Date(`${date}T${time}:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 /** Format time-only in a timezone. */
 export function formatTimeInTz(iso: string, timeZone: string, locale = "en-GB"): string {
   return formatInTz(iso, timeZone, { hour: "2-digit", minute: "2-digit", hour12: false }, locale);

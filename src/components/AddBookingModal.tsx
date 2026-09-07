@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
@@ -46,15 +47,24 @@ import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { configuredDepositMinor } from "@/lib/booking-payment";
 import {
+  addDays,
   formatDuration,
+  formatDurationLong,
   formatInTz,
   formatMoney,
   isoDate,
+  localDateTimeToIso,
+  parseIso,
   parseMoneyToMinor,
   spansDays,
 } from "@/lib/format";
+import { outsideWorkingHours } from "@/lib/working-hours";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const DATE_INPUT =
+  "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
 
 export function AddBookingModal({
   open,
@@ -79,12 +89,25 @@ export function AddBookingModal({
   const [locationId, setLocationId] = useState("");
   const [date, setDate] = useState(defaultDate ?? isoDate(new Date()));
   const [slotKey, setSlotKey] = useState<string | null>(null);
+  // Staff either pick from the availability quote ("slot") or set the window
+  // themselves ("custom") — start/end, or whole days (RECA-532).
+  const [scheduling, setScheduling] = useState<"slot" | "custom">("slot");
+  const [startTime, setStartTime] = useState("09:00");
+  const [endDate, setEndDate] = useState(defaultDate ?? isoDate(new Date()));
+  const [endTime, setEndTime] = useState("10:00");
+  // Once the end has been edited by hand it stops following start + service length.
+  const [endTouched, setEndTouched] = useState(false);
+  const [allDay, setAllDay] = useState(false);
+  // Price override (pounds, as typed). null = the catalogue total.
+  const [priceInput, setPriceInput] = useState<string | null>(null);
 
   // Defaults come from wherever the modal was opened (a calendar day, a client's
   // profile) and differ between opens, so apply them each time it opens.
   useEffect(() => {
     if (!open) return;
     setDate(defaultDate ?? isoDate(new Date()));
+    setEndDate(defaultDate ?? isoDate(new Date()));
+    setEndTouched(false);
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
   }, [open, defaultDate, defaultStaffId]);
@@ -204,7 +227,7 @@ export function AddBookingModal({
     staffId: staffId !== "all" ? staffId : undefined,
     from: validDate ? dayStart.toISOString() : "",
     to: validDate ? dayEnd.toISOString() : "",
-    enabled: open && validDate,
+    enabled: open && validDate && scheduling === "slot",
   });
 
   const slots = useMemo(
@@ -229,13 +252,85 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
+  // Price override (RECA-532): the API puts the difference on the primary service, so
+  // the total can never drop below what the additional services alone come to.
+  const priceOverridden = priceInput !== null;
+  const overridePriceMinor: number | null = (() => {
+    if (!priceOverridden) return null;
+    try {
+      const minor = parseMoneyToMinor(priceInput);
+      return minor >= additionalTotalMinor ? minor : null;
+    } catch {
+      return null;
+    }
+  })();
+  const priceInvalid = priceOverridden && overridePriceMinor === null;
+  const effectiveTotalMinor = overridePriceMinor ?? rolledTotalMinor;
+  const priceChanged = overridePriceMinor !== null && overridePriceMinor !== rolledTotalMinor;
+
+  // Catalogue length of the whole job — the default end when staff set the time.
+  const catalogueDurationMinutes = (() => {
+    if (!service) return 60;
+    const variant = variantId !== "none" ? service.variants.find((v) => v.id === variantId) : null;
+    const primary = variant?.durationMinutes ?? service.durationMinutes;
+    return (
+      primary +
+      additional.reduce((sum, a) => {
+        const s = serviceById.get(a.serviceId);
+        if (!s) return sum;
+        const v = a.variantId ? s.variants.find((x) => x.id === a.variantId) : undefined;
+        return sum + (v?.durationMinutes ?? s.durationMinutes);
+      }, 0)
+    );
+  })();
+
+  // End follows start + service length until someone edits it.
+  useEffect(() => {
+    if (scheduling !== "custom" || endTouched || !validDate) return;
+    if (allDay) {
+      const days = Math.max(1, Math.ceil(catalogueDurationMinutes / 1440));
+      setEndDate(isoDate(addDays(parseIso(date), days - 1)));
+      return;
+    }
+    const startIso = localDateTimeToIso(date, startTime);
+    if (!startIso) return;
+    const end = new Date(new Date(startIso).getTime() + catalogueDurationMinutes * 60_000);
+    setEndDate(isoDate(end));
+    setEndTime(`${`${end.getHours()}`.padStart(2, "0")}:${`${end.getMinutes()}`.padStart(2, "0")}`);
+  }, [scheduling, endTouched, validDate, allDay, date, startTime, catalogueDurationMinutes]);
+
+  // The staff-set window as ISO instants (browser-local wall clock, like events). For
+  // all-day the server snaps to local midnights at the location; we send day bounds.
+  const customWindow = useMemo<{ start: string; end: string; minutes: number } | null>(() => {
+    if (scheduling !== "custom") return null;
+    const start = allDay ? localDateTimeToIso(date, "00:00") : localDateTimeToIso(date, startTime);
+    const end = allDay
+      ? /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+        ? localDateTimeToIso(isoDate(addDays(parseIso(endDate), 1)), "00:00")
+        : null
+      : localDateTimeToIso(endDate, endTime);
+    if (!start || !end) return null;
+    const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000);
+    return minutes > 0 ? { start, end, minutes } : null;
+  }, [scheduling, allDay, date, startTime, endDate, endTime]);
+
+  // A set time needs someone to do it — "any staff" only makes sense for a quote.
+  const customStaffId = staffId !== "all" ? staffId : (soleStaff?.id ?? null);
+  const customStaff = customStaffId
+    ? ((staff.data ?? []).find((s) => s.id === customStaffId) ?? null)
+    : null;
+  const hoursWarning = useMemo(() => {
+    if (scheduling !== "custom" || allDay || !customWindow || !customStaff) return null;
+    return outsideWorkingHours(customStaff, customWindow, locationId || null, timezone);
+  }, [scheduling, allDay, customWindow, customStaff, locationId, timezone]);
+
   // The API sums the booked services' deposits unless staff override it here.
   const defaultDepositMinor = configuredDepositMinor(
     [
       ...(service ? [service] : []),
       ...additional.map((a) => serviceById.get(a.serviceId)).filter((s) => s != null),
     ],
-    rolledTotalMinor,
+    effectiveTotalMinor,
   );
   const depositOverridden = depositInput !== null;
   const depositMinor: number | null = (() => {
@@ -244,7 +339,7 @@ export function AddBookingModal({
     if (!depositInput.trim()) return null;
     try {
       const minor = parseMoneyToMinor(depositInput);
-      return minor > 0 && minor < rolledTotalMinor ? minor : null;
+      return minor > 0 && minor < effectiveTotalMinor ? minor : null;
     } catch {
       return null;
     }
@@ -255,13 +350,20 @@ export function AddBookingModal({
     (() => {
       try {
         const minor = parseMoneyToMinor(depositInput);
-        return minor < 0 || minor >= rolledTotalMinor;
+        return minor < 0 || minor >= effectiveTotalMinor;
       } catch {
         return true;
       }
     })();
 
   const handleConflict = () => {
+    if (scheduling === "custom") {
+      toast.error(
+        `Clashes with another booking${customStaff ? ` for ${customStaff.displayName}` : ""}`,
+        { description: "Pick a different time, or someone else." },
+      );
+      return;
+    }
     toast.error("That slot was just taken", {
       description: "Availability has been refreshed — pick another time.",
     });
@@ -279,14 +381,39 @@ export function AddBookingModal({
     setSlotKey(null);
     setPaymentMethod("none");
     setDepositInput(null);
+    setPriceInput(null);
+    setScheduling("slot");
+    setAllDay(false);
+    setEndTouched(false);
     setNotes("");
     setAdditional([]);
     setBankResult(null);
   };
 
   const submit = async () => {
-    if (!customerId || !service || !locationId || !selectedSlot) {
-      toast.error("Choose a client, service, location and time slot");
+    if (!customerId || !service || !locationId) {
+      toast.error("Choose a client, service and location");
+      return;
+    }
+    if (scheduling === "slot" && !selectedSlot) {
+      toast.error("Choose a time slot");
+      return;
+    }
+    if (scheduling === "custom" && (!customWindow || !customStaffId)) {
+      toast.error(!customStaffId ? `Choose a ${staffLower}` : "Check the times", {
+        description: !customStaffId
+          ? "A set time needs someone to do the work."
+          : "The end must come after the start.",
+      });
+      return;
+    }
+    if (priceInvalid) {
+      toast.error("Check the price", {
+        description:
+          additionalTotalMinor > 0
+            ? `It can't be less than the ${formatMoney(additionalTotalMinor, service.currency)} of additional services.`
+            : "Enter an amount, or reset to the list price.",
+      });
       return;
     }
 
@@ -338,8 +465,15 @@ export function AddBookingModal({
           }
         : {}),
       locationId,
-      staffId: selectedSlot.staffId,
-      start: selectedSlot.start,
+      ...(scheduling === "custom" && customWindow && customStaffId
+        ? {
+            staffId: customStaffId,
+            start: customWindow.start,
+            end: customWindow.end,
+            ...(allDay ? { allDay: true } : {}),
+          }
+        : { staffId: selectedSlot!.staffId, start: selectedSlot!.start }),
+      ...(priceChanged ? { priceMinor: overridePriceMinor } : {}),
       leadCustomerId: customerId,
       ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
       paymentMethod,
@@ -351,7 +485,9 @@ export function AddBookingModal({
       notesInternal: notes || null,
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
-      ...(selectedSlot.slotToken ? { slotToken: selectedSlot.slotToken } : {}),
+      ...(scheduling === "slot" && selectedSlot?.slotToken
+        ? { slotToken: selectedSlot.slotToken }
+        : {}),
     };
 
     setSubmitting(true);
@@ -614,7 +750,9 @@ export function AddBookingModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Any {staffLower}</SelectItem>
+                      <SelectItem value="all">
+                        {scheduling === "custom" ? `Choose a ${staffLower}…` : `Any ${staffLower}`}
+                      </SelectItem>
                       {(staff.data ?? []).map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.displayName}
@@ -622,21 +760,28 @@ export function AddBookingModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {scheduling === "custom" && !customStaffId ? (
+                    <p className="text-xs text-destructive">
+                      A set time needs a {staffLower} to do the work.
+                    </p>
+                  ) : null}
                 </div>
               )}
-              <div className="grid gap-2">
-                <Label htmlFor="booking-date">Date</Label>
-                <input
-                  id="booking-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => {
-                    setDate(e.target.value);
-                    setSlotKey(null);
-                  }}
-                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
-                />
-              </div>
+              {scheduling === "slot" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="booking-date">Date</Label>
+                  <input
+                    id="booking-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      setSlotKey(null);
+                    }}
+                    className={DATE_INPUT}
+                  />
+                </div>
+              ) : null}
             </div>
 
             {multiAllowed ? (
@@ -711,86 +856,239 @@ export function AddBookingModal({
               </div>
             ) : null}
 
-            <div className="grid gap-2">
-              <Label>Available times</Label>
-              {!serviceId || !locationId ? (
-                <p className="text-xs text-muted-foreground">
-                  Choose a service and location to see availability.
-                </p>
-              ) : availability.isLoading ? (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
-                  ))}
-                </div>
-              ) : slots.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {validDate
-                    ? emptySlotsMessage(service?.availabilityWindows, date)
-                    : "Pick a date to see available times."}
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {slots.map((s) => {
-                    const key = `${s.start}:${s.staffId}`;
-                    return (
+            {service ? (
+              <div className="grid gap-3 rounded-xl border p-3">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="booking-price">Price (£)</Label>
+                    {priceOverridden ? (
                       <button
-                        key={key}
                         type="button"
-                        onClick={() => setSlotKey(key)}
-                        className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                          key === slotKey
-                            ? "border-primary bg-primary-soft text-primary"
-                            : "hover:bg-secondary"
-                        }`}
-                        title={
-                          s.remainingCapacity > 1
-                            ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
-                            : formatMoney(s.priceMinor, s.currency)
-                        }
+                        className="text-xs text-primary underline-offset-4 hover:underline"
+                        onClick={() => setPriceInput(null)}
                       >
-                        {formatInTz(s.start, s.displayTimezone || timezone, {
+                        List {formatMoney(rolledTotalMinor, service.currency)} · reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <Input
+                    id="booking-price"
+                    inputMode="decimal"
+                    value={priceOverridden ? priceInput : (rolledTotalMinor / 100).toFixed(2)}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                    aria-invalid={priceInvalid}
+                  />
+                  {priceInvalid ? (
+                    <p className="text-xs text-destructive">
+                      {additionalTotalMinor > 0
+                        ? `Enter at least ${formatMoney(additionalTotalMinor, service.currency)} — the additional services keep their list prices.`
+                        : "Enter an amount, or reset to the list price."}
+                    </p>
+                  ) : priceChanged ? (
+                    <p className="text-xs text-muted-foreground">
+                      {additionalTotalMinor > 0
+                        ? `${formatMoney(effectiveTotalMinor - additionalTotalMinor, service.currency)} for ${service.name}; additional services stay at list price.`
+                        : `Adjusted from the ${formatMoney(rolledTotalMinor, service.currency)} list price.`}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Time</Label>
+                  <Tabs
+                    value={scheduling}
+                    onValueChange={(v) => {
+                      setScheduling(v as typeof scheduling);
+                      setSlotKey(null);
+                      setEndTouched(false);
+                    }}
+                  >
+                    <TabsList className="h-8">
+                      <TabsTrigger value="slot" className="text-xs">
+                        Pick a slot
+                      </TabsTrigger>
+                      <TabsTrigger value="custom" className="text-xs">
+                        Set the time
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                {scheduling === "custom" ? (
+                  <div className="grid gap-3">
+                    <div className="grid gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-start-date">Start</Label>
+                        <div className="flex gap-2">
+                          <input
+                            id="booking-start-date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
+                          />
+                          {allDay ? null : (
+                            <input
+                              type="time"
+                              aria-label="Start time"
+                              value={startTime}
+                              onChange={(e) => setStartTime(e.target.value)}
+                              className={cn(DATE_INPUT, "w-28 shrink-0")}
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-end-date">{allDay ? "Last day" : "End"}</Label>
+                        <div className="flex gap-2">
+                          <input
+                            id="booking-end-date"
+                            type="date"
+                            value={endDate}
+                            min={date}
+                            onChange={(e) => {
+                              setEndDate(e.target.value);
+                              setEndTouched(true);
+                            }}
+                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
+                          />
+                          {allDay ? null : (
+                            <input
+                              type="time"
+                              aria-label="End time"
+                              value={endTime}
+                              onChange={(e) => {
+                                setEndTime(e.target.value);
+                                setEndTouched(true);
+                              }}
+                              className={cn(DATE_INPUT, "w-28 shrink-0")}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-primary"
+                          checked={allDay}
+                          onChange={(e) => {
+                            setAllDay(e.target.checked);
+                            setEndTouched(false);
+                          }}
+                        />
+                        All day
+                      </label>
+                      <span
+                        className={cn(
+                          "text-xs tabular-nums",
+                          customWindow ? "text-muted-foreground" : "text-destructive",
+                        )}
+                      >
+                        {customWindow
+                          ? `Duration: ${formatDurationLong(customWindow.minutes)}`
+                          : "The end must come after the start."}
+                      </span>
+                    </div>
+                    {allDay ? (
+                      <p className="text-xs text-muted-foreground">
+                        {`Blocks ${customStaff?.displayName ?? `the ${staffLower}`} for the whole ${
+                          customWindow && customWindow.minutes > 1440 ? "days" : "day"
+                        }; the client sees the ${
+                          customWindow && customWindow.minutes > 1440 ? "dates" : "date"
+                        } rather than a time.`}
+                      </p>
+                    ) : null}
+                    {hoursWarning ? (
+                      <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                        {hoursWarning}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {!serviceId || !locationId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Choose a service and location to see availability.
+                      </p>
+                    ) : availability.isLoading ? (
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {Array.from({ length: 6 }, (_, i) => (
+                          <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
+                        ))}
+                      </div>
+                    ) : slots.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {validDate
+                          ? emptySlotsMessage(service?.availabilityWindows, date)
+                          : "Pick a date to see available times."}
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {slots.map((s) => {
+                          const key = `${s.start}:${s.staffId}`;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSlotKey(key)}
+                              className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
+                                key === slotKey
+                                  ? "border-primary bg-primary-soft text-primary"
+                                  : "hover:bg-secondary"
+                              }`}
+                              title={
+                                s.remainingCapacity > 1
+                                  ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
+                                  : formatMoney(s.priceMinor, s.currency)
+                              }
+                            >
+                              {formatInTz(s.start, s.displayTimezone || timezone, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {selectedSlot &&
+                    spansDays(
+                      selectedSlot.start,
+                      selectedSlot.end,
+                      selectedSlot.displayTimezone || timezone,
+                    ) ? (
+                      <p className="text-xs text-muted-foreground">
+                        Drop-off{" "}
+                        {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
+                          weekday: "short",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {selectedSlot &&
-              spansDays(
-                selectedSlot.start,
-                selectedSlot.end,
-                selectedSlot.displayTimezone || timezone,
-              ) ? (
-                <p className="text-xs text-muted-foreground">
-                  Drop-off{" "}
-                  {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
-                    weekday: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {" · "}ready{" "}
-                  {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-              ) : null}
-              {selectedSlot ? (
-                <p className="text-xs text-muted-foreground">
-                  Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
-                  {selectedSlot.remainingCapacity > 1
-                    ? ` · ${selectedSlot.remainingCapacity} places left`
-                    : ""}
-                  {selectedSlot.slotToken ? " · slot token attached" : ""}
-                </p>
-              ) : null}
-            </div>
+                        {" · "}ready{" "}
+                        {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    ) : null}
+                    {selectedSlot ? (
+                      <p className="text-xs text-muted-foreground">
+                        Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                        {selectedSlot.remainingCapacity > 1
+                          ? ` · ${selectedSlot.remainingCapacity} places left`
+                          : ""}
+                        {selectedSlot.slotToken ? " · slot token attached" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label>Payment method</Label>
@@ -808,13 +1106,13 @@ export function AddBookingModal({
                 <SelectContent>
                   <SelectItem value="none">
                     Take payment separately
-                    {service ? ` — ${formatMoney(rolledTotalMinor, service.currency)}` : ""}
+                    {service ? ` — ${formatMoney(effectiveTotalMinor, service.currency)}` : ""}
                   </SelectItem>
                   <SelectItem value="credit" disabled={additional.length > 0}>
                     Use package credit
                   </SelectItem>
                   {bankTransferEnabled ? (
-                    <SelectItem value="bank_transfer" disabled={rolledTotalMinor <= 0}>
+                    <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
                       Bank transfer — awaits payment
                     </SelectItem>
                   ) : null}
@@ -832,7 +1130,7 @@ export function AddBookingModal({
               ) : null}
             </div>
 
-            {service && paymentMethod !== "credit" && rolledTotalMinor > 0 ? (
+            {service && paymentMethod !== "credit" && effectiveTotalMinor > 0 ? (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="booking-deposit">Deposit to secure (£)</Label>
@@ -864,10 +1162,10 @@ export function AddBookingModal({
                   className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
                 >
                   {depositInvalid
-                    ? `Enter an amount under ${formatMoney(rolledTotalMinor, service.currency)}, or clear it to take the full amount.`
+                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it to take the full amount.`
                     : depositMinor != null
-                      ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(rolledTotalMinor - depositMinor, service.currency)} balance to collect later.`
-                      : `No deposit — the full ${formatMoney(rolledTotalMinor, service.currency)} is due.`}
+                      ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} balance to collect later.`
+                      : `No deposit — the full ${formatMoney(effectiveTotalMinor, service.currency)} is due.`}
                 </p>
               </div>
             ) : null}
@@ -890,7 +1188,14 @@ export function AddBookingModal({
               {setupBlocked || catalogueLoading ? "Close" : "Cancel"}
             </Button>
             {setupBlocked || catalogueLoading ? null : (
-              <Button onClick={submit} disabled={submitting || !selectedSlot}>
+              <Button
+                onClick={submit}
+                disabled={
+                  submitting ||
+                  priceInvalid ||
+                  (scheduling === "slot" ? !selectedSlot : !customWindow || !customStaffId)
+                }
+              >
                 {submitting ? "Creating…" : "Create booking"}
               </Button>
             )}

@@ -564,7 +564,9 @@ function CalendarPage() {
                           )}
                         >
                           <ServiceDot colour={serviceColour(b)} />
-                          {startsOn(b, iso) ? (
+                          {b.allDay && startsOn(b, iso) ? (
+                            <span className="font-semibold">All day</span>
+                          ) : startsOn(b, iso) ? (
                             <span className="font-semibold tabular-nums">
                               {formatInTz(b.start, timezone, {
                                 hour: "2-digit",
@@ -622,6 +624,62 @@ function CalendarPage() {
           </div>
 
           <div className="overflow-x-auto">
+            {/* All-day jobs (RECA-532) get a lane above the hours rather than a
+                00:00–00:00 block: they hold the whole day, not a time on it. */}
+            {filtered.some((b) => b.allDay) ? (
+              <div className="flex min-w-[720px] border-b bg-secondary/20">
+                <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
+                  All day
+                </div>
+                {days.map((day) => {
+                  const iso = isoDate(day);
+                  const items = filtered
+                    .filter((b) => b.allDay && coversDay(b, iso))
+                    .sort((a, b) => a.start.localeCompare(b.start));
+                  return (
+                    <div key={iso} className="flex min-h-9 flex-1 flex-col gap-0.5 border-l p-1">
+                      {items.map((b) => {
+                        const cancelled = isCancelled(b);
+                        const payment = chipPayment(b);
+                        const tag = tagFor(b);
+                        const owner = staff.data?.find((s) => s.id === b.staffId);
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => setSelectedBookingId(b.id)}
+                            title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
+                            aria-label={`All day: ${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
+                            className={cn(
+                              "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              payment.className,
+                              cancelled && "opacity-45 line-through",
+                            )}
+                          >
+                            <ServiceDot colour={serviceColour(b)} />
+                            {startsOn(b, iso) ? null : (
+                              <span className="text-muted-foreground" aria-label="Continues">
+                                ↳
+                              </span>
+                            )}
+                            {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
+                            <span className="truncate">{b.serviceSnapshot.name}</span>
+                            {view === "day" && owner ? (
+                              <span className="truncate text-muted-foreground">
+                                · {owner.displayName}
+                              </span>
+                            ) : null}
+                            {isMultiDay(b) && !endsOn(b, iso) ? (
+                              <span className="ml-auto text-muted-foreground">→</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="relative flex min-w-[720px]">
               <div className="w-16 shrink-0">
                 {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
@@ -637,7 +695,7 @@ function CalendarPage() {
 
               {days.map((day) => {
                 const iso = isoDate(day);
-                const dayBookings = filtered.filter((b) => coversDay(b, iso));
+                const dayBookings = filtered.filter((b) => !b.allDay && coversDay(b, iso));
                 const dayEvents = events.filter((e) => coversDay(e, iso));
                 return (
                   <div key={iso} className="relative flex-1 border-l">
