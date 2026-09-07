@@ -26,7 +26,7 @@ import {
 } from "@/lib/api/hooks";
 import { customerDisplayName, type Booking } from "@/lib/api/types";
 import { bookingSettlement } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { formatAllDaySpan, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
 export const Route = createFileRoute("/bookings")({
   head: () => ({
@@ -293,8 +293,15 @@ function BookingRow({
     <tr onClick={onSelect} className="cursor-pointer transition-colors hover:bg-secondary/50">
       <td className="px-4 py-3 font-medium whitespace-nowrap">{booking.reference}</td>
       <td className="px-4 py-3 tabular-nums whitespace-nowrap">
-        {formatInTz(booking.start, timezone, { dateStyle: "medium", timeStyle: "short" })}
-        {spansDays(booking.start, booking.end, timezone) ? (
+        {booking.allDay ? (
+          <>
+            {formatAllDaySpan(booking.start, booking.end, timezone)}
+            <span className="block text-xs text-muted-foreground">All day</span>
+          </>
+        ) : (
+          formatInTz(booking.start, timezone, { dateStyle: "medium", timeStyle: "short" })
+        )}
+        {!booking.allDay && spansDays(booking.start, booking.end, timezone) ? (
           <span className="block text-xs text-muted-foreground">
             until{" "}
             {formatInTz(booking.end, timezone, {

@@ -578,12 +578,18 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
         className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60"
       >
         <div className="w-16 shrink-0">
-          <p className="text-sm font-semibold tabular-nums">
-            {formatInTz(booking.start, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {formatInTz(booking.end, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
+          {booking.allDay ? (
+            <p className="text-sm font-semibold">All day</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatInTz(booking.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatInTz(booking.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">

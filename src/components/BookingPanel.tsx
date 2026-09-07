@@ -97,7 +97,9 @@ import {
 } from "@/lib/booking-payment";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
-  formatBookingSpan,
+  formatBookingWhen,
+  formatDurationLong,
+  localDateTimeToIso,
   formatInTz,
   formatMoney,
   isoDate,
@@ -170,6 +172,19 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
+  // Catalogue total the job was priced from (RECA-532): the primary's snapshot price
+  // plus the additional services, which never carry an override. Differs from
+  // priceMinor only when staff adjusted it at create.
+  const listPriceMinor = booking
+    ? booking.serviceSnapshot.priceMinor +
+      (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0)
+    : null;
+  const totalMinutes = booking
+    ? Math.max(
+        0,
+        Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
+      )
+    : 0;
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
@@ -340,7 +355,7 @@ export function BookingPanel({
               <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
               <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
               <p className="text-sm text-muted-foreground">
-                {formatBookingSpan(booking.start, booking.end, timezone)}
+                {formatBookingWhen(booking, timezone)}
               </p>
             </div>
           )}
@@ -456,6 +471,11 @@ export function BookingPanel({
                     <Detail
                       label="Amount"
                       value={formatMoney(booking.priceMinor, booking.currency)}
+                      hint={
+                        listPriceMinor !== null && listPriceMinor !== booking.priceMinor
+                          ? `Adjusted from ${formatMoney(listPriceMinor, booking.currency)}`
+                          : undefined
+                      }
                     />
                     {settlement && settlement.depositMinor != null ? (
                       <Detail
@@ -475,7 +495,11 @@ export function BookingPanel({
                     ) : null}
                     <Detail
                       label="Duration"
-                      value={`${booking.serviceSnapshot.durationMinutes} minutes`}
+                      value={
+                        booking.allDay
+                          ? `All day · ${formatDurationLong(totalMinutes)}`
+                          : formatDurationLong(totalMinutes)
+                      }
                     />
                     <Detail label="Source" value={booking.source} />
                   </dl>
@@ -983,11 +1007,23 @@ export function BookingPanel({
   );
 }
 
-function Detail({ label, value, className }: { label: string; value: string; className?: string }) {
+function Detail({
+  label,
+  value,
+  hint,
+  className,
+}: {
+  label: string;
+  value: string;
+  /** Small secondary line, e.g. the catalogue price a total was adjusted from. */
+  hint?: string;
+  className?: string;
+}) {
   return (
     <div className={cn(className)}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
+      {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
     </div>
   );
 }
@@ -1183,13 +1219,36 @@ function RescheduleDialog({
   const services = useServices();
   const catalogue = (services.data ?? []).find((s) => s.id === booking.serviceSnapshot.serviceId);
 
+  // A job whose window staff set by hand (all-day, or a length that isn't the
+  // catalogue's) won't appear in the slot quote, so it moves by date/time instead
+  // and keeps its length (RECA-532).
+  const lengthMinutes = Math.round(
+    (new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000,
+  );
+  const customLength =
+    booking.allDay ||
+    (booking.lineItems?.[0]?.durationMinutes ?? booking.serviceSnapshot.durationMinutes) !==
+      booking.serviceSnapshot.durationMinutes;
+  const [mode, setMode] = useState<"slot" | "custom">(customLength ? "custom" : "slot");
+  const [time, setTime] = useState(() => {
+    const d = new Date(booking.start);
+    return `${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`;
+  });
+
   useEffect(() => {
     if (open) {
       setStaffId(booking.staffId);
       setDate(isoDate(new Date(booking.start)));
       setSlotStart(null);
+      setMode(customLength ? "custom" : "slot");
+      const d = new Date(booking.start);
+      setTime(`${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`);
     }
-  }, [open, booking.id, booking.staffId, booking.start]);
+  }, [open, booking.id, booking.staffId, booking.start, customLength]);
+
+  const customStart = booking.allDay
+    ? localDateTimeToIso(date, "00:00")
+    : localDateTimeToIso(date, time);
 
   const dayStart = new Date(`${date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -1200,7 +1259,7 @@ function RescheduleDialog({
     staffId: staffId !== "any" ? staffId : undefined,
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
-    enabled: open,
+    enabled: open && mode === "slot",
   });
 
   const slots = useMemo(
@@ -1208,22 +1267,38 @@ function RescheduleDialog({
     [availability.data],
   );
   const selectedSlot = slots.find((s) => s.start === slotStart) ?? null;
+  const customStaffId = staffId !== "any" ? staffId : null;
+  const canSubmit = mode === "slot" ? Boolean(selectedSlot) : Boolean(customStart && customStaffId);
 
   const submit = async () => {
-    if (!selectedSlot) {
+    if (mode === "slot" && !selectedSlot) {
       toast.error("Choose a new time slot");
+      return;
+    }
+    if (mode === "custom" && (!customStart || !customStaffId)) {
+      toast.error(!customStaffId ? `Choose a ${staffNoun.toLowerCase()}` : "Check the date");
       return;
     }
     try {
       await rescheduleAction.mutateAsync({
         bookingId: booking.id,
         ifMatch: booking.version,
-        body: { start: selectedSlot.start, staffId: selectedSlot.staffId },
+        body:
+          mode === "slot"
+            ? { start: selectedSlot!.start, staffId: selectedSlot!.staffId }
+            : { start: customStart!, staffId: customStaffId! },
       });
       toast.success("Booking rescheduled");
       onOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        if (mode === "custom") {
+          const who = staffOptions.find((s) => s.id === customStaffId)?.displayName;
+          toast.error(`Clashes with another booking${who ? ` for ${who}` : ""}`, {
+            description: "Pick a different day or time.",
+          });
+          return;
+        }
         toast.error("That slot was just taken", {
           description: "Availability has been refreshed — pick another time.",
         });
@@ -1246,6 +1321,22 @@ function RescheduleDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
+          <Tabs
+            value={mode}
+            onValueChange={(v) => {
+              setMode(v as typeof mode);
+              setSlotStart(null);
+            }}
+          >
+            <TabsList className="h-8">
+              <TabsTrigger value="slot" className="text-xs">
+                Pick a slot
+              </TabsTrigger>
+              <TabsTrigger value="custom" className="text-xs">
+                {booking.allDay ? "Move the day" : "Set the time"}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label>{staffNoun}</Label>
@@ -1270,63 +1361,83 @@ function RescheduleDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="reschedule-date">Date</Label>
-              <input
-                id="reschedule-date"
-                type="date"
-                value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setSlotStart(null);
-                }}
-                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
-              />
+              <Label htmlFor="reschedule-date">{mode === "custom" ? "New start" : "Date"}</Label>
+              <div className="flex gap-2">
+                <input
+                  id="reschedule-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    setSlotStart(null);
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                />
+                {mode === "custom" && !booking.allDay ? (
+                  <input
+                    type="time"
+                    aria-label="Start time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                  />
+                ) : null}
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label>Available times</Label>
-            {availability.isLoading ? (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
-                ))}
-              </div>
-            ) : availability.isError ? (
-              <p className="text-xs text-destructive">Couldn't load availability.</p>
-            ) : slots.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {emptySlotsMessage(catalogue?.availabilityWindows, date)}
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {slots.map((s) => (
-                  <button
-                    key={`${s.start}-${s.staffId}`}
-                    type="button"
-                    onClick={() => setSlotStart(s.start)}
-                    className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                      s.start === slotStart
-                        ? "border-primary bg-primary-soft text-primary"
-                        : "hover:bg-secondary"
-                    }`}
-                  >
-                    {formatInTz(s.start, s.displayTimezone || timezone, {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {mode === "custom" ? (
+            <p className="text-xs text-muted-foreground">
+              {booking.allDay
+                ? `Stays an all-day job of ${formatDurationLong(lengthMinutes)}, starting on the new date.`
+                : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start.`}
+              {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
+            </p>
+          ) : (
+            <div className="grid gap-2">
+              <Label>Available times</Label>
+              {availability.isLoading ? (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
+                  ))}
+                </div>
+              ) : availability.isError ? (
+                <p className="text-xs text-destructive">Couldn't load availability.</p>
+              ) : slots.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {emptySlotsMessage(catalogue?.availabilityWindows, date)}
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {slots.map((s) => (
+                    <button
+                      key={`${s.start}-${s.staffId}`}
+                      type="button"
+                      onClick={() => setSlotStart(s.start)}
+                      className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
+                        s.start === slotStart
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "hover:bg-secondary"
+                      }`}
+                    >
+                      {formatInTz(s.start, s.displayTimezone || timezone, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={rescheduleAction.isPending || !selectedSlot}>
+          <Button onClick={submit} disabled={rescheduleAction.isPending || !canSubmit}>
             {rescheduleAction.isPending ? "Rescheduling…" : "Confirm new time"}
           </Button>
         </DialogFooter>
