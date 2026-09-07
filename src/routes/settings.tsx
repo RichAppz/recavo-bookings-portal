@@ -6,6 +6,7 @@ import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
+import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -342,7 +343,8 @@ function SettingsPage() {
           <TabsContent value="privacy" className="mt-4">
             <PrivacyTab />
           </TabsContent>
-          <TabsContent value="notifications" className="mt-4">
+          <TabsContent value="notifications" className="mt-4 grid gap-5">
+            <BookingRemindersSetting />
             <NotificationTemplatesTab />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
