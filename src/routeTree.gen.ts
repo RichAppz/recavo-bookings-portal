@@ -17,6 +17,7 @@ import { Route as BookRouteImport } from './routes/book'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as ConnectRouteImport } from './routes/connect'
+import { Route as EventsRouteImport } from './routes/events'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
@@ -82,6 +83,11 @@ const CalendarRoute = CalendarRouteImport.update({
 const ConnectRoute = ConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
+  '/events': typeof EventsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
+  '/events': typeof EventsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -297,6 +305,7 @@ export interface FileRoutesById {
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
+  '/events': typeof EventsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -335,6 +344,7 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/connect'
+    | '/events'
     | '/invite'
     | '/locations'
     | '/login'
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/connect'
+    | '/events'
     | '/invite'
     | '/locations'
     | '/login'
@@ -406,6 +417,7 @@ export interface FileRouteTypes {
     | '/bookings'
     | '/calendar'
     | '/connect'
+    | '/events'
     | '/invite'
     | '/locations'
     | '/login'
@@ -443,6 +455,7 @@ export interface RootRouteChildren {
   BookingsRoute: typeof BookingsRoute
   CalendarRoute: typeof CalendarRoute
   ConnectRoute: typeof ConnectRouteWithChildren
+  EventsRoute: typeof EventsRoute
   InviteRoute: typeof InviteRoute
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
@@ -521,6 +534,13 @@ declare module '@tanstack/react-router' {
       path: '/connect'
       fullPath: '/connect'
       preLoaderRoute: typeof ConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -747,6 +767,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookingsRoute: BookingsRoute,
   CalendarRoute: CalendarRoute,
   ConnectRoute: ConnectRouteWithChildren,
+  EventsRoute: EventsRoute,
   InviteRoute: InviteRoute,
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,
