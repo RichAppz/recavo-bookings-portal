@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
@@ -60,6 +61,7 @@ import {
 } from "@/lib/format";
 import { outsideWorkingHours } from "@/lib/working-hours";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { useStoredState } from "@/lib/use-stored-state";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -117,6 +119,15 @@ export function AddBookingModal({
   const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [notes, setNotes] = useState("");
+  // Whether the client is told straight away (RECA-533). Some clients don't want the
+  // confirmation landing in their inbox, so this is remembered per business and comes
+  // back the way it was last left rather than resetting each time.
+  const [notifyPref, setNotifyPref] = useStoredState<"on" | "off">(
+    `recavo.booking.notify.${tenant.businessId}`,
+    "on",
+    ["on", "off"],
+  );
+  const notifyCustomer = notifyPref === "on";
   const [submitting, setSubmitting] = useState(false);
   // Account details + reference from a pay-by-bank 201, read out to the customer
   // before closing (RECA-522).
@@ -483,6 +494,7 @@ export function AddBookingModal({
         ? { depositMinor: depositMinor ?? 0 }
         : {}),
       notesInternal: notes || null,
+      ...(notifyCustomer ? {} : { notifyCustomer: false }),
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
       ...(scheduling === "slot" && selectedSlot?.slotToken
@@ -499,7 +511,7 @@ export function AddBookingModal({
         toast.success("Booking reserved — awaiting bank transfer");
         return;
       }
-      toast.success("Booking created");
+      toast.success(notifyCustomer ? "Booking created" : "Booking created — client not notified");
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -1177,6 +1189,31 @@ export function AddBookingModal({
                 placeholder="Visible to staff only"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+              <div className="grid gap-0.5">
+                <Label htmlFor="booking-notify" className="cursor-pointer">
+                  Send confirmation to client
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {notifyCustomer
+                    ? selectedCustomer?.contactPreferences.operationalNotifications === false
+                      ? "This client has turned off booking messages, so nothing will be sent."
+                      : `Goes out by ${
+                          selectedCustomer?.contactPreferences.preferredChannel === "sms"
+                            ? "SMS"
+                            : "email"
+                        } as soon as the booking is created.`
+                    : "Nothing is sent now. Use Resend on the booking when they're ready to hear from you."}
+                </p>
+              </div>
+              <Switch
+                id="booking-notify"
+                checked={notifyCustomer}
+                onCheckedChange={(checked) => setNotifyPref(checked ? "on" : "off")}
+                aria-label="Send confirmation to client"
               />
             </div>
           </div>
