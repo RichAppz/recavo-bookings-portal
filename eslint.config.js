@@ -6,8 +6,9 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // android/ and ios/ are generated Capacitor native projects, not web source.
-  { ignores: ["dist", ".output", ".vinxi", "android", "ios"] },
+  // android/ and ios/ are generated Capacitor native projects, not web source;
+  // schema.d.ts is openapi-typescript output (npm run gen:api), never hand-edited.
+  { ignores: ["dist", ".output", ".vinxi", "android", "ios", "src/lib/api/schema.d.ts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
