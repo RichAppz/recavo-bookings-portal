@@ -78,6 +78,13 @@ export const queryKeys = {
     ["biz", businessId, "payments", paymentId, "receipt"] as const,
   connectAccount: (businessId: string) => ["biz", businessId, "connect"] as const,
 
+  /** Prefix for every invoice list — invalidate after any invoice write. */
+  invoicesAll: (businessId: string) => ["biz", businessId, "invoices", "list"] as const,
+  invoices: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "invoices", "list", filters ?? {}] as const,
+  invoice: (businessId: string, invoiceId: string) =>
+    ["biz", businessId, "invoices", invoiceId] as const,
+
   conversations: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "conversations", filters ?? {}] as const,
   conversation: (businessId: string, conversationId: string) =>
@@ -151,6 +158,9 @@ export const queryKeys = {
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
   portalLinkedRecords: (businessId: string) => ["portal", businessId, "linked-records"] as const,
+  portalInvoices: (businessId: string) => ["portal", businessId, "invoices"] as const,
+  portalInvoice: (businessId: string, invoiceId: string) =>
+    ["portal", businessId, "invoices", invoiceId] as const,
 
   // Platform admin: cross-tenant billing (RECA-509)
   platformBilling: (businessId: string) => ["platform", businessId, "billing"] as const,

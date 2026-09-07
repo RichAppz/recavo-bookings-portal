@@ -71,6 +71,8 @@ export function StatCard({
 
 const statusStyles: Record<string, string> = {
   confirmed: "bg-primary-soft text-primary",
+  issued: "bg-primary-soft text-primary",
+  sent: "bg-primary-soft text-primary",
   completed: "bg-success-soft text-success",
   succeeded: "bg-success-soft text-success",
   attended: "bg-success-soft text-success",
@@ -100,6 +102,8 @@ const statusStyles: Record<string, string> = {
   ended: "bg-muted text-muted-foreground",
   used: "bg-muted text-muted-foreground",
   none: "bg-muted text-muted-foreground",
+  void: "bg-muted text-muted-foreground line-through",
+  overdue: "bg-destructive-soft text-destructive",
   late_cancelled: "bg-warning-soft text-warning-foreground",
   late_cancellation: "bg-warning-soft text-warning-foreground",
   pending_counsel_review: "bg-warning-soft text-warning-foreground",

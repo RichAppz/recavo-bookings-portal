@@ -56,11 +56,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
+import { BookingInvoices } from "@/components/BookingInvoices";
 import { TableGhost } from "@/components/ghost";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useAvailability,
   useBooking,
   useBookingAction,
+  useBusinessId,
   useBookingHistory,
   useBookingPayments,
   useCustomer,
@@ -80,7 +83,7 @@ import {
   type RecordPaymentMethod,
   type ResendChannel,
 } from "@/lib/api/hooks";
-import { ApiError, toastApiError } from "@/lib/api";
+import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import {
   customerDisplayName,
   type Booking,
@@ -120,6 +123,8 @@ export function BookingPanel({
   onClose: () => void;
 }) {
   const tenant = useTenant();
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelBy, setCancelBy] = useState<"business" | "customer">("business");
   const [cancelReason, setCancelReason] = useState("");
@@ -228,6 +233,16 @@ export function BookingPanel({
     if (!booking) return;
     try {
       await action.mutateAsync({ bookingId: booking.id, ifMatch: booking.version, body });
+      // Marking attended completes the job, and the outbox worker may then issue
+      // an invoice a second or two later. It isn't in the attendance response, so
+      // poll the job's invoices a couple of times to surface it (ADR 0019 §7).
+      if (action === attendanceAction && body?.attended === true) {
+        for (const delay of [1500, 4000]) {
+          setTimeout(() => {
+            void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+          }, delay);
+        }
+      }
     } catch (err) {
       if (err instanceof ApiError && err.isConflict) {
         void bookingQuery.refetch();
@@ -669,6 +684,13 @@ export function BookingPanel({
                       ))}
                     </ul>
                   )}
+
+                  <Separator />
+                  <BookingInvoices
+                    booking={booking}
+                    customerEmail={customerEmail}
+                    onNavigate={onClose}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

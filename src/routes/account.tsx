@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { CalendarClock, CalendarDays, Receipt, Store, Ticket, Wallet } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
+import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
 import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
 import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
@@ -36,7 +37,7 @@ import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
 const searchSchema = z.object({
-  view: z.enum(["overview", "calendar", "credits", "purchases", "profile"]).optional(),
+  view: z.enum(["overview", "calendar", "credits", "purchases", "invoices", "profile"]).optional(),
   // Stripe 3-D Secure returns here when checkout ran from the account drawer.
   payment_intent: z.string().optional(),
   payment_intent_client_secret: z.string().optional(),
@@ -63,6 +64,7 @@ const TITLES: Record<AccountView, { title: string; description: string }> = {
   calendar: { title: "Calendar", description: "Your bookings, month by month." },
   credits: { title: "Credits", description: "Bookings you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
+  invoices: { title: "Invoices", description: "Invoices businesses have sent you, as PDFs." },
   profile: { title: "Profile", description: "Your name and contact details." },
 };
 
@@ -276,6 +278,8 @@ function AccountContent({
             solo={solo}
             onBook={(studio) => openBooking(studio)}
           />
+        ) : view === "invoices" ? (
+          <AccountInvoices studios={studios} />
         ) : (
           <Purchases payments={history} solo={solo} />
         )}
