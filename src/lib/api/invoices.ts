@@ -7,8 +7,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, createIdempotentMutationFn, queryKeys, toastApiError } from "@/lib/api";
 import { useBusinessId, usePlanFeature, useSubscription } from "@/lib/api/hooks";
-import type { SubscriptionAddon } from "@/lib/api/hooks";
-import type { PortalBusinessSummary } from "@/lib/api/hooks";
+import type { PortalBusinessSummary, SubscriptionAddon, SubscriptionView } from "@/lib/api/hooks";
 import {
   INVOICING_ADDON_KEY,
   INVOICING_FEATURE_KEY,
@@ -35,10 +34,51 @@ export function useInvoicingEntitled(): boolean | undefined {
   return usePlanFeature(INVOICING_FEATURE_KEY);
 }
 
+export type InvoicingAddonRow = SubscriptionAddon & {
+  /** True when the API didn't list the bolt-on and this row is our default (£10/month). */
+  synthetic: boolean;
+};
+
+/** Guide §2: £10/month on Solo and Business, included in Growth. */
+const DEFAULT_INVOICING_ADDON: Omit<SubscriptionAddon, "status"> = {
+  key: INVOICING_ADDON_KEY,
+  featureKey: INVOICING_FEATURE_KEY,
+  unitAmountMinor: 1000,
+  currency: "GBP",
+  interval: "month",
+};
+
+/**
+ * The invoicing bolt-on row for a subscription view. The API lists it under
+ * `addons[]`; until an environment runs an API build that knows about invoicing
+ * we still want the add-on visible and purchasable, so fall back to the guide's
+ * default price and derive the status from the feature map.
+ */
+export function invoicingAddonFrom(
+  view: SubscriptionView | undefined,
+): InvoicingAddonRow | undefined {
+  if (!view) return undefined;
+  const listed = view.addons?.find((a) => a.key === INVOICING_ADDON_KEY);
+  if (listed) return { ...listed, synthetic: false };
+  return {
+    ...DEFAULT_INVOICING_ADDON,
+    status: view.features?.[INVOICING_FEATURE_KEY] === true ? "included" : "available",
+    synthetic: true,
+  };
+}
+
+/** Add-on rows for the Billing page — the API's list, plus invoicing if it wasn't listed. */
+export function addonsWithInvoicing(view: SubscriptionView | undefined): SubscriptionAddon[] {
+  const listed = view?.addons ?? [];
+  const invoicing = invoicingAddonFrom(view);
+  if (!invoicing || !invoicing.synthetic) return listed;
+  return [...listed, invoicing];
+}
+
 /** The invoicing bolt-on row (included / active / available), once the subscription is known. */
-export function useInvoicingAddon(): SubscriptionAddon | undefined {
+export function useInvoicingAddon(): InvoicingAddonRow | undefined {
   const subscription = useSubscription();
-  return subscription.data?.addons?.find((a) => a.key === INVOICING_ADDON_KEY);
+  return invoicingAddonFrom(subscription.data);
 }
 
 export function isFeatureNotAvailable(err: unknown): boolean {
