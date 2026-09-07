@@ -8,8 +8,18 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useRedeemPurchaseClaim } from "@/lib/api/hooks";
 import { useAuth } from "@/lib/auth/auth-store";
+import { z } from "zod";
+
+/**
+ * `?next=invoices` — the auto-invoice email links here so the customer record is
+ * attached on first sign-in, then lands them on their invoices (ADR 0019 §8).
+ */
+const searchSchema = z.object({
+  next: z.enum(["invoices"]).optional(),
+});
 
 export const Route = createFileRoute("/claim/$token")({
+  validateSearch: searchSchema,
   component: ClaimPage,
   head: () => ({
     meta: [
@@ -64,6 +74,7 @@ function claimProblem(error: unknown): { title: string; detail: string } {
  */
 function ClaimPage() {
   const { token } = Route.useParams();
+  const { next } = Route.useSearch();
   const { status } = useAuth();
   const navigate = useNavigate();
   const redeem = useRedeemPurchaseClaim();
@@ -93,12 +104,17 @@ function ClaimPage() {
     attempted.current = true;
     redeem.mutate(token, {
       onSuccess: () => {
+        if (next === "invoices") {
+          toast.success("You're all set", { description: "Your invoices are ready to view." });
+          void navigate({ to: "/account", search: { view: "invoices" } });
+          return;
+        }
         toast.success("You're all set", { description: "Your sessions are ready to book." });
         void navigate({ to: "/account" });
       },
       onError: (error) => setProblem(claimProblem(error)),
     });
-  }, [status, token, redeem, navigate]);
+  }, [status, token, redeem, navigate, next]);
 
   // `isSuccess` keeps the spinner up while the redirect to the portal happens, so
   // the form never flashes behind a completed claim.

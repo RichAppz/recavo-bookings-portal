@@ -27,7 +27,10 @@ import { addressToForm, formToAddress, type AddressFormState } from "@/lib/custo
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { CreateInvoiceDialog } from "@/components/CreateInvoiceDialog";
 import { FileAttachments } from "@/components/FileAttachments";
+import { InvoicesTable } from "@/components/InvoicesTable";
+import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
 import {
   activeSortedFields,
@@ -127,6 +130,7 @@ import {
   useUpdateCustomer,
   useUpdateCustomerStatus,
 } from "@/lib/api/hooks";
+import { useInvoices, useInvoicingEntitled } from "@/lib/api/invoices";
 import {
   customerAddressLine,
   customerDisplayName,
@@ -314,6 +318,9 @@ function ClientProfile() {
           <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
           <TabsTrigger value="packages">Packages</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          {tenant.can(PERMISSIONS.INVOICE_READ) ? (
+            <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          ) : null}
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="consents">Consents</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
@@ -477,6 +484,12 @@ function ClientProfile() {
             )}
           </SectionCard>
         </TabsContent>
+
+        {tenant.can(PERMISSIONS.INVOICE_READ) ? (
+          <TabsContent value="invoices" className="mt-4">
+            <ClientInvoicesTab customerId={client.id} disabled={anonymised} />
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="notes" className="mt-4">
           <SectionCard title="Internal notes" description="Only visible to your team">
@@ -875,6 +888,74 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
         </div>
       </Can>
     </SectionCard>
+  );
+}
+
+/** Every invoice raised for this client (drafts included), with a shortcut to raise another. */
+function ClientInvoicesTab({ customerId, disabled }: { customerId: string; disabled: boolean }) {
+  const tenant = useTenant();
+  const invoices = useInvoices({ customerId, limit: 200 });
+  const entitled = useInvoicingEntitled();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const canManage = tenant.can(PERMISSIONS.INVOICE_MANAGE);
+
+  const startCreate = () => {
+    if (entitled === false) setUpsellOpen(true);
+    else setCreateOpen(true);
+  };
+
+  return (
+    <>
+      <SectionCard
+        title="Invoices"
+        description="Newest first"
+        bodyClassName="p-0"
+        action={
+          canManage ? (
+            <Button
+              size="sm"
+              disabled={disabled || entitled === undefined}
+              title={
+                entitled === false
+                  ? "Invoicing isn’t on your plan yet — add the bolt-on to raise invoices."
+                  : undefined
+              }
+              onClick={startCreate}
+            >
+              <Plus className="size-4" /> New invoice
+            </Button>
+          ) : null
+        }
+      >
+        <InvoicesTable
+          invoices={invoices.data}
+          loading={invoices.isLoading}
+          error={invoices.isError}
+          showCustomer={false}
+          empty={
+            <EmptyState
+              title="No invoices for this client"
+              description={
+                canManage
+                  ? "Raise one from a job in the booking panel, or start a blank invoice here."
+                  : undefined
+              }
+            />
+          }
+        />
+      </SectionCard>
+      <CreateInvoiceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultCustomerId={customerId}
+      />
+      <InvoicingUpgradeDialog
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        onEnabled={() => setCreateOpen(true)}
+      />
+    </>
   );
 }
 

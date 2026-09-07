@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
+import { InvoicingSetting } from "@/components/InvoicingSetting";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -71,6 +72,8 @@ import { toastApiError } from "@/lib/api/errors";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { formatInTz } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
+import { bpsToPercentInput, percentInputToBps, type TaxConfig } from "@/lib/invoices";
+import { cn } from "@/lib/utils";
 import { markdownToPlainText, parsePolicyContent } from "@/lib/markdown";
 import {
   PERMISSIONS,
@@ -775,8 +778,13 @@ function ConfigurationTab() {
   );
   const [logoUrl, setLogoUrl] = useState(brandingConfig?.logoUrl ?? "");
   const [accentColour, setAccentColour] = useState(brandingConfig?.accentColour ?? "");
+  // VAT rate / inclusive pricing aren't on the committed OpenAPI snapshot yet
+  // either (ADR 0019); same widening as branding until the schema is refreshed.
+  const taxConfig = config?.tax as TaxConfig | undefined;
   const [vatRegistered, setVatRegistered] = useState(Boolean(config?.tax?.vatRegistered));
   const [vatNumber, setVatNumber] = useState(config?.tax?.vatNumber ?? "");
+  const [vatRatePct, setVatRatePct] = useState(bpsToPercentInput(taxConfig?.vatRateBps));
+  const [pricesIncludeVat, setPricesIncludeVat] = useState(taxConfig?.pricesIncludeVat !== false);
   const [closureDays, setClosureDays] = useState(
     String(config?.retention?.closureWindowDays ?? 30),
   );
@@ -798,6 +806,8 @@ function ConfigurationTab() {
     setAccentColour(brandingConfig?.accentColour ?? "");
     setVatRegistered(Boolean(config?.tax?.vatRegistered));
     setVatNumber(config?.tax?.vatNumber ?? "");
+    setVatRatePct(bpsToPercentInput((config?.tax as TaxConfig | undefined)?.vatRateBps));
+    setPricesIncludeVat((config?.tax as TaxConfig | undefined)?.pricesIncludeVat !== false);
     setClosureDays(String(config?.retention?.closureWindowDays ?? 30));
     setLine1(config?.legalAddress?.line1 ?? "");
     setLine2(config?.legalAddress?.line2 ?? "");
@@ -809,11 +819,14 @@ function ConfigurationTab() {
 
   const accentValid = accentColour === "" || /^#[0-9a-fA-F]{6}$/.test(accentColour);
   const logoValid = logoUrl === "" || logoUrl.startsWith("https://");
+  const vatRateBps = percentInputToBps(vatRatePct);
+  const vatRateValid = vatRateBps !== undefined;
 
-  // Branding is not on the generated configuration type yet, so it rides along
-  // on a widened patch until openapi.json is refreshed.
-  type ConfigPatch = Parameters<typeof update.mutateAsync>[0] & {
+  // Branding / tax extras are not on the generated configuration type yet, so
+  // they ride along on a widened patch until openapi.json is refreshed.
+  type ConfigPatch = Omit<Parameters<typeof update.mutateAsync>[0], "tax"> & {
     branding?: { logoUrl: string | null; accentColour: string | null };
+    tax?: TaxConfig;
   };
 
   return (
@@ -913,6 +926,35 @@ function ConfigurationTab() {
               <Switch checked={vatRegistered} onCheckedChange={setVatRegistered} />
             </div>
             <Field label="VAT number" value={vatNumber} onChange={setVatNumber} />
+            <div className="grid gap-1.5">
+              <Field
+                label="VAT rate (%)"
+                value={vatRatePct}
+                onChange={setVatRatePct}
+                type="number"
+              />
+              <p
+                className={cn(
+                  "text-xs",
+                  vatRateValid ? "text-muted-foreground" : "text-destructive",
+                )}
+              >
+                {vatRateValid
+                  ? "Applied to taxable invoice lines. Invoices show a VAT breakdown only when you're registered and a rate is set."
+                  : "Enter a rate between 0 and 100."}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">Prices include VAT</p>
+                <p className="text-xs text-muted-foreground">
+                  {pricesIncludeVat
+                    ? "Your prices are gross — VAT is backed out on invoices."
+                    : "Your prices are net — VAT is added on top on invoices."}
+                </p>
+              </div>
+              <Switch checked={pricesIncludeVat} onCheckedChange={setPricesIncludeVat} />
+            </div>
           </div>
         </SectionCard>
         <SectionCard title="Legal address & retention">
@@ -938,7 +980,7 @@ function ConfigurationTab() {
           fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
         >
           <Button
-            disabled={update.isPending || !accentValid || !logoValid}
+            disabled={update.isPending || !accentValid || !logoValid || !vatRateValid}
             onClick={async () => {
               const patch: ConfigPatch = {
                 branding: {
@@ -958,7 +1000,12 @@ function ConfigurationTab() {
                   // a booking patch that omitted it would turn online payments off.
                   requireOnlinePayment: isOnlinePaymentRequired(config),
                 } as NonNullable<Parameters<typeof update.mutateAsync>[0]["booking"]>,
-                tax: { vatRegistered, vatNumber: vatNumber.trim() || null },
+                tax: {
+                  vatRegistered,
+                  vatNumber: vatNumber.trim() || null,
+                  vatRateBps: vatRateBps ?? null,
+                  pricesIncludeVat,
+                },
                 retention: { closureWindowDays: Number(closureDays) || 30 },
                 legalAddress: line1.trim()
                   ? {
@@ -1749,18 +1796,7 @@ function PaymentsTab() {
           </div>
         )}
       </SectionCard>
-      {/* self-start stops the grid stretching this stub card to match the tall
-          Stripe card beside it. */}
-      <SectionCard title="Invoicing and tax" className="self-start">
-        <p className="text-sm text-muted-foreground">
-          VAT and legal address are managed under Configuration.
-        </p>
-        <Button variant="outline" size="sm" className="mt-3 w-fit" asChild>
-          <Link to="/settings" search={{ tab: "configuration" }}>
-            Edit VAT &amp; legal address
-          </Link>
-        </Button>
-      </SectionCard>
+      <InvoicingSetting className="xl:col-span-2" />
     </>
   );
 }

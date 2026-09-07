@@ -2,6 +2,26 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildQueryString } from "./query-string.ts";
 import { ApiError, parseProblemDetails, toFormErrors, newIdempotencyKey } from "./errors.ts";
+import { filenameFromDisposition } from "./content-disposition.ts";
+
+describe("filenameFromDisposition", () => {
+  it("reads a quoted attachment filename", () => {
+    assert.equal(filenameFromDisposition('attachment; filename="INV-0001.pdf"'), "INV-0001.pdf");
+  });
+
+  it("reads a bare filename and RFC 5987 encoding", () => {
+    assert.equal(filenameFromDisposition("attachment; filename=draft-abc.pdf"), "draft-abc.pdf");
+    assert.equal(
+      filenameFromDisposition("attachment; filename*=UTF-8''INV-0002%20copy.pdf"),
+      "INV-0002 copy.pdf",
+    );
+  });
+
+  it("returns null when there is nothing to read", () => {
+    assert.equal(filenameFromDisposition(null), null);
+    assert.equal(filenameFromDisposition("inline"), null);
+  });
+});
 
 describe("buildQueryString", () => {
   it("omits nullish values", () => {

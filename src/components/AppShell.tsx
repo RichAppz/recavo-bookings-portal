@@ -11,6 +11,7 @@ import {
   ClipboardList,
   CreditCard,
   ExternalLink,
+  FileText,
   Gift,
   LayoutDashboard,
   LifeBuoy,
@@ -166,6 +167,7 @@ const NAV: NavGroup[] = [
         anyOf: [PERMISSIONS.CUSTOMER_READ],
       },
       { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
+      { to: "/invoices", label: "Invoices", icon: FileText, anyOf: [PERMISSIONS.INVOICE_READ] },
       { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
       // Billing lives under Settings → Billing; /billing stays routable for Stripe
       // return URLs and the locked-out landing, but isn't a nav destination.

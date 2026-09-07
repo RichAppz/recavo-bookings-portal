@@ -1,6 +1,7 @@
 import { ApiError, parseProblemDetails } from "./errors";
 import { getAccessToken } from "./token";
 import { buildQueryString, type QueryValue } from "./query-string";
+import { filenameFromDisposition } from "./content-disposition";
 
 export type { QueryValue };
 export { buildQueryString };
@@ -81,7 +82,51 @@ async function parseBody(res: Response): Promise<unknown> {
   }
 }
 
+export type BlobResult = {
+  blob: Blob;
+  /** From `Content-Disposition: attachment; filename="…"`, when the server sent one. */
+  filename: string | null;
+  contentType: string | null;
+  requestId?: string;
+  status: number;
+};
+
+export { filenameFromDisposition };
+
 export async function request<T>(options: RequestOptions): Promise<ApiResult<T>> {
+  const result = await requestRaw(options, "json");
+  return {
+    data: result.parsed as T,
+    requestId: result.requestId,
+    status: result.status,
+  };
+}
+
+/**
+ * Same headers, auth and 401-replay as {@link request}, but the successful body
+ * comes back as a Blob — for PDFs and other binaries the JSON path would mangle
+ * (it reads the body as text). Errors are still problem+json → {@link ApiError}.
+ */
+export async function requestBlob(options: RequestOptions): Promise<BlobResult> {
+  const result = await requestRaw(options, "blob");
+  return {
+    blob: result.blob ?? new Blob(),
+    filename: filenameFromDisposition(result.headers.get("Content-Disposition")),
+    contentType: result.headers.get("Content-Type"),
+    requestId: result.requestId,
+    status: result.status,
+  };
+}
+
+type RawResult = {
+  parsed?: unknown;
+  blob?: Blob;
+  headers: Headers;
+  requestId?: string;
+  status: number;
+};
+
+async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promise<RawResult> {
   const {
     method = "GET",
     path,
@@ -97,7 +142,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
 
   const url = `${resolvePath(path)}${buildQueryString(query)}`;
   const headers: Record<string, string> = {
-    Accept: "application/json",
+    Accept: mode === "blob" ? "*/*" : "application/json",
     ...extraHeaders,
   };
 
@@ -162,7 +207,11 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
   }
 
   const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
-  const parsed = await parseBody(res);
+  // A binary success is read as a Blob; anything else (JSON success, or any
+  // failure — errors are always problem+json) goes through the text parser.
+  const asBlob = mode === "blob" && res.ok;
+  const blob = asBlob ? await res.blob() : undefined;
+  const parsed = asBlob ? undefined : await parseBody(res);
 
   if (import.meta.env.DEV) {
     const line = `[api] ← ${res.status} ${method} ${url} in ${elapsed()}ms${requestId ? ` reqId=${requestId}` : ""}`;
@@ -176,7 +225,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     if (error.isMfaRequired && mfaHandler) {
       const retried = await mfaHandler(error);
       if (retried) {
-        return request<T>(options);
+        return requestRaw(options, mode);
       }
     }
 
@@ -195,7 +244,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     ) {
       const refreshed = await authRetryHandler(bearerToken);
       if (refreshed) {
-        return request<T>({ ...options, authRetried: true });
+        return requestRaw({ ...options, authRetried: true }, mode);
       }
     }
 
@@ -203,7 +252,9 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
   }
 
   return {
-    data: parsed as T,
+    parsed,
+    blob,
+    headers: res.headers,
     requestId,
     status: res.status,
   };
@@ -227,4 +278,7 @@ export const api = {
   ) => request<T>({ ...opts, method: "PATCH", path, body }),
   delete: <T>(path: string, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
     request<T>({ ...opts, method: "DELETE", path }),
+  /** GET a binary body (PDF etc.) with the usual auth. */
+  blob: (path: string, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
+    requestBlob({ ...opts, method: "GET", path }),
 };

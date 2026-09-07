@@ -41,6 +41,8 @@ import { Route as ClaimTokenRouteImport } from './routes/claim.$token'
 import { Route as ClientsIndexRouteImport } from './routes/clients.index'
 import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
 import { Route as ClientsImportRouteImport } from './routes/clients.import'
+import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
+import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
 import { Route as ConnectRefreshBusinessIdRouteImport } from './routes/connect.refresh.$businessId'
 import { Route as ConnectReturnBusinessIdRouteImport } from './routes/connect.return.$businessId'
 
@@ -204,6 +206,16 @@ const ClientsImportRoute = ClientsImportRouteImport.update({
   path: '/clients/import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesInvoiceIdRoute = InvoicesInvoiceIdRouteImport.update({
+  id: '/invoices/$invoiceId',
+  path: '/invoices/$invoiceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectRefreshBusinessIdRoute =
   ConnectRefreshBusinessIdRouteImport.update({
     id: '/refresh/$businessId',
@@ -247,8 +259,10 @@ export interface FileRoutesByFullPath {
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
+  '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
@@ -282,8 +296,10 @@ export interface FileRoutesByTo {
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
+  '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
+  '/invoices': typeof InvoicesIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
@@ -319,8 +335,10 @@ export interface FileRoutesById {
   '/claim/$token': typeof ClaimTokenRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
+  '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
+  '/invoices/': typeof InvoicesIndexRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
 }
@@ -357,8 +375,10 @@ export interface FileRouteTypes {
     | '/claim/$token'
     | '/clients/$clientId'
     | '/clients/import'
+    | '/invoices/$invoiceId'
     | '/billing/'
     | '/clients/'
+    | '/invoices/'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
   fileRoutesByTo: FileRoutesByTo
@@ -392,8 +412,10 @@ export interface FileRouteTypes {
     | '/claim/$token'
     | '/clients/$clientId'
     | '/clients/import'
+    | '/invoices/$invoiceId'
     | '/billing'
     | '/clients'
+    | '/invoices'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
   id:
@@ -428,8 +450,10 @@ export interface FileRouteTypes {
     | '/claim/$token'
     | '/clients/$clientId'
     | '/clients/import'
+    | '/invoices/$invoiceId'
     | '/billing/'
     | '/clients/'
+    | '/invoices/'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
   fileRoutesById: FileRoutesById
@@ -462,7 +486,9 @@ export interface RootRouteChildren {
   ClaimTokenRoute: typeof ClaimTokenRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsImportRoute: typeof ClientsImportRoute
+  InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
+  InvoicesIndexRoute: typeof InvoicesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -691,6 +717,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClientsImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoices/': {
+      id: '/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof InvoicesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices/$invoiceId': {
+      id: '/invoices/$invoiceId'
+      path: '/invoices/$invoiceId'
+      fullPath: '/invoices/$invoiceId'
+      preLoaderRoute: typeof InvoicesInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/connect/refresh/$businessId': {
       id: '/connect/refresh/$businessId'
       path: '/refresh/$businessId'
@@ -766,7 +806,9 @@ const rootRouteChildren: RootRouteChildren = {
   ClaimTokenRoute: ClaimTokenRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsImportRoute: ClientsImportRoute,
+  InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
   ClientsIndexRoute: ClientsIndexRoute,
+  InvoicesIndexRoute: InvoicesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
