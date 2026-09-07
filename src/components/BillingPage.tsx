@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, MessageSquareText } from "lucide-react";
+import { Check, FileText, MessageSquareText } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import {
@@ -45,6 +45,7 @@ import type {
 } from "@/lib/api/types";
 import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access";
 import { formatInTz, formatMoney } from "@/lib/format";
+import { INVOICING_ADDON_KEY } from "@/lib/invoices";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -191,10 +192,79 @@ function accessCopy(sub: BusinessSubscription | null | undefined): string {
   }
 }
 
+type AddonCopy = {
+  name: string;
+  icon: typeof MessageSquareText;
+  /** Bundled by the plan tier. */
+  included: (planName: string) => string;
+  /** Held via the bolt-on. */
+  active: (price: string) => string;
+  /** Purchasable. */
+  available: (price: string) => string;
+  removeTitle: string;
+  removeBody: string;
+  keepLabel: string;
+  addedTitle: string;
+  removedTitle: string;
+};
+
 /**
- * Bolt-ons sold on top of the plan (RECA-527). Today that is SMS reminders: bundled
- * in Business and Growth, £10/month on Solo. Reads/writes the same entitlement the
- * client-channel gate and the reminder worker use, so what it shows is what sends.
+ * Copy per sellable bolt-on (RECA-527, ADR 0019). Anything the catalogue returns
+ * that isn't listed here is rendered with generic wording rather than hidden.
+ */
+const ADDON_COPY: Record<string, AddonCopy> = {
+  [SMS_ADDON_KEY]: {
+    name: "SMS reminders",
+    icon: MessageSquareText,
+    included: (plan) => `Included in ${plan}. Clients set to SMS get texted before every booking.`,
+    active: (price) => `Active · ${price}. Clients set to SMS get texted before every booking.`,
+    available: (price) =>
+      `Text clients before every booking instead of relying on email. ${price}, or included with Business and Growth.`,
+    removeTitle: "Remove SMS reminders?",
+    removeBody:
+      "Clients set to SMS will get email reminders instead from now on. The unused part of this month is credited to your next invoice.",
+    keepLabel: "Keep SMS",
+    addedTitle: "SMS reminders added",
+    removedTitle: "SMS reminders removed",
+  },
+  [INVOICING_ADDON_KEY]: {
+    name: "Invoicing",
+    icon: FileText,
+    included: (plan) =>
+      `Included in ${plan}. Numbered PDF invoices, emailed to clients and issued automatically when a job is completed.`,
+    active: (price) =>
+      `Active · ${price}. Numbered PDF invoices, emailed to clients and issued automatically when a job is completed.`,
+    available: (price) =>
+      `Raise numbered PDF invoices, email them to clients and invoice jobs automatically on completion. ${price}, or included with Growth.`,
+    removeTitle: "Remove invoicing?",
+    removeBody:
+      "You’ll no longer be able to raise, issue or send invoices, and jobs won’t be invoiced automatically. Everything already issued stays available to you and your clients. The unused part of this month is credited to your next invoice.",
+    keepLabel: "Keep invoicing",
+    addedTitle: "Invoicing added",
+    removedTitle: "Invoicing removed",
+  },
+};
+
+function genericAddonCopy(key: string): AddonCopy {
+  const name = key.charAt(0).toUpperCase() + key.slice(1).replace(/[-_]/g, " ");
+  return {
+    name,
+    icon: Check,
+    included: (plan) => `Included in ${plan}.`,
+    active: (price) => `Active · ${price}.`,
+    available: (price) => `${price}.`,
+    removeTitle: `Remove ${name}?`,
+    removeBody: "The unused part of this month is credited to your next invoice.",
+    keepLabel: "Keep it",
+    addedTitle: `${name} added`,
+    removedTitle: `${name} removed`,
+  };
+}
+
+/**
+ * Bolt-ons sold on top of the plan (RECA-527): SMS reminders and invoicing today.
+ * Reads/writes the same entitlement the feature gates use, so what it shows is
+ * what the API will allow.
  */
 function AddonsCard({
   addons,
@@ -207,10 +277,7 @@ function AddonsCard({
 }) {
   const add = useAddSubscriptionAddon();
   const remove = useRemoveSubscriptionAddon();
-  const sms = addons.find((a) => a.key === SMS_ADDON_KEY);
-  if (!sms) return null;
-
-  const price = `${formatMoney(sms.unitAmountMinor, sms.currency, { compact: true })}/${sms.interval}`;
+  if (addons.length === 0) return null;
   const busy = add.isPending || remove.isPending;
 
   return (
@@ -218,69 +285,78 @@ function AddonsCard({
       title="Add-ons"
       description="Extras you can switch on without changing plan. Prorated onto your current bill."
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4">
-        <div className="flex items-start gap-3">
-          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" />
-          <div>
-            <p className="text-sm font-medium">SMS reminders</p>
-            <p className="text-xs text-muted-foreground">
-              {sms.status === "included"
-                ? `Included in ${currentPlanName ?? "your plan"}. Clients set to SMS get texted before every booking.`
-                : sms.status === "active"
-                  ? `Active · ${price}. Clients set to SMS get texted before every booking.`
-                  : `Text clients before every booking instead of relying on email. ${price}, or included with Business and Growth.`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {sms.status === "included" ? (
-            <StatusBadge status="active" />
-          ) : sms.status === "active" ? (
-            <>
-              <StatusBadge status="active" />
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={disabled || busy}>
-                    Remove
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Remove SMS reminders?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Clients set to SMS will get email reminders instead from now on. The unused
-                      part of this month is credited to your next invoice.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep SMS</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={async () => {
-                        await remove.mutateAsync(SMS_ADDON_KEY);
-                        toast.success("SMS reminders removed");
-                      }}
-                    >
-                      Remove add-on
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          ) : (
-            <Button
-              size="sm"
-              disabled={disabled || busy}
-              onClick={async () => {
-                await add.mutateAsync(SMS_ADDON_KEY);
-                toast.success("SMS reminders added", {
-                  description: `${price} has been added to your subscription.`,
-                });
-              }}
+      <div className="grid gap-3">
+        {addons.map((addon) => {
+          const copy = ADDON_COPY[addon.key] ?? genericAddonCopy(addon.key);
+          const Icon = copy.icon;
+          const price = `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`;
+          return (
+            <div
+              key={addon.key}
+              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4"
             >
-              {add.isPending ? "Adding…" : `Add for ${price}`}
-            </Button>
-          )}
-        </div>
+              <div className="flex items-start gap-3">
+                <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">{copy.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {addon.status === "included"
+                      ? copy.included(currentPlanName ?? "your plan")
+                      : addon.status === "active"
+                        ? copy.active(price)
+                        : copy.available(price)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {addon.status === "included" ? (
+                  <StatusBadge status="active" />
+                ) : addon.status === "active" ? (
+                  <>
+                    <StatusBadge status="active" />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={disabled || busy}>
+                          Remove
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{copy.removeTitle}</AlertDialogTitle>
+                          <AlertDialogDescription>{copy.removeBody}</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{copy.keepLabel}</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={async () => {
+                              await remove.mutateAsync(addon.key);
+                              toast.success(copy.removedTitle);
+                            }}
+                          >
+                            Remove add-on
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    disabled={disabled || busy}
+                    onClick={async () => {
+                      await add.mutateAsync(addon.key);
+                      toast.success(copy.addedTitle, {
+                        description: `${price} has been added to your subscription.`,
+                      });
+                    }}
+                  >
+                    {add.isPending ? "Adding…" : `Add for ${price}`}
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </SectionCard>
   );

@@ -20,6 +20,10 @@ export const PERMISSIONS = {
   BOOKING_MARK_ATTENDANCE: "booking.mark_attendance",
   PAYMENT_READ: "payment.read",
   PAYMENT_REFUND: "payment.refund",
+  INVOICE_READ: "invoice.read",
+  INVOICE_MANAGE: "invoice.manage",
+  /** Portal customers: their own issued / paid invoices. */
+  INVOICE_READ_OWN: "invoice.read_own",
   PACKAGE_MANAGE: "package.manage",
   CREDIT_ADJUST: "credit.adjust",
   REPORT_READ: "report.read",
@@ -69,6 +73,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.BOOKING_MARK_ATTENDANCE,
     P.PAYMENT_READ,
     P.PAYMENT_REFUND,
+    P.INVOICE_READ,
+    P.INVOICE_MANAGE,
     P.PACKAGE_MANAGE,
     P.CREDIT_ADJUST,
     P.REPORT_READ,
@@ -87,6 +93,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.BOOKING_RESCHEDULE,
     P.BOOKING_CANCEL,
     P.BOOKING_MARK_ATTENDANCE,
+    P.INVOICE_READ,
+    P.INVOICE_MANAGE,
     P.REPORT_READ,
   ],
   [SYSTEM_ROLES.STAFF]: [
@@ -106,11 +114,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.BOOKING_RESCHEDULE,
     P.BOOKING_CANCEL,
     P.PAYMENT_READ,
+    P.INVOICE_READ,
   ],
   [SYSTEM_ROLES.FINANCE]: [
     P.BUSINESS_READ,
     P.PAYMENT_READ,
     P.PAYMENT_REFUND,
+    P.INVOICE_READ,
+    P.INVOICE_MANAGE,
     P.REPORT_READ,
     P.REPORT_EXPORT,
     P.BILLING_MANAGE,
@@ -118,7 +129,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<SystemRoleKey, readonly Permission
     P.CREDIT_ADJUST,
   ],
   [SYSTEM_ROLES.RESTRICTED_STAFF]: [P.BUSINESS_READ, P.BOOKING_READ_OWN],
-  [SYSTEM_ROLES.CUSTOMER]: [P.BOOKING_READ_OWN],
+  [SYSTEM_ROLES.CUSTOMER]: [P.BOOKING_READ_OWN, P.INVOICE_READ_OWN],
 };
 
 const ROLE_ALIASES: Record<string, SystemRoleKey> = {

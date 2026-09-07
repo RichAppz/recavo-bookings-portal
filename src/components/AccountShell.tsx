@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarDays,
+  FileText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -17,13 +18,15 @@ import { useAuth } from "@/lib/auth/auth-store";
 import { userDisplayName } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-export type AccountView = "overview" | "calendar" | "credits" | "purchases" | "profile";
+export type AccountView =
+  "overview" | "calendar" | "credits" | "purchases" | "invoices" | "profile";
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "calendar", label: "Calendar", icon: CalendarDays },
   { view: "credits", label: "Credits", icon: Ticket },
   { view: "purchases", label: "Purchases", icon: Receipt },
+  { view: "invoices", label: "Invoices", icon: FileText },
   { view: "profile", label: "Profile", icon: UserRound },
 ];
 

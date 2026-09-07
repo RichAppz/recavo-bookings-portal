@@ -1,5 +1,13 @@
-export { api, request, getApiBaseUrl, setMfaHandler, setAuthRetryHandler } from "./client";
-export type { RequestOptions, ApiResult } from "./client";
+export {
+  api,
+  request,
+  requestBlob,
+  filenameFromDisposition,
+  getApiBaseUrl,
+  setMfaHandler,
+  setAuthRetryHandler,
+} from "./client";
+export type { RequestOptions, ApiResult, BlobResult } from "./client";
 export { buildQueryString, type QueryValue } from "./query-string";
 export {
   ApiError,
