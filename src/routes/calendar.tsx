@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -33,6 +33,7 @@ import {
   type PaymentTone,
 } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { useStoredState } from "@/lib/use-stored-state";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -165,10 +166,16 @@ function monthGrid(anchor: Date): Date[] {
 
 function CalendarPage() {
   const tenant = useTenant();
-  const [view, setView] = useState<"day" | "week" | "month">("week");
+  // View and filters come back the way they were last left, per business.
+  const prefKey = (name: string) => `recavo.calendar.${name}.${tenant.businessId ?? "none"}`;
+  const [view, setView] = useStoredState<"day" | "week" | "month">(prefKey("view"), "week", [
+    "day",
+    "week",
+    "month",
+  ]);
   const [anchor, setAnchor] = useState(() => new Date());
-  const [staffFilter, setStaffFilter] = useState("all");
-  const [serviceFilter, setServiceFilter] = useState("all");
+  const [staffFilter, setStaffFilter] = useStoredState<string>(prefKey("staff"), "all");
+  const [serviceFilter, setServiceFilter] = useStoredState<string>(prefKey("service"), "all");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
@@ -200,6 +207,21 @@ function CalendarPage() {
 
   const services = useServices();
   const staff = useStaffList();
+  // A remembered filter can point at something since deleted; fall back to "all".
+  useEffect(() => {
+    if (
+      services.data &&
+      serviceFilter !== "all" &&
+      !services.data.some((s) => s.id === serviceFilter)
+    ) {
+      setServiceFilter("all");
+    }
+  }, [services.data, serviceFilter, setServiceFilter]);
+  useEffect(() => {
+    if (staff.data && staffFilter !== "all" && !staff.data.some((s) => s.id === staffFilter)) {
+      setStaffFilter("all");
+    }
+  }, [staff.data, staffFilter, setStaffFilter]);
 
   const days = useMemo(() => {
     if (view === "day") return [anchor];
