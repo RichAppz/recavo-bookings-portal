@@ -92,8 +92,10 @@ export function CustomerSearchPicker({
   const candidates = pool.filter((c) => c.id !== excludeCustomerId);
   const hasSuggestions = (suggestions?.length ?? 0) > 0;
 
+  // `modal` so the list gets its own scroll-lock shard: without it the hosting
+  // Dialog's lock swallows touch scrolling in the portalled popover on iOS.
   return (
-    <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+    <Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
