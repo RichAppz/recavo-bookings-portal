@@ -5,6 +5,7 @@ import {
   BadgePoundSterling,
   CalendarPlus,
   CalendarX,
+  Clock,
   Lock,
   MessageSquarePlus,
   Package,
@@ -27,6 +28,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { EventModal } from "@/components/EventModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { BookingPanel } from "@/components/BookingPanel";
 import {
@@ -51,12 +53,13 @@ import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useBookings,
+  useCalendarBlocks,
   useCustomer,
   useDashboard,
   useLocationsList,
   useStaffList,
 } from "@/lib/api/hooks";
-import type { Booking } from "@/lib/api/types";
+import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate, pct, ukDate } from "@/lib/format";
@@ -133,6 +136,8 @@ function Overview() {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [eventOpen, setEventOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarBlock | null>(null);
   const [rangeKey, setRangeKey] = useState<RangeKey>("month");
   const today = isoDate(new Date());
 
@@ -142,6 +147,13 @@ function Overview() {
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
     .sort((a, b) => a.start.localeCompare(b.start));
+  // Staff events (dentist, school run) share the diary, so they belong in "Today" too.
+  const todaysEvents = useCalendarBlocks({ ...todayRange() });
+  const events = todaysEvents.data ?? [];
+  const todayItems = [
+    ...scheduled.map((item) => ({ kind: "booking" as const, item })),
+    ...events.map((item) => ({ kind: "event" as const, item })),
+  ].sort((a, b) => a.item.start.localeCompare(b.item.start));
 
   const attendanceChart = dashboard.data
     ? [
@@ -346,7 +358,11 @@ function Overview() {
         <SectionCard
           className="xl:col-span-2"
           title="Today"
-          description={`${scheduled.length} scheduled sessions`}
+          description={
+            events.length > 0
+              ? `${scheduled.length} scheduled sessions · ${events.length} ${events.length === 1 ? "event" : "events"}`
+              : `${scheduled.length} scheduled sessions`
+          }
           action={
             <Button variant="outline" size="sm" asChild>
               <Link to="/calendar">Open calendar</Link>
@@ -358,18 +374,33 @@ function Overview() {
             <TableGhost rows={5} />
           ) : todays.isError ? (
             <p className="p-5 text-sm text-destructive">Couldn't load today's bookings.</p>
-          ) : scheduled.length === 0 ? (
+          ) : todayItems.length === 0 ? (
             <div className="p-6">
               <EmptyState
                 title="Nothing scheduled today"
-                description="Add a booking to fill the diary."
+                description="Add a booking or an event to fill the diary."
               />
             </div>
           ) : (
             <ul className="divide-y">
-              {scheduled.map((b) => (
-                <TodayRow key={b.id} booking={b} onClick={() => setSelectedBookingId(b.id)} />
-              ))}
+              {todayItems.map((entry) =>
+                entry.kind === "event" ? (
+                  <TodayEventRow
+                    key={entry.item.id}
+                    block={entry.item}
+                    onClick={() => {
+                      setEditingEvent(entry.item);
+                      setEventOpen(true);
+                    }}
+                  />
+                ) : (
+                  <TodayRow
+                    key={entry.item.id}
+                    booking={entry.item}
+                    onClick={() => setSelectedBookingId(entry.item.id)}
+                  />
+                ),
+              )}
             </ul>
           )}
         </SectionCard>
@@ -437,6 +468,16 @@ function Overview() {
               <Button variant="outline" className="justify-start" onClick={() => setQuick("group")}>
                 <UsersRound className="size-4" /> Group session
               </Button>
+              <Button
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  setEditingEvent(null);
+                  setEventOpen(true);
+                }}
+              >
+                <Clock className="size-4" /> Add event
+              </Button>
               <Button variant="outline" className="justify-start" onClick={() => setQuick("block")}>
                 <CalendarX className="size-4" /> Block time
               </Button>
@@ -460,6 +501,14 @@ function Overview() {
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <EventModal
+        open={eventOpen}
+        onOpenChange={(o) => {
+          setEventOpen(o);
+          if (!o) setEditingEvent(null);
+        }}
+        block={editingEvent}
+      />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
     </>
@@ -472,6 +521,45 @@ function Metric({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium tabular-nums">{value}</dd>
     </div>
+  );
+}
+
+/** A staff event on today's list: its own colour, no client or status, click to edit. */
+function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () => void }) {
+  const tenant = useTenant();
+  const staff = useStaffList();
+  const owner = staff.data?.find((s) => s.id === block.staffId);
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60"
+      >
+        <div className="w-16 shrink-0">
+          <p className="text-sm font-semibold tabular-nums">
+            {formatInTz(block.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+          </p>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {formatInTz(block.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        </div>
+        <span
+          aria-hidden
+          className="size-2.5 shrink-0 rounded-sm"
+          style={{ backgroundColor: block.colour }}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{block.title}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            Event · {owner?.displayName ?? "—"}
+            {block.notes ? ` · ${block.notes}` : ""}
+          </p>
+        </div>
+        <PersonAvatar name={owner?.displayName ?? "?"} size={32} />
+      </button>
+    </li>
   );
 }
 
