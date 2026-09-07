@@ -45,6 +45,7 @@ import type {
 } from "@/lib/api/types";
 import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access";
 import { formatInTz, formatMoney } from "@/lib/format";
+import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -344,10 +345,14 @@ function AddonsCard({
                     size="sm"
                     disabled={disabled || busy}
                     onClick={async () => {
-                      await add.mutateAsync(addon.key);
-                      toast.success(copy.addedTitle, {
-                        description: `${price} has been added to your subscription.`,
-                      });
+                      try {
+                        await add.mutateAsync(addon.key);
+                        toast.success(copy.addedTitle, {
+                          description: `${price} has been added to your subscription.`,
+                        });
+                      } catch {
+                        // The hook already toasts the API error.
+                      }
                     }}
                   >
                     {add.isPending ? "Adding…" : `Add for ${price}`}
@@ -377,6 +382,7 @@ export function BillingPage() {
 
   const current = subscription.data?.subscription;
   const plan = subscription.data?.plan;
+  const addonRows = addonsWithInvoicing(subscription.data);
   const tz = tenant.business?.defaultTimezone ?? "Europe/London";
   const blocked = isBillingBlocked(current);
   const canManage = canManageSaasBilling({
@@ -520,9 +526,9 @@ export function BillingPage() {
         </SectionCard>
       ) : null}
 
-      {!blocked && current && subscription.data?.addons?.length ? (
+      {!blocked && current && addonRows.length ? (
         <AddonsCard
-          addons={subscription.data.addons}
+          addons={addonRows}
           currentPlanName={currentPlan?.name ?? plan?.name ?? null}
           disabled={!canManage}
         />

@@ -43,15 +43,19 @@ export function InvoicingUpgradeDialog({
   const addAddon = useAddSubscriptionAddon();
 
   const current = subscription.data?.subscription ?? null;
+  const blocked = isBillingBlocked(current);
+  // Bolt-ons need a live subscription (the API answers 422 otherwise), so a
+  // business with no plan — or a lapsed one — is sent to choose a plan instead.
+  const live = Boolean(current) && !blocked;
   const canManage = canManageSaasBilling({
     can: tenant.can,
     roleKeys: tenant.roleKeys,
-    blocked: isBillingBlocked(current),
+    blocked,
   });
   const price = addon
     ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
     : "£10/month";
-  const canBuyHere = Boolean(current) && addon?.status === "available" && canManage;
+  const canBuyHere = live && addon?.status === "available" && canManage;
 
   const goToBilling = () => {
     onOpenChange(false);
@@ -68,7 +72,7 @@ export function InvoicingUpgradeDialog({
       </>
     );
     actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
-  } else if (!current) {
+  } else if (!live) {
     body = (
       <>
         Invoicing comes with the Growth plan, or as a {price} bolt-on on Solo and Business. Choose a
@@ -100,18 +104,22 @@ export function InvoicingUpgradeDialog({
           <Button
             disabled={addAddon.isPending}
             onClick={async () => {
-              const view = await addAddon.mutateAsync(INVOICING_ADDON_KEY);
-              if (view.features?.[INVOICING_FEATURE_KEY]) {
-                toast.success("Invoicing added", {
-                  description: `${price} has been added to your subscription.`,
-                });
-                onOpenChange(false);
-                onEnabled?.();
-              } else {
-                toast.info("Invoicing bolt-on added — activating", {
-                  description: "It can take a moment to switch on. Try again shortly.",
-                });
-                onOpenChange(false);
+              try {
+                const view = await addAddon.mutateAsync(INVOICING_ADDON_KEY);
+                if (view.features?.[INVOICING_FEATURE_KEY]) {
+                  toast.success("Invoicing added", {
+                    description: `${price} has been added to your subscription.`,
+                  });
+                  onOpenChange(false);
+                  onEnabled?.();
+                } else {
+                  toast.info("Invoicing bolt-on added — activating", {
+                    description: "It can take a moment to switch on. Try again shortly.",
+                  });
+                  onOpenChange(false);
+                }
+              } catch {
+                // useAddSubscriptionAddon already toasts the problem+json error.
               }
             }}
           >
