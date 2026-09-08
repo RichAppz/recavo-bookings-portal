@@ -3,6 +3,8 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  useLocation,
+  useNavigate,
   useRouter,
   HeadContent,
   Scripts,
@@ -11,7 +13,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AuthProvider } from "@/lib/auth/auth-store";
+import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -155,6 +157,23 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A password-reset email signs the person in and should land them on /reset to choose
+ * a new password. Supabase can send them to the Site URL instead (redirect not on the
+ * allow-list, or the link opened elsewhere), so steer them there from wherever they
+ * arrive while the recovery is still open.
+ */
+function PasswordRecoveryRedirect() {
+  const { status, passwordRecovery } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!passwordRecovery || status !== "authenticated" || pathname === "/reset") return;
+    void navigate({ to: "/reset", replace: true });
+  }, [passwordRecovery, status, pathname, navigate]);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -164,6 +183,7 @@ function RootComponent() {
         <AuthProvider>
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <PasswordRecoveryRedirect />
             <Outlet />
             <Toaster position="top-right" richColors />
             <MfaDialog />
