@@ -6,7 +6,9 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
+import { matchesServiceFilter } from "@/lib/service-categories";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -86,16 +88,20 @@ function BookingsPage() {
     status: statusFilter !== "all" ? statusFilter : undefined,
   });
 
+  const serviceById = useMemo(
+    () => new Map((services.data ?? []).map((s) => [s.id, s])),
+    [services.data],
+  );
   const rows = useMemo(() => {
     const q = query.toLowerCase().trim();
     return (bookings.data?.bookings ?? [])
       .filter(
         (b) =>
-          (serviceFilter === "all" || b.serviceSnapshot.serviceId === serviceFilter) &&
+          matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)) &&
           (!q || b.reference.toLowerCase().includes(q)),
       )
       .sort((a, b) => b.start.localeCompare(a.start));
-  }, [bookings.data, serviceFilter, query]);
+  }, [bookings.data, serviceFilter, serviceById, query]);
 
   const pageRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -153,19 +159,11 @@ function BookingsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={serviceFilter} onValueChange={setServiceFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Service" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All services</SelectItem>
-              {(services.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ServiceFilterSelect
+            services={services.data ?? []}
+            value={serviceFilter}
+            onValueChange={setServiceFilter}
+          />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
               <SelectValue placeholder="Status" />

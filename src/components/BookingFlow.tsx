@@ -34,6 +34,7 @@ import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import { bookingSettlement } from "@/lib/booking-payment";
 import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
 
@@ -835,197 +836,209 @@ export function BookingFlow({
                 No bookable services are available right now.
               </p>
             ) : (
-              (services.data ?? []).map((s) => {
-                const expanded = s.id === serviceId;
-                return (
-                  <div key={s.id} className="space-y-3">
-                    <button
-                      onClick={() => {
-                        // Tapping the open one closes it again, so a mis-tap is undoable
-                        // without a Back button on a step that no longer exists.
-                        if (expanded) {
-                          setServiceId(null);
-                          setSelectedSlot(null);
-                          return;
-                        }
-                        setServiceId(s.id);
-                        setSelectedSlot(null);
-                      }}
-                      aria-expanded={expanded}
-                      className={`surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition ${
-                        expanded ? "ring-2 ring-primary" : ""
-                      }`}
-                    >
-                      <span>
-                        <span className="block font-medium">{s.name}</span>
-                        {s.description ? (
-                          <span className="mt-1 block text-sm text-muted-foreground">
-                            {s.description}
+              groupByCategory(services.data ?? []).map((group) => (
+                <div key={group.category ?? "__none"} className="space-y-3">
+                  {/* Headings only when the studio has sorted its services into categories. */}
+                  {hasCategories(services.data ?? []) ? (
+                    <h2 className="pt-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                      {group.category ?? "Other"}
+                    </h2>
+                  ) : null}
+                  {group.items.map((s) => {
+                    const expanded = s.id === serviceId;
+                    return (
+                      <div key={s.id} className="space-y-3">
+                        <button
+                          onClick={() => {
+                            // Tapping the open one closes it again, so a mis-tap is undoable
+                            // without a Back button on a step that no longer exists.
+                            if (expanded) {
+                              setServiceId(null);
+                              setSelectedSlot(null);
+                              return;
+                            }
+                            setServiceId(s.id);
+                            setSelectedSlot(null);
+                          }}
+                          aria-expanded={expanded}
+                          className={`surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition ${
+                            expanded ? "ring-2 ring-primary" : ""
+                          }`}
+                        >
+                          <span>
+                            <span className="block font-medium">{s.name}</span>
+                            {s.description ? (
+                              <span className="mt-1 block text-sm text-muted-foreground">
+                                {s.description}
+                              </span>
+                            ) : null}
+                            <span className="mt-2 block text-xs text-muted-foreground">
+                              {s.durationMinutes} minutes
+                            </span>
                           </span>
-                        ) : null}
-                        <span className="mt-2 block text-xs text-muted-foreground">
-                          {s.durationMinutes} minutes
-                        </span>
-                      </span>
-                      <span className="text-right whitespace-nowrap">
-                        <span className="block text-lg font-semibold">
-                          {formatMoney(s.basePriceMinor, s.currency)}
-                        </span>
-                        {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {formatMoney(s.depositMinor, s.currency)} deposit
+                          <span className="text-right whitespace-nowrap">
+                            <span className="block text-lg font-semibold">
+                              {formatMoney(s.basePriceMinor, s.currency)}
+                            </span>
+                            {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
+                              <span className="block text-xs text-muted-foreground">
+                                {formatMoney(s.depositMinor, s.currency)} deposit
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                      </span>
-                    </button>
+                        </button>
 
-                    {expanded ? (
-                      <div className="animate-in fade-in slide-in-from-top-2 space-y-5 rounded-xl border border-dashed p-4 duration-300 sm:p-5">
-                        {(locations.data ?? []).length > 1 ? (
-                          <div className="space-y-2">
-                            <h2 className="text-sm font-medium">Where</h2>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {(locations.data ?? []).map((l) => (
-                                <button
-                                  key={l.id}
-                                  onClick={() => {
-                                    setLocationId(l.id);
-                                    setSelectedSlot(null);
-                                  }}
-                                  className={`rounded-xl border p-3 text-left transition ${
-                                    l.id === activeLocationId
-                                      ? "border-primary bg-primary-soft text-primary"
-                                      : "bg-card hover:bg-secondary"
-                                  }`}
-                                >
-                                  <span className="flex items-center gap-2 text-sm font-medium">
-                                    <MapPin className="size-4" />
-                                    {l.name}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {activeLocationId ? (
-                          <div className="animate-in fade-in slide-in-from-top-1 space-y-3 duration-300">
-                            <h2 className="text-sm font-medium">When</h2>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                              {dateChoices(date).map((d) => {
-                                const dt = new Date(`${d}T00:00:00Z`);
-                                const selected = d === date;
-                                return (
-                                  <button
-                                    key={d}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    onClick={() => {
-                                      setDate(d);
-                                      setSelectedSlot(null);
-                                    }}
-                                    className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition ${
-                                      selected
-                                        ? "border-primary bg-primary-soft text-primary"
-                                        : "bg-card hover:bg-secondary"
-                                    }`}
-                                  >
-                                    <span className="text-xs text-muted-foreground">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        weekday: "short",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                    <span className="text-base font-semibold tabular-nums">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        day: "numeric",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        month: "short",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {availability.isLoading ? (
-                              <div className="grid grid-cols-3 gap-2">
-                                {Array.from({ length: 6 }, (_, i) => (
-                                  <div
-                                    key={i}
-                                    className="h-10 animate-pulse rounded-md bg-primary/10"
-                                  />
-                                ))}
-                              </div>
-                            ) : slots.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">
-                                {loadingTimes
-                                  ? "Checking this date…"
-                                  : "No availability on this date. Try another day."}
-                              </p>
-                            ) : (
-                              <>
-                                {/* The previous day's times stay put while the new ones
-                                    load, dimmed and inert so the grid never jumps and a
-                                    stale time can't be tapped mid-swap. */}
-                                <div
-                                  aria-busy={loadingTimes}
-                                  className={`grid grid-cols-3 gap-2 transition-opacity duration-200 sm:grid-cols-4 ${
-                                    loadingTimes ? "pointer-events-none opacity-50" : "opacity-100"
-                                  }`}
-                                >
-                                  {slots.map((slot) => (
+                        {expanded ? (
+                          <div className="animate-in fade-in slide-in-from-top-2 space-y-5 rounded-xl border border-dashed p-4 duration-300 sm:p-5">
+                            {(locations.data ?? []).length > 1 ? (
+                              <div className="space-y-2">
+                                <h2 className="text-sm font-medium">Where</h2>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {(locations.data ?? []).map((l) => (
                                     <button
-                                      key={`${slot.start}-${slot.staffId}`}
-                                      onClick={() => setSelectedSlot(slot)}
-                                      className={`rounded-xl border py-2.5 text-sm tabular-nums transition ${
-                                        slot.start === selectedSlot?.start &&
-                                        slot.staffId === selectedSlot?.staffId
+                                      key={l.id}
+                                      onClick={() => {
+                                        setLocationId(l.id);
+                                        setSelectedSlot(null);
+                                      }}
+                                      className={`rounded-xl border p-3 text-left transition ${
+                                        l.id === activeLocationId
                                           ? "border-primary bg-primary-soft text-primary"
-                                          : "hover:bg-secondary"
+                                          : "bg-card hover:bg-secondary"
                                       }`}
                                     >
-                                      {formatInTz(slot.start, slot.displayTimezone, {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
+                                      <span className="flex items-center gap-2 text-sm font-medium">
+                                        <MapPin className="size-4" />
+                                        {l.name}
+                                      </span>
                                     </button>
                                   ))}
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  Times shown in {slots[0]?.displayTimezone}.
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            Choose a location to see available times.
-                          </p>
-                        )}
+                              </div>
+                            ) : null}
 
-                        {selectedSlot ? (
-                          <Button
-                            size="xl"
-                            className="animate-in fade-in w-full duration-300"
-                            onClick={() => {
-                              setMode("service");
-                              setStep(STEP_DETAILS);
-                            }}
-                          >
-                            Continue
-                          </Button>
+                            {activeLocationId ? (
+                              <div className="animate-in fade-in slide-in-from-top-1 space-y-3 duration-300">
+                                <h2 className="text-sm font-medium">When</h2>
+                                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                                  {dateChoices(date).map((d) => {
+                                    const dt = new Date(`${d}T00:00:00Z`);
+                                    const selected = d === date;
+                                    return (
+                                      <button
+                                        key={d}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => {
+                                          setDate(d);
+                                          setSelectedSlot(null);
+                                        }}
+                                        className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition ${
+                                          selected
+                                            ? "border-primary bg-primary-soft text-primary"
+                                            : "bg-card hover:bg-secondary"
+                                        }`}
+                                      >
+                                        <span className="text-xs text-muted-foreground">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            weekday: "short",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                        <span className="text-base font-semibold tabular-nums">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            day: "numeric",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            month: "short",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {availability.isLoading ? (
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {Array.from({ length: 6 }, (_, i) => (
+                                      <div
+                                        key={i}
+                                        className="h-10 animate-pulse rounded-md bg-primary/10"
+                                      />
+                                    ))}
+                                  </div>
+                                ) : slots.length === 0 ? (
+                                  <p className="text-sm text-muted-foreground">
+                                    {loadingTimes
+                                      ? "Checking this date…"
+                                      : "No availability on this date. Try another day."}
+                                  </p>
+                                ) : (
+                                  <>
+                                    {/* The previous day's times stay put while the new ones
+                                        load, dimmed and inert so the grid never jumps and a
+                                        stale time can't be tapped mid-swap. */}
+                                    <div
+                                      aria-busy={loadingTimes}
+                                      className={`grid grid-cols-3 gap-2 transition-opacity duration-200 sm:grid-cols-4 ${
+                                        loadingTimes
+                                          ? "pointer-events-none opacity-50"
+                                          : "opacity-100"
+                                      }`}
+                                    >
+                                      {slots.map((slot) => (
+                                        <button
+                                          key={`${slot.start}-${slot.staffId}`}
+                                          onClick={() => setSelectedSlot(slot)}
+                                          className={`rounded-xl border py-2.5 text-sm tabular-nums transition ${
+                                            slot.start === selectedSlot?.start &&
+                                            slot.staffId === selectedSlot?.staffId
+                                              ? "border-primary bg-primary-soft text-primary"
+                                              : "hover:bg-secondary"
+                                          }`}
+                                        >
+                                          {formatInTz(slot.start, slot.displayTimezone, {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Times shown in {slots[0]?.displayTimezone}.
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                Choose a location to see available times.
+                              </p>
+                            )}
+
+                            {selectedSlot ? (
+                              <Button
+                                size="xl"
+                                className="animate-in fade-in w-full duration-300"
+                                onClick={() => {
+                                  setMode("service");
+                                  setStep(STEP_DETAILS);
+                                }}
+                              >
+                                Continue
+                              </Button>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })
+                    );
+                  })}
+                </div>
+              ))
             )}
 
             {(packages.data ?? []).length > 0 ? (

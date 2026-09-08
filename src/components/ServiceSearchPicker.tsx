@@ -12,6 +12,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { CatalogueService } from "@/lib/api/types";
 import { formatDuration, formatMoney } from "@/lib/format";
+import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,6 +43,8 @@ export function ServiceSearchPicker({
   const [search, setSearch] = useState("");
   const needle = search.trim().toLowerCase();
   const selected = value ? services.find((s) => s.id === value) : undefined;
+  // Categories only appear as headings once the catalogue actually uses them.
+  const grouped = hasCategories(services);
   const matches = needle
     ? services.filter((s) =>
         [s.name, s.category ?? "", s.description ?? ""].some((text) =>
@@ -83,34 +86,43 @@ export function ServiceSearchPicker({
             {matches.length === 0 ? (
               <CommandEmpty>{emptyMessage}</CommandEmpty>
             ) : (
-              <CommandGroup>
-                {matches.map((s) => (
-                  <CommandItem
-                    key={s.id}
-                    value={s.id}
-                    onSelect={() => {
-                      onSelect(s);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn("size-4", selected?.id === s.id ? "opacity-100" : "opacity-0")}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{s.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {[
-                          formatDuration(s.durationMinutes),
-                          formatMoney(s.basePriceMinor, s.currency),
-                          s.category,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              groupByCategory(matches).map((group) => (
+                <CommandGroup
+                  key={group.category ?? "__none"}
+                  heading={grouped ? (group.category ?? "Other") : undefined}
+                >
+                  {group.items.map((s) => (
+                    <CommandItem
+                      key={s.id}
+                      value={s.id}
+                      onSelect={() => {
+                        onSelect(s);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "size-4",
+                          selected?.id === s.id ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{s.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[
+                            formatDuration(s.durationMinutes),
+                            formatMoney(s.basePriceMinor, s.currency),
+                            // Already the heading when grouped.
+                            grouped ? null : s.category,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))
             )}
           </CommandList>
         </Command>
