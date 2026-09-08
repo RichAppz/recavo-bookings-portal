@@ -126,8 +126,20 @@ function BookingsPage() {
           />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <Input
+            type="date"
+            aria-label="From date"
+            className="min-w-0"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+          <Input
+            type="date"
+            aria-label="To date"
+            className="min-w-0"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
           <Select value={staffFilter} onValueChange={setStaffFilter}>
             <SelectTrigger>
               <SelectValue placeholder={staffNoun} />

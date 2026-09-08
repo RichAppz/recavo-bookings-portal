@@ -174,6 +174,24 @@
   h4 {
     letter-spacing: -0.02em;
   }
+
+  /* iOS Safari gives date/time inputs an intrinsic width that ignores `width: 100%`
+     and their grid cell, so two side by side ran past the edge of the card. Drop the
+     native chrome and let them fill whatever box they're given. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    /* WebKit centres the value and collapses the height when empty. */
+    text-align: left;
+    min-height: 1.5em;
+  }
 }
 
 @utility surface-card {
