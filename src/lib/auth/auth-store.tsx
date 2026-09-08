@@ -125,8 +125,32 @@ const OAUTH_CALLBACK_GRACE_MS = 15_000;
 function hasPendingAuthCallback(): boolean {
   if (typeof window === "undefined") return false;
   const hash = window.location.hash;
-  if (hash.includes("access_token=") || hash.includes("error_description=")) return true;
+  if (hash.includes("access_token=")) return true;
   return new URLSearchParams(window.location.search).has("code");
+}
+
+/**
+ * When an emailed link can't be redeemed — expired, already used, or opened in a
+ * different browser than the one that requested it — Supabase sends the person
+ * back with the reason in the URL fragment instead of a session. Left alone that
+ * reads as "the link did nothing"; pulled out here it can be said plainly.
+ */
+function takeAuthCallbackError(): string | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash.includes("error")) return null;
+  const params = new URLSearchParams(hash);
+  const code = params.get("error_code");
+  const description = params.get("error_description");
+  if (!code && !description && !params.get("error")) return null;
+  // Clear the fragment so a reload doesn't repeat the message.
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (code === "otp_expired") {
+    return "That link has expired. Request a new one and open it within an hour.";
+  }
+  return (
+    description?.replace(/\+/g, " ") ?? "That link couldn't be used. Please request a new one."
+  );
 }
 
 /**
@@ -497,6 +521,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const supabase = getSupabase();
     let mounted = true;
+
+    const callbackError = takeAuthCallbackError();
+    if (callbackError) {
+      authLog("auth callback returned an error", callbackError);
+      toast.error("Sign-in link didn't work", { description: callbackError, duration: 10_000 });
+    }
 
     awaitingOauthCallbackRef.current = hasPendingAuthCallback();
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
