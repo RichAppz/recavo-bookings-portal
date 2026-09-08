@@ -148,7 +148,9 @@ function takeAuthCallbackError(): string | null {
   if (code === "otp_expired") {
     return "That link has expired. Request a new one and open it within an hour.";
   }
-  return description?.replace(/\+/g, " ") ?? "That link couldn't be used. Please request a new one.";
+  return (
+    description?.replace(/\+/g, " ") ?? "That link couldn't be used. Please request a new one."
+  );
 }
 
 /**

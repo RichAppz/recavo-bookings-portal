@@ -1,9 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowRight, KeyRound, Loader2, Mail, MailCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, Mail, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell } from "@/components/AuthShell";
-import { RecoveryPending } from "@/components/RecoveryPending";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,66 +22,38 @@ const MIN_PASSWORD_LENGTH = 8;
  */
 function ResetPage() {
   const { status, passwordRecovery, clearPasswordRecovery } = useAuth();
-  // Set once a new password has been saved. The recovery session is signed out at
-  // that point, which would otherwise drop us back to the request form.
-  const [updated, setUpdated] = useState(false);
 
   // A recovery flag with no session behind it means the link didn't produce one:
   // expired, already used, or the person signed out mid-way. Drop the flag so
   // the request form comes back instead of a spinner that never resolves.
   useEffect(() => {
-    if (!updated && passwordRecovery && status === "unauthenticated") clearPasswordRecovery();
-  }, [updated, passwordRecovery, status, clearPasswordRecovery]);
+    if (passwordRecovery && status === "unauthenticated") clearPasswordRecovery();
+  }, [passwordRecovery, status, clearPasswordRecovery]);
 
-  if (updated) return <PasswordUpdated />;
   if (passwordRecovery && status !== "unauthenticated") {
     // The session from the link may still be settling; keep the intent on screen
     // rather than flashing the request form.
-    return status === "authenticated" ? (
-      <ChooseNewPassword onUpdated={() => setUpdated(true)} />
-    ) : (
-      <RecoveryPending />
-    );
+    return status === "authenticated" ? <ChooseNewPassword /> : <SettingUp />;
   }
   return <RequestReset />;
 }
 
-/**
- * The link proved who they are; the new password is now the thing to prove they
- * have. So rather than carrying the recovery session into the app, end it and ask
- * for a sign-in — which also confirms the password they just typed twice works.
- */
-function PasswordUpdated() {
+function SettingUp() {
   return (
     <AuthShell
       eyebrow="Account recovery"
-      title="Password updated"
-      subtitle="You've been signed out everywhere. Sign in with your new password to carry on."
+      title="One moment"
+      subtitle="Checking your reset link."
       footer={null}
     >
-      <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-accent-foreground">
-            <ShieldCheck className="size-4" />
-          </span>
-          <div className="text-sm">
-            <p className="font-medium text-foreground">Your account is secure</p>
-            <p className="mt-1 text-muted-foreground">
-              Any device still signed in with the old password will need the new one.
-            </p>
-          </div>
-        </div>
-        <Button asChild size="lg" className="h-11 w-full rounded-xl">
-          <Link to="/login" replace>
-            Sign in <ArrowRight className="size-4" />
-          </Link>
-        </Button>
+      <div className="flex justify-center py-6">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     </AuthShell>
   );
 }
 
-function ChooseNewPassword({ onUpdated }: { onUpdated: () => void }) {
+function ChooseNewPassword() {
   const { updatePassword, clearPasswordRecovery, signOut, supabaseUser } = useAuth();
   const navigate = useNavigate();
   const [next, setNext] = useState("");
@@ -100,11 +71,13 @@ function ChooseNewPassword({ onUpdated }: { onUpdated: () => void }) {
     try {
       // The reset link is the proof of identity here, so no current password.
       await updatePassword({ newPassword: next });
-      // Show the confirmation before the sign-out flips auth state underneath us.
-      onUpdated();
-      await signOut();
+      toast.success("Password updated", {
+        description: "You're signed in — use the new password next time.",
+      });
+      void navigate({ to: "/", replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't update your password.");
+    } finally {
       setBusy(false);
     }
   };
