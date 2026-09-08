@@ -69,6 +69,13 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   /**
+   * True from the moment a password-reset link signs the person in until they save
+   * a new password (or sign out). While set, the app routes them to /reset.
+   */
+  passwordRecovery: boolean;
+  /** Finish (or abandon) a password reset started from an email link. */
+  clearPasswordRecovery: () => void;
+  /**
    * Change (or, for OAuth-only accounts, set) the signed-in user's password.
    * When `currentPassword` is given it is verified first so a borrowed session
    * can't silently take over the account. Accounts with 2FA enrolled are stepped
@@ -120,6 +127,34 @@ function hasPendingAuthCallback(): boolean {
   const hash = window.location.hash;
   if (hash.includes("access_token=") || hash.includes("error_description=")) return true;
   return new URLSearchParams(window.location.search).has("code");
+}
+
+/**
+ * A password-reset link lands the person in the app already signed in (Supabase
+ * exchanges the token for a session) and announces it with a PASSWORD_RECOVERY event.
+ * That event is easy to lose — Supabase may bounce to the Site URL rather than /reset,
+ * and a reload replays nothing — so the fact is kept in sessionStorage until a new
+ * password is saved, and the root layout steers the person to /reset while it's set.
+ */
+const RECOVERY_KEY = "recavo.auth.passwordRecovery";
+
+function readRecoveryFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.sessionStorage.getItem(RECOVERY_KEY) === "1") return true;
+  } catch {
+    // Storage unavailable — fall through to the URL check.
+  }
+  return window.location.hash.includes("type=recovery");
+}
+
+function writeRecoveryFlag(on: boolean) {
+  try {
+    if (on) window.sessionStorage.setItem(RECOVERY_KEY, "1");
+    else window.sessionStorage.removeItem(RECOVERY_KEY);
+  } catch {
+    // Storage unavailable — in-memory state still drives the UI for this page load.
+  }
 }
 
 /** Namespaced debug logging for tracing the auth bootstrap (dev only). */
@@ -194,6 +229,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollment | null>(null);
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaStatusReady, setMfaStatusReady] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState<boolean>(() => readRecoveryFlag());
+  const clearPasswordRecovery = useCallback(() => {
+    writeRecoveryFlag(false);
+    setPasswordRecovery(false);
+  }, []);
   const mfaResolveRef = useRef<((ok: boolean) => void) | null>(null);
   const mfaEnrollmentRef = useRef<MfaEnrollment | null>(null);
   // The Supabase user id we've already loaded a profile for. Supabase fires
@@ -482,7 +522,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       authLog("onAuthStateChange", event, { userId: next?.user?.id });
       // An explicit sign-out must win over any pending callback grace.
-      if (event === "SIGNED_OUT") awaitingOauthCallbackRef.current = false;
+      if (event === "SIGNED_OUT") {
+        awaitingOauthCallbackRef.current = false;
+        writeRecoveryFlag(false);
+        setPasswordRecovery(false);
+      }
+      if (event === "PASSWORD_RECOVERY") {
+        writeRecoveryFlag(true);
+        setPasswordRecovery(true);
+      }
       void applySession(next);
     });
 
@@ -807,6 +855,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMfaEnrolled(false);
     setMfaStatusReady(true);
     setStatus("unauthenticated");
+    writeRecoveryFlag(false);
+    setPasswordRecovery(false);
     queryClient.clear();
 
     if (isSupabaseConfigured()) {
@@ -841,16 +891,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Your current password is incorrect.");
         }
       }
-      // Supabase refuses password changes on an AAL1 session once a TOTP factor exists.
-      const ok = await ensureAal2();
-      if (!ok) throw new Error("Two-factor verification is required to change your password.");
+      // Supabase refuses password changes on an AAL1 session once a TOTP factor exists,
+      // so challenge an enrolled factor — but never make someone *set up* 2FA just to
+      // change (or recover) their password.
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      if (mfaStepFor(aal, factors) === "challenge") {
+        const ok = await challengeMfa();
+        if (!ok) throw new Error("Two-factor verification is required to change your password.");
+      }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
         authLog("updatePassword error", error);
         throw error;
       }
+      // A reset-from-email is finished once a new password is saved.
+      writeRecoveryFlag(false);
+      setPasswordRecovery(false);
     },
-    [session, ensureAal2],
+    [session, challengeMfa],
   );
 
   const updateProfile = useCallback(
@@ -881,6 +940,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyEmailCode,
       signOut,
       resetPassword,
+      passwordRecovery,
+      clearPasswordRecovery,
       updatePassword,
       updateProfile,
       ensureAal2,
@@ -908,6 +969,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyEmailCode,
       signOut,
       resetPassword,
+      passwordRecovery,
+      clearPasswordRecovery,
       updatePassword,
       updateProfile,
       ensureAal2,
