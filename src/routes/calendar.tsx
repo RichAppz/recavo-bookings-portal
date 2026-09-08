@@ -157,6 +157,11 @@ function timeAtOffset(offsetY: number): string {
   return `${`${Math.floor(clamped / 60)}`.padStart(2, "0")}:${`${clamped % 60}`.padStart(2, "0")}`;
 }
 
+/** Bars shown per day in the month grid before it collapses to "+N more". */
+const MONTH_LANES = 3;
+/** Height of one bar row in the month grid, px (matches the chip's text + padding). */
+const MONTH_LANE_HEIGHT = 20;
+
 /** Six Monday-first weeks from the Monday on or before the 1st. */
 function monthGrid(anchor: Date): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -352,6 +357,64 @@ function CalendarPage() {
   };
   const bookingLabel = tenant.terminology.booking || "Booking";
 
+  type MonthEntry = { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock };
+  type PlacedItem = {
+    entry: MonthEntry;
+    /** First and last column (0–6) the item occupies within this week. */
+    startCol: number;
+    endCol: number;
+    lane: number;
+    continuesBefore: boolean;
+    continuesAfter: boolean;
+  };
+  const weeks = useMemo(
+    () =>
+      view === "month" ? Array.from({ length: 6 }, (_, i) => days.slice(i * 7, i * 7 + 7)) : [],
+    [view, days],
+  );
+  /**
+   * Lay one week's bookings and events into lanes. Longer spans go first and each
+   * item takes the topmost lane that's free across every column it covers, so a
+   * two-day job is one uninterrupted bar and the day items pack in around it.
+   */
+  const placeMonthItems = (weekIsos: string[]): PlacedItem[] => {
+    const entries: MonthEntry[] = [
+      ...filtered.map((item) => ({ kind: "booking" as const, item })),
+      ...events.map((item) => ({ kind: "event" as const, item })),
+    ];
+    const spans = entries.flatMap((entry) => {
+      const cols = weekIsos
+        .map((iso, i) => (coversDay(entry.item, iso) ? i : -1))
+        .filter((i) => i >= 0);
+      if (cols.length === 0) return [];
+      const startCol = cols[0]!;
+      const endCol = cols[cols.length - 1]!;
+      return [
+        {
+          entry,
+          startCol,
+          endCol,
+          continuesBefore: startCol === 0 && !startsOn(entry.item, weekIsos[0]!),
+          continuesAfter: endCol === 6 && !endsOn(entry.item, weekIsos[6]!),
+        },
+      ];
+    });
+    spans.sort(
+      (a, b) =>
+        a.startCol - b.startCol ||
+        b.endCol - b.startCol - (a.endCol - a.startCol) ||
+        a.entry.item.start.localeCompare(b.entry.item.start),
+    );
+    // laneFree[lane] = first column still free in that lane.
+    const laneFree: number[] = [];
+    return spans.map((span) => {
+      let lane = laneFree.findIndex((free) => free <= span.startCol);
+      if (lane === -1) lane = laneFree.length;
+      laneFree[lane] = span.endCol + 1;
+      return { ...span, lane };
+    });
+  };
+
   return (
     <>
       <PageHeader
@@ -460,63 +523,93 @@ function CalendarPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
-            {days.map((day) => {
-              const iso = isoDate(day);
-              const outside = day.getMonth() !== anchor.getMonth();
-              const dayBookings = filtered
-                .filter((b) => coversDay(b, iso))
-                .sort((a, b) => a.start.localeCompare(b.start));
-              const dayEvents = events
-                .filter((e) => coversDay(e, iso))
-                .sort((a, b) => a.start.localeCompare(b.start));
-              const dayItems: (
-                { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock }
-              )[] = [
-                ...dayBookings.map((item) => ({ kind: "booking" as const, item })),
-                ...dayEvents.map((item) => ({ kind: "event" as const, item })),
-              ].sort((a, b) => a.item.start.localeCompare(b.item.start));
-              return (
+          {/* One row per week. Items are laid out per row so a job that runs over
+              several days is a single bar across them, not a chip in each cell that
+              reads as separate jobs. */}
+          {weeks.map((week, weekIdx) => {
+            const weekIsos = week.map(isoDate);
+            const placed = placeMonthItems(weekIsos);
+            const hiddenOn = (iso: string) =>
+              placed.filter((p) => p.lane >= MONTH_LANES && coversDay(p.entry.item, iso)).length;
+            return (
+              <div key={weekIsos[0]} className="relative grid grid-cols-7">
+                {week.map((day) => {
+                  const iso = isoDate(day);
+                  const outside = day.getMonth() !== anchor.getMonth();
+                  const hidden = hiddenOn(iso);
+                  return (
+                    <div
+                      key={iso}
+                      className={cn(
+                        // The card draws its own edge, so the grid drops the borders
+                        // that would otherwise double up along the right and bottom.
+                        "group relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0",
+                        weekIdx === weeks.length - 1 && "border-b-0",
+                        outside && "bg-muted/30",
+                      )}
+                    >
+                      {/* Sits behind the bars so empty space opens the day, while a
+                          bar still opens its own booking. Nesting the two as real
+                          buttons would be invalid markup. */}
+                      <button
+                        type="button"
+                        onClick={() => openDay(day)}
+                        className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
+                        aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                      />
+
+                      <span
+                        className={cn(
+                          "pointer-events-none relative inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums",
+                          outside ? "text-muted-foreground/60" : "text-foreground",
+                          iso === todayIso && "bg-primary font-semibold text-primary-foreground",
+                        )}
+                      >
+                        {day.getDate()}
+                      </span>
+                      {/* Quick add for this day; shows on hover (always on touch, which has no hover). */}
+                      <button
+                        type="button"
+                        onClick={() => openChooser(iso)}
+                        className="absolute top-1.5 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                        aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+
+                      {hidden > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openDay(day)}
+                          className="absolute bottom-1 left-1.5 cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                        >
+                          +{hidden} more
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                {/* The bars: same seven columns as the cells beneath, so a span of
+                    n columns lines up exactly with the days it covers. */}
                 <div
-                  key={iso}
-                  className={cn(
-                    // The card draws its own edge, so the grid drops the borders
-                    // that would otherwise double up along the right and bottom.
-                    "group relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-child(n+36)]:border-b-0",
-                    outside && "bg-muted/30",
-                  )}
+                  className="pointer-events-none absolute inset-x-0 top-8 grid grid-cols-7 gap-y-0.5"
+                  style={{ gridAutoRows: `${MONTH_LANE_HEIGHT}px` }}
                 >
-                  {/* Sits behind the chips so empty space opens the day, while a
-                      chip still opens its own booking. Nesting the two as real
-                      buttons would be invalid markup. */}
-                  <button
-                    type="button"
-                    onClick={() => openDay(day)}
-                    className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
-                    aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
-                  />
-
-                  <span
-                    className={cn(
-                      "pointer-events-none relative inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums",
-                      outside ? "text-muted-foreground/60" : "text-foreground",
-                      iso === todayIso && "bg-primary font-semibold text-primary-foreground",
-                    )}
-                  >
-                    {day.getDate()}
-                  </span>
-                  {/* Quick add for this day; shows on hover (always on touch, which has no hover). */}
-                  <button
-                    type="button"
-                    onClick={() => openChooser(iso)}
-                    className="absolute top-1.5 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                    aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
-                  >
-                    <Plus className="size-3.5" />
-                  </button>
-
-                  <div className="relative mt-1 flex flex-col gap-0.5">
-                    {dayItems.slice(0, 3).map((entry) => {
+                  {placed
+                    .filter((p) => p.lane < MONTH_LANES)
+                    .map((p) => {
+                      const { entry, startCol, endCol, lane, continuesBefore, continuesAfter } = p;
+                      const style: CSSProperties = {
+                        gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                        gridRow: lane + 1,
+                      };
+                      // A bar that carries on past the row edge runs right to it, unrounded,
+                      // so it visibly continues into the next (or previous) week.
+                      const edges = cn(
+                        continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1.5",
+                        continuesAfter ? "mr-0 rounded-r-none" : "mr-1.5",
+                      );
                       if (entry.kind === "event") {
                         const ev = entry.item;
                         return (
@@ -524,23 +617,26 @@ function CalendarPage() {
                             key={ev.id}
                             type="button"
                             onClick={() => openEvent(ev)}
-                            style={eventChipStyle(ev.colour)}
-                            className="flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight"
+                            style={{ ...style, ...eventChipStyle(ev.colour) }}
+                            className={cn(
+                              "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              edges,
+                            )}
                           >
-                            {startsOn(ev, iso) ? (
-                              <span className="font-semibold tabular-nums">
-                                {timeLabel(ev.start)}
-                              </span>
-                            ) : (
+                            {continuesBefore ? (
                               <span
                                 className="text-muted-foreground"
                                 aria-label="Continues from earlier"
                               >
                                 ↳
                               </span>
+                            ) : (
+                              <span className="font-semibold tabular-nums">
+                                {timeLabel(ev.start)}
+                              </span>
                             )}
                             <span className="truncate">{ev.title}</span>
-                            {isMultiDay(ev) && !endsOn(ev, iso) ? (
+                            {continuesAfter ? (
                               <span className="ml-auto text-muted-foreground">→</span>
                             ) : null}
                           </button>
@@ -550,59 +646,55 @@ function CalendarPage() {
                       const cancelled = isCancelled(b);
                       const payment = chipPayment(b);
                       const tag = tagFor(b);
+                      const multi = isMultiDay(b);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name}${
+                            multi ? `, until ${endLabel(b)}` : ""
+                          } — ${payment.label}`}
+                          style={style}
                           className={cn(
-                            "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
+                            edges,
                             cancelled && "opacity-45 line-through",
                           )}
                         >
                           <ServiceDot colour={serviceColour(b)} />
-                          {b.allDay && startsOn(b, iso) ? (
-                            <span className="font-semibold">All day</span>
-                          ) : startsOn(b, iso) ? (
-                            <span className="font-semibold tabular-nums">
-                              {formatInTz(b.start, timezone, {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          ) : (
+                          {continuesBefore ? (
                             <span
                               className="text-muted-foreground"
                               aria-label="Continues from earlier"
                             >
                               ↳
                             </span>
+                          ) : b.allDay ? (
+                            <span className="font-semibold">All day</span>
+                          ) : (
+                            <span className="font-semibold tabular-nums">{timeLabel(b.start)}</span>
                           )}
                           {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
                           <span className="truncate">{b.serviceSnapshot.name}</span>
-                          {isMultiDay(b) && !endsOn(b, iso) ? (
+                          {/* Wide enough to say so: a bar over several days shows when it ends. */}
+                          {multi && endCol > startCol && !continuesAfter ? (
+                            <span className="ml-auto shrink-0 text-muted-foreground">
+                              until {timeLabel(b.end)}
+                            </span>
+                          ) : null}
+                          {continuesAfter ? (
                             <span className="ml-auto text-muted-foreground">→</span>
                           ) : null}
                         </button>
                       );
                     })}
-                    {dayItems.length > 3 ? (
-                      <button
-                        type="button"
-                        onClick={() => openDay(day)}
-                        className="cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        +{dayItems.length - 3} more
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="surface-card overflow-x-auto">
