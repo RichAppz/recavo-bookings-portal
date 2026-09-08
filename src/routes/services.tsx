@@ -26,6 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  groupByCategory,
+  hasCategories,
+  knownCategories,
+  normaliseCategory,
+} from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
@@ -201,123 +207,144 @@ function ServicesPage() {
           action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
         />
       ) : (
-        <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {(services.data ?? []).map((s) => (
-            <article key={s.id} className="surface-card flex flex-col p-5">
-              <div className="flex items-start justify-between gap-3">
-                <span
-                  className="size-2.5 rounded-full"
-                  // Same fallback as the calendar dot, so the card matches what staff see there.
-                  style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
-                />
-                <div className="flex items-center gap-2">
-                  {s.publicVisible ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Eye className="size-3.5" /> Public
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <EyeOff className="size-3.5" /> Hidden from booking page
-                    </span>
-                  )}
-                  <StatusBadge status={s.active ? "active" : "inactive"} />
-                </div>
-              </div>
-              <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-
-              <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="size-4 text-muted-foreground" />
-                  {formatDuration(s.durationMinutes)}
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold">
-                  {formatMoney(s.basePriceMinor, s.currency)}
-                  {s.capacityMax > 1 ? " pp" : ""}
-                </span>
-                {s.depositMinor && s.depositMinor > 0 ? (
-                  <span className="text-muted-foreground">
-                    {formatMoney(s.depositMinor, s.currency)} deposit
+        <div className="space-y-8">
+          {groupByCategory(services.data ?? []).map((group) => (
+            <section key={group.category ?? "__none"} className="space-y-3">
+              {/* Headings only once categories are in use; a flat catalogue stays flat. */}
+              {hasCategories(services.data ?? []) ? (
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  {group.category ?? "Other"}
+                  <span className="ml-2 font-normal tabular-nums normal-case">
+                    {group.items.length}
                   </span>
-                ) : null}
-                {isDetailing && s.capacityMax === 1 ? null : (
-                  <span className="flex items-center gap-1.5">
-                    <Users className="size-4 text-muted-foreground" />
-                    {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
-                  </span>
-                )}
-              </div>
-
-              {s.variants.length > 0 ? (
-                <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-                  {s.variants.map((v) => (
-                    <li key={v.id} className="flex items-center justify-between">
-                      <span>{v.name}</span>
-                      <span className="tabular-nums">
-                        {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
-                        {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                </h2>
               ) : null}
+              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {group.items.map((s) => (
+                  <article key={s.id} className="surface-card flex flex-col p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className="size-2.5 rounded-full"
+                        // Same fallback as the calendar dot, so the card matches what staff see there.
+                        style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
+                      />
+                      <div className="flex items-center gap-2">
+                        {s.publicVisible ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Eye className="size-3.5" /> Public
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <EyeOff className="size-3.5" /> Hidden from booking page
+                          </span>
+                        )}
+                        <StatusBadge status={s.active ? "active" : "inactive"} />
+                      </div>
+                    </div>
+                    <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
 
-              <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                <Row
-                  label={
-                    tenant.terminology.staff.toLowerCase().endsWith("s")
-                      ? tenant.terminology.staff
-                      : `${tenant.terminology.staff}s`
-                  }
-                  value={describeDeliverers(s, staff.data ?? [])}
-                />
-                <Row
-                  label="Locations"
-                  value={
-                    s.locationIds
-                      .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                      .filter(Boolean)
-                      .join(", ") || "All"
-                  }
-                />
-                <Row
-                  label="Booking notice"
-                  value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
-                />
-                <Row label="Cancellation" value={`${s.cancellationPolicy.windowHours} hours`} />
-                <Row
-                  label="Buffer"
-                  value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
-                />
-                <Row label="Offered" value={formatAvailabilityWindows(s.availabilityWindows)} />
-              </dl>
+                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-4 text-muted-foreground" />
+                        {formatDuration(s.durationMinutes)}
+                      </span>
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        {formatMoney(s.basePriceMinor, s.currency)}
+                        {s.capacityMax > 1 ? " pp" : ""}
+                      </span>
+                      {s.depositMinor && s.depositMinor > 0 ? (
+                        <span className="text-muted-foreground">
+                          {formatMoney(s.depositMinor, s.currency)} deposit
+                        </span>
+                      ) : null}
+                      {isDetailing && s.capacityMax === 1 ? null : (
+                        <span className="flex items-center gap-1.5">
+                          <Users className="size-4 text-muted-foreground" />
+                          {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
+                        </span>
+                      )}
+                    </div>
 
-              <div className="mt-5 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Switch
-                    checked={s.active}
-                    disabled={updateService.isPending}
-                    onCheckedChange={(v) => {
-                      updateService.mutate(
-                        {
-                          serviceId: s.id,
-                          version: s.version,
-                          body: { active: v },
-                        },
-                        {
-                          onSuccess: () =>
-                            toast.success(v ? `${noun} activated` : `${noun} paused`),
-                        },
-                      );
-                    }}
-                  />
-                  {s.active ? "Bookable" : "Hidden"}
-                </span>
-                <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                  Edit {lower}
-                </Button>
+                    {s.variants.length > 0 ? (
+                      <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+                        {s.variants.map((v) => (
+                          <li key={v.id} className="flex items-center justify-between">
+                            <span>{v.name}</span>
+                            <span className="tabular-nums">
+                              {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
+                              {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                      <Row
+                        label={
+                          tenant.terminology.staff.toLowerCase().endsWith("s")
+                            ? tenant.terminology.staff
+                            : `${tenant.terminology.staff}s`
+                        }
+                        value={describeDeliverers(s, staff.data ?? [])}
+                      />
+                      <Row
+                        label="Locations"
+                        value={
+                          s.locationIds
+                            .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                            .filter(Boolean)
+                            .join(", ") || "All"
+                        }
+                      />
+                      <Row
+                        label="Booking notice"
+                        value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
+                      />
+                      <Row
+                        label="Cancellation"
+                        value={`${s.cancellationPolicy.windowHours} hours`}
+                      />
+                      <Row
+                        label="Buffer"
+                        value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
+                      />
+                      <Row
+                        label="Offered"
+                        value={formatAvailabilityWindows(s.availabilityWindows)}
+                      />
+                    </dl>
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Switch
+                          checked={s.active}
+                          disabled={updateService.isPending}
+                          onCheckedChange={(v) => {
+                            updateService.mutate(
+                              {
+                                serviceId: s.id,
+                                version: s.version,
+                                body: { active: v },
+                              },
+                              {
+                                onSuccess: () =>
+                                  toast.success(v ? `${noun} activated` : `${noun} paused`),
+                              },
+                            );
+                          }}
+                        />
+                        {s.active ? "Bookable" : "Hidden"}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                        Edit {lower}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </article>
+            </section>
           ))}
         </div>
       )}
@@ -383,7 +410,7 @@ function ServiceDialog({
   onClose: () => void;
 }) {
   const tenant = useTenant();
-  const { noun, lower } = serviceNoun(tenant.terminology.service);
+  const { noun, lower, pluralLower } = serviceNoun(tenant.terminology.service);
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   // Example names must read like the user's trade, not like a PT product.
   const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
@@ -429,6 +456,14 @@ function ServiceDialog({
   );
   const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
   const [description, setDescription] = useState(service?.description ?? "");
+  // Free text, but the categories already in use are offered as one-tap chips so
+  // "Polishing" is spelt the same way on every service and groups cleanly.
+  const [category, setCategory] = useState(service?.category ?? "");
+  const catalogue = useServices();
+  const categorySuggestions = useMemo(
+    () => knownCategories(catalogue.data ?? []),
+    [catalogue.data],
+  );
   const [active, setActive] = useState(service?.active ?? true);
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
   // Calendar swatch; null = "no colour", which renders the theme default.
@@ -454,6 +489,7 @@ function ServiceDialog({
     setDurationUnit(isDetailing ? split.unit : "minutes");
     setCapacity(String(s?.capacityMax ?? 1));
     setDescription(s?.description ?? "");
+    setCategory(s?.category ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
     setColour(s?.colour ?? null);
@@ -554,6 +590,7 @@ function ServiceDialog({
       name,
       eligibleStaffIds,
       description: description || null,
+      category: normaliseCategory(category),
       durationMinutes,
       basePriceMinor,
       capacityMax,
@@ -652,6 +689,49 @@ function ServiceDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="s-category">Category (optional)</Label>
+            <Input
+              id="s-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder={isDetailing ? "Polishing" : "Classes"}
+              list="s-category-options"
+              autoComplete="off"
+            />
+            <datalist id="s-category-options">
+              {categorySuggestions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            {categorySuggestions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {categorySuggestions.map((c) => {
+                  const on = normaliseCategory(category)?.toLowerCase() === c.toLowerCase();
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(on ? "" : c)}
+                      aria-pressed={on}
+                      className={cn(
+                        "cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                        on
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Groups {pluralLower} on your booking page and in the calendar filter — e.g. all your
+              polishing work under one heading.
+            </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="s-colour">Calendar colour</Label>

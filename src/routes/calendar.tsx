@@ -6,6 +6,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
+import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
+import { matchesServiceFilter, serviceFilterExists } from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -214,11 +216,7 @@ function CalendarPage() {
   const staff = useStaffList();
   // A remembered filter can point at something since deleted; fall back to "all".
   useEffect(() => {
-    if (
-      services.data &&
-      serviceFilter !== "all" &&
-      !services.data.some((s) => s.id === serviceFilter)
-    ) {
+    if (services.data && !serviceFilterExists(serviceFilter, services.data)) {
       setServiceFilter("all");
     }
   }, [services.data, serviceFilter, setServiceFilter]);
@@ -254,8 +252,12 @@ function CalendarPage() {
   });
   const events = blocks.data ?? [];
 
-  const filtered = (bookings.data?.bookings ?? []).filter(
-    (b) => serviceFilter === "all" || b.serviceSnapshot.serviceId === serviceFilter,
+  const serviceById = useMemo(
+    () => new Map((services.data ?? []).map((s) => [s.id, s])),
+    [services.data],
+  );
+  const filtered = (bookings.data?.bookings ?? []).filter((b) =>
+    matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)),
   );
 
   // One batched lookup for every vehicle (or other linked record) in view, so
@@ -478,19 +480,12 @@ function CalendarPage() {
               </SelectContent>
             </Select>
           ) : null}
-          <Select value={serviceFilter} onValueChange={setServiceFilter}>
-            <SelectTrigger className="w-full sm:w-[190px]">
-              <SelectValue placeholder="Service" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All services</SelectItem>
-              {(services.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ServiceFilterSelect
+            services={services.data ?? []}
+            value={serviceFilter}
+            onValueChange={setServiceFilter}
+            className="w-full sm:w-[190px]"
+          />
         </div>
       </div>
 
