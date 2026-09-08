@@ -9,13 +9,14 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
+import { RecoveryPending } from "@/components/RecoveryPending";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
 
@@ -162,16 +163,28 @@ function RootShell({ children }: { children: ReactNode }) {
  * a new password. Supabase can send them to the Site URL instead (redirect not on the
  * allow-list, or the link opened elsewhere), so steer them there from wherever they
  * arrive while the recovery is still open.
+ *
+ * This is a gate, not just a redirect: while a recovery is open and we are anywhere
+ * but /reset, the route tree is not rendered at all. Redirecting from an effect
+ * meant the dashboard mounted first and flashed on screen — a confusing thing to
+ * see when all you asked for was a new password.
  */
-function PasswordRecoveryRedirect() {
-  const { status, passwordRecovery } = useAuth();
+function PasswordRecoveryGate({ children }: { children: ReactNode }) {
+  const { passwordRecovery } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  // Server render has no sessionStorage or URL fragment to read, so it always
+  // renders the tree; deciding after mount keeps hydration consistent.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const steer = mounted && passwordRecovery && pathname !== "/reset";
   useEffect(() => {
-    if (!passwordRecovery || status !== "authenticated" || pathname === "/reset") return;
-    void navigate({ to: "/reset", replace: true });
-  }, [passwordRecovery, status, pathname, navigate]);
-  return null;
+    if (steer) void navigate({ to: "/reset", replace: true });
+  }, [steer, navigate]);
+
+  if (steer) return <RecoveryPending />;
+  return <>{children}</>;
 }
 
 function RootComponent() {
@@ -183,8 +196,9 @@ function RootComponent() {
         <AuthProvider>
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <PasswordRecoveryRedirect />
-            <Outlet />
+            <PasswordRecoveryGate>
+              <Outlet />
+            </PasswordRecoveryGate>
             <Toaster position="top-right" richColors />
             <MfaDialog />
           </TenantProvider>

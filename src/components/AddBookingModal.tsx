@@ -377,12 +377,10 @@ export function AddBookingModal({
   if (!locationId) blockers.push("Choose a location");
   if (service) {
     if (scheduling === "slot") {
-      if (!selectedSlot)
-        blockers.push(slots.length > 0 ? "Pick a time slot" : "Pick a date with an available slot");
+      if (!selectedSlot) blockers.push(slots.length > 0 ? "Pick a time slot" : "Pick a date with an available slot");
     } else {
       if (!customStaffId) blockers.push(`Choose a ${staffLower}`);
-      if (!customWindow)
-        blockers.push(allDay ? "Set the first and last day" : "Set a start and end time");
+      if (!customWindow) blockers.push(allDay ? "Set the first and last day" : "Set a start and end time");
     }
     if (priceInvalid) blockers.push("Check the price");
     if (depositInvalid) blockers.push("Check the deposit");
@@ -439,14 +437,11 @@ export function AddBookingModal({
       return;
     }
     if (!customerId || !service || !locationId) {
-      toast.error(blockers[0] ?? "Choose a client, service and location");
+      toast.error("Choose a client, service and location");
       return;
     }
     if (scheduling === "slot" && !selectedSlot) {
-      toast.error("Pick a time slot", {
-        description:
-          slots.length > 0 ? undefined : "No availability on this date — try another day.",
-      });
+      toast.error("Choose a time slot");
       return;
     }
     if (scheduling === "custom" && (!customWindow || !customStaffId)) {
@@ -1271,12 +1266,11 @@ export function AddBookingModal({
             {setupBlocked || catalogueLoading ? null : (
               <Button
                 onClick={submit}
-                // Looks disabled while something is missing but stays clickable, so
-                // the click can explain what's left rather than doing nothing.
-                disabled={submitting}
-                aria-disabled={submitting || blocked}
-                className={cn(blocked && !submitting && "opacity-50")}
-                title={blocked ? blockers.join(" · ") : undefined}
+                disabled={
+                  submitting ||
+                  priceInvalid ||
+                  (scheduling === "slot" ? !selectedSlot : !customWindow || !customStaffId)
+                }
               >
                 {submitting ? "Creating…" : "Create booking"}
               </Button>
