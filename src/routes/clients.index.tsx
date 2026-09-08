@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Search, Upload, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
+import { LoadMoreSentinel } from "@/components/LoadMoreSentinel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -55,6 +56,8 @@ function ClientsPage() {
   });
   const rows = customers.items;
   const activeCount = useMemo(() => rows.filter((c) => c.status === "active").length, [rows]);
+  const { fetchNextPage } = customers;
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
 
   return (
     <>
@@ -170,17 +173,11 @@ function ClientsPage() {
                 </tbody>
               </table>
             </div>
-            {customers.hasNextPage ? (
-              <div className="border-t p-4">
-                <Button
-                  variant="outline"
-                  disabled={customers.isFetchingNextPage}
-                  onClick={() => void customers.fetchNextPage()}
-                >
-                  {customers.isFetchingNextPage ? "Loading…" : "Load more"}
-                </Button>
-              </div>
-            ) : null}
+            <LoadMoreSentinel
+              hasNextPage={Boolean(customers.hasNextPage)}
+              isFetchingNextPage={customers.isFetchingNextPage}
+              onLoadMore={loadMore}
+            />
           </>
         )}
       </div>
