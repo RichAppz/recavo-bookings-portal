@@ -44,18 +44,47 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+/**
+ * Browser hardening on every response. The sign-in, reset and checkout pages are
+ * the ones that matter: without `frame-ancestors` any site can frame the login
+ * form and lift a password by clickjacking; without HSTS a first visit over
+ * plain HTTP can be intercepted before the redirect. `frame-ancestors 'none'` is
+ * safe because nothing here is designed to be embedded — the only iframe in the
+ * app points at a PDF blob, not at the portal itself.
+ */
+const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "content-security-policy": "frame-ancestors 'none'",
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  // `payment` is deliberately not restricted: Stripe Elements runs in its own
+  // iframe and needs the Payment Request API for wallets.
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const hardened = new Response(response.body, response);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!hardened.headers.has(name)) hardened.headers.set(name, value);
+  }
+  return hardened;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

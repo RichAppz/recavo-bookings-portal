@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, KeyRound, Loader2, Mail, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell } from "@/components/AuthShell";
@@ -21,9 +21,16 @@ const MIN_PASSWORD_LENGTH = 8;
  * recovery, so ask for the new password instead of showing the request form again.
  */
 function ResetPage() {
-  const { status, passwordRecovery } = useAuth();
+  const { status, passwordRecovery, clearPasswordRecovery } = useAuth();
 
-  if (passwordRecovery) {
+  // A recovery flag with no session behind it means the link didn't produce one:
+  // expired, already used, or the person signed out mid-way. Drop the flag so
+  // the request form comes back instead of a spinner that never resolves.
+  useEffect(() => {
+    if (passwordRecovery && status === "unauthenticated") clearPasswordRecovery();
+  }, [passwordRecovery, status, clearPasswordRecovery]);
+
+  if (passwordRecovery && status !== "unauthenticated") {
     // The session from the link may still be settling; keep the intent on screen
     // rather than flashing the request form.
     return status === "authenticated" ? <ChooseNewPassword /> : <SettingUp />;
