@@ -87,7 +87,9 @@ function assertBundleMatchesTarget() {
     // such as https://xyzcompany.supabase.co.
     for (const m of source.matchAll(/https:\/\/[a-z]{20}\.supabase\.co/g)) supabaseRefs.add(m[0]);
     // API hosts only — the bundle legitimately names bookings./book.recavo.app too.
-    for (const m of source.matchAll(/https:\/\/(?:booking-api|recavo-api)[a-z0-9.-]*\.(?:recavo\.app|fly\.dev)/g)) {
+    for (const m of source.matchAll(
+      /https:\/\/(?:booking-api|recavo-api)[a-z0-9.-]*\.(?:recavo\.app|fly\.dev)/g,
+    )) {
       apiHosts.add(m[0]);
     }
   }
@@ -95,12 +97,20 @@ function assertBundleMatchesTarget() {
   const wrongSupabase = [...supabaseRefs].filter((url) => url !== expectedSupabase);
   const wrongApi = [...apiHosts].filter((url) => url !== expectedApi);
   if (supabaseRefs.size === 0 || wrongSupabase.length > 0 || wrongApi.length > 0) {
-    console.error(`Refusing to deploy ${targetName}: the built bundle does not match ${target.envFile}.`);
-    console.error(`  expected Supabase ${expectedSupabase}, found ${[...supabaseRefs].join(", ") || "none"}`);
-    console.error(`  expected API      ${expectedApi}, found ${[...apiHosts].join(", ") || "none"}`);
+    console.error(
+      `Refusing to deploy ${targetName}: the built bundle does not match ${target.envFile}.`,
+    );
+    console.error(
+      `  expected Supabase ${expectedSupabase}, found ${[...supabaseRefs].join(", ") || "none"}`,
+    );
+    console.error(
+      `  expected API      ${expectedApi}, found ${[...apiHosts].join(", ") || "none"}`,
+    );
     const leaked = Object.keys(process.env).filter((k) => k.startsWith("VITE_"));
     if (leaked.length > 0) {
-      console.error(`  VITE_* variables are set in this shell and override .env files: ${leaked.join(", ")}`);
+      console.error(
+        `  VITE_* variables are set in this shell and override .env files: ${leaked.join(", ")}`,
+      );
       console.error(`  Run: unset ${leaked.join(" ")}  — then rebuild.`);
     }
     process.exit(1);
