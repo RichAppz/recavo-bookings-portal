@@ -682,7 +682,9 @@ function CalendarPage() {
                           {/* Wide enough to say so: a bar over several days shows when it ends. */}
                           {multi && endCol > startCol && !continuesAfter ? (
                             <span className="ml-auto shrink-0 text-muted-foreground">
-                              until {timeLabel(b.end)}
+                              {b.allDay
+                                ? `${endCol - startCol + 1} days`
+                                : `until ${timeLabel(b.end)}`}
                             </span>
                           ) : null}
                           {continuesAfter ? (
