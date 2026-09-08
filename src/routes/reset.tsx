@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowRight, Loader2, Mail, MailCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, Mail, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,148 @@ export const Route = createFileRoute("/reset")({
   head: () => ({ meta: [{ title: "Reset password — RECAVO" }] }),
 });
 
+const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * Two halves of the same journey. Signed out: ask for the email and send the link.
+ * Arriving from that link: Supabase has already signed the person in and flagged a
+ * recovery, so ask for the new password instead of showing the request form again.
+ */
 function ResetPage() {
+  const { status, passwordRecovery } = useAuth();
+
+  if (passwordRecovery) {
+    // The session from the link may still be settling; keep the intent on screen
+    // rather than flashing the request form.
+    return status === "authenticated" ? <ChooseNewPassword /> : <SettingUp />;
+  }
+  return <RequestReset />;
+}
+
+function SettingUp() {
+  return (
+    <AuthShell
+      eyebrow="Account recovery"
+      title="One moment"
+      subtitle="Checking your reset link."
+      footer={null}
+    >
+      <div className="flex justify-center py-6">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    </AuthShell>
+  );
+}
+
+function ChooseNewPassword() {
+  const { updatePassword, clearPasswordRecovery, signOut, supabaseUser } = useAuth();
+  const navigate = useNavigate();
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const canSubmit = !busy && next.length >= MIN_PASSWORD_LENGTH && next === confirm;
+
+  const submit = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      // The reset link is the proof of identity here, so no current password.
+      await updatePassword({ newPassword: next });
+      toast.success("Password updated", {
+        description: "You're signed in — use the new password next time.",
+      });
+      void navigate({ to: "/", replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't update your password.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AuthShell
+      eyebrow="Account recovery"
+      title="Choose a new password"
+      subtitle={
+        supabaseUser?.email
+          ? `You're resetting the password for ${supabaseUser.email}.`
+          : "Pick something you haven't used here before."
+      }
+      footer={
+        <button
+          type="button"
+          className="font-medium text-primary hover:underline"
+          onClick={() => {
+            clearPasswordRecovery();
+            void signOut();
+            void navigate({ to: "/login", replace: true });
+          }}
+        >
+          Cancel and sign out
+        </button>
+      }
+    >
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSubmit) void submit();
+        }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="new-password">New password</Label>
+          <div className="relative">
+            <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              className="h-11 rounded-xl pl-9"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              aria-invalid={tooShort}
+              autoFocus
+              required
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            At least {MIN_PASSWORD_LENGTH} characters.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm new password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            autoComplete="new-password"
+            className="h-11 rounded-xl"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            aria-invalid={mismatch}
+            required
+          />
+          {mismatch ? <p className="text-xs text-destructive">Passwords don't match.</p> : null}
+        </div>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <Button type="submit" size="lg" className="h-11 w-full rounded-xl" disabled={!canSubmit}>
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <>
+              Save new password <ArrowRight className="size-4" />
+            </>
+          )}
+        </Button>
+      </form>
+    </AuthShell>
+  );
+}
+
+function RequestReset() {
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
