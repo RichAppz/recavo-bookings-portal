@@ -893,15 +893,35 @@ export function useCustomers(
   return useQuery({
     queryKey: queryKeys.customers(businessId, query),
     enabled: Boolean(businessId) && filters.enabled !== false,
-    queryFn: async () => {
-      const res = await api.get<{ items: Customer[]; nextCursor?: string | null }>(
-        `/api/v1/businesses/${businessId}/customers`,
-        { query },
-      );
-      return res.data;
+    queryFn: async ({ signal }) => {
+      // Every caller of this hook is a picker — "which client is this booking /
+      // invoice / message for?" — and a picker that quietly stops at the first
+      // page hides everyone past client 25. Walk the cursor to the end (largest
+      // page the API allows) so the list is the whole client book.
+      type Page = { items: Customer[]; nextCursor?: string | null };
+      const items: Customer[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < CUSTOMER_PICKER_MAX_PAGES; page += 1) {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/customers`,
+          {
+            query: { ...query, limit: CUSTOMER_PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
+            signal,
+          },
+        );
+        items.push(...res.data.items);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return { items, nextCursor: null as string | null };
     },
   });
 }
+
+/** Largest page size the customers endpoint accepts. */
+const CUSTOMER_PAGE_LIMIT = 100;
+/** 5,000 clients — well past any single business here; guards against a runaway cursor. */
+const CUSTOMER_PICKER_MAX_PAGES = 50;
 
 /** Cursor-paginated customers list (`items` + `nextCursor`). */
 export function useCustomersInfinite(
