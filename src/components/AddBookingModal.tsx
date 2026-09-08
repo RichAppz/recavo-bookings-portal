@@ -367,6 +367,28 @@ export function AddBookingModal({
       }
     })();
 
+  // Everything still standing between the form and a booking, in the order the
+  // fields appear. The Create button stays clickable while this is non-empty so
+  // a click can say what's missing instead of silently doing nothing.
+  const blockers: string[] = [];
+  if (!customerId) blockers.push("Choose a client");
+  if (!service) blockers.push("Choose a service");
+  if (recordRequired && linkedRecordId === "none") blockers.push(`Choose a ${recordTermLower}`);
+  if (!locationId) blockers.push("Choose a location");
+  if (service) {
+    if (scheduling === "slot") {
+      if (!selectedSlot)
+        blockers.push(slots.length > 0 ? "Pick a time slot" : "Pick a date with an available slot");
+    } else {
+      if (!customStaffId) blockers.push(`Choose a ${staffLower}`);
+      if (!customWindow)
+        blockers.push(allDay ? "Set the first and last day" : "Set a start and end time");
+    }
+    if (priceInvalid) blockers.push("Check the price");
+    if (depositInvalid) blockers.push("Check the deposit");
+  }
+  const blocked = blockers.length > 0;
+
   const handleConflict = () => {
     if (scheduling === "custom") {
       toast.error(
@@ -402,12 +424,29 @@ export function AddBookingModal({
   };
 
   const submit = async () => {
+    // Several gaps at once: list them all rather than revealing one per click.
+    // A single gap falls through to the specific message for it below.
+    if (blockers.length > 1) {
+      toast.error("A few things are still needed", {
+        description: (
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {blockers.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        ),
+      });
+      return;
+    }
     if (!customerId || !service || !locationId) {
-      toast.error("Choose a client, service and location");
+      toast.error(blockers[0] ?? "Choose a client, service and location");
       return;
     }
     if (scheduling === "slot" && !selectedSlot) {
-      toast.error("Choose a time slot");
+      toast.error("Pick a time slot", {
+        description:
+          slots.length > 0 ? undefined : "No availability on this date — try another day.",
+      });
       return;
     }
     if (scheduling === "custom" && (!customWindow || !customStaffId)) {
@@ -1232,11 +1271,12 @@ export function AddBookingModal({
             {setupBlocked || catalogueLoading ? null : (
               <Button
                 onClick={submit}
-                disabled={
-                  submitting ||
-                  priceInvalid ||
-                  (scheduling === "slot" ? !selectedSlot : !customWindow || !customStaffId)
-                }
+                // Looks disabled while something is missing but stays clickable, so
+                // the click can explain what's left rather than doing nothing.
+                disabled={submitting}
+                aria-disabled={submitting || blocked}
+                className={cn(blocked && !submitting && "opacity-50")}
+                title={blocked ? blockers.join(" · ") : undefined}
               >
                 {submitting ? "Creating…" : "Create booking"}
               </Button>
