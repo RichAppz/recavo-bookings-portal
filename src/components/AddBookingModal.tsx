@@ -679,7 +679,13 @@ export function AddBookingModal({
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
+              {/* Service takes the full row unless a Variant field sits beside it, so the
+                  additional-services row underneath reads as part of the same choice. */}
+              <div
+                className={
+                  service && service.variants.length > 0 ? "grid gap-2" : "grid gap-2 sm:col-span-2"
+                }
+              >
                 <Label>Service</Label>
                 <ServiceSearchPicker
                   services={serviceList}
@@ -725,6 +731,77 @@ export function AddBookingModal({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              ) : null}
+              {multiAllowed ? (
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label>Additional services (optional)</Label>
+                  {additional.map((a, idx) => {
+                    const s = serviceById.get(a.serviceId);
+                    if (!s) return null;
+                    return (
+                      <div
+                        key={a.serviceId}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border p-2"
+                      >
+                        <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
+                        {s.variants.length > 0 ? (
+                          <Select
+                            value={a.variantId ?? "none"}
+                            onValueChange={(v) =>
+                              setAdditional((prev) =>
+                                prev.map((x, i) =>
+                                  i === idx ? { ...x, variantId: v === "none" ? null : v } : x,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-44">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Default</SelectItem>
+                              {s.variants.map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.name} · {formatMoney(v.priceMinor ?? 0, s.currency)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {formatMoney(s.basePriceMinor, s.currency)}
+                          </span>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => setAdditional((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  {availableToAdd.length > 0 ? (
+                    <ServiceSearchPicker
+                      services={availableToAdd}
+                      value={null}
+                      placeholder="Add another service"
+                      onSelect={(s) =>
+                        setAdditional((prev) => [...prev, { serviceId: s.id, variantId: null }])
+                      }
+                    />
+                  ) : null}
+                  {additional.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Reserves the combined duration and rolls up to an estimated{" "}
+                      {formatMoney(rolledTotalMinor, service!.currency)}. The server confirms the
+                      final price and end time.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               <div className="grid gap-2">
@@ -795,78 +872,6 @@ export function AddBookingModal({
                 </div>
               ) : null}
             </div>
-
-            {multiAllowed ? (
-              <div className="grid gap-2">
-                <Label>Additional services (optional)</Label>
-                {additional.map((a, idx) => {
-                  const s = serviceById.get(a.serviceId);
-                  if (!s) return null;
-                  return (
-                    <div
-                      key={a.serviceId}
-                      className="flex flex-wrap items-center gap-2 rounded-lg border p-2"
-                    >
-                      <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
-                      {s.variants.length > 0 ? (
-                        <Select
-                          value={a.variantId ?? "none"}
-                          onValueChange={(v) =>
-                            setAdditional((prev) =>
-                              prev.map((x, i) =>
-                                i === idx ? { ...x, variantId: v === "none" ? null : v } : x,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-44">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Default</SelectItem>
-                            {s.variants.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.name} · {formatMoney(v.priceMinor ?? 0, s.currency)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {formatMoney(s.basePriceMinor, s.currency)}
-                        </span>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => setAdditional((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-                {availableToAdd.length > 0 ? (
-                  <ServiceSearchPicker
-                    services={availableToAdd}
-                    value={null}
-                    placeholder="Add another service"
-                    onSelect={(s) =>
-                      setAdditional((prev) => [...prev, { serviceId: s.id, variantId: null }])
-                    }
-                  />
-                ) : null}
-                {additional.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Reserves the combined duration and rolls up to an estimated{" "}
-                    {formatMoney(rolledTotalMinor, service!.currency)}. The server confirms the
-                    final price and end time.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
 
             {service ? (
               <div className="grid gap-3 rounded-xl border p-3">
