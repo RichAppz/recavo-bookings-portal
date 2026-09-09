@@ -18291,7 +18291,136 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a service that was never booked
+         * @description Permanently removes the service. Only for services no booking has ever referenced (including cancelled bookings): one with booking history returns `409 CONFLICT` and should be deactivated instead (`PATCH active=false`). Requires business.update.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Service has bookings — deactivate it instead (CONFLICT) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update a service */
@@ -21672,7 +21801,138 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a credit package that was never sold
+         * @description Permanently removes the package. Only for packages no purchase, entitlement or payment has ever referenced: one with sales history returns `409 CONFLICT` and should be archived instead (`PATCH active=false`). Requires package.manage.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    packageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update a credit package */
@@ -27236,7 +27496,7 @@ export interface paths {
                                     key: string;
                                     /** @example 100 */
                                     credits: number;
-                                    /** @example 500 */
+                                    /** @example 600 */
                                     unitAmountMinor: number;
                                     /** @example GBP */
                                     currency: string;
@@ -27388,7 +27648,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Buy a bundle of 100 texts (£5)
+         * Buy a bundle of 100 texts (£6)
          * @description Creates a one-off Stripe Checkout Session (`mode: payment`) for the bundle on the business’s Stripe Customer and returns its URL. Nothing is credited here: the balance moves when Stripe confirms payment (webhook) or when the success page calls /sms-credits/checkout/reconcile — both are idempotent per Session. Success URL: `{PUBLIC_APP_URL}/billing/sms-credits/success?session_id=…`. Requires billing.manage and an Idempotency-Key (replays return the same URL). `403` when checkout is disabled.
          */
         post: {
@@ -27434,7 +27694,7 @@ export interface paths {
                                 key: string;
                                 /** @example 100 */
                                 credits: number;
-                                /** @example 500 */
+                                /** @example 600 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -27605,7 +27865,7 @@ export interface paths {
                                     key: string;
                                     /** @example 100 */
                                     credits: number;
-                                    /** @example 500 */
+                                    /** @example 600 */
                                     unitAmountMinor: number;
                                     /** @example GBP */
                                     currency: string;
