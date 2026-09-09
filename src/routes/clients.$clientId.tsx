@@ -45,7 +45,8 @@ import {
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
-import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import type { ContactChannel } from "@/lib/api/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -699,8 +700,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   );
   const [marketingConsent, setMarketingConsent] = useState(client.marketingConsent.granted);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  // Picking SMS on a plan without it opens the bolt-on/upgrade prompt (RECA-527).
-  const smsGate = useSmsChannelGate(setPreferredChannel);
+  // SMS is allowed on every plan (ADR 0020); the note below says what it'll cost.
+  const smsCredits = useSmsCreditsSummary();
 
   useEffect(() => {
     setFirstName(client.firstName);
@@ -796,7 +797,7 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
           <Select
             value={preferredChannel}
             disabled={disabled}
-            onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
+            onValueChange={(v) => setPreferredChannel(v as ContactChannel)}
           >
             <SelectTrigger className="max-w-xs">
               <SelectValue />
@@ -812,11 +813,11 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            {smsGate.smsEntitled === false
-              ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
-              : "SMS needs a phone number — reminders fall back to email until one is saved."}
+            SMS needs a mobile number — reminders fall back to email until one is saved.
+            {preferredChannel === "sms" && smsCredits.level !== "unlimited"
+              ? ` ${smsCredits.note}`
+              : ""}
           </p>
-          {smsGate.dialog}
         </div>
         <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
           <div>
@@ -1376,7 +1377,7 @@ function CustomerNotificationsTab({ customerId }: { customerId: string }) {
   return (
     <SectionCard
       title="Notifications"
-      description="Reminders and updates sent to this client. SMS falls back to email until the bolt-on is active."
+      description="Reminders and updates sent to this client. Texts use your prepaid credits and fall back to email when none are left."
       action={
         <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
           <Button

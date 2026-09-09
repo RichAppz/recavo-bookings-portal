@@ -146,7 +146,12 @@ async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promi
     ...extraHeaders,
   };
 
-  if (body !== undefined) {
+  // A Blob/File body is sent as-is (e.g. the branding logo upload takes raw image
+  // bytes); everything else is JSON.
+  const rawBody = typeof Blob !== "undefined" && body instanceof Blob;
+  if (rawBody) {
+    if (!headers["Content-Type"]) headers["Content-Type"] = body.type || "application/octet-stream";
+  } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
   if (idempotencyKey) {
@@ -179,7 +184,7 @@ async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promi
     res = await fetch(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : rawBody ? body : JSON.stringify(body),
       signal,
     });
   } catch (err) {

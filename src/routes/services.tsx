@@ -37,12 +37,14 @@ import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/Week
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   useCreateService,
+  useDeleteService,
   useLocationsList,
   useServices,
   useStaffList,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
+import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
 import { ApiError } from "@/lib/api";
 import {
   formatAvailabilityWindows,
@@ -146,7 +148,9 @@ function ServicesPage() {
   const staff = useStaffList();
   const locations = useLocationsList();
   const updateService = useUpdateService();
+  const deleteService = useDeleteService();
   const [editing, setEditing] = useState<CatalogueService | null>(null);
+  const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
   // New services default to the business's opening hours — the location picked
   // in the sidebar, else the first active one with hours set.
@@ -337,9 +341,20 @@ function ServicesPage() {
                         />
                         {s.active ? "Bookable" : "Hidden"}
                       </span>
-                      <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                        Edit {lower}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete ${lower}`}
+                          onClick={() => setDeleting(s)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                          Edit {lower}
+                        </Button>
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -356,6 +371,30 @@ function ServicesPage() {
         onClose={() => {
           setCreating(false);
           setEditing(null);
+        }}
+      />
+
+      <DeleteOrFallbackDialog
+        item={deleting}
+        onClose={() => setDeleting(null)}
+        copy={(s) => ({
+          title: `Delete ${s.name}?`,
+          description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
+          inUseTitle: `Pause this ${lower} instead?`,
+          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
+          fallbackLabel: "Pause",
+        })}
+        onDelete={async (s) => {
+          await deleteService.mutateAsync(s.id);
+          toast.success(`${noun} deleted`);
+        }}
+        onFallback={async (s) => {
+          await updateService.mutateAsync({
+            serviceId: s.id,
+            version: s.version,
+            body: { active: false },
+          });
+          toast.success(`${noun} paused`);
         }}
       />
     </>

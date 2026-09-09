@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, FileText, MessageSquareText } from "lucide-react";
+import { Check, FileText } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
+import { SmsCreditsCard } from "@/components/SmsCreditsCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  SMS_ADDON_KEY,
   useAddSubscriptionAddon,
   useBillingCatalogue,
   useBillingPortal,
@@ -67,7 +67,8 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Online booking page and calendar",
         "Card payments with deposits",
         "Client records, goals and session notes",
-        "Email reminders (SMS bolt-on +£10/mo)",
+        "Email reminders, texts from prepaid credit bundles",
+        "Your logo and colours on emails and invoices",
         "Core revenue reporting",
       ],
     },
@@ -78,7 +79,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Trainer availability and role permissions",
         "Packages, credits and memberships",
         "Group sessions and out-call training",
-        "SMS + email reminders included",
+        "Email reminders, texts from prepaid credit bundles",
         "Progress tracking and measurements",
         "Full reporting suite",
       ],
@@ -87,8 +88,8 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       tagline: "Larger gyms or multi-site operators.",
       bullets: [
         "Advanced admin and permissions",
-        "SMS + email reminders included",
-        "Custom branding",
+        "Unlimited text reminders included",
+        "Invoicing included",
         "Priority support and onboarding help",
         "Data exports",
         "Advanced automations",
@@ -102,7 +103,8 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Online booking page and calendar",
         "Card payments with deposits",
         "Customer records with vehicle history",
-        "Email reminders (SMS bolt-on +£10/mo)",
+        "Email reminders, texts from prepaid credit bundles",
+        "Your logo and colours on emails and invoices",
         "Core revenue reporting",
       ],
     },
@@ -113,7 +115,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Staff availability and role permissions",
         "Multi-service jobs with rolled-up pricing",
         "Vehicles saved to every customer",
-        "SMS + email reminders included",
+        "Email reminders, texts from prepaid credit bundles",
         "Full reporting suite",
       ],
     },
@@ -121,8 +123,8 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       tagline: "Larger workshops or multi-site operators.",
       bullets: [
         "Advanced admin and permissions",
-        "SMS + email reminders included",
-        "Custom branding",
+        "Unlimited text reminders included",
+        "Invoicing included",
         "Priority support and onboarding help",
         "Data exports",
         "Advanced automations",
@@ -195,7 +197,7 @@ function accessCopy(sub: BusinessSubscription | null | undefined): string {
 
 type AddonCopy = {
   name: string;
-  icon: typeof MessageSquareText;
+  icon: typeof FileText;
   /** Bundled by the plan tier. */
   included: (planName: string) => string;
   /** Held via the bolt-on. */
@@ -210,24 +212,11 @@ type AddonCopy = {
 };
 
 /**
- * Copy per sellable bolt-on (RECA-527, ADR 0019). Anything the catalogue returns
- * that isn't listed here is rendered with generic wording rather than hidden.
+ * Copy per sellable bolt-on (ADR 0019). Anything the catalogue returns that isn't
+ * listed here is rendered with generic wording rather than hidden. Texting is no
+ * longer a bolt-on — it's prepaid credits (ADR 0020), shown in its own card.
  */
 const ADDON_COPY: Record<string, AddonCopy> = {
-  [SMS_ADDON_KEY]: {
-    name: "SMS reminders",
-    icon: MessageSquareText,
-    included: (plan) => `Included in ${plan}. Clients set to SMS get texted before every booking.`,
-    active: (price) => `Active · ${price}. Clients set to SMS get texted before every booking.`,
-    available: (price) =>
-      `Text clients before every booking instead of relying on email. ${price}, or included with Business and Growth.`,
-    removeTitle: "Remove SMS reminders?",
-    removeBody:
-      "Clients set to SMS will get email reminders instead from now on. The unused part of this month is credited to your next invoice.",
-    keepLabel: "Keep SMS",
-    addedTitle: "SMS reminders added",
-    removedTitle: "SMS reminders removed",
-  },
   [INVOICING_ADDON_KEY]: {
     name: "Invoicing",
     icon: FileText,
@@ -263,9 +252,8 @@ function genericAddonCopy(key: string): AddonCopy {
 }
 
 /**
- * Bolt-ons sold on top of the plan (RECA-527): SMS reminders and invoicing today.
- * Reads/writes the same entitlement the feature gates use, so what it shows is
- * what the API will allow.
+ * Bolt-ons sold on top of the plan: invoicing today. Reads/writes the same
+ * entitlement the feature gates use, so what it shows is what the API will allow.
  */
 function AddonsCard({
   addons,
@@ -533,6 +521,8 @@ export function BillingPage() {
           disabled={!canManage}
         />
       ) : null}
+
+      {!blocked && current ? <SmsCreditsCard /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
