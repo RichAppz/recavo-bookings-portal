@@ -1585,7 +1585,7 @@ export function useCreatePackageLink() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { name: string; packageIds: string[] }) => {
+    mutationFn: async (body: { name: string; serviceIds: string[]; packageIds: string[] }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
         body,
@@ -3872,6 +3872,8 @@ export function usePublicAvailability(
     locationId?: string;
     from?: string;
     to?: string;
+    /** Shared link code; lets the search reach a session kept off the public page. */
+    linkCode?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -3883,6 +3885,7 @@ export function usePublicAvailability(
     locationId: filters.locationId!,
     from: filters.from!,
     to: filters.to!,
+    ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
   };
   return useQuery({
     queryKey: queryKeys.publicAvailability(businessId ?? "", query),
@@ -3937,9 +3940,10 @@ export function usePublicPackages(businessId: string | undefined) {
   });
 }
 
-/** A shared package link as the buyer sees it: a heading plus the packages it names. */
+/** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
 export type PublicPackageLink = {
   link: { code: string; name: string };
+  services: PublicService[];
   packages: PublicPackage[];
 };
 
@@ -4023,6 +4027,8 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
       async (
         body: {
           slotToken: string;
+          /** Shared link code; required to hold a session kept off the public page. */
+          linkCode?: string | null;
           firstName: string;
           lastName?: string | null;
           email?: string | null;

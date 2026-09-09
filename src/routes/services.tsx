@@ -45,6 +45,7 @@ import {
   useUpdateStaff,
 } from "@/lib/api/hooks";
 import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
+import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { ApiError } from "@/lib/api";
 import {
   formatAvailabilityWindows,
@@ -363,6 +364,8 @@ function ServicesPage() {
           ))}
         </div>
       )}
+
+      {tenant.business ? <PackageLinksCard slug={tenant.business.slug} /> : null}
 
       <ServiceDialog
         open={creating || editing !== null}
