@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Clock, Eye, EyeOff, Plus, Ticket } from "lucide-react";
+import { Clock, Eye, EyeOff, Plus, Ticket, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
@@ -30,11 +30,13 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { ApiError } from "@/lib/api";
 import {
   useCreatePackage,
+  useDeletePackage,
   useExpireCredits,
   usePackages,
   useServices,
   useUpdatePackage,
 } from "@/lib/api/hooks";
+import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
 import type { Package } from "@/lib/api/types";
 import { formatMoney, parseMoneyToMinor } from "@/lib/format";
 import { validityLabel } from "@/lib/packages";
@@ -90,9 +92,11 @@ function PackagesPage() {
   const packages = usePackages();
   const services = useServices();
   const updatePackage = useUpdatePackage();
+  const deletePackage = useDeletePackage();
   const expireCredits = useExpireCredits();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Package | null>(null);
+  const [deleting, setDeleting] = useState<Package | null>(null);
   const [quick, setQuick] = useState<QuickAction>(null);
   const terms = usePackageTerms();
   const tenant = useTenant();
@@ -207,9 +211,20 @@ function PackagesPage() {
                     />
                     {p.active ? "On sale" : "Paused"}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
-                    Edit package
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      aria-label="Delete package"
+                      onClick={() => setDeleting(p)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditing(p)}>
+                      Edit package
+                    </Button>
+                  </div>
                 </div>
               </article>
             );
@@ -254,6 +269,31 @@ function PackagesPage() {
         }}
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
+
+      <DeleteOrFallbackDialog
+        item={deleting}
+        onClose={() => setDeleting(null)}
+        copy={(p) => ({
+          title: `Delete ${p.name}?`,
+          description: "This permanently removes the package. It can't be undone.",
+          inUseTitle: "Pause this package instead?",
+          inUseDescription:
+            "This package has been sold to clients, so it can't be deleted without losing their credit history. Pausing takes it off sale while existing credits keep working.",
+          fallbackLabel: "Pause",
+        })}
+        onDelete={async (p) => {
+          await deletePackage.mutateAsync(p.id);
+          toast.success("Package deleted");
+        }}
+        onFallback={async (p) => {
+          await updatePackage.mutateAsync({
+            packageId: p.id,
+            version: p.version,
+            body: { active: false },
+          });
+          toast.success("Package paused");
+        }}
+      />
     </>
   );
 }

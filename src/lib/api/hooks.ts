@@ -600,6 +600,25 @@ export function useCreateService() {
   });
 }
 
+/**
+ * Hard-delete a service that no booking has ever referenced. Anything with booking
+ * history comes back 409 and can only be deactivated; the caller decides how to present
+ * that, so errors are not toasted here.
+ */
+export function useDeleteService() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (serviceId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/services/${serviceId}`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
+  });
+}
+
 export function useUpdateService() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -1501,6 +1520,24 @@ export function useCreatePackage() {
       invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Hard-delete a package nobody has ever bought. Once sold it comes back 409 and can
+ * only be archived (`active=false`); errors are left to the caller.
+ */
+export function useDeletePackage() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (packageId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/packages/${packageId}`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
   });
 }
 
