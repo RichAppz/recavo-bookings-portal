@@ -9,6 +9,7 @@ import { CalendarStats } from "@/components/CalendarStats";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
+import { ServiceKey } from "@/components/ServiceKey";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -1046,7 +1047,9 @@ function CalendarPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+      {/* Payment colours are a fixed handful, so they stay inline; the service
+          colours grow with the catalogue and live behind a button instead. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
           <span className="font-medium">Payment (chip colour):</span>
           {PAYMENT_LEGEND.map(({ tone, label }) => (
@@ -1063,17 +1066,13 @@ function CalendarPage() {
             Event (own colour, hatched)
           </span>
         </div>
-        {(services.data ?? []).length > 0 ? (
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="font-medium">Service (dot):</span>
-            {(services.data ?? []).map((s) => (
-              <span key={s.id} className="flex items-center gap-2">
-                <ServiceDot colour={s.colour ?? SERVICE_FALLBACK_COLOUR} className="size-2.5" />
-                {s.name}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <ServiceKey
+          services={services.data ?? []}
+          fallbackColour={SERVICE_FALLBACK_COLOUR}
+          value={serviceFilter}
+          onValueChange={setServiceFilter}
+          className="sm:ml-auto"
+        />
       </div>
 
       <AddToCalendarChooser
