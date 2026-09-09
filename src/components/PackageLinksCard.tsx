@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, EyeOff, Link2, Plus, Trash2 } from "lucide-react";
+import { Copy, Link2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -182,19 +182,21 @@ function RevokeButton({
   );
 }
 
-/** One tickable row; the order badge tells the PT how the page will list things. */
+/**
+ * One tickable row; the order badge tells the PT how the page will list things. Whether
+ * the item is on the public page is deliberately not shown: a link makes it visible
+ * either way, so the flag would only be noise here.
+ */
 function ChoiceRow({
   checked,
   order,
   name,
-  hidden,
   price,
   onToggle,
 }: {
   checked: boolean;
   order: number;
   name: string;
-  hidden: boolean;
   price: string;
   onToggle: () => void;
 }) {
@@ -202,14 +204,7 @@ function ChoiceRow({
     <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 text-sm">
       <span className="flex items-center gap-3">
         <Checkbox checked={checked} onCheckedChange={onToggle} />
-        <span>
-          <span className="block font-medium">{name}</span>
-          {hidden ? (
-            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <EyeOff className="size-3" /> Hidden from booking page
-            </span>
-          ) : null}
-        </span>
+        <span className="font-medium">{name}</span>
       </span>
       <span className="flex items-center gap-3 text-muted-foreground">
         {checked ? <span className="tabular-nums text-xs">#{order + 1}</span> : null}
@@ -315,7 +310,6 @@ function CreateLinkDialog({
                     checked={serviceIds.includes(s.id)}
                     order={serviceIds.indexOf(s.id)}
                     name={s.name}
-                    hidden={!s.publicVisible}
                     price={formatMoney(s.basePriceMinor, s.currency)}
                     onToggle={() => toggleService(s.id)}
                   />
@@ -334,7 +328,6 @@ function CreateLinkDialog({
                     checked={packageIds.includes(p.id)}
                     order={packageIds.indexOf(p.id)}
                     name={p.name}
-                    hidden={!p.salesAvailable}
                     price={formatMoney(p.priceMinor, p.currency)}
                     onToggle={() => togglePackage(p.id)}
                   />
