@@ -200,6 +200,24 @@
   border-radius: var(--radius-xl);
 }
 
+/* Calendar bars slide their label back and forth when it is wider than the bar
+   (see components/Marquee.tsx, which sets the two custom properties). Pausing at
+   each end gives the eye time to read the start and the finish. */
+@keyframes marquee {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  82%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee var(--marquee-duration, 6s) ease-in-out infinite alternate;
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {
