@@ -43,6 +43,9 @@ import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
 import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
+import { Route as BillingSmsCreditsIndexRouteImport } from './routes/billing.sms-credits.index'
+import { Route as BillingSmsCreditsCancelRouteImport } from './routes/billing.sms-credits.cancel'
+import { Route as BillingSmsCreditsSuccessRouteImport } from './routes/billing.sms-credits.success'
 import { Route as ConnectRefreshBusinessIdRouteImport } from './routes/connect.refresh.$businessId'
 import { Route as ConnectReturnBusinessIdRouteImport } from './routes/connect.return.$businessId'
 
@@ -216,6 +219,22 @@ const InvoicesInvoiceIdRoute = InvoicesInvoiceIdRouteImport.update({
   path: '/invoices/$invoiceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BillingSmsCreditsIndexRoute = BillingSmsCreditsIndexRouteImport.update({
+  id: '/sms-credits/',
+  path: '/sms-credits/',
+  getParentRoute: () => BillingRoute,
+} as any)
+const BillingSmsCreditsCancelRoute = BillingSmsCreditsCancelRouteImport.update({
+  id: '/sms-credits/cancel',
+  path: '/sms-credits/cancel',
+  getParentRoute: () => BillingRoute,
+} as any)
+const BillingSmsCreditsSuccessRoute =
+  BillingSmsCreditsSuccessRouteImport.update({
+    id: '/sms-credits/success',
+    path: '/sms-credits/success',
+    getParentRoute: () => BillingRoute,
+  } as any)
 const ConnectRefreshBusinessIdRoute =
   ConnectRefreshBusinessIdRouteImport.update({
     id: '/refresh/$businessId',
@@ -263,8 +282,11 @@ export interface FileRoutesByFullPath {
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
+  '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/billing/sms-credits/': typeof BillingSmsCreditsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -300,8 +322,11 @@ export interface FileRoutesByTo {
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/invoices': typeof InvoicesIndexRoute
+  '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
+  '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/billing/sms-credits': typeof BillingSmsCreditsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -339,8 +364,11 @@ export interface FileRoutesById {
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
+  '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/billing/sms-credits/': typeof BillingSmsCreditsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -379,8 +407,11 @@ export interface FileRouteTypes {
     | '/billing/'
     | '/clients/'
     | '/invoices/'
+    | '/billing/sms-credits/cancel'
+    | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/billing/sms-credits/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -416,8 +447,11 @@ export interface FileRouteTypes {
     | '/billing'
     | '/clients'
     | '/invoices'
+    | '/billing/sms-credits/cancel'
+    | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/billing/sms-credits'
   id:
     | '__root__'
     | '/'
@@ -454,8 +488,11 @@ export interface FileRouteTypes {
     | '/billing/'
     | '/clients/'
     | '/invoices/'
+    | '/billing/sms-credits/cancel'
+    | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/billing/sms-credits/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -731,6 +768,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoicesInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/billing/sms-credits/': {
+      id: '/billing/sms-credits/'
+      path: '/sms-credits'
+      fullPath: '/billing/sms-credits/'
+      preLoaderRoute: typeof BillingSmsCreditsIndexRouteImport
+      parentRoute: typeof BillingRoute
+    }
+    '/billing/sms-credits/cancel': {
+      id: '/billing/sms-credits/cancel'
+      path: '/sms-credits/cancel'
+      fullPath: '/billing/sms-credits/cancel'
+      preLoaderRoute: typeof BillingSmsCreditsCancelRouteImport
+      parentRoute: typeof BillingRoute
+    }
+    '/billing/sms-credits/success': {
+      id: '/billing/sms-credits/success'
+      path: '/sms-credits/success'
+      fullPath: '/billing/sms-credits/success'
+      preLoaderRoute: typeof BillingSmsCreditsSuccessRouteImport
+      parentRoute: typeof BillingRoute
+    }
     '/connect/refresh/$businessId': {
       id: '/connect/refresh/$businessId'
       path: '/refresh/$businessId'
@@ -753,6 +811,9 @@ interface BillingRouteChildren {
   BillingSetupRoute: typeof BillingSetupRoute
   BillingSuccessRoute: typeof BillingSuccessRoute
   BillingIndexRoute: typeof BillingIndexRoute
+  BillingSmsCreditsCancelRoute: typeof BillingSmsCreditsCancelRoute
+  BillingSmsCreditsSuccessRoute: typeof BillingSmsCreditsSuccessRoute
+  BillingSmsCreditsIndexRoute: typeof BillingSmsCreditsIndexRoute
 }
 
 const BillingRouteChildren: BillingRouteChildren = {
@@ -760,6 +821,9 @@ const BillingRouteChildren: BillingRouteChildren = {
   BillingSetupRoute: BillingSetupRoute,
   BillingSuccessRoute: BillingSuccessRoute,
   BillingIndexRoute: BillingIndexRoute,
+  BillingSmsCreditsCancelRoute: BillingSmsCreditsCancelRoute,
+  BillingSmsCreditsSuccessRoute: BillingSmsCreditsSuccessRoute,
+  BillingSmsCreditsIndexRoute: BillingSmsCreditsIndexRoute,
 }
 
 const BillingRouteWithChildren =

@@ -35,15 +35,15 @@ export function useInvoicingEntitled(): boolean | undefined {
 }
 
 export type InvoicingAddonRow = SubscriptionAddon & {
-  /** True when the API didn't list the bolt-on and this row is our default (£10/month). */
+  /** True when the API didn't list the bolt-on and this row is our default (£8/month). */
   synthetic: boolean;
 };
 
-/** Guide §2: £10/month on Solo and Business, included in Growth. */
+/** ADR 0020 pricing: £8/month on Solo and Business, included in Growth. */
 const DEFAULT_INVOICING_ADDON: Omit<SubscriptionAddon, "status"> = {
   key: INVOICING_ADDON_KEY,
   featureKey: INVOICING_FEATURE_KEY,
-  unitAmountMinor: 1000,
+  unitAmountMinor: 800,
   currency: "GBP",
   interval: "month",
 };

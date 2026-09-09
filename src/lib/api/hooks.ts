@@ -2894,7 +2894,11 @@ export type SubscriptionAddon = {
   status: "included" | "active" | "available";
 };
 
-export const SMS_ADDON_KEY = "sms";
+/**
+ * Plan feature that bundles texting (Growth). Since ADR 0020 `false` no longer
+ * means "cannot text" — it means texts draw on prepaid credits. Ask
+ * {@link useSmsCredits} for the real picture.
+ */
 export const SMS_FEATURE_KEY = "reminders.sms";
 
 export type SubscriptionView = {
@@ -2917,7 +2921,7 @@ export function useSubscription() {
   });
 }
 
-/** Buy a bolt-on (e.g. SMS on Solo). Server replays on the same Idempotency-Key (RECA-526). */
+/** Buy a bolt-on (e.g. invoicing). Server replays on the same Idempotency-Key (RECA-526). */
 export function useAddSubscriptionAddon() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -3227,10 +3231,148 @@ export function usePlanFeature(featureKey: string): boolean | undefined {
   return subscription.data.features?.[featureKey] === true;
 }
 
-/** The SMS bolt-on row from the subscription view, if the business has a subscription. */
-export function useSmsAddon(): SubscriptionAddon | undefined {
-  const subscription = useSubscription();
-  return subscription.data?.addons?.find((a) => a.key === SMS_ADDON_KEY);
+/* ---------------- Prepaid text credits (ADR 0020) ---------------- */
+
+export type SmsCreditBundle = {
+  key: string;
+  credits: number;
+  unitAmountMinor: number;
+  currency: string;
+};
+
+export type SmsCreditLedgerEntry = {
+  id: string;
+  /** Positive for purchase / grant / release, -1 per text. */
+  delta: number;
+  balanceAfter: number;
+  kind: "purchase" | "consume" | "release" | "grant";
+  reference: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type SmsCredits = {
+  balance: number;
+  purchasedTotal: number;
+  consumedTotal: number;
+  /** Growth: texts included, credits never drawn down. */
+  unlimited: boolean;
+  /** The pack on sale — render this rather than hard-coding "£5 / 100". */
+  bundle: SmsCreditBundle;
+  /** Last 20 ledger entries, newest first. */
+  recent: SmsCreditLedgerEntry[];
+};
+
+/**
+ * Text credit balance for the business. Any active member may read it, so the
+ * UI can say whether a text will actually go out. Credits are consumed by the
+ * server as messages send, so this is refetched on focus rather than cached hard.
+ */
+export function useSmsCredits() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.smsCredits(businessId),
+    enabled: Boolean(businessId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const res = await api.get<{ smsCredits: SmsCredits }>(
+        `/api/v1/businesses/${businessId}/sms-credits`,
+      );
+      return res.data.smsCredits;
+    },
+  });
+}
+
+/** One-off Stripe Checkout for a credit bundle. Redirect to `checkoutUrl`; nothing is credited until it's paid. */
+export function useStartSmsCreditsCheckout() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: { bundle?: string } | undefined, idempotencyKey: string) => {
+        const res = await api.post<{ checkoutUrl: string; bundle: SmsCreditBundle }>(
+          `/api/v1/businesses/${businessId}/sms-credits/checkout`,
+          body ?? {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export type SmsCreditsReconcileResult = {
+  /** True exactly once — for whichever of the success page or the webhook saw the paid Session first. */
+  credited: boolean;
+  balance: number;
+  paymentStatus: "paid" | "unpaid" | "no_payment_required" | null;
+  smsCredits: SmsCredits;
+};
+
+/**
+ * Called from the success page with the Checkout Session id. Idempotent on the
+ * Session id (no Idempotency-Key), so it's safe on every load. Errors are left
+ * to the page, which distinguishes "not paid yet" from "not ours".
+ */
+export function useReconcileSmsCreditsCheckout() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { stripeCheckoutSessionId: string }) => {
+      const res = await api.post<SmsCreditsReconcileResult>(
+        `/api/v1/businesses/${businessId}/sms-credits/checkout/reconcile`,
+        body,
+      );
+      return res.data;
+    },
+    onSuccess: (result) => {
+      qc.setQueryData(queryKeys.smsCredits(businessId), result.smsCredits);
+    },
+  });
+}
+
+/* ---------------- Business logo (branding) ---------------- */
+
+/**
+ * Upload the business logo as raw PNG/JPEG bytes (≤ 1 MiB). Synchronous — the API
+ * scans the image before answering, so allow a couple of seconds. Errors are the
+ * caller's: the settings card maps the validation codes to friendly copy.
+ */
+export function useUploadBrandingLogo() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File | Blob) => {
+      const res = await api.put<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/branding/logo`,
+        file,
+        { headers: { "Content-Type": file.type } },
+      );
+      return res.data.configuration;
+    },
+    onSuccess: (configuration) => {
+      qc.setQueryData(queryKeys.configuration(businessId), configuration);
+      void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+    },
+  });
+}
+
+export function useRemoveBrandingLogo() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.delete<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/branding/logo`,
+      );
+      return res.data.configuration;
+    },
+    onSuccess: (configuration) => {
+      qc.setQueryData(queryKeys.configuration(businessId), configuration);
+      void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
 }
 
 /**

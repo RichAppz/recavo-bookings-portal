@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
+import { BrandingLogoField } from "@/components/BrandingLogoField";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
@@ -842,20 +843,29 @@ function ConfigurationTab() {
             <Field label="Linked record label" value={linkedTerm} onChange={setLinkedTerm} />
           </div>
         </SectionCard>
-        <SectionCard title="Branding">
+        <SectionCard
+          title="Branding"
+          description="Your logo and accent colour on customer emails, invoices and the booking page. Included on every plan."
+        >
           <div className="grid gap-4">
-            <p className="text-xs text-muted-foreground">
-              Used on the emails your customers receive. Leave either field empty to fall back to
-              RECAVO's.
-            </p>
-            <div className="grid gap-1.5">
-              <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
-              <p className="text-xs text-muted-foreground">
-                {logoValid
-                  ? "Must be a public https link — email apps cannot load private files."
-                  : "Must start with https://"}
-              </p>
-            </div>
+            <BrandingLogoField
+              logoUrl={logoValid ? logoUrl : ""}
+              onChange={setLogoUrl}
+              disabled={!tenant.can(PERMISSIONS.BUSINESS_UPDATE)}
+            />
+            <details className="group">
+              <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
+                Use an image hosted elsewhere instead
+              </summary>
+              <div className="mt-2 grid gap-1.5">
+                <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
+                <p className="text-xs text-muted-foreground">
+                  {logoValid
+                    ? "Must be a public https link — email apps cannot load private files. Saved with the rest of this page."
+                    : "Must start with https://"}
+                </p>
+              </div>
+            </details>
             <div className="grid gap-1.5">
               <div className="flex items-end gap-3">
                 <div className="flex-1">

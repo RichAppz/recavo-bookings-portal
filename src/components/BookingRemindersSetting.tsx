@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BellRing, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { SmsUpgradeDialog } from "@/components/SmsUpgradeDialog";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ApiError } from "@/lib/api";
-import { SMS_FEATURE_KEY, usePlanFeature, useUpdateConfiguration } from "@/lib/api/hooks";
+import { useUpdateConfiguration } from "@/lib/api/hooks";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   CHANNEL_LABELS,
@@ -40,19 +41,19 @@ const ISSUE_TEXT: Record<RowIssue, string> = {
 /**
  * Booking reminder rules (RECA-530): when reminders go out and by which channel.
  * Saving replaces the whole set; the API then rebuilds open reminders for upcoming
- * bookings without resending any already sent. SMS is gated on the entitlement —
- * picking it on Solo without the bolt-on opens the upgrade dialog.
+ * bookings without resending any already sent. SMS is allowed on every plan (ADR
+ * 0020): whether a reminder actually goes by text is settled at send time from the
+ * credit balance, so the editor just says what that balance is.
  */
 export function BookingRemindersSetting({ className }: { className?: string }) {
   const tenant = useTenant();
   const update = useUpdateConfiguration();
-  const smsEntitled = usePlanFeature(SMS_FEATURE_KEY);
+  const smsCredits = useSmsCreditsSummary();
   const saved = tenant.configuration?.reminders?.rules;
 
   const [rows, setRows] = useState<RuleRow[]>(() => rowsFromRules(saved));
   const [dirty, setDirty] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
-  const [upgradeFor, setUpgradeFor] = useState<string | null>(null);
 
   // Adopt saved rules once configuration loads, but never clobber in-progress edits.
   const savedSnapshot = JSON.stringify(saved ?? null);
@@ -78,13 +79,7 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
     setInlineError(null);
   };
 
-  const setChannel = (key: string, channel: ReminderChannel) => {
-    if (channel === "sms" && smsEntitled === false) {
-      setUpgradeFor(key);
-      return;
-    }
-    patch(key, { channel });
-  };
+  const setChannel = (key: string, channel: ReminderChannel) => patch(key, { channel });
 
   const issues = validateRows(rows);
   const canSave = dirty && issues.size === 0 && !update.isPending;
@@ -103,7 +98,7 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 403) {
-          setInlineError("SMS reminders need the SMS bolt-on or the Business/Growth plan.");
+          setInlineError("Your role can't change reminders — ask an admin.");
           return;
         }
         const fieldErr = err.fieldErrors.find((fe) => fe.field.startsWith("reminders"));
@@ -208,10 +203,7 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
                       <SelectContent>
                         <SelectItem value="preferred">{CHANNEL_LABELS.preferred}</SelectItem>
                         <SelectItem value="email">{CHANNEL_LABELS.email}</SelectItem>
-                        <SelectItem value="sms">
-                          {CHANNEL_LABELS.sms}
-                          {smsEntitled === false ? " · bolt-on" : ""}
-                        </SelectItem>
+                        <SelectItem value="sms">{CHANNEL_LABELS.sms}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -255,6 +247,28 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
             <strong>SMS</strong> texts clients who have a mobile number and haven't opted out —
             anyone else gets an email instead.
           </p>
+          {smsCredits.credits ? (
+            <p
+              className={cn(
+                "text-xs",
+                smsCredits.level === "empty"
+                  ? "text-destructive"
+                  : smsCredits.level === "low"
+                    ? "text-amber-700 dark:text-amber-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {smsCredits.note}
+              {smsCredits.level !== "unlimited" ? (
+                <>
+                  {" "}
+                  <Link to="/billing/sms-credits" className="underline underline-offset-2">
+                    {smsCredits.level === "empty" ? "Buy texts" : "Text credits"}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          ) : null}
 
           {inlineError ? <p className="text-sm text-destructive">{inlineError}</p> : null}
 
@@ -279,17 +293,6 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
           </div>
         </div>
       </Can>
-
-      <SmsUpgradeDialog
-        open={upgradeFor !== null}
-        onOpenChange={(open) => {
-          if (!open) setUpgradeFor(null);
-        }}
-        onEnabled={() => {
-          if (upgradeFor) patch(upgradeFor, { channel: "sms" });
-          setUpgradeFor(null);
-        }}
-      />
     </section>
   );
 }

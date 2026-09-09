@@ -22,7 +22,7 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 /**
  * Shown when someone tries to create, issue or send an invoice on a workspace
  * that isn't entitled to `invoicing` (ADR 0019). Growth bundles it; Solo and
- * Business can add it as a £10/month bolt-on right here, or change plan.
+ * Business can add it as an £8/month bolt-on right here, or change plan.
  *
  * Reads and PDF downloads are never gated, so this only guards the write actions.
  */
@@ -54,7 +54,7 @@ export function InvoicingUpgradeDialog({
   });
   const price = addon
     ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
-    : "£10/month";
+    : "£8/month";
   const canBuyHere = live && addon?.status === "available" && canManage;
 
   const goToBilling = () => {

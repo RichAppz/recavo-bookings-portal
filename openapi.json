@@ -1028,7 +1028,7 @@
                   "sms",
                   "none"
                 ],
-                "description": "Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered only while the business holds the reminders.sms entitlement and the customer keeps operational notifications on; otherwise reminders fall back to email."
+                "description": "Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered while the business can text (Growth includes unlimited texts; Solo/Business spend prepaid credits, ADR 0020) and the customer keeps operational notifications on; otherwise reminders fall back to email."
               },
               "operationalNotifications": {
                 "type": "boolean"
@@ -3258,7 +3258,7 @@
           },
           "branding": {
             "type": "object",
-            "description": "Customer-facing email branding; null fields fall back to platform branding.",
+            "description": "Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding.",
             "properties": {
               "logoUrl": {
                 "type": [
@@ -3266,7 +3266,7 @@
                   "null"
                 ],
                 "format": "uri",
-                "description": "Absolute https URL to a logo image."
+                "description": "Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image."
               },
               "accentColour": {
                 "type": [
@@ -3329,7 +3329,7 @@
             "required": [
               "rules"
             ],
-            "description": "Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference.",
+            "description": "Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference.",
             "properties": {
               "rules": {
                 "type": "array",
@@ -3353,7 +3353,7 @@
                         "email",
                         "sms"
                       ],
-                      "description": "`preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email."
+                      "description": "`preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email."
                     }
                   }
                 }
@@ -6099,6 +6099,198 @@
             "description": "PNG image of the RECAVO mark",
             "content": {
               "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/brand/businesses/{businessId}/logo": {
+      "get": {
+        "summary": "A business’s uploaded logo",
+        "description": "The image uploaded via `PUT /api/v1/businesses/{businessId}/branding/logo`. Public and embeddable cross-origin because mail clients, the booking page and invoice PDFs load it without credentials. `branding.logoUrl` carries a `?v=` content hash purely as a cache-buster; the route ignores the query. 404 when the business has no uploaded logo. Rate-limited per IP.",
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG or JPEG image bytes",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -15637,7 +15829,7 @@
                   },
                   "branding": {
                     "type": "object",
-                    "description": "Customer-facing email branding; null fields fall back to platform branding.",
+                    "description": "Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding.",
                     "properties": {
                       "logoUrl": {
                         "type": [
@@ -15645,7 +15837,7 @@
                           "null"
                         ],
                         "format": "uri",
-                        "description": "Absolute https URL to a logo image."
+                        "description": "Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image."
                       },
                       "accentColour": {
                         "type": [
@@ -15708,7 +15900,7 @@
                     "required": [
                       "rules"
                     ],
-                    "description": "Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference.",
+                    "description": "Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference.",
                     "properties": {
                       "rules": {
                         "type": "array",
@@ -15732,7 +15924,7 @@
                                 "email",
                                 "sms"
                               ],
-                              "description": "`preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email."
+                              "description": "`preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email."
                             }
                           }
                         }
@@ -15747,6 +15939,417 @@
         "responses": {
           "200": {
             "description": "Updated configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configuration"
+                  ],
+                  "properties": {
+                    "configuration": {
+                      "$ref": "#/components/schemas/BusinessConfiguration"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/branding/logo": {
+      "put": {
+        "summary": "Upload the business logo",
+        "description": "Send the image bytes as the request body with `Content-Type: image/png` or `image/jpeg` (≤ 1 MiB; PNG/JPEG verified from the bytes, SVG refused). The image is malware-scanned, stored once per business and published at a stable API-hosted URL that is written to `branding.logoUrl` — so it appears on invoice PDFs, customer emails and the public booking page. Re-uploading replaces the previous logo. Requires business.update. `400 VALIDATION_FAILED` with `errors[0].code` of `UNSUPPORTED_MEDIA_TYPE` / `TOO_LARGE` / `NOT_AN_IMAGE` / `MALWARE_DETECTED`; `422` when the scanner is unavailable.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated configuration with `branding.logoUrl` set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configuration"
+                  ],
+                  "properties": {
+                    "configuration": {
+                      "$ref": "#/components/schemas/BusinessConfiguration"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove the business logo",
+        "description": "Deletes the uploaded image and clears `branding.logoUrl` (also clears an externally hosted URL). Requires business.update.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated configuration with `branding.logoUrl: null`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18648,7 +19251,7 @@
                       "sms",
                       "none"
                     ],
-                    "description": "Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement."
+                    "description": "Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020)."
                   },
                   "operationalNotifications": {
                     "type": "boolean"
@@ -21696,7 +22299,7 @@
                       "sms",
                       "none"
                     ],
-                    "description": "Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement."
+                    "description": "Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020)."
                   },
                   "operationalNotifications": {
                     "type": "boolean"
@@ -43220,15 +43823,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -43652,7 +44255,7 @@
     "/api/v1/businesses/{businessId}/subscription/addons/{addonKey}": {
       "post": {
         "summary": "Add a paid add-on to the current subscription",
-        "description": "Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `sms` (SMS reminders, £10/month).",
+        "description": "Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `invoicing` (£8/month). The former `sms` add-on was replaced by prepaid bundles — see /sms-credits.",
         "security": [
           {
             "bearerAuth": []
@@ -43672,11 +44275,11 @@
             "name": "addonKey",
             "in": "path",
             "required": true,
-            "description": "Add-on key. Currently `sms` (RECA-526).",
+            "description": "Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020).",
             "schema": {
               "type": "string",
               "enum": [
-                "sms"
+                "invoicing"
               ]
             }
           },
@@ -43832,15 +44435,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -44050,11 +44653,11 @@
             "name": "addonKey",
             "in": "path",
             "required": true,
-            "description": "Add-on key. Currently `sms` (RECA-526).",
+            "description": "Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020).",
             "schema": {
               "type": "string",
               "enum": [
-                "sms"
+                "invoicing"
               ]
             }
           },
@@ -44210,15 +44813,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -44239,6 +44842,908 @@
                               "available"
                             ],
                             "description": "`included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/sms-credits": {
+      "get": {
+        "summary": "Text credit balance and recent ledger",
+        "description": "Prepaid SMS credits for the business (ADR 0020). Any active member may read it so staff know whether texts will go out. `unlimited: true` on Growth.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "smsCredits"
+                  ],
+                  "properties": {
+                    "smsCredits": {
+                      "type": "object",
+                      "required": [
+                        "balance",
+                        "purchasedTotal",
+                        "consumedTotal",
+                        "unlimited",
+                        "bundle",
+                        "recent"
+                      ],
+                      "description": "Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down.",
+                      "properties": {
+                        "balance": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "example": 87
+                        },
+                        "purchasedTotal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "consumedTotal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlimited": {
+                          "type": "boolean",
+                          "description": "True when the plan tier bundles `reminders.sms` (Growth): no credits needed."
+                        },
+                        "bundle": {
+                          "type": "object",
+                          "required": [
+                            "key",
+                            "credits",
+                            "unitAmountMinor",
+                            "currency"
+                          ],
+                          "description": "The pack on sale. Display amount only — Stripe is the money authority.",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "example": "sms_100"
+                            },
+                            "credits": {
+                              "type": "integer",
+                              "example": 100
+                            },
+                            "unitAmountMinor": {
+                              "type": "integer",
+                              "example": 500
+                            },
+                            "currency": {
+                              "type": "string",
+                              "example": "GBP"
+                            }
+                          }
+                        },
+                        "recent": {
+                          "type": "array",
+                          "description": "Most recent 20 ledger entries, newest first.",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "delta",
+                              "balanceAfter",
+                              "kind",
+                              "reference",
+                              "createdAt"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "delta": {
+                                "type": "integer",
+                                "description": "Positive for purchase/grant/release, -1 per text."
+                              },
+                              "balanceAfter": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "purchase",
+                                  "consume",
+                                  "release",
+                                  "grant"
+                                ]
+                              },
+                              "reference": {
+                                "type": "string",
+                                "description": "Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase."
+                              },
+                              "metadata": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "additionalProperties": true
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/sms-credits/checkout": {
+      "post": {
+        "summary": "Buy a bundle of 100 texts (£5)",
+        "description": "Creates a one-off Stripe Checkout Session (`mode: payment`) for the bundle on the business’s Stripe Customer and returns its URL. Nothing is credited here: the balance moves when Stripe confirms payment (webhook) or when the success page calls /sms-credits/checkout/reconcile — both are idempotent per Session. Success URL: `{PUBLIC_APP_URL}/billing/sms-credits/success?session_id=…`. Requires billing.manage and an Idempotency-Key (replays return the same URL). `403` when checkout is disabled.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bundle": {
+                    "type": "string",
+                    "description": "Bundle key; defaults to `sms_100`. Unknown keys → 404."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "checkoutUrl",
+                    "bundle"
+                  ],
+                  "properties": {
+                    "checkoutUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "bundle": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "credits",
+                        "unitAmountMinor",
+                        "currency"
+                      ],
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "example": "sms_100"
+                        },
+                        "credits": {
+                          "type": "integer",
+                          "example": 100
+                        },
+                        "unitAmountMinor": {
+                          "type": "integer",
+                          "example": 500
+                        },
+                        "currency": {
+                          "type": "string",
+                          "example": "GBP"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/sms-credits/checkout/reconcile": {
+      "post": {
+        "summary": "Success-page reconcile for a bundle purchase",
+        "description": "Call from the success page with the `session_id` query value. Retrieves the Session from Stripe, checks it belongs to this business and credits the bundle if paid and not already credited (`credited: true` exactly once; the late webhook then no-ops). Open or unpaid sessions return `credited: false`. `404` for a Session of another tenant or a non-bundle Session. Requires billing.manage; financial rate limit applies.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "stripeCheckoutSessionId"
+                ],
+                "properties": {
+                  "stripeCheckoutSessionId": {
+                    "type": "string",
+                    "example": "cs_test_…"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "credited",
+                    "balance",
+                    "paymentStatus",
+                    "smsCredits"
+                  ],
+                  "properties": {
+                    "credited": {
+                      "type": "boolean"
+                    },
+                    "balance": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "paymentStatus": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "example": "paid"
+                    },
+                    "smsCredits": {
+                      "type": "object",
+                      "required": [
+                        "balance",
+                        "purchasedTotal",
+                        "consumedTotal",
+                        "unlimited",
+                        "bundle",
+                        "recent"
+                      ],
+                      "description": "Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down.",
+                      "properties": {
+                        "balance": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "example": 87
+                        },
+                        "purchasedTotal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "consumedTotal": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unlimited": {
+                          "type": "boolean",
+                          "description": "True when the plan tier bundles `reminders.sms` (Growth): no credits needed."
+                        },
+                        "bundle": {
+                          "type": "object",
+                          "required": [
+                            "key",
+                            "credits",
+                            "unitAmountMinor",
+                            "currency"
+                          ],
+                          "description": "The pack on sale. Display amount only — Stripe is the money authority.",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "example": "sms_100"
+                            },
+                            "credits": {
+                              "type": "integer",
+                              "example": 100
+                            },
+                            "unitAmountMinor": {
+                              "type": "integer",
+                              "example": 500
+                            },
+                            "currency": {
+                              "type": "string",
+                              "example": "GBP"
+                            }
+                          }
+                        },
+                        "recent": {
+                          "type": "array",
+                          "description": "Most recent 20 ledger entries, newest first.",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "delta",
+                              "balanceAfter",
+                              "kind",
+                              "reference",
+                              "createdAt"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "delta": {
+                                "type": "integer",
+                                "description": "Positive for purchase/grant/release, -1 per text."
+                              },
+                              "balanceAfter": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "purchase",
+                                  "consume",
+                                  "release",
+                                  "grant"
+                                ]
+                              },
+                              "reference": {
+                                "type": "string",
+                                "description": "Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase."
+                              },
+                              "metadata": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "additionalProperties": true
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
                           }
                         }
                       }
@@ -44598,15 +46103,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -45160,15 +46665,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -45528,15 +47033,15 @@
                         "properties": {
                           "key": {
                             "type": "string",
-                            "example": "sms"
+                            "example": "invoicing"
                           },
                           "featureKey": {
                             "type": "string",
-                            "example": "reminders.sms"
+                            "example": "invoicing"
                           },
                           "unitAmountMinor": {
                             "type": "integer",
-                            "example": 1000
+                            "example": 800
                           },
                           "currency": {
                             "type": "string",
@@ -46311,15 +47816,15 @@
                             "properties": {
                               "key": {
                                 "type": "string",
-                                "example": "sms"
+                                "example": "invoicing"
                               },
                               "featureKey": {
                                 "type": "string",
-                                "example": "reminders.sms"
+                                "example": "invoicing"
                               },
                               "unitAmountMinor": {
                                 "type": "integer",
-                                "example": 1000
+                                "example": 800
                               },
                               "currency": {
                                 "type": "string",
