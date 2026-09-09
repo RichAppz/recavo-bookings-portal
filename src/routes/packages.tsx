@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Clock, Eye, EyeOff, Plus, Ticket, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,7 @@ function PackagesPage() {
   const [deleting, setDeleting] = useState<Package | null>(null);
   const [quick, setQuick] = useState<QuickAction>(null);
   const terms = usePackageTerms();
+  const tenant = useTenant();
 
   return (
     <>
@@ -229,6 +231,10 @@ function PackagesPage() {
           })}
         </div>
       )}
+
+      {tenant.business && (packages.data ?? []).length > 0 ? (
+        <PackageLinksCard slug={tenant.business.slug} packages={packages.data ?? []} />
+      ) : null}
 
       <p className="text-sm text-muted-foreground">
         Credit balances live on the client profile.{" "}

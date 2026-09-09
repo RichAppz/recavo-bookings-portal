@@ -41,6 +41,7 @@ export type Customer = schemas["Customer"];
 export type CustomerNote = schemas["CustomerNote"];
 export type CustomerTag = schemas["CustomerTag"];
 export type Package = schemas["Package"];
+export type PackageLink = schemas["PackageLink"];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];

@@ -53,6 +53,7 @@ import type {
   OnboardingStepKey,
   OutboxEvent,
   Package,
+  PackageLink,
   PackagePurchase,
   Payment,
   PaymentReceipt,
@@ -1559,6 +1560,57 @@ export function useUpdatePackage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
       invalidateOnboarding(qc, businessId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Package links (share a hand-picked set of packages) ---------------- */
+
+export function usePackageLinks() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.packageLinks(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ links: PackageLink[] }>(
+        `/api/v1/businesses/${businessId}/package-links`,
+      );
+      return res.data.links;
+    },
+  });
+}
+
+export function useCreatePackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { name: string; packageIds: string[] }) => {
+      const res = await api.post<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links`,
+        body,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRevokePackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (linkId: string) => {
+      const res = await api.delete<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links/${linkId}`,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -3885,6 +3937,32 @@ export function usePublicPackages(businessId: string | undefined) {
   });
 }
 
+/** A shared package link as the buyer sees it: a heading plus the packages it names. */
+export type PublicPackageLink = {
+  link: { code: string; name: string };
+  packages: PublicPackage[];
+};
+
+/**
+ * Resolves the `?offer=` code on a booking page. A 404 is an ordinary outcome (the
+ * business revoked the link), so it is not retried and the caller falls back to the
+ * full catalogue.
+ */
+export function usePublicPackageLink(businessId: string | undefined, code: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicPackageLink(businessId ?? "", code ?? ""),
+    enabled: Boolean(businessId && code),
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<PublicPackageLink>(
+        `/api/v1/public/businesses/${businessId}/package-links/${encodeURIComponent(code ?? "")}`,
+        { public: true },
+      );
+      return res.data;
+    },
+  });
+}
+
 export type PublicPackagePayment = PublicBookingPayment & {
   packageName: string;
   creditsIssued: number;
@@ -3918,6 +3996,8 @@ export function useBuyPublicPackage(businessId: string | undefined) {
       async (
         vars: {
           packageId: string;
+          /** Code of the shared link the buyer arrived through, if any. */
+          linkCode?: string | null;
           firstName: string;
           lastName?: string | null;
           email?: string | null;

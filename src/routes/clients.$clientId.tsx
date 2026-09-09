@@ -791,6 +791,7 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
           value={address}
           onChange={setAddress}
           disabled={disabled}
+          className="sm:col-span-2"
         />
         <div className="grid gap-2 sm:col-span-2">
           <Label>Preferred channel</Label>
