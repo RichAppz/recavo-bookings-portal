@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { CalendarClock, CalendarDays, Receipt, Store, Ticket, Wallet } from "lucide-react";
+import { CalendarClock, CalendarDays, Gift, Receipt, Store, Ticket, Wallet } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
@@ -21,6 +21,7 @@ import {
   usePortalAcrossStudios,
   usePortalBusinesses,
   usePortalLink,
+  usePortalPackageLinksAcrossStudios,
   stripeCheckoutFrom,
   stripeCheckoutUnavailableMessage,
   useStartPortalBookingPayment,
@@ -29,6 +30,7 @@ import {
   type PortalBusinessSummary,
   type PortalCredit,
   type PublicBookingPayment,
+  type PublicPackageLink,
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
@@ -37,7 +39,9 @@ import { formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
 const searchSchema = z.object({
-  view: z.enum(["overview", "calendar", "credits", "purchases", "invoices", "profile"]).optional(),
+  view: z
+    .enum(["overview", "calendar", "offers", "credits", "purchases", "invoices", "profile"])
+    .optional(),
   // Stripe 3-D Secure returns here when checkout ran from the account drawer.
   payment_intent: z.string().optional(),
   payment_intent_client_secret: z.string().optional(),
@@ -62,6 +66,7 @@ export const Route = createFileRoute("/account")({
 const TITLES: Record<AccountView, { title: string; description: string }> = {
   overview: { title: "My account", description: "Your bookings, credits and payments." },
   calendar: { title: "Calendar", description: "Your bookings, month by month." },
+  offers: { title: "Offers", description: "Sessions and packages picked out for you." },
   credits: { title: "Credits", description: "Bookings you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
   invoices: { title: "Invoices", description: "Invoices businesses have sent you, as PDFs." },
@@ -135,10 +140,12 @@ function AccountContent({
 }) {
   const { user } = useAuth();
   const { bookings, credits, payments } = usePortalAcrossStudios(studios);
+  const offers = usePortalPackageLinksAcrossStudios(studios);
   const startPayment = useStartPortalBookingPayment(undefined);
   const syncPayment = useSyncPortalBookingPayment();
   const [bookingStudio, setBookingStudio] = useState<PortalBusinessSummary | null>(null);
   const [bookingSeed, setBookingSeed] = useState<BookingSeed | null>(null);
+  const [bookingOffer, setBookingOffer] = useState<{ code: string; name: string } | null>(null);
   const [calDay, setCalDay] = useState(isoDate(new Date()));
   const [checkout, setCheckout] = useState<{
     payment: PublicBookingPayment;
@@ -154,6 +161,7 @@ function AccountContent({
     const studio = studios.find((s) => s.id === id);
     if (studio) {
       setBookingSeed(null);
+      setBookingOffer(null);
       setBookingStudio(studio);
     }
   }, [studios]);
@@ -219,7 +227,14 @@ function AccountContent({
 
   const openBooking = (studio: PortalBusinessSummary, seed?: BookingSeed | null) => {
     setBookingSeed(seed ?? null);
+    setBookingOffer(null);
     setBookingStudio(studio);
+  };
+
+  const openOffer = (offer: FromStudio<PublicPackageLink>) => {
+    setBookingSeed(null);
+    setBookingOffer(offer.link);
+    setBookingStudio(offer.studio);
   };
 
   return (
@@ -271,6 +286,8 @@ function AccountContent({
               />
             }
           />
+        ) : view === "offers" ? (
+          <Offers offers={offers.data} loading={offers.isPending} solo={solo} onOpen={openOffer} />
         ) : view === "credits" ? (
           <Credits
             credits={usable}
@@ -316,11 +333,13 @@ function AccountContent({
       <BookSessionDrawer
         studio={bookingStudio}
         seed={bookingSeed}
+        offer={bookingOffer}
         open={bookingStudio !== null}
         onOpenChange={(open) => {
           if (!open) {
             setBookingStudio(null);
             setBookingSeed(null);
+            setBookingOffer(null);
           }
         }}
       />
@@ -530,6 +549,82 @@ function Overview({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Sign-up links a studio has handed to this customer. Each opens the booking drawer
+ * in offer mode, so sessions and packages the studio keeps off its public page are
+ * bookable here — that is usually the point of sending one.
+ */
+function Offers({
+  offers,
+  loading,
+  solo,
+  onOpen,
+}: {
+  offers: FromStudio<PublicPackageLink>[];
+  loading: boolean;
+  solo: boolean;
+  onOpen: (offer: FromStudio<PublicPackageLink>) => void;
+}) {
+  if (loading && offers.length === 0) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 2 }, (_, i) => (
+          <div key={i} className="surface-card h-[164px] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  if (offers.length === 0) {
+    return (
+      <EmptyState
+        icon={<Gift className="size-5" />}
+        title="No offers yet"
+        description="When a business picks out sessions or packages for you, they'll appear here ready to book."
+      />
+    );
+  }
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {offers.map((offer) => {
+        return (
+          <div
+            key={`${offer.studio.id}:${offer.link.code}`}
+            className="surface-card flex flex-col gap-4 p-5"
+          >
+            <div>
+              <p className="text-lg font-semibold">{offer.link.name}</p>
+              {!solo ? (
+                <p className="text-sm text-muted-foreground">{offer.studio.tradingName}</p>
+              ) : null}
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {offer.services.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-3">
+                  <span className="truncate">{s.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {s.durationMinutes} min · {formatMoney(s.basePriceMinor, s.currency)}
+                  </span>
+                </li>
+              ))}
+              {offer.packages.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <span className="truncate">{p.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {p.creditsIssued} credits · {formatMoney(p.priceMinor, p.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Button size="sm" className="mt-auto self-start" onClick={() => onOpen(offer)}>
+              <Gift className="size-4" /> Book or buy
+            </Button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
