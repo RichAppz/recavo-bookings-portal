@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Link2, Plus, Trash2 } from "lucide-react";
+import { Copy, Link2, Plus, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -24,15 +24,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SectionCard } from "@/components/ui-bits";
+import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
+import { PersonAvatar, SectionCard } from "@/components/ui-bits";
 import {
   useCreatePackageLink,
   usePackageLinks,
   usePackages,
   useRevokePackageLink,
+  useAssignPackageLink,
+  useCustomer,
   useServices,
 } from "@/lib/api/hooks";
-import type { CatalogueService, Package, PackageLink } from "@/lib/api/types";
+import type { CatalogueService, Customer, Package, PackageLink } from "@/lib/api/types";
+import { customerDisplayName } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -70,6 +74,7 @@ export function PackageLinksCard({ slug }: { slug: string }) {
   const packages = usePackages();
   const revoke = useRevokePackageLink();
   const [creating, setCreating] = useState(false);
+  const [sharing, setSharing] = useState<PackageLink | null>(null);
 
   const serviceName = (id: string) =>
     (services.data ?? []).find((s) => s.id === id)?.name ?? `Removed ${nouns.lower}`;
@@ -123,6 +128,10 @@ export function PackageLinksCard({ slug }: { slug: string }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setSharing(link)}>
+                    <Users className="size-4" /> Clients
+                    {link.customerIds.length > 0 ? ` (${link.customerIds.length})` : null}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => copyLink(url)}>
                     <Copy className="size-4" /> Copy link
                   </Button>
@@ -142,6 +151,11 @@ export function PackageLinksCard({ slug }: { slug: string }) {
         </ul>
       )}
 
+      <ShareLinkDialog
+        // Read the live row so the list updates as clients are added or removed.
+        link={(links.data ?? []).find((l) => l.id === sharing?.id) ?? null}
+        onClose={() => setSharing(null)}
+      />
       <CreateLinkDialog
         open={creating}
         slug={slug}
@@ -151,6 +165,97 @@ export function PackageLinksCard({ slug }: { slug: string }) {
         onClose={() => setCreating(false)}
       />
     </SectionCard>
+  );
+}
+
+/**
+ * Hand a link to clients so it appears under Offers in their account. Same action as
+ * the switch on the client profile, from the link's side: pick a client, they're added;
+ * the × takes it back. The URL keeps working for anyone regardless.
+ */
+function ShareLinkDialog({ link, onClose }: { link: PackageLink | null; onClose: () => void }) {
+  const assign = useAssignPackageLink();
+  const toggle = (customerId: string, assigned: boolean) =>
+    assign.mutate(
+      { linkId: link!.id, customerId, assigned },
+      {
+        onSuccess: () =>
+          toast.success(assigned ? "Added to their Offers" : "Removed from their Offers"),
+      },
+    );
+
+  return (
+    <Dialog open={link !== null} onOpenChange={(open) => (open ? null : onClose())}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Send to clients</DialogTitle>
+          <DialogDescription>
+            {link ? `“${link.name}” ` : "This link "}
+            appears under Offers when these clients sign in. Anyone with the URL can still open it.
+          </DialogDescription>
+        </DialogHeader>
+        {link ? (
+          <div className="space-y-4">
+            <CustomerSearchPicker
+              value={null}
+              placeholder="Add a client…"
+              onSelect={(c: Customer) => {
+                if (!link.customerIds.includes(c.id)) toggle(c.id, true);
+              }}
+            />
+            {link.customerIds.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Not sent to anyone yet.</p>
+            ) : (
+              <ul className="divide-y rounded-xl border">
+                {link.customerIds.map((id) => (
+                  <AssignedClientRow
+                    key={id}
+                    customerId={id}
+                    disabled={assign.isPending}
+                    onRemove={() => toggle(id, false)}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AssignedClientRow({
+  customerId,
+  disabled,
+  onRemove,
+}: {
+  customerId: string;
+  disabled: boolean;
+  onRemove: () => void;
+}) {
+  const customer = useCustomer(customerId);
+  const name = customer.data ? customerDisplayName(customer.data) : "…";
+  return (
+    <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+      <span className="flex min-w-0 items-center gap-2">
+        <PersonAvatar name={name} size={28} />
+        <span className="truncate font-medium">{name}</span>
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={`Remove ${name}`}
+        disabled={disabled}
+        onClick={onRemove}
+      >
+        <X className="size-4" />
+      </Button>
+    </li>
   );
 }
 

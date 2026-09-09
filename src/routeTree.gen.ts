@@ -31,6 +31,7 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResetRouteImport } from './routes/reset'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SignUpLinksRouteImport } from './routes/sign-up-links'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as VehiclesRouteImport } from './routes/vehicles'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
@@ -159,6 +160,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignUpLinksRoute = SignUpLinksRouteImport.update({
+  id: '/sign-up-links',
+  path: '/sign-up-links',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -310,6 +317,7 @@ export interface FileRoutesByTo {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -352,6 +360,7 @@ export interface FileRoutesById {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
+  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -395,6 +404,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
+    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -435,6 +445,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
+    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -476,6 +487,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
+    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -518,6 +530,7 @@ export interface RootRouteChildren {
   ResetRoute: typeof ResetRoute
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
+  SignUpLinksRoute: typeof SignUpLinksRoute
   StaffRoute: typeof StaffRoute
   VehiclesRoute: typeof VehiclesRoute
   ClaimTokenRoute: typeof ClaimTokenRoute
@@ -682,6 +695,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up-links': {
+      id: '/sign-up-links'
+      path: '/sign-up-links'
+      fullPath: '/sign-up-links'
+      preLoaderRoute: typeof SignUpLinksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff': {
@@ -865,6 +885,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetRoute: ResetRoute,
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
+  SignUpLinksRoute: SignUpLinksRoute,
   StaffRoute: StaffRoute,
   VehiclesRoute: VehiclesRoute,
   ClaimTokenRoute: ClaimTokenRoute,
