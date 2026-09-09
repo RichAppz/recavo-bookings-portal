@@ -21,6 +21,7 @@ import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MessagesRouteImport } from './routes/messages'
+import { Route as OfferLinksRouteImport } from './routes/offer-links'
 import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PlatformRouteImport } from './routes/platform'
@@ -107,6 +108,11 @@ const LoginRoute = LoginRouteImport.update({
 const MessagesRoute = MessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OfferLinksRoute = OfferLinksRouteImport.update({
+  id: '/offer-links',
+  path: '/offer-links',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PackagesRoute = PackagesRouteImport.update({
@@ -260,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -300,6 +307,7 @@ export interface FileRoutesByTo {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -342,6 +350,7 @@ export interface FileRoutesById {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -385,6 +394,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -425,6 +435,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -466,6 +477,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -508,6 +520,7 @@ export interface RootRouteChildren {
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
   MessagesRoute: typeof MessagesRoute
+  OfferLinksRoute: typeof OfferLinksRoute
   PackagesRoute: typeof PackagesRoute
   PaymentsRoute: typeof PaymentsRoute
   PlatformRoute: typeof PlatformRoute
@@ -612,6 +625,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/messages'
       preLoaderRoute: typeof MessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/offer-links': {
+      id: '/offer-links'
+      path: '/offer-links'
+      fullPath: '/offer-links'
+      preLoaderRoute: typeof OfferLinksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/packages': {
@@ -855,6 +875,7 @@ const rootRouteChildren: RootRouteChildren = {
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,
   MessagesRoute: MessagesRoute,
+  OfferLinksRoute: OfferLinksRoute,
   PackagesRoute: PackagesRoute,
   PaymentsRoute: PaymentsRoute,
   PlatformRoute: PlatformRoute,

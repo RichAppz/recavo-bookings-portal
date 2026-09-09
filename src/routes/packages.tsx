@@ -232,9 +232,7 @@ function PackagesPage() {
         </div>
       )}
 
-      {tenant.business && (packages.data ?? []).length > 0 ? (
-        <PackageLinksCard slug={tenant.business.slug} packages={packages.data ?? []} />
-      ) : null}
+      {tenant.business ? <PackageLinksCard slug={tenant.business.slug} /> : null}
 
       <p className="text-sm text-muted-foreground">
         Credit balances live on the client profile.{" "}

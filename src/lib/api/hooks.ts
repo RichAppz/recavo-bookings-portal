@@ -1585,7 +1585,13 @@ export function useCreatePackageLink() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { name: string; packageIds: string[] }) => {
+    mutationFn: async (body: {
+      name: string;
+      serviceIds: string[];
+      packageIds: string[];
+      /** Hand the link to these clients as it is created. */
+      customerIds?: string[];
+    }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
         body,
@@ -1607,6 +1613,28 @@ export function useRevokePackageLink() {
       const res = await api.delete<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links/${linkId}`,
       );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Hand a link to a client (or take it back). It then appears under Offers in their
+ * account; it does not change who can open the URL.
+ */
+export function useAssignPackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { linkId: string; customerId: string; assigned: boolean }) => {
+      const url = `/api/v1/businesses/${businessId}/package-links/${vars.linkId}/customers/${vars.customerId}`;
+      const res = vars.assigned
+        ? await api.put<{ link: PackageLink }>(url, {})
+        : await api.delete<{ link: PackageLink }>(url);
       return res.data.link;
     },
     onSuccess: () => {
@@ -3872,6 +3900,8 @@ export function usePublicAvailability(
     locationId?: string;
     from?: string;
     to?: string;
+    /** Shared link code; lets the search reach a session kept off the public page. */
+    linkCode?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -3883,6 +3913,7 @@ export function usePublicAvailability(
     locationId: filters.locationId!,
     from: filters.from!,
     to: filters.to!,
+    ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
   };
   return useQuery({
     queryKey: queryKeys.publicAvailability(businessId ?? "", query),
@@ -3937,9 +3968,10 @@ export function usePublicPackages(businessId: string | undefined) {
   });
 }
 
-/** A shared package link as the buyer sees it: a heading plus the packages it names. */
+/** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
 export type PublicPackageLink = {
   link: { code: string; name: string };
+  services: PublicService[];
   packages: PublicPackage[];
 };
 
@@ -4023,6 +4055,8 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
       async (
         body: {
           slotToken: string;
+          /** Shared link code; required to hold a session kept off the public page. */
+          linkCode?: string | null;
           firstName: string;
           lastName?: string | null;
           email?: string | null;
@@ -4435,6 +4469,27 @@ export type PortalCredit = {
   expiresAt: string;
   status: string;
 };
+
+/**
+ * Offer links a studio has handed to this customer, resolved like the public
+ * `?offer=` route so the account can open the booking flow in offer mode. One query
+ * per studio, tagged with the studio, mirroring usePortalAcrossStudios.
+ */
+export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
+  const list = useMemo(() => studios ?? [], [studios]);
+  return useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPackageLinks(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ links: PublicPackageLink[] }>("/api/v1/portal/package-links", {
+          query: { businessId: studio.id },
+        });
+        return res.data.links;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+}
 
 export function usePortalCredits(businessId: string | undefined) {
   return useQuery({
