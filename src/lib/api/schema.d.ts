@@ -3133,6 +3133,8 @@ export interface paths {
                     variantId?: string;
                     staffId?: string;
                     granularityMinutes?: number;
+                    /** @description Code from the shared package link the visitor arrived through. Lets them search a session that is kept off the general public page. Ignored when unknown or revoked. */
+                    linkCode?: string;
                 };
                 header?: never;
                 path: {
@@ -3443,7 +3445,7 @@ export interface paths {
         };
         /**
          * Resolve a shared package link
-         * @description The packages a buyer holding this link may choose from, in the order the business picked, whether or not they are on general public sale. 404 for an unknown or revoked code, so the booking page can fall back to its ordinary listing.
+         * @description The sessions and packages a visitor holding this link may choose from, in the order the business picked, whether or not they are on the general public page. 404 for an unknown or revoked code, so the booking page can fall back to its ordinary listing.
          */
         get: {
             parameters: {
@@ -3457,7 +3459,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Link and its packages */
+                /** @description Link with its sessions and packages */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -3469,6 +3471,7 @@ export interface paths {
                                 code: string;
                                 name: string;
                             };
+                            services: components["schemas"]["CatalogueService"][];
                             packages: {
                                 /** Format: uuid */
                                 id: string;
@@ -3803,6 +3806,8 @@ export interface paths {
                     "application/json": {
                         /** @description Signed slot token from availability search. */
                         slotToken: string;
+                        /** @description Code from the shared package link the visitor arrived through. Lets them hold a session that is kept off the general public page. Ignored when unknown or revoked. */
+                        linkCode?: string | null;
                         firstName: string;
                         lastName?: string | null;
                         email?: string | null;
@@ -22407,7 +22412,7 @@ export interface paths {
         put?: never;
         /**
          * Create a shareable package link
-         * @description A hand-picked, ordered subset of this business’s packages that a buyer sees at `{bookingPage}?offer={code}`. Every id must belong to the business. Packages in the link are purchasable through it even when salesAvailable is false; inactive packages are simply not shown until reactivated. Requires package.manage.
+         * @description A hand-picked, ordered subset of this business’s sessions and packages that a visitor sees at `{bookingPage}?offer={code}`. Every id must belong to the business, and at least one id is required across the two lists. Sessions in the link are bookable and packages purchasable through it even when kept off the public page; inactive items are simply not shown until reactivated. Requires package.manage.
          */
         post: {
             parameters: {
@@ -22422,7 +22427,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
-                        packageIds: string[];
+                        serviceIds?: string[];
+                        packageIds?: string[];
                     };
                 };
             };
@@ -37638,7 +37644,7 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
-        /** @description A shareable link that scopes the public booking page to a hand-picked set of packages. Buyers arriving through it can purchase those packages even when they are kept off the general public page (salesAvailable false). The code is a public handle, not a secret. */
+        /** @description A shareable link that scopes the public booking page to a hand-picked set of sessions and packages. Visitors arriving through it can book those sessions and buy those packages even when they are kept off the general public page (publicVisible / salesAvailable false). The code is a public handle, not a secret. */
         PackageLink: {
             /** Format: uuid */
             id: string;
@@ -37648,7 +37654,9 @@ export interface components {
             code: string;
             /** @description Staff-facing label; also shown to the buyer. */
             name: string;
-            /** @description Shown to the buyer in this order. */
+            /** @description Sessions shown to the visitor, in this order. */
+            serviceIds: string[];
+            /** @description Packages shown to the visitor, in this order. */
             packageIds: string[];
             /** Format: date-time */
             revokedAt: string | null;

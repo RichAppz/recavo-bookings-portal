@@ -25,12 +25,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionCard } from "@/components/ui-bits";
-import { useCreatePackageLink, usePackageLinks, useRevokePackageLink } from "@/lib/api/hooks";
-import type { Package, PackageLink } from "@/lib/api/types";
+import {
+  useCreatePackageLink,
+  usePackageLinks,
+  usePackages,
+  useRevokePackageLink,
+  useServices,
+} from "@/lib/api/hooks";
+import type { CatalogueService, Package, PackageLink } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
+import { useTenant } from "@/lib/tenant/tenant-context";
 
-/** The URL a client opens: the booking page, narrowed to the link's packages. */
+/** The URL a client opens: the booking page, narrowed to what the link names. */
 function packageLinkUrl(slug: string, code: string): string {
   return `${bookingUrlFor(slug)}?offer=${encodeURIComponent(code)}`;
 }
@@ -40,21 +47,41 @@ function copyLink(url: string, message = "Link copied") {
   toast.success(message, { description: url.replace(/^https?:\/\//, "") });
 }
 
+/** "Session" for PT, "Service" for detailing — the same trick the Sessions page uses. */
+function sessionNoun(service: string) {
+  const noun = service.replace(/\s+type$/i, "").trim() || "Service";
+  const lower = noun.toLowerCase();
+  const plural = lower.endsWith("s") ? noun : `${noun}s`;
+  return { noun, lower, plural, pluralLower: plural.toLowerCase() };
+}
+
 /**
- * Sign-up links: a hand-picked set of packages behind one URL. The public page shows
- * every package with "Available to buy" switched on; a link lets the business send one
- * person or group a narrower choice — or a package it never puts on the public page.
+ * Sign-up links: a hand-picked set of sessions and packages behind one URL. The public
+ * page shows every session and package the business has switched on; a link lets it
+ * send one person or group a narrower choice — or something it never puts on the
+ * public page. Rendered on both the Sessions and Packages pages, so it fetches its own
+ * catalogue rather than leaning on whichever page it sits in.
  */
-export function PackageLinksCard({ slug, packages }: { slug: string; packages: Package[] }) {
+export function PackageLinksCard({ slug }: { slug: string }) {
+  const tenant = useTenant();
+  const nouns = sessionNoun(tenant.terminology.service);
   const links = usePackageLinks();
+  const services = useServices();
+  const packages = usePackages();
   const revoke = useRevokePackageLink();
   const [creating, setCreating] = useState(false);
-  const nameOf = (id: string) => packages.find((p) => p.id === id)?.name ?? "Removed package";
+
+  const serviceName = (id: string) =>
+    (services.data ?? []).find((s) => s.id === id)?.name ?? `Removed ${nouns.lower}`;
+  const packageName = (id: string) =>
+    (packages.data ?? []).find((p) => p.id === id)?.name ?? "Removed package";
+  const contents = (link: PackageLink) =>
+    [...link.serviceIds.map(serviceName), ...link.packageIds.map(packageName)].join(" · ");
 
   return (
     <SectionCard
       title="Sign-up links"
-      description="Send a link that shows only the packages you choose — including ones hidden from your booking page."
+      description={`Send a link that shows only the ${nouns.pluralLower} and packages you choose — including ones hidden from your booking page.`}
       action={
         <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
           <Plus className="size-4" /> New link
@@ -85,9 +112,7 @@ export function PackageLinksCard({ slug, packages }: { slug: string; packages: P
                     <Link2 className="size-4 shrink-0 text-muted-foreground" />
                     <span className="truncate">{link.name}</span>
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {link.packageIds.map(nameOf).join(" · ")}
-                  </p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{contents(link)}</p>
                   <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                     {url.replace(/^https?:\/\//, "")}
                   </p>
@@ -115,7 +140,9 @@ export function PackageLinksCard({ slug, packages }: { slug: string; packages: P
       <CreateLinkDialog
         open={creating}
         slug={slug}
-        packages={packages}
+        nouns={nouns}
+        services={services.data ?? []}
+        packages={packages.data ?? []}
         onClose={() => setCreating(false)}
       />
     </SectionCard>
@@ -142,8 +169,8 @@ function RevokeButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Remove “{link.name}”?</AlertDialogTitle>
           <AlertDialogDescription>
-            Anyone who opens the link will see your full booking page instead. Packages already
-            bought through it are not affected.
+            Anyone who opens the link will see your full booking page instead. Bookings made and
+            packages bought through it are not affected.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -155,44 +182,91 @@ function RevokeButton({
   );
 }
 
+/** One tickable row; the order badge tells the PT how the page will list things. */
+function ChoiceRow({
+  checked,
+  order,
+  name,
+  hidden,
+  price,
+  onToggle,
+}: {
+  checked: boolean;
+  order: number;
+  name: string;
+  hidden: boolean;
+  price: string;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 text-sm">
+      <span className="flex items-center gap-3">
+        <Checkbox checked={checked} onCheckedChange={onToggle} />
+        <span>
+          <span className="block font-medium">{name}</span>
+          {hidden ? (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <EyeOff className="size-3" /> Hidden from booking page
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <span className="flex items-center gap-3 text-muted-foreground">
+        {checked ? <span className="tabular-nums text-xs">#{order + 1}</span> : null}
+        <span className="font-medium text-foreground">{price}</span>
+      </span>
+    </label>
+  );
+}
+
 function CreateLinkDialog({
   open,
   slug,
+  nouns,
+  services,
   packages,
   onClose,
 }: {
   open: boolean;
   slug: string;
+  nouns: ReturnType<typeof sessionNoun>;
+  services: CatalogueService[];
   packages: Package[];
   onClose: () => void;
 }) {
   const create = useCreatePackageLink();
   const [name, setName] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  // Paused packages would show nothing on the page, so they are not offered here.
-  const choices = packages.filter((p) => p.active);
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [packageIds, setPackageIds] = useState<string[]>([]);
+  // Paused items would show nothing on the page, so they are not offered here.
+  const serviceChoices = services.filter((s) => s.active);
+  const packageChoices = packages.filter((p) => p.active);
+  const nothingToShare = serviceChoices.length === 0 && packageChoices.length === 0;
 
   useEffect(() => {
     if (open) {
       setName("");
-      setSelected([]);
+      setServiceIds([]);
+      setPackageIds([]);
     }
   }, [open]);
 
-  const toggle = (id: string) =>
-    setSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  const toggleIn = (set: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) =>
+    set((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  const toggleService = toggleIn(setServiceIds);
+  const togglePackage = toggleIn(setPackageIds);
 
   const submit = async () => {
     if (!name.trim()) {
       toast.error("Give the link a name");
       return;
     }
-    if (selected.length === 0) {
-      toast.error("Choose at least one package");
+    if (serviceIds.length === 0 && packageIds.length === 0) {
+      toast.error(`Choose at least one ${nouns.lower} or package`);
       return;
     }
     try {
-      const link = await create.mutateAsync({ name: name.trim(), packageIds: selected });
+      const link = await create.mutateAsync({ name: name.trim(), serviceIds, packageIds });
       // Straight to the clipboard: the next thing the PT does is paste it into a message.
       copyLink(packageLinkUrl(slug, link.code), "Link created and copied");
       onClose();
@@ -207,8 +281,8 @@ function CreateLinkDialog({
         <DialogHeader>
           <DialogTitle>New sign-up link</DialogTitle>
           <DialogDescription>
-            Clients who open it see only these packages, in this order, and can buy them even if
-            they are hidden from your booking page.
+            Clients who open it see only these {nouns.pluralLower} and packages, in this order, and
+            can book or buy them even if they are hidden from your booking page.
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
@@ -224,55 +298,63 @@ function CreateLinkDialog({
               Shown as the heading when someone opens the link.
             </p>
           </div>
-          <div className="grid gap-2">
-            <Label>Packages</Label>
-            {choices.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No active packages to share yet. Create a package first.
-              </p>
-            ) : (
-              <div className="grid gap-2">
-                {choices.map((p) => {
-                  const order = selected.indexOf(p.id);
-                  return (
-                    <label
-                      key={p.id}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 text-sm"
-                    >
-                      <span className="flex items-center gap-3">
-                        <Checkbox checked={order >= 0} onCheckedChange={() => toggle(p.id)} />
-                        <span>
-                          <span className="block font-medium">{p.name}</span>
-                          {!p.salesAvailable ? (
-                            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <EyeOff className="size-3" /> Hidden from booking page
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-3 text-muted-foreground">
-                        {order >= 0 ? (
-                          <span className="tabular-nums text-xs">#{order + 1}</span>
-                        ) : null}
-                        <span className="font-medium text-foreground">
-                          {formatMoney(p.priceMinor, p.currency)}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
+
+          {nothingToShare ? (
             <p className="text-xs text-muted-foreground">
-              Tick packages in the order you want them shown.
+              Nothing active to share yet. Create a {nouns.lower} or a package first.
             </p>
-          </div>
+          ) : null}
+
+          {serviceChoices.length > 0 ? (
+            <div className="grid gap-2">
+              <Label>{nouns.plural}</Label>
+              <div className="grid gap-2">
+                {serviceChoices.map((s) => (
+                  <ChoiceRow
+                    key={s.id}
+                    checked={serviceIds.includes(s.id)}
+                    order={serviceIds.indexOf(s.id)}
+                    name={s.name}
+                    hidden={!s.publicVisible}
+                    price={formatMoney(s.basePriceMinor, s.currency)}
+                    onToggle={() => toggleService(s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {packageChoices.length > 0 ? (
+            <div className="grid gap-2">
+              <Label>Packages</Label>
+              <div className="grid gap-2">
+                {packageChoices.map((p) => (
+                  <ChoiceRow
+                    key={p.id}
+                    checked={packageIds.includes(p.id)}
+                    order={packageIds.indexOf(p.id)}
+                    name={p.name}
+                    hidden={!p.salesAvailable}
+                    price={formatMoney(p.priceMinor, p.currency)}
+                    onToggle={() => togglePackage(p.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {nothingToShare ? null : (
+            <p className="text-xs text-muted-foreground">
+              Tick things in the order you want them shown. You can mix {nouns.pluralLower} and
+              packages, or pick just one kind.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={create.isPending || choices.length === 0} onClick={() => void submit()}>
+          <Button disabled={create.isPending || nothingToShare} onClick={() => void submit()}>
             {create.isPending ? "Creating…" : "Create and copy link"}
           </Button>
         </DialogFooter>

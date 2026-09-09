@@ -106,6 +106,18 @@ function formatCountdown(ms: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** One line under a shared link's heading, shaped by what the link actually holds. */
+function offerIntro(studioName: string | null, hasSessions: boolean, hasPackages: boolean) {
+  const who = studioName ? `${studioName} has` : "You've been";
+  if (hasSessions && hasPackages) {
+    return `${who} sent you a choice of sessions and packages. Book a session, or buy a package and use the credits whenever you like.`;
+  }
+  if (hasSessions) {
+    return `${who} sent you a choice of sessions. Pick one, choose a time, and you're booked.`;
+  }
+  return `${who} sent you a choice of packages. Pick one, pay securely, and your credits are ready to book.`;
+}
+
 type Hold = {
   booking: Booking;
   holdToken: string;
@@ -325,14 +337,22 @@ export function BookingFlow({
   const locations = usePublicLocations(businessId);
   const packages = usePublicPackages(businessId);
   const offer = usePublicPackageLink(businessId, offerCode ?? undefined);
-  // A live link narrows the page to its own packages. A dead one (revoked, mistyped)
-  // is not an error the buyer can act on, so the page quietly shows everything instead.
+  // A live link narrows the page to its own sessions and packages. A dead one (revoked,
+  // mistyped) is not an error the visitor can act on, so the page quietly shows
+  // everything instead.
   const offerActive = Boolean(offerCode) && offer.isSuccess;
   const offerGone = Boolean(offerCode) && offer.isError;
   const offerLoading = Boolean(offerCode) && offer.isPending;
+  const visibleServices = offerActive ? (offer.data?.services ?? []) : (services.data ?? []);
   const visiblePackages = offerActive ? (offer.data?.packages ?? []) : (packages.data ?? []);
+  // Only sent to the API while the link is live; a dead code is simply not mentioned.
+  const linkCode = offerActive ? offerCode : null;
 
-  const service = services.data?.find((s) => s.id === serviceId) ?? null;
+  // Both lists are searched: a session reached through a link may be on no public list.
+  const service =
+    offer.data?.services.find((s) => s.id === serviceId) ??
+    services.data?.find((s) => s.id === serviceId) ??
+    null;
   // With one location there is nothing to choose, so it is picked for the customer and
   // the "Where" block never appears. Derived rather than assigned on click, so it still
   // holds when the locations arrive after the service was picked.
@@ -354,6 +374,7 @@ export function BookingFlow({
     locationId: activeLocationId ?? undefined,
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
+    linkCode,
     enabled: step === STEP_CHOOSE && Boolean(serviceId && activeLocationId),
   });
 
@@ -451,6 +472,7 @@ export function BookingFlow({
     holdMutation.mutate(
       {
         slotToken: selectedSlot.slotToken,
+        linkCode,
         firstName: firstName.trim(),
         lastName: lastName.trim() || null,
         email: email.trim() || null,
@@ -513,7 +535,7 @@ export function BookingFlow({
       setPackagePayment(
         await buyPackage.mutateAsync({
           packageId: chosenPackage.id,
-          linkCode: offerActive ? offerCode : null,
+          linkCode,
           firstName: firstName.trim(),
           lastName: lastName.trim() || null,
           email: email.trim(),
@@ -853,10 +875,7 @@ export function BookingFlow({
             </h1>
             {offerActive ? (
               <p className="text-sm text-muted-foreground">
-                {studioName
-                  ? `${studioName} has sent you a choice of packages.`
-                  : "You've been sent a choice of packages."}{" "}
-                Pick one, pay securely, and your credits are ready to book.
+                {offerIntro(studioName, visibleServices.length > 0, visiblePackages.length > 0)}
               </p>
             ) : null}
             {offerGone ? (
@@ -865,21 +884,24 @@ export function BookingFlow({
                 {studioName ? ` ${studioName}` : ""} offers.
               </p>
             ) : null}
-            {offerLoading || offerActive ? null : services.isLoading ? (
+            {offerLoading ? null : !offerActive && services.isLoading ? (
               <CardsGhost count={3} className="h-28" />
-            ) : services.isError ? (
+            ) : !offerActive && services.isError ? (
               <p className="text-sm text-destructive">
                 Couldn't load services. Please try again shortly.
               </p>
-            ) : (services.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No bookable services are available right now.
-              </p>
+            ) : visibleServices.length === 0 ? (
+              // A link with nothing available says so once, below, for both kinds.
+              offerActive ? null : (
+                <p className="text-sm text-muted-foreground">
+                  No bookable services are available right now.
+                </p>
+              )
             ) : (
-              groupByCategory(services.data ?? []).map((group) => (
+              groupByCategory(visibleServices).map((group) => (
                 <div key={group.category ?? "__none"} className="space-y-3">
                   {/* Headings only when the studio has sorted its services into categories. */}
-                  {hasCategories(services.data ?? []) ? (
+                  {hasCategories(visibleServices) ? (
                     <h2 className="pt-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                       {group.category ?? "Other"}
                     </h2>
@@ -1083,16 +1105,21 @@ export function BookingFlow({
 
             {offerLoading ? <CardsGhost count={2} className="h-24" /> : null}
 
-            {offerActive && visiblePackages.length === 0 ? (
+            {offerActive && visibleServices.length === 0 && visiblePackages.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                None of the packages on this link are available right now. Check with
+                Nothing on this link is available right now. Check with
                 {studioName ? ` ${studioName}` : " the studio"}.
               </p>
             ) : null}
 
             {visiblePackages.length > 0 ? (
-              <div className={offerActive ? "space-y-3" : "space-y-3 pt-4"}>
-                {offerActive ? null : (
+              <div
+                className={
+                  offerActive && visibleServices.length === 0 ? "space-y-3" : "space-y-3 pt-4"
+                }
+              >
+                {/* The heading earns its place when packages sit under a list of sessions. */}
+                {offerActive && visibleServices.length === 0 ? null : (
                   <div>
                     <h2 className="text-base font-semibold">Buy a package</h2>
                     <p className="text-sm text-muted-foreground">
@@ -1135,7 +1162,7 @@ export function BookingFlow({
 
             {offerActive && onLeaveOffer ? (
               <p className="pt-2 text-sm text-muted-foreground">
-                Looking to book a single session instead?{" "}
+                Looking for something else?{" "}
                 <button
                   type="button"
                   onClick={onLeaveOffer}
