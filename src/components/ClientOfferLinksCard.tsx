@@ -8,12 +8,12 @@ import type { PackageLink } from "@/lib/api/types";
 import { bookingUrlFor } from "@/lib/hosts";
 
 /**
- * Hand a client one of the business's sign-up links. Assigned links show up under
+ * Hand a client one of the business's offer links. Assigned links show up under
  * "Offers" in the client's own account, so they can book or buy from them without
  * finding the URL in a message. Assignment does not gate the link — the URL still
  * works for anyone — so this card is about reach, not access.
  */
-export function ClientSignupLinksCard({
+export function ClientOfferLinksCard({
   clientId,
   slug,
   disabled,
@@ -48,7 +48,7 @@ export function ClientSignupLinksCard({
 
   return (
     <SectionCard
-      title="Sign-up links"
+      title="Offer links"
       description="Switch a link on and it appears under Offers when this client signs in. Anyone with the URL can still open it."
     >
       {links.isLoading ? (
@@ -59,7 +59,7 @@ export function ClientSignupLinksCard({
         </div>
       ) : (links.data ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No sign-up links yet. Create one from the Sessions or Packages page.
+          No offer links yet. Create one from the Offer links page.
         </p>
       ) : (
         <ul className="divide-y">

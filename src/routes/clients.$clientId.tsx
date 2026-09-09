@@ -44,7 +44,7 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
-import { ClientSignupLinksCard } from "@/components/ClientSignupLinksCard";
+import { ClientOfferLinksCard } from "@/components/ClientOfferLinksCard";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import type { ContactChannel } from "@/lib/api/types";
@@ -430,7 +430,7 @@ function ClientProfile() {
           </SectionCard>
 
           {tenant.business ? (
-            <ClientSignupLinksCard
+            <ClientOfferLinksCard
               clientId={clientId}
               slug={tenant.business.slug}
               disabled={anonymised}

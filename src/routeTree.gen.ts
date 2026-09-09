@@ -21,6 +21,7 @@ import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MessagesRouteImport } from './routes/messages'
+import { Route as OfferLinksRouteImport } from './routes/offer-links'
 import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PlatformRouteImport } from './routes/platform'
@@ -31,7 +32,6 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ResetRouteImport } from './routes/reset'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SignUpLinksRouteImport } from './routes/sign-up-links'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as VehiclesRouteImport } from './routes/vehicles'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
@@ -110,6 +110,11 @@ const MessagesRoute = MessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OfferLinksRoute = OfferLinksRouteImport.update({
+  id: '/offer-links',
+  path: '/offer-links',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PackagesRoute = PackagesRouteImport.update({
   id: '/packages',
   path: '/packages',
@@ -158,11 +163,6 @@ const ServicesRoute = ServicesRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpLinksRoute = SignUpLinksRouteImport.update({
-  id: '/sign-up-links',
-  path: '/sign-up-links',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StaffRoute = StaffRouteImport.update({
@@ -266,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -276,7 +277,6 @@ export interface FileRoutesByFullPath {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
-  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -307,6 +307,7 @@ export interface FileRoutesByTo {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -317,7 +318,6 @@ export interface FileRoutesByTo {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
-  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -350,6 +350,7 @@ export interface FileRoutesById {
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
   '/messages': typeof MessagesRoute
+  '/offer-links': typeof OfferLinksRoute
   '/packages': typeof PackagesRoute
   '/payments': typeof PaymentsRoute
   '/platform': typeof PlatformRoute
@@ -360,7 +361,6 @@ export interface FileRoutesById {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRoute
-  '/sign-up-links': typeof SignUpLinksRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -394,6 +394,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -404,7 +405,6 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
-    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -435,6 +435,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -445,7 +446,6 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
-    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -477,6 +477,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/login'
     | '/messages'
+    | '/offer-links'
     | '/packages'
     | '/payments'
     | '/platform'
@@ -487,7 +488,6 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/settings'
-    | '/sign-up-links'
     | '/staff'
     | '/vehicles'
     | '/billing/cancel'
@@ -520,6 +520,7 @@ export interface RootRouteChildren {
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
   MessagesRoute: typeof MessagesRoute
+  OfferLinksRoute: typeof OfferLinksRoute
   PackagesRoute: typeof PackagesRoute
   PaymentsRoute: typeof PaymentsRoute
   PlatformRoute: typeof PlatformRoute
@@ -530,7 +531,6 @@ export interface RootRouteChildren {
   ResetRoute: typeof ResetRoute
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRoute
-  SignUpLinksRoute: typeof SignUpLinksRoute
   StaffRoute: typeof StaffRoute
   VehiclesRoute: typeof VehiclesRoute
   ClaimTokenRoute: typeof ClaimTokenRoute
@@ -627,6 +627,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offer-links': {
+      id: '/offer-links'
+      path: '/offer-links'
+      fullPath: '/offer-links'
+      preLoaderRoute: typeof OfferLinksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/packages': {
       id: '/packages'
       path: '/packages'
@@ -695,13 +702,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up-links': {
-      id: '/sign-up-links'
-      path: '/sign-up-links'
-      fullPath: '/sign-up-links'
-      preLoaderRoute: typeof SignUpLinksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff': {
@@ -875,6 +875,7 @@ const rootRouteChildren: RootRouteChildren = {
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,
   MessagesRoute: MessagesRoute,
+  OfferLinksRoute: OfferLinksRoute,
   PackagesRoute: PackagesRoute,
   PaymentsRoute: PaymentsRoute,
   PlatformRoute: PlatformRoute,
@@ -885,7 +886,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResetRoute: ResetRoute,
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRoute,
-  SignUpLinksRoute: SignUpLinksRoute,
   StaffRoute: StaffRoute,
   VehiclesRoute: VehiclesRoute,
   ClaimTokenRoute: ClaimTokenRoute,
