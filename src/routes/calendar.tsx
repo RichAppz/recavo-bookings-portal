@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
+import { CalendarStats } from "@/components/CalendarStats";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
@@ -422,6 +423,24 @@ function CalendarPage() {
   };
   const bookingLabel = tenant.terminology.booking || "Booking";
 
+  // Totals cover the dates actually in view. The month grid pads out to six
+  // weeks, so a job on the 31st of last month is drawn but not counted; a job is
+  // counted on the day it starts so nothing is double-counted across a boundary.
+  const statsBookings = useMemo(() => {
+    const first = isoDate(
+      view === "month" ? new Date(anchor.getFullYear(), anchor.getMonth(), 1) : days[0],
+    );
+    const last = isoDate(
+      view === "month"
+        ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+        : days[days.length - 1],
+    );
+    return filtered.filter((b) => {
+      const day = isoDateInTz(b.start, timezone);
+      return first <= day && day <= last;
+    });
+  }, [filtered, view, anchor, days, timezone]);
+
   type MonthEntry = { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock };
   type PlacedItem = {
     entry: MonthEntry;
@@ -594,6 +613,13 @@ function CalendarPage() {
           ) : null}
         </div>
       </div>
+
+      <CalendarStats
+        bookings={statsBookings}
+        currency={tenant.business?.currency ?? statsBookings[0]?.currency ?? "GBP"}
+        bookingLabel={bookingLabel}
+        loading={bookings.isLoading}
+      />
 
       {bookings.data?.nextCursor ? (
         <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
