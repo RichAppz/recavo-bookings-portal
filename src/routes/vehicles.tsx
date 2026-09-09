@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
@@ -16,6 +17,7 @@ import { AppShell } from "@/components/AppShell";
 import {
   activeSortedFields,
   CustomerSearchPicker,
+  DeleteLinkedRecordDialog,
   LinkedRecordFormDialog,
   OwnershipHistoryDialog,
   TransferLinkedRecordDialog,
@@ -109,6 +111,7 @@ function VehiclesPage() {
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
   const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
+  const [deletingFor, setDeletingFor] = useState<LinkedRecord | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   // Unlike the client-profile tab, this page has no implicit owner — the add
   // dialog starts with a client picker.
@@ -304,6 +307,12 @@ function VehiclesPage() {
                                     >
                                       <Archive className="size-4" /> Archive
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() => setDeletingFor(r)}
+                                    >
+                                      <Trash2 className="size-4" /> Delete
+                                    </DropdownMenuItem>
                                   </>
                                 ) : null}
                               </Can>
@@ -345,6 +354,14 @@ function VehiclesPage() {
         term={term}
         onOpenChange={(o) => {
           if (!o) setHistoryFor(null);
+        }}
+      />
+
+      <DeleteLinkedRecordDialog
+        record={deletingFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setDeletingFor(null);
         }}
       />
 

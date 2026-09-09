@@ -1337,6 +1337,29 @@ export function usePatchLinkedRecord(customerId: string | undefined) {
 }
 
 /**
+ * Hard-delete a linked record that no booking has ever referenced. Anything with
+ * booking history comes back 409 and can only be archived (RECA-90); the caller
+ * decides how to present that, so errors are not toasted here.
+ */
+export function useDeleteLinkedRecord() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { recordId: string; customerId: string }) => {
+      await api.delete(`/api/v1/businesses/${businessId}/linked-records/${vars.recordId}`);
+      return vars;
+    },
+    onSuccess: (vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerLinkedRecords(businessId, vars.customerId),
+      });
+      qc.removeQueries({ queryKey: queryKeys.linkedRecord(businessId, vars.recordId) });
+    },
+  });
+}
+
+/**
  * Transfer a linked record (e.g. a vehicle that changed hands) to another customer
  * in the same business (RECA-521). If-Match guarded; the record keeps its id so
  * booking history stays intact. Errors are left to the caller (the transfer dialog
