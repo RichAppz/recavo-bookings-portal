@@ -3,6 +3,16 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
 import { TableGhost } from "@/components/ghost";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -37,8 +47,10 @@ import {
   useCreateCustomerLinkedRecord,
   useCustomer,
   useCustomers,
+  useDeleteLinkedRecord,
   useLinkedRecordOwnership,
   useMemberships,
+  usePatchLinkedRecord,
   useTransferLinkedRecord,
 } from "@/lib/api/hooks";
 import {
@@ -327,6 +339,100 @@ function OwnershipOwnerName({ customerId }: { customerId: string }) {
     <span className="text-sm font-medium text-muted-foreground">
       {customer.isLoading ? "Loading…" : "Unknown client"}
     </span>
+  );
+}
+
+/**
+ * Remove a linked record. Deletes outright when nothing has ever been booked
+ * against it (the "added by mistake" case); when the API says it has booking
+ * history (409) the dialog switches to offering an archive instead, since the
+ * record has to stay resolvable from those bookings (RECA-90).
+ */
+export function DeleteLinkedRecordDialog({
+  record,
+  term,
+  onOpenChange,
+  onDone,
+}: {
+  record: LinkedRecord | null;
+  term: string;
+  onOpenChange: (o: boolean) => void;
+  /** Called after a successful delete or archive. */
+  onDone?: (outcome: "deleted" | "archived") => void;
+}) {
+  const open = record !== null;
+  const lower = term.toLowerCase();
+  const remove = useDeleteLinkedRecord();
+  const patch = usePatchLinkedRecord(record?.customerId);
+  const [inUse, setInUse] = useState(false);
+  const busy = remove.isPending || patch.isPending;
+
+  useEffect(() => {
+    if (!open) setInUse(false);
+  }, [open]);
+
+  const confirm = async () => {
+    if (!record) return;
+    if (inUse) {
+      try {
+        await patch.mutateAsync({
+          recordId: record.id,
+          version: record.version,
+          body: { status: "archived" },
+        });
+        toast.success(`${term} archived`);
+        onDone?.("archived");
+        onOpenChange(false);
+      } catch {
+        // usePatchLinkedRecord toasts the error.
+      }
+      return;
+    }
+    try {
+      await remove.mutateAsync({ recordId: record.id, customerId: record.customerId });
+      toast.success(`${term} deleted`);
+      onDone?.("deleted");
+      onOpenChange(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setInUse(true);
+        return;
+      }
+      toastApiError(err);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {inUse ? `Archive this ${lower} instead?` : `Delete ${record?.displayLabel ?? lower}?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {inUse
+              ? `This ${lower} has bookings against it, so it can't be deleted without losing that history. Archiving hides it from pickers and lists while past bookings keep their record.`
+              : `This permanently removes the ${lower} and its ownership history. It can't be undone.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={busy}
+            onClick={(e) => {
+              // Keep the dialog open until the request settles (or the 409 flips the copy).
+              e.preventDefault();
+              void confirm();
+            }}
+            className={cn(
+              !inUse && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            )}
+          >
+            {busy ? "Working…" : inUse ? "Archive" : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
