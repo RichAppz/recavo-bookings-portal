@@ -70,7 +70,6 @@ import {
   useLinkedRecord,
   useLocationsList,
   useMarkBankTransferReceived,
-  usePlanFeature,
   useRecordBookingPayment,
   useResendBookingMessage,
   useServices,
@@ -84,6 +83,7 @@ import {
   type ResendChannel,
 } from "@/lib/api/hooks";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import {
   customerDisplayName,
   type Booking,
@@ -148,7 +148,10 @@ export function BookingPanel({
   const markReceived = useMarkBankTransferReceived();
   const recordPayment = useRecordBookingPayment();
   const resend = useResendBookingMessage();
-  const smsEntitled = usePlanFeature("reminders.sms");
+  const smsCredits = useSmsCreditsSummary();
+  // Set when a manual text was refused for lack of credits (422) — the one place a
+  // zero balance is an error rather than a silent email fallback (ADR 0020 §3.4).
+  const [resendError, setResendError] = useState<string | null>(null);
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
@@ -208,16 +211,24 @@ export function BookingPanel({
   const customerPhone = customer.data?.phoneNormalised ?? null;
   const customerEmail = customer.data?.emailNormalised ?? null;
   const smsOptedOut = customer.data?.contactPreferences?.operationalNotifications === false;
-  const smsBlocked = !smsEntitled
-    ? "Not included in your plan"
-    : !customerPhone
-      ? "No mobile number on file"
-      : smsOptedOut
-        ? "Customer has opted out of texts"
-        : null;
+  const smsBlocked = !customerPhone
+    ? "No mobile number on file"
+    : smsOptedOut
+      ? "Customer has opted out of texts"
+      : null;
+  // What the text will cost, shown as the menu subtitle when it isn't blocked.
+  const smsHint =
+    smsCredits.level === "unlimited"
+      ? customerPhone
+      : smsCredits.level === "empty"
+        ? "No text credits left"
+        : smsCredits.credits
+          ? `${customerPhone} · ${smsCredits.credits.balance} left`
+          : customerPhone;
 
   const sendAgain = async (channel: ResendChannel) => {
     if (!booking) return;
+    setResendError(null);
     try {
       await resend.mutateAsync({ bookingId: booking.id, channel });
       toast.success(
@@ -226,6 +237,12 @@ export function BookingPanel({
         }`,
       );
     } catch (err) {
+      if (channel === "sms" && err instanceof ApiError && err.status === 422) {
+        setResendError(
+          err.detail ?? "You have no text credits left; buy a bundle to send text messages.",
+        );
+        return;
+      }
       toastApiError(err);
     }
   };
@@ -803,11 +820,23 @@ export function BookingPanel({
                       <Smartphone className="size-4" />
                       <span className="flex-1">Text message</span>
                       <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
-                        {smsBlocked ?? customerPhone}
+                        {smsBlocked ?? smsHint}
                       </span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : null}
+              {resendError ? (
+                <p className="col-span-2 text-xs text-destructive">
+                  {resendError}{" "}
+                  <Link
+                    to="/billing/sms-credits"
+                    onClick={onClose}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Buy texts
+                  </Link>
+                </p>
               ) : null}
               <Button variant="outline" asChild>
                 <Link to="/messages" onClick={onClose}>

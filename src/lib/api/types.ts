@@ -79,6 +79,9 @@ export type ProblemDetails = schemas["ProblemDetails"];
 
 export type PolicyDocumentType = PolicyDocument["type"];
 export type SaasPlanCode = PublicCataloguePlan["code"];
+
+/** A customer's preferred contact channel (`contactPreferences.preferredChannel`). */
+export type ContactChannel = "email" | "phone" | "sms" | "none";
 export type SaasInterval = PublicCataloguePlan["prices"][number]["interval"];
 
 export type LinkedRecordDefinitionBundle = {

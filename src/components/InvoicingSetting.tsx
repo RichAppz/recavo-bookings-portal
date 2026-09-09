@@ -145,7 +145,7 @@ export function InvoicingSetting({ className }: { className?: string }) {
   });
   const price = addon
     ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
-    : "£10/month";
+    : "£8/month";
   const addonBusy = addAddon.isPending || removeAddon.isPending;
 
   const buy = async () => {

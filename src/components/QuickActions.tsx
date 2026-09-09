@@ -3,7 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Layers, Package, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupGate } from "@/components/SetupGate";
-import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import type { ContactChannel } from "@/lib/api/types";
 import {
   Dialog,
   DialogContent,
@@ -32,11 +33,9 @@ import {
   useCreateBooking,
   useCreateCustomer,
   useCustomers,
-  SMS_FEATURE_KEY,
   useIssuePackagePurchase,
   useLocationsList,
   usePackages,
-  usePlanFeature,
   useSendMessage,
   useServices,
   useStaffList,
@@ -153,14 +152,13 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
   const [address, setAddress] = useState<AddressFormState>(EMPTY_ADDRESS);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  // Default to SMS only when the plan can actually send it; otherwise a brand-new
-  // client would trip the upgrade prompt before anyone typed a name (RECA-527).
-  const smsEntitled = usePlanFeature(SMS_FEATURE_KEY);
-  const defaultChannel: ContactChannel = smsEntitled ? "sms" : "email";
+  // Default to SMS when a text would actually go out right now (Growth, or credits
+  // in hand); with an empty balance default to email so nothing silently falls back.
+  const smsCredits = useSmsCreditsSummary();
+  const defaultChannel: ContactChannel = smsCredits.canText ? "sms" : "email";
   const [preferredChannel, setPreferredChannel] = useState<ContactChannel>(defaultChannel);
   const [operationalNotifications, setOperationalNotifications] = useState(true);
   const createCustomer = useCreateCustomer();
-  const smsGate = useSmsChannelGate(setPreferredChannel);
 
   const reset = () => {
     setFirstName("");
@@ -282,7 +280,7 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
         <Label>Preferred channel</Label>
         <Select
           value={preferredChannel}
-          onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
+          onValueChange={(v) => setPreferredChannel(v as ContactChannel)}
         >
           <SelectTrigger>
             <SelectValue />
@@ -295,11 +293,11 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          {smsEntitled === false
-            ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
-            : "SMS needs a mobile number — reminders fall back to email until one is saved."}
+          SMS needs a mobile number — reminders fall back to email until one is saved.
+          {preferredChannel === "sms" && smsCredits.level !== "unlimited"
+            ? ` ${smsCredits.note}`
+            : ""}
         </p>
-        {smsGate.dialog}
       </div>
       <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
         <div>

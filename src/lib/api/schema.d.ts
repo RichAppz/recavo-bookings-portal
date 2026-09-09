@@ -1304,6 +1304,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/brand/businesses/{businessId}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A business’s uploaded logo
+         * @description The image uploaded via `PUT /api/v1/businesses/{businessId}/branding/logo`. Public and embeddable cross-origin because mail clients, the booking page and invoice PDFs load it without credentials. `branding.logoUrl` carries a `?v=` content hash purely as a cache-buster; the route ignores the query. 404 when the business has no uploaded logo. Rate-limited per IP.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PNG or JPEG image bytes */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                        "image/jpeg": string;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -8039,11 +8188,11 @@ export interface paths {
                             postalCode?: string;
                             country?: string;
                         } | null;
-                        /** @description Customer-facing email branding; null fields fall back to platform branding. */
+                        /** @description Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding. */
                         branding?: {
                             /**
                              * Format: uri
-                             * @description Absolute https URL to a logo image.
+                             * @description Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image.
                              */
                             logoUrl?: string | null;
                             /** @description Hex accent used for buttons and rules in email. */
@@ -8060,12 +8209,12 @@ export interface paths {
                             iban?: string | null;
                             bic?: string | null;
                         };
-                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
                         reminders?: {
                             rules: {
                                 minutesBefore: number;
                                 /**
-                                 * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                                 * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email.
                                  * @enum {string}
                                  */
                                 channel: "preferred" | "email" | "sms";
@@ -8195,6 +8344,295 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the business logo
+         * @description Send the image bytes as the request body with `Content-Type: image/png` or `image/jpeg` (≤ 1 MiB; PNG/JPEG verified from the bytes, SVG refused). The image is malware-scanned, stored once per business and published at a stable API-hosted URL that is written to `branding.logoUrl` — so it appears on invoice PDFs, customer emails and the public booking page. Re-uploading replaces the previous logo. Requires business.update. `400 VALIDATION_FAILED` with `errors[0].code` of `UNSUPPORTED_MEDIA_TYPE` / `TOO_LARGE` / `NOT_AN_IMAGE` / `MALWARE_DETECTED`; `422` when the scanner is unavailable.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            responses: {
+                /** @description Updated configuration with `branding.logoUrl` set */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            configuration: components["schemas"]["BusinessConfiguration"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Remove the business logo
+         * @description Deletes the uploaded image and clears `branding.logoUrl` (also clears an externally hosted URL). Requires business.update.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Updated configuration with `branding.logoUrl: null` */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            configuration: components["schemas"]["BusinessConfiguration"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/businesses/{businessId}/onboarding": {
@@ -10223,7 +10661,7 @@ export interface paths {
                         email?: string | null;
                         phone?: string | null;
                         /**
-                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement.
+                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020).
                          * @enum {string}
                          */
                         preferredChannel?: "email" | "phone" | "sms" | "none";
@@ -11941,7 +12379,7 @@ export interface paths {
                         email?: string | null;
                         phone?: string | null;
                         /**
-                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement.
+                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020).
                          * @enum {string}
                          */
                         preferredChannel?: "email" | "phone" | "sms" | "none";
@@ -26059,11 +26497,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -26365,7 +26803,7 @@ export interface paths {
         put?: never;
         /**
          * Add a paid add-on to the current subscription
-         * @description Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `sms` (SMS reminders, £10/month).
+         * @description Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `invoicing` (£8/month). The former `sms` add-on was replaced by prepaid bundles — see /sms-credits.
          */
         post: {
             parameters: {
@@ -26375,8 +26813,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `sms` (RECA-526). */
-                    addonKey: "sms";
+                    /** @description Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020). */
+                    addonKey: "invoicing";
                 };
                 cookie?: never;
             };
@@ -26429,11 +26867,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -26568,8 +27006,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `sms` (RECA-526). */
-                    addonKey: "sms";
+                    /** @description Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020). */
+                    addonKey: "invoicing";
                 };
                 cookie?: never;
             };
@@ -26622,11 +27060,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -26754,6 +27192,559 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/sms-credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Text credit balance and recent ledger
+         * @description Prepaid SMS credits for the business (ADR 0020). Any active member may read it so staff know whether texts will go out. `unlimited: true` on Growth.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Balance */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down. */
+                            smsCredits: {
+                                /** @example 87 */
+                                balance: number;
+                                purchasedTotal: number;
+                                consumedTotal: number;
+                                /** @description True when the plan tier bundles `reminders.sms` (Growth): no credits needed. */
+                                unlimited: boolean;
+                                /** @description The pack on sale. Display amount only — Stripe is the money authority. */
+                                bundle: {
+                                    /** @example sms_100 */
+                                    key: string;
+                                    /** @example 100 */
+                                    credits: number;
+                                    /** @example 500 */
+                                    unitAmountMinor: number;
+                                    /** @example GBP */
+                                    currency: string;
+                                };
+                                /** @description Most recent 20 ledger entries, newest first. */
+                                recent: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @description Positive for purchase/grant/release, -1 per text. */
+                                    delta: number;
+                                    balanceAfter: number;
+                                    /** @enum {string} */
+                                    kind: "purchase" | "consume" | "release" | "grant";
+                                    /** @description Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase. */
+                                    reference: string;
+                                    metadata?: {
+                                        [key: string]: unknown;
+                                    } | null;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/sms-credits/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Buy a bundle of 100 texts (£5)
+         * @description Creates a one-off Stripe Checkout Session (`mode: payment`) for the bundle on the business’s Stripe Customer and returns its URL. Nothing is credited here: the balance moves when Stripe confirms payment (webhook) or when the success page calls /sms-credits/checkout/reconcile — both are idempotent per Session. Success URL: `{PUBLIC_APP_URL}/billing/sms-credits/success?session_id=…`. Requires billing.manage and an Idempotency-Key (replays return the same URL). `403` when checkout is disabled.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description Bundle key; defaults to `sms_100`. Unknown keys → 404. */
+                        bundle?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Checkout session created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            checkoutUrl: string;
+                            bundle: {
+                                /** @example sms_100 */
+                                key: string;
+                                /** @example 100 */
+                                credits: number;
+                                /** @example 500 */
+                                unitAmountMinor: number;
+                                /** @example GBP */
+                                currency: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/sms-credits/checkout/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Success-page reconcile for a bundle purchase
+         * @description Call from the success page with the `session_id` query value. Retrieves the Session from Stripe, checks it belongs to this business and credits the bundle if paid and not already credited (`credited: true` exactly once; the late webhook then no-ops). Open or unpaid sessions return `credited: false`. `404` for a Session of another tenant or a non-bundle Session. Requires billing.manage; financial rate limit applies.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @example cs_test_… */
+                        stripeCheckoutSessionId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Reconciled */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            credited: boolean;
+                            balance: number;
+                            /** @example paid */
+                            paymentStatus: string | null;
+                            /** @description Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down. */
+                            smsCredits: {
+                                /** @example 87 */
+                                balance: number;
+                                purchasedTotal: number;
+                                consumedTotal: number;
+                                /** @description True when the plan tier bundles `reminders.sms` (Growth): no credits needed. */
+                                unlimited: boolean;
+                                /** @description The pack on sale. Display amount only — Stripe is the money authority. */
+                                bundle: {
+                                    /** @example sms_100 */
+                                    key: string;
+                                    /** @example 100 */
+                                    credits: number;
+                                    /** @example 500 */
+                                    unitAmountMinor: number;
+                                    /** @example GBP */
+                                    currency: string;
+                                };
+                                /** @description Most recent 20 ledger entries, newest first. */
+                                recent: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @description Positive for purchase/grant/release, -1 per text. */
+                                    delta: number;
+                                    balanceAfter: number;
+                                    /** @enum {string} */
+                                    kind: "purchase" | "consume" | "release" | "grant";
+                                    /** @description Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase. */
+                                    reference: string;
+                                    metadata?: {
+                                        [key: string]: unknown;
+                                    } | null;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/subscription/checkout/reconcile": {
         parameters: {
             query?: never;
@@ -26835,11 +27826,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -27190,11 +28181,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -27396,11 +28387,11 @@ export interface paths {
                             };
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
@@ -27808,11 +28799,11 @@ export interface paths {
                                 };
                                 /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                                 addons: {
-                                    /** @example sms */
+                                    /** @example invoicing */
                                     key: string;
-                                    /** @example reminders.sms */
+                                    /** @example invoicing */
                                     featureKey: string;
-                                    /** @example 1000 */
+                                    /** @example 800 */
                                     unitAmountMinor: number;
                                     /** @example GBP */
                                     currency: string;
@@ -35012,7 +36003,7 @@ export interface components {
             phoneDisplay: string | null;
             contactPreferences: {
                 /**
-                 * @description Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered only while the business holds the reminders.sms entitlement and the customer keeps operational notifications on; otherwise reminders fall back to email.
+                 * @description Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered while the business can text (Growth includes unlimited texts; Solo/Business spend prepaid credits, ADR 0020) and the customer keeps operational notifications on; otherwise reminders fall back to email.
                  * @enum {string}
                  */
                 preferredChannel: "email" | "phone" | "sms" | "none";
@@ -35665,11 +36656,11 @@ export interface components {
                 postalCode?: string;
                 country?: string;
             } | null;
-            /** @description Customer-facing email branding; null fields fall back to platform branding. */
+            /** @description Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding. */
             branding?: {
                 /**
                  * Format: uri
-                 * @description Absolute https URL to a logo image.
+                 * @description Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image.
                  */
                 logoUrl?: string | null;
                 /** @description Hex accent used for buttons and rules in email. */
@@ -35686,12 +36677,12 @@ export interface components {
                 iban?: string | null;
                 bic?: string | null;
             };
-            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
             reminders?: {
                 rules: {
                     minutesBefore: number;
                     /**
-                     * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                     * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email.
                      * @enum {string}
                      */
                     channel: "preferred" | "email" | "sms";
