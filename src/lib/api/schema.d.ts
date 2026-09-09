@@ -22584,7 +22584,7 @@ export interface paths {
         put?: never;
         /**
          * Create a shareable package link
-         * @description A hand-picked, ordered subset of this business’s sessions and packages that a visitor sees at `{bookingPage}?offer={code}`. Every id must belong to the business, and at least one id is required across the two lists. Sessions in the link are bookable and packages purchasable through it even when kept off the public page; inactive items are simply not shown until reactivated. Requires package.manage.
+         * @description A hand-picked, ordered subset of this business’s sessions and packages that a visitor sees at `{bookingPage}?offer={code}`. Every id must belong to the business, and at least one id is required across the two lists. Sessions in the link are bookable and packages purchasable through it even when kept off the public page; inactive items are simply not shown until reactivated. `customerIds` hands the link to those customers straight away (see the customers sub-route); every id must belong to the business or the whole request fails. Requires package.manage.
          */
         post: {
             parameters: {
@@ -22601,6 +22601,7 @@ export interface paths {
                         name: string;
                         serviceIds?: string[];
                         packageIds?: string[];
+                        customerIds?: string[];
                     };
                 };
             };
