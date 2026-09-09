@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   ShieldOff,
+  Trash2,
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -34,6 +35,7 @@ import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
 import {
   activeSortedFields,
+  DeleteLinkedRecordDialog,
   LinkedRecordFormDialog,
   OwnershipHistoryDialog,
   summariseValues,
@@ -1160,6 +1162,7 @@ function CustomerLinkedRecordsTab({
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
   const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
+  const [deletingFor, setDeletingFor] = useState<LinkedRecord | null>(null);
 
   // Resolve the transfer target from the live list so that after a 409 (stale
   // version) the refetched record — with its bumped version — flows into the
@@ -1267,6 +1270,13 @@ function CustomerLinkedRecordsTab({
                             >
                               <Archive className="size-4" /> Archive
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={disabled}
+                              className="text-destructive focus:text-destructive"
+                              onSelect={() => setDeletingFor(r)}
+                            >
+                              <Trash2 className="size-4" /> Delete
+                            </DropdownMenuItem>
                           </>
                         ) : null}
                       </Can>
@@ -1336,6 +1346,14 @@ function CustomerLinkedRecordsTab({
         term={term}
         onOpenChange={(o) => {
           if (!o) setHistoryFor(null);
+        }}
+      />
+
+      <DeleteLinkedRecordDialog
+        record={deletingFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setDeletingFor(null);
         }}
       />
 
