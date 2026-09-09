@@ -24,7 +24,7 @@ export type BookingSeed = {
  * Signed-in booking stays on the account. The public studio page (`/$slug`) is
  * left for people who arrived from a link without an account.
  *
- * `offer` scopes the flow to a sign-up link the studio handed this customer, the
+ * `offer` scopes the flow to an offer link the studio handed this customer, the
  * same way `?offer=` does on the public page.
  */
 export function BookSessionDrawer({

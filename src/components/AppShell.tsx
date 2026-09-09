@@ -147,8 +147,8 @@ const NAV: NavGroup[] = [
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },
       {
-        to: "/sign-up-links",
-        label: "Sign-up links",
+        to: "/offer-links",
+        label: "Offer links",
         icon: Link2,
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },

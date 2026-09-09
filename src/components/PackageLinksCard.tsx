@@ -60,7 +60,7 @@ function sessionNoun(service: string) {
 }
 
 /**
- * Sign-up links: a hand-picked set of sessions and packages behind one URL. The public
+ * Offer links: a hand-picked set of sessions and packages behind one URL. The public
  * page shows every session and package the business has switched on; a link lets it
  * send one person or group a narrower choice — or something it never puts on the
  * public page. Rendered on both the Sessions and Packages pages, so it fetches its own
@@ -90,7 +90,7 @@ export function PackageLinksCard({ slug }: { slug: string }) {
 
   return (
     <SectionCard
-      title="Sign-up links"
+      title="Offer links"
       description={`Send a link that shows only the ${nouns.pluralLower} and packages you choose — including ones hidden from your booking page.`}
       action={
         <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
@@ -106,7 +106,7 @@ export function PackageLinksCard({ slug }: { slug: string }) {
         </div>
       ) : (links.data ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No links yet. Create one to share a specific offer with a client or group.
+          No offer links yet. Create one to share a specific offer with a client or group.
         </p>
       ) : (
         <ul className="divide-y">
@@ -384,7 +384,7 @@ function CreateLinkDialog({
     <Dialog open={open} onOpenChange={(o) => (o ? undefined : onClose())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New sign-up link</DialogTitle>
+          <DialogTitle>New offer link</DialogTitle>
           <DialogDescription>
             Clients who open it see only these {nouns.pluralLower} and packages, in this order, and
             can book or buy them even if they are hidden from your booking page.

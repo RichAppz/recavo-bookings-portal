@@ -553,7 +553,7 @@ function Overview({
 }
 
 /**
- * Sign-up links a studio has handed to this customer. Each opens the booking drawer
+ * Offer links a studio has handed to this customer. Each opens the booking drawer
  * in offer mode, so sessions and packages the studio keeps off its public page are
  * bookable here — that is usually the point of sending one.
  */

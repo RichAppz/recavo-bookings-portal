@@ -4465,7 +4465,7 @@ export type PortalCredit = {
 };
 
 /**
- * Sign-up links a studio has handed to this customer, resolved like the public
+ * Offer links a studio has handed to this customer, resolved like the public
  * `?offer=` route so the account can open the booking flow in offer mode. One query
  * per studio, tagged with the studio, mirroring usePortalAcrossStudios.
  */
