@@ -65,6 +65,7 @@ export const queryKeys = {
   packages: (businessId: string) => ["biz", businessId, "packages"] as const,
   package: (businessId: string, packageId: string) =>
     ["biz", businessId, "packages", packageId] as const,
+  packageLinks: (businessId: string) => ["biz", businessId, "package-links"] as const,
   entitlements: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "entitlements", filters ?? {}] as const,
   creditLedger: (businessId: string, filters?: Record<string, unknown>) =>
@@ -139,6 +140,8 @@ export const queryKeys = {
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,
   publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
+  publicPackageLink: (businessId: string, code: string) =>
+    ["public", businessId, "package-links", code] as const,
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
