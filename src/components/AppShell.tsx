@@ -52,6 +52,7 @@ import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
+import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
@@ -365,6 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               setSetupOpenRequest((n) => n + 1);
             }}
           />
+          <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <button
             onClick={() => {
               setMobileNav(false);
