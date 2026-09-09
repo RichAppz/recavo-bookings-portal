@@ -375,25 +375,23 @@ function ServicesPage() {
       />
 
       <DeleteOrFallbackDialog
-        open={deleting !== null}
-        onOpenChange={(o) => {
-          if (!o) setDeleting(null);
-        }}
-        title={`Delete ${deleting?.name ?? lower}?`}
-        description={`This permanently removes the ${lower} from your catalogue. It can't be undone.`}
-        inUseTitle={`Pause this ${lower} instead?`}
-        inUseDescription={`This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`}
-        fallbackLabel="Pause"
-        onDelete={async () => {
-          if (!deleting) return;
-          await deleteService.mutateAsync(deleting.id);
+        item={deleting}
+        onClose={() => setDeleting(null)}
+        copy={(s) => ({
+          title: `Delete ${s.name}?`,
+          description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
+          inUseTitle: `Pause this ${lower} instead?`,
+          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
+          fallbackLabel: "Pause",
+        })}
+        onDelete={async (s) => {
+          await deleteService.mutateAsync(s.id);
           toast.success(`${noun} deleted`);
         }}
-        onFallback={async () => {
-          if (!deleting) return;
+        onFallback={async (s) => {
           await updateService.mutateAsync({
-            serviceId: deleting.id,
-            version: deleting.version,
+            serviceId: s.id,
+            version: s.version,
             body: { active: false },
           });
           toast.success(`${noun} paused`);

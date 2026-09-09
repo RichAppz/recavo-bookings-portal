@@ -265,25 +265,24 @@ function PackagesPage() {
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
 
       <DeleteOrFallbackDialog
-        open={deleting !== null}
-        onOpenChange={(o) => {
-          if (!o) setDeleting(null);
-        }}
-        title={`Delete ${deleting?.name ?? "package"}?`}
-        description="This permanently removes the package. It can't be undone."
-        inUseTitle="Pause this package instead?"
-        inUseDescription="This package has been sold to clients, so it can't be deleted without losing their credit history. Pausing takes it off sale while existing credits keep working."
-        fallbackLabel="Pause"
-        onDelete={async () => {
-          if (!deleting) return;
-          await deletePackage.mutateAsync(deleting.id);
+        item={deleting}
+        onClose={() => setDeleting(null)}
+        copy={(p) => ({
+          title: `Delete ${p.name}?`,
+          description: "This permanently removes the package. It can't be undone.",
+          inUseTitle: "Pause this package instead?",
+          inUseDescription:
+            "This package has been sold to clients, so it can't be deleted without losing their credit history. Pausing takes it off sale while existing credits keep working.",
+          fallbackLabel: "Pause",
+        })}
+        onDelete={async (p) => {
+          await deletePackage.mutateAsync(p.id);
           toast.success("Package deleted");
         }}
-        onFallback={async () => {
-          if (!deleting) return;
+        onFallback={async (p) => {
           await updatePackage.mutateAsync({
-            packageId: deleting.id,
-            version: deleting.version,
+            packageId: p.id,
+            version: p.version,
             body: { active: false },
           });
           toast.success("Package paused");
