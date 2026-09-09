@@ -75,8 +75,13 @@ export function PackageLinksCard({ slug }: { slug: string }) {
     (services.data ?? []).find((s) => s.id === id)?.name ?? `Removed ${nouns.lower}`;
   const packageName = (id: string) =>
     (packages.data ?? []).find((p) => p.id === id)?.name ?? "Removed package";
-  const contents = (link: PackageLink) =>
-    [...link.serviceIds.map(serviceName), ...link.packageIds.map(packageName)].join(" · ");
+  const contents = (link: PackageLink) => {
+    const items = [...link.serviceIds.map(serviceName), ...link.packageIds.map(packageName)];
+    const n = link.customerIds.length;
+    // Assigned from the client profile; shown here so the PT can see a link is in use.
+    if (n > 0) items.push(`sent to ${n} ${n === 1 ? "client" : "clients"}`);
+    return items.join(" · ");
+  };
 
   return (
     <SectionCard

@@ -23,17 +23,22 @@ export type BookingSeed = {
 /**
  * Signed-in booking stays on the account. The public studio page (`/$slug`) is
  * left for people who arrived from a link without an account.
+ *
+ * `offer` scopes the flow to a sign-up link the studio handed this customer, the
+ * same way `?offer=` does on the public page.
  */
 export function BookSessionDrawer({
   studio,
   open,
   onOpenChange,
   seed,
+  offer,
 }: {
   studio: PortalBusinessSummary | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   seed?: BookingSeed | null;
+  offer?: { code: string; name: string } | null;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -54,7 +59,7 @@ export function BookSessionDrawer({
         className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
       >
         <SheetHeader className="space-y-1 border-b px-5 py-4 text-left">
-          <SheetTitle>Book a session</SheetTitle>
+          <SheetTitle>{offer ? offer.name : "Book a session"}</SheetTitle>
           {studio ? (
             <SheetDescription>{studio.tradingName}</SheetDescription>
           ) : (
@@ -63,8 +68,9 @@ export function BookSessionDrawer({
         </SheetHeader>
         {open && studio ? (
           <BookingFlow
-            key={`${studio.id}:${seed?.slot?.slotToken ?? seed?.date ?? "new"}`}
+            key={`${studio.id}:${offer?.code ?? ""}:${seed?.slot?.slotToken ?? seed?.date ?? "new"}`}
             businessId={studio.id}
+            offerCode={offer?.code ?? null}
             studio={{
               id: studio.id,
               slug: studio.slug,

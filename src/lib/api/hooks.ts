@@ -1616,6 +1616,28 @@ export function useRevokePackageLink() {
   });
 }
 
+/**
+ * Hand a link to a client (or take it back). It then appears under Offers in their
+ * account; it does not change who can open the URL.
+ */
+export function useAssignPackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { linkId: string; customerId: string; assigned: boolean }) => {
+      const url = `/api/v1/businesses/${businessId}/package-links/${vars.linkId}/customers/${vars.customerId}`;
+      const res = vars.assigned
+        ? await api.put<{ link: PackageLink }>(url, {})
+        : await api.delete<{ link: PackageLink }>(url);
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function usePayments(
   filters: {
     from?: string;
@@ -4441,6 +4463,27 @@ export type PortalCredit = {
   expiresAt: string;
   status: string;
 };
+
+/**
+ * Sign-up links a studio has handed to this customer, resolved like the public
+ * `?offer=` route so the account can open the booking flow in offer mode. One query
+ * per studio, tagged with the studio, mirroring usePortalAcrossStudios.
+ */
+export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
+  const list = useMemo(() => studios ?? [], [studios]);
+  return useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPackageLinks(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ links: PublicPackageLink[] }>("/api/v1/portal/package-links", {
+          query: { businessId: studio.id },
+        });
+        return res.data.links;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+}
 
 export function usePortalCredits(businessId: string | undefined) {
   return useQuery({

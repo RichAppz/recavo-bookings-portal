@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarDays,
   FileText,
+  Gift,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -19,11 +20,12 @@ import { userDisplayName } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export type AccountView =
-  "overview" | "calendar" | "credits" | "purchases" | "invoices" | "profile";
+  "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile";
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "calendar", label: "Calendar", icon: CalendarDays },
+  { view: "offers", label: "Offers", icon: Gift },
   { view: "credits", label: "Credits", icon: Ticket },
   { view: "purchases", label: "Purchases", icon: Receipt },
   { view: "invoices", label: "Invoices", icon: FileText },
