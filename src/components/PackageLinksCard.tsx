@@ -343,6 +343,7 @@ function CreateLinkDialog({
   const [name, setName] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [packageIds, setPackageIds] = useState<string[]>([]);
+  const [clients, setClients] = useState<Customer[]>([]);
   // Paused items would show nothing on the page, so they are not offered here.
   const serviceChoices = services.filter((s) => s.active);
   const packageChoices = packages.filter((p) => p.active);
@@ -353,6 +354,7 @@ function CreateLinkDialog({
       setName("");
       setServiceIds([]);
       setPackageIds([]);
+      setClients([]);
     }
   }, [open]);
 
@@ -371,9 +373,19 @@ function CreateLinkDialog({
       return;
     }
     try {
-      const link = await create.mutateAsync({ name: name.trim(), serviceIds, packageIds });
+      const link = await create.mutateAsync({
+        name: name.trim(),
+        serviceIds,
+        packageIds,
+        customerIds: clients.map((c) => c.id),
+      });
       // Straight to the clipboard: the next thing the PT does is paste it into a message.
-      copyLink(packageLinkUrl(slug, link.code), "Link created and copied");
+      copyLink(
+        packageLinkUrl(slug, link.code),
+        clients.length > 0
+          ? `Link created, copied and sent to ${clients.length} ${clients.length === 1 ? "client" : "clients"}`
+          : "Link created and copied",
+      );
       onClose();
     } catch {
       // Surfaced by the mutation's toast.
@@ -451,6 +463,43 @@ function CreateLinkDialog({
               Tick things in the order you want them shown. You can mix {nouns.pluralLower} and
               packages, or pick just one kind.
             </p>
+          )}
+
+          {nothingToShare ? null : (
+            <div className="grid gap-2">
+              <Label>Send to clients (optional)</Label>
+              <CustomerSearchPicker
+                value={null}
+                placeholder="Add a client…"
+                onSelect={(c: Customer) =>
+                  setClients((list) => (list.some((x) => x.id === c.id) ? list : [...list, c]))
+                }
+              />
+              {clients.length > 0 ? (
+                <ul className="flex flex-wrap gap-2">
+                  {clients.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-center gap-1 rounded-full border py-1 pr-1 pl-3 text-sm"
+                    >
+                      {customerDisplayName(c)}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="size-6 rounded-full p-0"
+                        aria-label={`Remove ${customerDisplayName(c)}`}
+                        onClick={() => setClients((list) => list.filter((x) => x.id !== c.id))}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                The link appears under Offers when these clients sign in. You can add more later.
+              </p>
+            </div>
           )}
         </div>
         <DialogFooter>

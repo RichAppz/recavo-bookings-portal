@@ -1585,7 +1585,13 @@ export function useCreatePackageLink() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { name: string; serviceIds: string[]; packageIds: string[] }) => {
+    mutationFn: async (body: {
+      name: string;
+      serviceIds: string[];
+      packageIds: string[];
+      /** Hand the link to these clients as it is created. */
+      customerIds?: string[];
+    }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
         body,
