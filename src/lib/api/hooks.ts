@@ -980,6 +980,40 @@ export function useCustomer(customerId: string | undefined) {
   });
 }
 
+/**
+ * Names for a set of customers, one cached lookup each (the list endpoint has no
+ * id filter). Used by calendar bars that show the client; `enabled` lets the
+ * caller skip the fetches entirely when that column is switched off.
+ */
+export function useCustomersById(
+  customerIds: readonly (string | null | undefined)[],
+  enabled = true,
+) {
+  const businessId = useBusinessId();
+  const ids = useMemo(
+    () => Array.from(new Set(customerIds.filter((id): id is string => Boolean(id)))).sort(),
+    [customerIds],
+  );
+  return useQueries({
+    queries: ids.map((customerId) => ({
+      queryKey: queryKeys.customer(businessId, customerId),
+      enabled: Boolean(businessId) && enabled,
+      staleTime: 5 * 60_000,
+      queryFn: async () => {
+        const res = await api.get<{ customer: Customer }>(
+          `/api/v1/businesses/${businessId}/customers/${customerId}`,
+        );
+        return res.data.customer;
+      },
+    })),
+    combine: (results) => {
+      const map = new Map<string, Customer>();
+      for (const r of results) if (r.data) map.set(r.data.id, r.data);
+      return map;
+    },
+  });
+}
+
 export function useCustomerBookings(customerId: string | undefined) {
   const businessId = useBusinessId();
   return useQuery({

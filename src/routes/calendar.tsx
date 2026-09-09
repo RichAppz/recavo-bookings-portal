@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus, Tag } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
+import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -21,12 +30,19 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   useBookings,
   useCalendarBlocks,
+  useCustomersById,
+  useLinkedRecordDefinition,
   useLinkedRecordsById,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
 import { addDays, formatInTz, formatMoney, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
-import type { Booking, CalendarBlock, LinkedRecord } from "@/lib/api/types";
+import {
+  customerDisplayName,
+  type Booking,
+  type CalendarBlock,
+  type LinkedRecord,
+} from "@/lib/api/types";
 import {
   bookingSettlement,
   paymentLabel,
@@ -161,6 +177,22 @@ function timeAtOffset(offsetY: number): string {
 
 /** Bars shown per day in the month grid before it collapses to "+N more". */
 const MONTH_LANES = 3;
+/**
+ * What a month bar says, left to right. The business picks which of these to show;
+ * the order is fixed so bars stay scannable. `time` is the start time, or "All day".
+ */
+const MONTH_BAR_FIELDS = ["time", "client", "record", "service"] as const;
+type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
+const DEFAULT_MONTH_BAR_FIELDS = "time,record,service";
+
+function parseMonthBarFields(raw: string): Set<MonthBarField> {
+  const set = new Set<MonthBarField>();
+  for (const part of raw.split(",")) {
+    if ((MONTH_BAR_FIELDS as readonly string[]).includes(part)) set.add(part as MonthBarField);
+  }
+  return set;
+}
+
 /** Height of one bar row in the month grid, px (matches the chip's text + padding). */
 const MONTH_LANE_HEIGHT = 20;
 
@@ -183,6 +215,19 @@ function CalendarPage() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [staffFilter, setStaffFilter] = useStoredState<string>(prefKey("staff"), "all");
   const [serviceFilter, setServiceFilter] = useStoredState<string>(prefKey("service"), "all");
+  const [monthBarRaw, setMonthBarRaw] = useStoredState<string>(
+    prefKey("monthBar"),
+    DEFAULT_MONTH_BAR_FIELDS,
+  );
+  const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
+  const toggleMonthBar = (field: MonthBarField) => {
+    const next = new Set(monthBar);
+    if (next.has(field)) next.delete(field);
+    else next.add(field);
+    // Never let the bar go blank; the service name is the floor.
+    if (next.size === 0) next.add("service");
+    setMonthBarRaw(MONTH_BAR_FIELDS.filter((f) => next.has(f)).join(","));
+  };
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
@@ -265,6 +310,24 @@ function CalendarPage() {
   const linkedRecords = useLinkedRecordsById(filtered.map((b) => b.linkedRecordId));
   const tagFor = (b: Booking) =>
     b.linkedRecordId ? recordTag(linkedRecords.get(b.linkedRecordId)) : null;
+  // Client names only when the month bars are set to show them: it is one lookup
+  // per customer, so not worth paying for otherwise.
+  const wantsClient = view === "month" && monthBar.has("client");
+  const customers = useCustomersById(
+    wantsClient ? filtered.map((b) => b.leadCustomerId) : [],
+    wantsClient,
+  );
+  const clientFor = (b: Booking) => {
+    const c = b.leadCustomerId ? customers.get(b.leadCustomerId) : undefined;
+    return c ? customerDisplayName(c) : null;
+  };
+  // "Registration" for a vehicle schema; otherwise whatever the record is called.
+  const recordDefinition = useLinkedRecordDefinition();
+  const recordFieldLabel = recordDefinition.data?.definition
+    ? recordDefinition.data.definition.key === "vehicle"
+      ? "Registration"
+      : recordDefinition.data.definition.singularLabel
+    : null;
 
   // Service identity rides along as a dot inside each chip; the chip's
   // border/background belong to payment status. A service with no colour set
@@ -486,6 +549,49 @@ function CalendarPage() {
             onValueChange={setServiceFilter}
             className="w-full sm:w-[190px]"
           />
+          {view === "month" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-auto">
+                  <Tag className="size-4" /> Bar text
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Show on month bars</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={monthBar.has("time")}
+                  onCheckedChange={() => toggleMonthBar("time")}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Time / All day
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                  checked={monthBar.has("client")}
+                  onCheckedChange={() => toggleMonthBar("client")}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Client name
+                </DropdownMenuCheckboxItem>
+                {recordFieldLabel ? (
+                  <DropdownMenuCheckboxItem
+                    checked={monthBar.has("record")}
+                    onCheckedChange={() => toggleMonthBar("record")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {recordFieldLabel}
+                  </DropdownMenuCheckboxItem>
+                ) : null}
+                <DropdownMenuCheckboxItem
+                  checked={monthBar.has("service")}
+                  onCheckedChange={() => toggleMonthBar("service")}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {tenant.terminology.service || "Service"}
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </div>
 
@@ -614,23 +720,25 @@ function CalendarPage() {
                             onClick={() => openEvent(ev)}
                             style={{ ...style, ...eventChipStyle(ev.colour) }}
                             className={cn(
-                              "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                               edges,
                             )}
                           >
-                            {continuesBefore ? (
-                              <span
-                                className="text-muted-foreground"
-                                aria-label="Continues from earlier"
-                              >
-                                ↳
-                              </span>
-                            ) : (
-                              <span className="font-semibold tabular-nums">
-                                {timeLabel(ev.start)}
-                              </span>
-                            )}
-                            <span className="truncate">{ev.title}</span>
+                            <Marquee>
+                              {continuesBefore ? (
+                                <span
+                                  className="text-muted-foreground"
+                                  aria-label="Continues from earlier"
+                                >
+                                  ↳
+                                </span>
+                              ) : (
+                                <span className="font-semibold tabular-nums">
+                                  {timeLabel(ev.start)}
+                                </span>
+                              )}
+                              <span>{ev.title}</span>
+                            </Marquee>
                             {continuesAfter ? (
                               <span className="ml-auto text-muted-foreground">→</span>
                             ) : null}
@@ -641,39 +749,53 @@ function CalendarPage() {
                       const cancelled = isCancelled(b);
                       const payment = chipPayment(b);
                       const tag = tagFor(b);
+                      const client = clientFor(b);
                       const multi = isMultiDay(b);
+                      const showTime = monthBar.has("time");
+                      const showClient = monthBar.has("client") && client;
+                      const showTag = monthBar.has("record") && tag;
+                      const showService = monthBar.has("service");
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name}${
-                            multi ? `, until ${endLabel(b)}` : ""
-                          } — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${
+                            b.serviceSnapshot.name
+                          }${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={style}
                           className={cn(
-                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
                             edges,
                             cancelled && "opacity-45 line-through",
                           )}
                         >
                           <ServiceDot colour={serviceColour(b)} />
-                          {continuesBefore ? (
-                            <span
-                              className="text-muted-foreground"
-                              aria-label="Continues from earlier"
-                            >
-                              ↳
-                            </span>
-                          ) : b.allDay ? (
-                            <span className="font-semibold">All day</span>
-                          ) : (
-                            <span className="font-semibold tabular-nums">{timeLabel(b.start)}</span>
-                          )}
-                          {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
-                          <span className="truncate">{b.serviceSnapshot.name}</span>
+                          {/* The label slides if it is wider than the bar, so a one-day
+                              cell still shows everything that was switched on. */}
+                          <Marquee>
+                            {continuesBefore ? (
+                              <span
+                                className="text-muted-foreground"
+                                aria-label="Continues from earlier"
+                              >
+                                ↳
+                              </span>
+                            ) : showTime ? (
+                              b.allDay ? (
+                                <span className="font-semibold">All day</span>
+                              ) : (
+                                <span className="font-semibold tabular-nums">
+                                  {timeLabel(b.start)}
+                                </span>
+                              )
+                            ) : null}
+                            {showClient ? <span className="font-semibold">{client}</span> : null}
+                            {showTag ? <span className="font-semibold">{tag}</span> : null}
+                            {showService ? <span>{b.serviceSnapshot.name}</span> : null}
+                          </Marquee>
                           {/* Wide enough to say so: a bar over several days shows when it ends. */}
                           {multi && endCol > startCol && !continuesAfter ? (
                             <span className="ml-auto shrink-0 text-muted-foreground">
