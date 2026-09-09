@@ -68,8 +68,8 @@ export function SmsCreditsCard({ className }: { className?: string }) {
         <div className="flex items-start gap-3 text-sm">
           <MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" />
           <p>
-            Texts are included in {subscription.data?.plan?.name ?? "your plan"} — reminders and
-            confirmations set to SMS always go by text, with nothing to top up.
+            Texts are included in your plan — reminders and confirmations set to SMS always go by
+            text, with nothing to top up.
           </p>
         </div>
       </SectionCard>
@@ -88,8 +88,8 @@ export function SmsCreditsCard({ className }: { className?: string }) {
             <MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" />
             <div>
               <p className="text-3xl font-semibold tracking-tight tabular-nums">
-                {data.balance}
-                <span className="ml-1.5 text-base font-normal text-muted-foreground">
+                {data.balance}{" "}
+                <span className="text-base font-normal text-muted-foreground">
                   {data.balance === 1 ? "text" : "texts"} left
                 </span>
               </p>
