@@ -115,6 +115,8 @@ export const queryKeys = {
     ["biz", businessId, "policy-documents", "current", type] as const,
   privacyNoticeLatest: (businessId: string) =>
     ["biz", businessId, "privacy-notices", "latest"] as const,
+  notificationTemplates: (businessId: string) =>
+    ["biz", businessId, "notification-templates"] as const,
   linkedRecordDefinition: (businessId: string) =>
     ["biz", businessId, "linked-record-definition"] as const,
   lifecycle: (businessId: string) => ["biz", businessId, "lifecycle"] as const,
