@@ -403,7 +403,7 @@ export function BookingPanel({
           </div>
         ) : (
           <>
-            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5">
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
                 <StatusBadge status={booking.attendanceStatus} />

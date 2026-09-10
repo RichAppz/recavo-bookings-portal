@@ -479,7 +479,7 @@ export function OwnershipHistoryDialog({
             Every client {record?.displayLabel ?? `this ${lower}`} has belonged to, newest first.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
           {ownership.isLoading ? (
             <TableGhost rows={2} />
           ) : ownership.isError ? (
@@ -757,7 +757,7 @@ export function LinkedRecordFormDialog({
           <DialogTitle>{initial ? `Edit ${lower}` : `Add ${lower}`}</DialogTitle>
           <DialogDescription>Fields come from your {lower} schema.</DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
+        <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
           {ownerSlot}
           <div className="grid gap-2">
             <Label htmlFor="lr-display-label">Display label</Label>
