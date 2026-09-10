@@ -505,19 +505,25 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <Select value={tenant.currentLocationId} onValueChange={tenant.setCurrentLocationId}>
-                <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All locations</SelectItem>
-                  {tenant.locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* A location filter only means something once there is more than one. */}
+              {tenant.locations.length > 1 ? (
+                <Select
+                  value={tenant.currentLocationId}
+                  onValueChange={tenant.setCurrentLocationId}
+                >
+                  <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All locations</SelectItem>
+                    {tenant.locations.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
