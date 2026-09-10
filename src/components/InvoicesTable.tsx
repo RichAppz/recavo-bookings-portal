@@ -5,7 +5,7 @@ import { TableGhost } from "@/components/ghost";
 import { EmptyState, StatusBadge } from "@/components/ui-bits";
 import type { Invoice } from "@/lib/api/invoices";
 import { formatMoney, isoDate, ukDate } from "@/lib/format";
-import { invoiceBalanceMinor, isInvoiceOverdue } from "@/lib/invoices";
+import { invoiceBalanceMinor, invoiceLinkedRecord, isInvoiceOverdue } from "@/lib/invoices";
 import { cn } from "@/lib/utils";
 
 /** "Auto" tag for invoices raised by the job-completion worker rather than a person. */
@@ -99,6 +99,7 @@ export function InvoicesTable({
         <tbody className="divide-y">
           {list.map((inv) => {
             const balance = invoiceBalanceMinor(inv);
+            const record = invoiceLinkedRecord(inv);
             return (
               <tr key={inv.id} className="hover:bg-secondary/50">
                 <td className={cn("px-4 whitespace-nowrap", compact ? "py-2" : "py-3")}>
@@ -110,6 +111,14 @@ export function InvoicesTable({
                     <InvoiceNumber invoice={inv} />
                     <InvoiceOriginTag invoice={inv} />
                   </Link>
+                  {record ? (
+                    <p
+                      className="mt-0.5 max-w-56 truncate text-xs text-muted-foreground"
+                      title={`${record.label}: ${record.value}`}
+                    >
+                      {record.value}
+                    </p>
+                  ) : null}
                 </td>
                 {showCustomer ? (
                   <td className={cn("px-4", compact ? "py-2" : "py-3")}>

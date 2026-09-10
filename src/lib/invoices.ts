@@ -59,6 +59,16 @@ export type InvoicePaymentInstructions = {
   bic: string | null;
 };
 
+/**
+ * The record the work was done on — a vehicle, a pet — snapshotted from the booking's
+ * linked record when the draft was created and printed on the PDF and email. `label`
+ * is the business's singular term for the record type ("Vehicle").
+ */
+export type InvoiceLinkedRecord = {
+  label: string;
+  value: string;
+};
+
 export type Invoice = {
   id: string;
   businessId: string;
@@ -68,6 +78,11 @@ export type Invoice = {
   origin: InvoiceOrigin;
   bookingId: string | null;
   bookingReference: string | null;
+  /**
+   * Null when the invoice is not about a record. Absent (`undefined`) from an API
+   * build that predates the field — treat as "no record" and hide the editor.
+   */
+  linkedRecord?: InvoiceLinkedRecord | null;
   customerId: string;
   currency: string;
   /** YYYY-MM-DD in the business timezone. */
@@ -117,7 +132,41 @@ export type UpdateInvoiceBody = {
   dueDate?: string | null;
   notes?: string | null;
   customerId?: string;
+  /** Correct or clear (null / blank value) the record the invoice is about. */
+  linkedRecord?: InvoiceLinkedRecord | null;
 };
+
+/** Mirrors the API's limits for the linked-record snapshot text. */
+export const INVOICE_LINKED_RECORD_LIMITS = {
+  labelMax: 60,
+  valueMax: 200,
+} as const;
+
+/** The record the invoice is about, or null — also null on an API that predates the field. */
+export function invoiceLinkedRecord(
+  invoice: Pick<Invoice, "linkedRecord">,
+): InvoiceLinkedRecord | null {
+  return invoice.linkedRecord ?? null;
+}
+
+/**
+ * Whether the API this invoice came from knows about linked records at all. Older
+ * builds omit the key entirely; new ones always send it (null when there is none).
+ * Used to hide the editor field rather than offer an edit that would silently drop.
+ */
+export function supportsLinkedRecord(invoice: Pick<Invoice, "linkedRecord">): boolean {
+  return invoice.linkedRecord !== undefined;
+}
+
+/**
+ * Turn the editor's typed value into the PATCH body: trimmed, or null to clear when
+ * blank. The label is the business's own term for the record type.
+ */
+export function linkedRecordInput(label: string, value: string): InvoiceLinkedRecord | null {
+  const trimmedValue = value.trim();
+  if (trimmedValue === "") return null;
+  return { label: label.trim() || "Reference", value: trimmedValue };
+}
 
 /** Plan feature key and the bolt-on key that grants it (Growth includes it). */
 export const INVOICING_FEATURE_KEY = "invoicing";

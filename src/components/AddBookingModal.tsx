@@ -37,6 +37,7 @@ import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
 import {
   useAvailability,
+  useConnectAccount,
   useCreateBooking,
   useCustomerLinkedRecords,
   useCustomer,
@@ -74,6 +75,16 @@ import { toast } from "sonner";
 /** Remembered choice of confirmation channels; "on"/"off" are the pre-tick-box values. */
 const NOTIFY_PREFS = ["email", "sms", "both", "none", "on", "off"] as const;
 type NotifyPref = (typeof NOTIFY_PREFS)[number];
+
+/**
+ * How the money is handled. `none` = request payment up front (the confirmation is a
+ * payment request); `pay_later` = pay after the job (plain confirmation, staff send a
+ * payment reminder or take it in person later); `credit` / `bank_transfer` as named.
+ */
+type PaymentMethod = "none" | "credit" | "bank_transfer" | "pay_later";
+/** The two "no money yet" choices; the last one used is remembered per business. */
+const TIMING_DEFAULTS = ["none", "pay_later"] as const;
+type PaymentTiming = (typeof TIMING_DEFAULTS)[number];
 
 const DATE_INPUT =
   "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
@@ -126,7 +137,20 @@ export function AddBookingModal({
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
   }, [open, defaultDate, defaultStaffId]);
-  const [paymentMethod, setPaymentMethod] = useState<"none" | "credit" | "bank_transfer">("none");
+  // A detailer who is paid after the job should not have to pick that every time, so
+  // the up-front / after-the-job choice sticks per business.
+  const [paymentTiming, setPaymentTiming] = useStoredState<PaymentTiming>(
+    `recavo.booking.payment.${tenant.businessId}`,
+    "none",
+    TIMING_DEFAULTS,
+  );
+  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(paymentTiming);
+  const setPaymentMethod = (next: PaymentMethod) => {
+    setPaymentMethodState(next);
+    if (next === "none" || next === "pay_later") setPaymentTiming(next);
+  };
+  const connect = useConnectAccount();
+  const cardPaymentsLive = connect.data?.chargesEnabled === true;
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
   const [depositInput, setDepositInput] = useState<string | null>(null);
@@ -427,8 +451,10 @@ export function AddBookingModal({
     effectiveTotalMinor,
   );
   const depositOverridden = depositInput !== null;
+  // Nothing is asked for up front when paying after the job, so no deposit applies.
+  const depositApplies = paymentMethod !== "credit" && paymentMethod !== "pay_later";
   const depositMinor: number | null = (() => {
-    if (paymentMethod === "credit") return null;
+    if (!depositApplies) return null;
     if (!depositOverridden) return defaultDepositMinor;
     if (!depositInput.trim()) return null;
     try {
@@ -496,7 +522,7 @@ export function AddBookingModal({
     setStaffId("all");
     setLocationId("");
     setSlotKey(null);
-    setPaymentMethod("none");
+    setPaymentMethodState(paymentTiming);
     setDepositInput(null);
     setPriceInput(null);
     setDiscount(null);
@@ -634,9 +660,7 @@ export function AddBookingModal({
       paymentMethod,
       // Only send an override when staff changed it; otherwise the API applies
       // the services' configured deposits (0 = force no deposit).
-      ...(depositOverridden && paymentMethod !== "credit"
-        ? { depositMinor: depositMinor ?? 0 }
-        : {}),
+      ...(depositOverridden && depositApplies ? { depositMinor: depositMinor ?? 0 } : {}),
       notesInternal: notes || null,
       notifyChannels,
       source: "staff_console",
@@ -1277,8 +1301,12 @@ export function AddBookingModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="pay_later">
+                    Pay after the job — confirmation only
+                    {service ? ` (${formatMoney(effectiveTotalMinor, service.currency)})` : ""}
+                  </SelectItem>
                   <SelectItem value="none">
-                    Take payment separately
+                    Request payment up front
                     {service ? ` — ${formatMoney(effectiveTotalMinor, service.currency)}` : ""}
                   </SelectItem>
                   <SelectItem value="credit" disabled={additional.length > 0}>
@@ -1291,6 +1319,19 @@ export function AddBookingModal({
                   ) : null}
                 </SelectContent>
               </Select>
+              {paymentMethod === "pay_later" ? (
+                <p className="text-xs text-muted-foreground">
+                  The client gets a plain booking confirmation — no payment request, pay link or
+                  deposit. Take payment when the job is done, or use “Send payment reminder” on the
+                  booking if it's still unpaid afterwards.
+                </p>
+              ) : paymentMethod === "none" && effectiveTotalMinor > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  The confirmation is a payment request showing the amount due
+                  {cardPaymentsLive ? " with a pay-online link" : ""}. Nothing is taken now — use
+                  “Take card payment” or “Record payment” on the booking when the money arrives.
+                </p>
+              ) : null}
               {paymentMethod === "bank_transfer" ? (
                 <p className="text-xs text-muted-foreground">
                   The booking waits as “awaiting payment”
@@ -1303,7 +1344,7 @@ export function AddBookingModal({
               ) : null}
             </div>
 
-            {service && paymentMethod !== "credit" && effectiveTotalMinor > 0 ? (
+            {service && depositApplies && effectiveTotalMinor > 0 ? (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="booking-deposit">Deposit to secure (£)</Label>
