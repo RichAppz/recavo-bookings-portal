@@ -6,6 +6,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { summariseBookings } from "@/lib/calendar-stats";
+import { useSoleStaff } from "@/lib/sole";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
@@ -38,7 +39,15 @@ import {
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
-import { addDays, formatInTz, formatMoney, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
+import {
+  addDays,
+  formatInTz,
+  formatMoney,
+  isAllDayEvent,
+  isoDate,
+  startOfWeek,
+  ukDateLong,
+} from "@/lib/format";
 import {
   customerDisplayName,
   type Booking,
@@ -53,7 +62,11 @@ import {
 } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
-import { matchesServiceFilter, serviceFilterExists } from "@/lib/service-categories";
+import {
+  matchesServiceFilter,
+  normaliseCategory,
+  serviceFilterExists,
+} from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -183,11 +196,17 @@ const DOUBLE_TAP_MS = 280;
 const MONTH_LANES = 3;
 /**
  * What a month bar says, left to right. The business picks which of these to show;
- * the order is fixed so bars stay scannable. `time` is the start time, or "All day".
+ * the order is fixed so bars stay scannable. `time` is the start time, or "All day";
+ * `category` is the service's category ("Cleaning · Full valet"), so two services
+ * with the same name in different groups do not read as the same job.
+ *
+ * The default only applies until the menu is first customised: a stored choice
+ * is kept as-is, so someone who deliberately trimmed their bars is not surprised
+ * by a new field appearing in them.
  */
-const MONTH_BAR_FIELDS = ["time", "client", "record", "service"] as const;
+const MONTH_BAR_FIELDS = ["time", "client", "record", "category", "service"] as const;
 type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
-const DEFAULT_MONTH_BAR_FIELDS = "time,record,service";
+const DEFAULT_MONTH_BAR_FIELDS = "time,record,category,service";
 
 function parseMonthBarFields(raw: string): Set<MonthBarField> {
   const set = new Set<MonthBarField>();
@@ -263,6 +282,7 @@ function CalendarPage() {
 
   const services = useServices();
   const staff = useStaffList();
+  const soleStaff = useSoleStaff();
   // A remembered filter can point at something since deleted; fall back to "all".
   useEffect(() => {
     if (services.data && !serviceFilterExists(serviceFilter, services.data)) {
@@ -341,6 +361,15 @@ function CalendarPage() {
     for (const s of services.data ?? []) map.set(s.id, s.colour ?? SERVICE_FALLBACK_COLOUR);
     return (b: Booking) => map.get(b.serviceSnapshot.serviceId) ?? SERVICE_FALLBACK_COLOUR;
   }, [services.data]);
+  // The category comes from the live catalogue, not the snapshot: it is a grouping
+  // label the business tidies over time, so the calendar should follow the tidy-up.
+  const categoryFor = (b: Booking) =>
+    normaliseCategory(serviceById.get(b.serviceSnapshot.serviceId)?.category);
+  /** "Cleaning · Full valet" — or just the name when the service has no category. */
+  const serviceLabel = (b: Booking) => {
+    const category = categoryFor(b);
+    return category ? `${category} · ${b.serviceSnapshot.name}` : b.serviceSnapshot.name;
+  };
 
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
@@ -429,6 +458,9 @@ function CalendarPage() {
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
   const timeLabel = (iso: string) =>
     formatInTz(iso, timezone, { hour: "2-digit", minute: "2-digit" });
+  // An all-day event holds the day, not a time on it: no "00:00" prefix, and in
+  // week/day view it sits in the all-day row rather than as a block at midnight.
+  const isAllDay = (ev: CalendarBlock) => isAllDayEvent(ev.start, ev.end, timezone);
 
   /**
    * Clip an item to today's column: one that began yesterday runs from the top of the
@@ -537,10 +569,10 @@ function CalendarPage() {
   const allDayPlaced =
     view === "month"
       ? []
-      : placeItems(
-          allDayIsos,
-          filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
-        );
+      : placeItems(allDayIsos, [
+          ...filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
+          ...events.filter(isAllDay).map((item) => ({ kind: "event" as const, item })),
+        ]);
   const allDayLanes = allDayPlaced.reduce((max, p) => Math.max(max, p.lane + 1), 0);
 
   return (
@@ -599,7 +631,7 @@ function CalendarPage() {
         </Tabs>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {/* A one-person business has nothing to filter by; the control is noise. */}
-          {(staff.data?.length ?? 0) > 1 ? (
+          {soleStaff ? null : (
             <Select value={staffFilter} onValueChange={setStaffFilter}>
               <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
@@ -615,7 +647,7 @@ function CalendarPage() {
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
+          )}
           <ServiceFilterSelect
             services={services.data ?? []}
             value={serviceFilter}
@@ -655,6 +687,13 @@ function CalendarPage() {
                     {recordFieldLabel}
                   </DropdownMenuCheckboxItem>
                 ) : null}
+                <DropdownMenuCheckboxItem
+                  checked={monthBar.has("category")}
+                  onCheckedChange={() => toggleMonthBar("category")}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Category
+                </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
                   checked={monthBar.has("service")}
                   onCheckedChange={() => toggleMonthBar("service")}
@@ -783,12 +822,16 @@ function CalendarPage() {
                       );
                       if (entry.kind === "event") {
                         const ev = entry.item;
+                        const allDay = isAllDay(ev);
                         return (
                           <button
                             key={ev.id}
                             type="button"
                             onClick={() => openEvent(ev)}
                             style={{ ...style, ...eventChipStyle(ev.colour) }}
+                            aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
+                              isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
+                            }`}
                             className={cn(
                               "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                               edges,
@@ -802,7 +845,7 @@ function CalendarPage() {
                                 >
                                   ↳
                                 </span>
-                              ) : (
+                              ) : allDay ? null : (
                                 <span className="font-semibold tabular-nums">
                                   {timeLabel(ev.start)}
                                 </span>
@@ -824,16 +867,22 @@ function CalendarPage() {
                       const showTime = monthBar.has("time");
                       const showClient = monthBar.has("client") && client;
                       const showTag = monthBar.has("record") && tag;
-                      const showService = monthBar.has("service");
+                      const category = categoryFor(b);
+                      const showCategory = monthBar.has("category") && category;
+                      // "Category only" on a service that has none would leave the
+                      // bar blank, so the name steps in for that service.
+                      const showService =
+                        monthBar.has("service") ||
+                        (!showCategory && !showTime && !showClient && !showTag);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${
-                            b.serviceSnapshot.name
-                          }${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+                            b,
+                          )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={style}
                           className={cn(
                             "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
@@ -864,6 +913,11 @@ function CalendarPage() {
                             ) : null}
                             {showClient ? <span className="font-semibold">{client}</span> : null}
                             {showTag ? <span className="font-semibold">{tag}</span> : null}
+                            {showCategory ? (
+                              <span className="text-muted-foreground">
+                                {showService ? `${category} ·` : category}
+                              </span>
+                            ) : null}
                             {showService ? <span>{b.serviceSnapshot.name}</span> : null}
                           </Marquee>
                           {continuesAfter ? (
@@ -897,8 +951,8 @@ function CalendarPage() {
           </div>
 
           <div className="overflow-x-auto">
-            {/* All-day jobs (RECA-532) get a lane above the hours rather than a
-                00:00–00:00 block: they hold the whole day, not a time on it. */}
+            {/* All-day jobs (RECA-532) and all-day events get a lane above the hours
+                rather than a 00:00–00:00 block: they hold the whole day, not a time on it. */}
             {allDayPlaced.length > 0 ? (
               <div className="flex min-w-[720px] border-b bg-secondary/20">
                 <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
@@ -920,20 +974,60 @@ function CalendarPage() {
                     }}
                   >
                     {allDayPlaced.map((p) => {
-                      if (p.entry.kind !== "booking") return null;
-                      const b = p.entry.item;
                       const { startCol, endCol, lane, continuesBefore, continuesAfter } = p;
+                      if (p.entry.kind === "event") {
+                        const ev = p.entry.item;
+                        const owner = staff.data?.find((s) => s.id === ev.staffId);
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => openEvent(ev)}
+                            title={owner ? `Event · ${owner.displayName}` : "Event"}
+                            aria-label={`All day: ${ev.title}${
+                              isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
+                            }`}
+                            style={{
+                              ...eventChipStyle(ev.colour),
+                              gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                              gridRow: lane + 1,
+                            }}
+                            className={cn(
+                              "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1",
+                              continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
+                            )}
+                          >
+                            {continuesBefore ? (
+                              <span className="text-muted-foreground" aria-label="Continues">
+                                ↳
+                              </span>
+                            ) : null}
+                            <span className="truncate font-semibold">{ev.title}</span>
+                            {view === "day" && owner && !soleStaff ? (
+                              <span className="truncate text-muted-foreground">
+                                · {owner.displayName}
+                              </span>
+                            ) : null}
+                            {continuesAfter ? (
+                              <span className="ml-auto text-muted-foreground">→</span>
+                            ) : null}
+                          </button>
+                        );
+                      }
+                      const b = p.entry.item;
                       const cancelled = isCancelled(b);
                       const payment = chipPayment(b);
                       const tag = tagFor(b);
                       const owner = staff.data?.find((s) => s.id === b.staffId);
+                      const category = categoryFor(b);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
-                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name}${
+                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${serviceLabel(b)}${
                             isMultiDay(b) ? `, until ${endLabel(b)}` : ""
                           } — ${payment.label}`}
                           style={{
@@ -956,7 +1050,12 @@ function CalendarPage() {
                           ) : null}
                           {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
                           <span className="truncate">{b.serviceSnapshot.name}</span>
-                          {view === "day" && owner ? (
+                          {/* Category trails the name here (not leads, as in month bars):
+                              a week column is narrow and the name must survive truncation. */}
+                          {category ? (
+                            <span className="truncate text-muted-foreground">· {category}</span>
+                          ) : null}
+                          {view === "day" && owner && !soleStaff ? (
                             <span className="truncate text-muted-foreground">
                               · {owner.displayName}
                             </span>
@@ -987,7 +1086,7 @@ function CalendarPage() {
               {days.map((day) => {
                 const iso = isoDate(day);
                 const dayBookings = filtered.filter((b) => !b.allDay && coversDay(b, iso));
-                const dayEvents = events.filter((e) => coversDay(e, iso));
+                const dayEvents = events.filter((e) => !isAllDay(e) && coversDay(e, iso));
                 return (
                   <div key={iso} className="relative flex-1 border-l">
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
@@ -1045,12 +1144,13 @@ function CalendarPage() {
                       const tag = tagFor(b);
                       const { startsToday, endsToday, heightMin, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
+                      const category = categoryFor(b);
                       return (
                         <button
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
@@ -1064,6 +1164,12 @@ function CalendarPage() {
                             <ServiceDot colour={serviceColour(b)} />
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
+                              {category ? (
+                                <span className="font-normal text-muted-foreground">
+                                  {" "}
+                                  · {category}
+                                </span>
+                              ) : null}
                             </span>
                           </p>
                           {tag ? (

@@ -10,6 +10,11 @@
  *   node scripts/cloudflare-deploy-config.mjs staging
  *   node scripts/cloudflare-deploy-config.mjs production
  *
+ * With `preflight` as a second argument it only runs the shell-environment
+ * checks, so `deploy:*` can refuse before spending a build:
+ *
+ *   node scripts/cloudflare-deploy-config.mjs staging preflight
+ *
  * `custom_domain: true` is what makes Cloudflare create and manage the DNS
  * record itself. These hostnames must match `src/lib/hosts.ts` — a wrong pair
  * here steals DNS from the live staging/production names.
@@ -42,24 +47,62 @@ const TARGETS = {
 
 const targetName = process.argv[2];
 const target = TARGETS[targetName];
-if (!target) {
-  console.error(`Usage: cloudflare-deploy-config.mjs <${Object.keys(TARGETS).join("|")}>`);
+const preflightOnly = process.argv[3] === "preflight";
+if (!target || (process.argv[3] && !preflightOnly)) {
+  console.error(
+    `Usage: cloudflare-deploy-config.mjs <${Object.keys(TARGETS).join("|")}> [preflight]`,
+  );
   process.exit(1);
 }
 
 /**
- * The build that just ran must point at this target's Supabase project and API.
+ * The build must point at this target's Supabase project and API, and the only
+ * place those may come from is the target's `.env.<mode>` file.
  *
  * Vite lets a real environment variable override `.env.<mode>`, so a stray
  * `VITE_SUPABASE_URL` left in the shell (e.g. from `source .env.staging` while
  * testing) silently produces a staging-wired bundle from `build:production`.
  * That happened once and took the production login down for an afternoon:
  * every customer's password was "wrong" because the site was asking the wrong
- * project. Read the bundle back and refuse to ship it if it disagrees.
+ * project. A second time, `source .env` for a local dev server left
+ * `VITE_API_BASE_URL=http://127.0.0.1:4000` in a long-lived shell and staging
+ * shipped a bundle that could not reach any API at all. So: refuse to build
+ * while any `VITE_*` is set in the shell, then read the bundle back and refuse
+ * to ship it if it disagrees with the env file anyway.
  */
 function readEnvValue(file, key) {
   const match = readFileSync(file, "utf8").match(new RegExp(`^${key}=(.*)$`, "m"));
   return match ? match[1].trim().replace(/^["']|["']$/g, "") : null;
+}
+
+function fail(lines) {
+  for (const line of lines) console.error(line);
+  process.exit(1);
+}
+
+function assertShellHasNoViteVars() {
+  const leaked = Object.keys(process.env)
+    .filter((k) => k.startsWith("VITE_"))
+    .sort();
+  if (leaked.length === 0) return;
+  fail([
+    `Refusing to build ${targetName}: VITE_* variables are set in this shell.`,
+    `  ${leaked.map((k) => `${k}=${process.env[k]}`).join("\n  ")}`,
+    `  Vite lets shell variables override ${target.envFile}, so the bundle would be`,
+    `  wired to whatever this shell last sourced (a local .env, another environment…)`,
+    `  rather than to the ${targetName} API and Supabase project.`,
+    `  Deploys must take VITE_* only from ${target.envFile} (vite build --mode ${targetName}).`,
+    `  Run: unset ${leaked.join(" ")}  — then re-run npm run deploy:${targetName}.`,
+  ]);
+}
+
+function assertEnvFileComplete() {
+  const expectedSupabase = readEnvValue(target.envFile, "VITE_SUPABASE_URL");
+  const expectedApi = readEnvValue(target.envFile, "VITE_API_BASE_URL");
+  if (!expectedSupabase || !expectedApi) {
+    fail([`${target.envFile} must define VITE_SUPABASE_URL and VITE_API_BASE_URL`]);
+  }
+  return { expectedSupabase, expectedApi };
 }
 
 function walk(dir, out = []) {
@@ -72,12 +115,7 @@ function walk(dir, out = []) {
 }
 
 function assertBundleMatchesTarget() {
-  const expectedSupabase = readEnvValue(target.envFile, "VITE_SUPABASE_URL");
-  const expectedApi = readEnvValue(target.envFile, "VITE_API_BASE_URL");
-  if (!expectedSupabase || !expectedApi) {
-    console.error(`${target.envFile} must define VITE_SUPABASE_URL and VITE_API_BASE_URL`);
-    process.exit(1);
-  }
+  const { expectedSupabase, expectedApi } = assertEnvFileComplete();
 
   const supabaseRefs = new Set();
   const apiHosts = new Set();
@@ -94,30 +132,44 @@ function assertBundleMatchesTarget() {
     }
   }
 
+  // The allow-list for each target is exactly its env file's API. An empty set
+  // is as wrong as a foreign host: `import.meta.env.VITE_API_BASE_URL` is
+  // inlined at build time, so a bundle built against a localhost API simply
+  // contains no recognisable API host at all.
   const wrongSupabase = [...supabaseRefs].filter((url) => url !== expectedSupabase);
   const wrongApi = [...apiHosts].filter((url) => url !== expectedApi);
-  if (supabaseRefs.size === 0 || wrongSupabase.length > 0 || wrongApi.length > 0) {
-    console.error(
+  const problems = [];
+  if (supabaseRefs.size === 0) problems.push("no Supabase project URL found in the bundle");
+  if (wrongSupabase.length > 0) problems.push(`foreign Supabase URL: ${wrongSupabase.join(", ")}`);
+  if (apiHosts.size === 0) {
+    problems.push(
+      "no API host found in the bundle (built with VITE_API_BASE_URL pointing at localhost or unset?)",
+    );
+  }
+  if (!apiHosts.has(expectedApi)) problems.push(`bundle never names ${expectedApi}`);
+  if (wrongApi.length > 0)
+    problems.push(`API host not allowed for ${targetName}: ${wrongApi.join(", ")}`);
+
+  if (problems.length > 0) {
+    fail([
       `Refusing to deploy ${targetName}: the built bundle does not match ${target.envFile}.`,
-    );
-    console.error(
+      ...problems.map((p) => `  - ${p}`),
       `  expected Supabase ${expectedSupabase}, found ${[...supabaseRefs].join(", ") || "none"}`,
-    );
-    console.error(
       `  expected API      ${expectedApi}, found ${[...apiHosts].join(", ") || "none"}`,
-    );
-    const leaked = Object.keys(process.env).filter((k) => k.startsWith("VITE_"));
-    if (leaked.length > 0) {
-      console.error(
-        `  VITE_* variables are set in this shell and override .env files: ${leaked.join(", ")}`,
-      );
-      console.error(`  Run: unset ${leaked.join(" ")}  — then rebuild.`);
-    }
-    process.exit(1);
+      `  Rebuild with a clean shell (no VITE_* set): npm run deploy:${targetName}`,
+    ]);
   }
   console.log(`bundle targets ${expectedSupabase} and ${expectedApi} ✓`);
 }
 
+// Order matters: a leaked VITE_* is the usual cause, so name it before the
+// bundle comparison produces a more confusing symptom.
+assertShellHasNoViteVars();
+assertEnvFileComplete();
+if (preflightOnly) {
+  console.log(`preflight ${targetName} ✓ (shell clean, ${target.envFile} complete)`);
+  process.exit(0);
+}
 assertBundleMatchesTarget();
 
 const path = ".output/server/wrangler.json";

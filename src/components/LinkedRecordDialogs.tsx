@@ -61,6 +61,14 @@ import {
   type LinkedRecordOwnership,
 } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
+import {
+  UNSUPPORTED_FIELD_TYPES,
+  buildQuickAddRecord,
+  coerceFieldValue,
+  hasQuickAddInput,
+  quickAddFields,
+  type LinkedRecordField,
+} from "@/lib/quick-add-record";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -514,48 +522,14 @@ export function OwnershipHistoryDialog({
   );
 }
 
-export type LinkedRecordField = {
-  fieldKey: string;
-  label: string;
-  helpText?: string | null;
-  dataType: string;
-  required: boolean;
-  constraints?: {
-    minLength?: number;
-    maxLength?: number;
-    min?: number;
-    max?: number;
-    pattern?: string;
-    options?: { value: string; label: string }[];
-    maxItems?: number;
-  };
-  displayOrder?: number;
-  status?: string;
-};
-
-/** Field types we can't yet edit from this dynamic form (uploads, cross-record refs, multi-select). */
-const UNSUPPORTED_FIELD_TYPES = new Set(["image", "file", "reference", "multi_select"]);
+export type { LinkedRecordField };
+export { quickAddFields };
 
 export function activeSortedFields(fields: LinkedRecordField[]): LinkedRecordField[] {
   return fields
     .filter((f) => (f.status ?? "active") === "active")
     .slice()
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-}
-
-/** Turns a raw string/boolean input into the typed value the API expects, or undefined when blank. */
-function coerceFieldValue(field: LinkedRecordField, raw: unknown): unknown {
-  if (field.dataType === "boolean") return Boolean(raw);
-  if (raw === "" || raw === undefined || raw === null) return undefined;
-  if (field.dataType === "integer") {
-    const n = parseInt(String(raw), 10);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  if (field.dataType === "decimal") {
-    const n = Number(raw);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  return String(raw);
 }
 
 /** Maps a server field error (which may be keyed `values.<fieldKey>`) back to a field. */
@@ -792,16 +766,21 @@ export function LinkedRecordFormDialog({
 }
 
 /**
- * The handful of fields worth asking for when the customer is standing at the
- * counter: everything required, then the first optional short-text fields, three
- * at most. For the vehicle template that's Registration, Make, Model.
+ * What the hosting form can do with the quick-add row besides render it. Add
+ * booking uses it so details typed but never "Added" are saved when the booking is
+ * created, instead of being dropped on the floor (a car typed into the row and
+ * then "Create booking" pressed used to reach the API as no car at all).
  */
-export function quickAddFields(fields: LinkedRecordField[]): LinkedRecordField[] {
-  const usable = fields.filter((f) => !UNSUPPORTED_FIELD_TYPES.has(f.dataType));
-  const required = usable.filter((f) => f.required);
-  const optional = usable.filter((f) => !f.required && f.dataType === "short_text");
-  return [...required, ...optional].slice(0, Math.max(3, required.length));
-}
+export type QuickAddLinkedRecordHandle = {
+  /** True when something has been typed and not yet added. */
+  hasInput: () => boolean;
+  /**
+   * Creates the record from what's typed (also firing `onAdded`). Resolves null when
+   * the row is empty or a required field is missing — the error shows inline, so
+   * the caller just stops. Rejects when the API call fails (already toasted).
+   */
+  submit: () => Promise<LinkedRecord | null>;
+};
 
 /**
  * Compact inline form for adding a linked record without leaving the current
@@ -815,6 +794,9 @@ export function QuickAddLinkedRecord({
   term,
   onAdded,
   onCancel,
+  onInputChange,
+  handleRef,
+  inputHint,
   autoFocus,
 }: {
   customerId: string;
@@ -823,6 +805,12 @@ export function QuickAddLinkedRecord({
   onAdded: (record: LinkedRecord) => void;
   /** Present when the form can be dismissed (the client already has records). */
   onCancel?: () => void;
+  /** Fires as the row goes between blank and typed-into (and false on unmount). */
+  onInputChange?: (hasInput: boolean) => void;
+  /** Lets the host save whatever's typed as part of its own submit. */
+  handleRef?: React.MutableRefObject<QuickAddLinkedRecordHandle | null>;
+  /** Replaces the status line once something's typed — e.g. "saved with the booking". */
+  inputHint?: string;
   autoFocus?: boolean;
 }) {
   const create = useCreateCustomerLinkedRecord(customerId);
@@ -837,48 +825,43 @@ export function QuickAddLinkedRecord({
     values: Record<string, unknown>;
   } | null>(null);
   const lower = term.toLowerCase();
+  const hasInput = hasQuickAddInput(values);
 
-  const submit = async () => {
-    const nextErrors: Record<string, string> = {};
-    const payload: Record<string, unknown> = {};
-    for (const f of quick) {
-      const coerced = coerceFieldValue(f, values[f.fieldKey]?.trim());
-      if (f.required && (coerced === undefined || coerced === "")) {
-        nextErrors[f.fieldKey] = "Required";
-        continue;
-      }
-      if (coerced !== undefined) payload[f.fieldKey] = coerced;
+  useEffect(() => {
+    onInputChange?.(hasInput);
+  }, [hasInput, onInputChange]);
+  useEffect(() => () => onInputChange?.(false), [onInputChange]);
+
+  const submit = async (): Promise<LinkedRecord | null> => {
+    const built = buildQuickAddRecord(quick, values, term);
+    if (built.kind === "invalid") {
+      setErrors(built.errors);
+      return null;
     }
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      return;
-    }
-    // Nothing is required any more, but a record with nothing in it helps nobody.
-    if (Object.keys(payload).length === 0) {
+    if (built.kind === "empty") {
       setEmptyError(true);
-      return;
+      return null;
     }
     setErrors({});
     setEmptyError(false);
-    // "Ford Focus · AB12 CDE" reads better than the field order would give. The
-    // identifier is whatever's required, or failing that the first (searched) field.
-    const identifyingFields = quick.some((f) => f.required)
-      ? quick.filter((f) => f.required)
-      : quick.slice(0, 1);
-    const descriptive = quick
-      .filter((f) => !identifyingFields.includes(f))
-      .map((f) => payload[f.fieldKey])
-      .filter((v) => v !== undefined && v !== "")
-      .join(" ");
-    const identifying = identifyingFields
-      .map((f) => payload[f.fieldKey])
-      .filter((v) => v !== undefined && v !== "")
-      .join(" ");
-    const displayLabel = [descriptive, identifying].filter(Boolean).join(" · ") || term;
-    const record = await create.mutateAsync({ displayLabel, values: payload });
+    const record = await create.mutateAsync({
+      displayLabel: built.displayLabel,
+      values: built.values,
+    });
     setValues({});
     onAdded(record);
+    return record;
   };
+
+  // Re-pointed every render so the host always calls into the current closure;
+  // cleared on unmount so a stale row can't be submitted after a client change.
+  useEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = { hasInput: () => hasInput, submit };
+    return () => {
+      handleRef.current = null;
+    };
+  });
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -901,10 +884,14 @@ export function QuickAddLinkedRecord({
   })();
 
   const requiredLabels = quick.filter((f) => f.required).map((f) => f.label.toLowerCase());
+  // Once something's typed, say what happens to it: the host saves it with its own
+  // submit, so nobody has to know the small "Add" button is optional.
   const requiredHint =
-    requiredLabels.length === 0
-      ? "Nothing's required — add what you know, the rest later."
-      : `Only the ${requiredLabels.join(" and ")} is needed now.`;
+    hasInput && inputHint
+      ? inputHint
+      : requiredLabels.length === 0
+        ? "Nothing's required — add what you know, the rest later."
+        : `Only the ${requiredLabels.join(" and ")} is needed now.`;
 
   return (
     <div className="rounded-lg border border-dashed p-3">

@@ -34,7 +34,7 @@ import { useAuth } from "@/lib/auth/auth-store";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import { bookingSettlement } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { formatDuration, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
@@ -935,7 +935,7 @@ export function BookingFlow({
                               </span>
                             ) : null}
                             <span className="mt-2 block text-xs text-muted-foreground">
-                              {s.durationMinutes} minutes
+                              {formatDuration(s.durationMinutes)}
                             </span>
                           </span>
                           <span className="text-right whitespace-nowrap">

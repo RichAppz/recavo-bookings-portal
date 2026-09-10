@@ -54,6 +54,7 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -72,8 +73,9 @@ function serviceNoun(service: string) {
 
 /**
  * The API stores minutes, but a detailer thinks in "how long do I have the
- * car" — often days. These helpers translate both ways so the form can offer
- * minutes/hours/days without the backend knowing.
+ * car" — often days — and a trainer in "a 1.5 hour session". These helpers
+ * translate both ways so the form can offer minutes/hours/days for every
+ * vertical without the backend knowing.
  */
 type DurationUnit = "minutes" | "hours" | "days";
 const UNIT_MINUTES: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };
@@ -96,11 +98,16 @@ const SERVICE_COLOURS = [
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
+/**
+ * Stored minutes → the value/unit pair someone would have typed. Whole days and
+ * whole or half hours come back in that unit ("3.5" hours, not "210" minutes,
+ * which is what the owner typed); anything odder stays in minutes.
+ */
 function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
   if (minutes >= 1440 && minutes % 1440 === 0) {
     return { value: String(minutes / 1440), unit: "days" };
   }
-  if (minutes >= 60 && minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" };
+  if (minutes >= 60 && minutes % 30 === 0) return { value: String(minutes / 60), unit: "hours" };
   return { value: String(minutes), unit: "minutes" };
 }
 
@@ -148,6 +155,8 @@ function ServicesPage() {
   const services = useServices();
   const staff = useStaffList();
   const locations = useLocationsList();
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   const [editing, setEditing] = useState<CatalogueService | null>(null);
@@ -286,23 +295,28 @@ function ServicesPage() {
                     ) : null}
 
                     <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                      <Row
-                        label={
-                          tenant.terminology.staff.toLowerCase().endsWith("s")
-                            ? tenant.terminology.staff
-                            : `${tenant.terminology.staff}s`
-                        }
-                        value={describeDeliverers(s, staff.data ?? [])}
-                      />
-                      <Row
-                        label="Locations"
-                        value={
-                          s.locationIds
-                            .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                            .filter(Boolean)
-                            .join(", ") || "All"
-                        }
-                      />
+                      {/* One person / one place: the rows would only ever say "All". */}
+                      {soleStaff ? null : (
+                        <Row
+                          label={
+                            tenant.terminology.staff.toLowerCase().endsWith("s")
+                              ? tenant.terminology.staff
+                              : `${tenant.terminology.staff}s`
+                          }
+                          value={describeDeliverers(s, staff.data ?? [])}
+                        />
+                      )}
+                      {soleLocation ? null : (
+                        <Row
+                          label="Locations"
+                          value={
+                            s.locationIds
+                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                              .filter(Boolean)
+                              .join(", ") || "All"
+                          }
+                        />
+                      )}
                       <Row
                         label="Booking notice"
                         value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
@@ -313,7 +327,7 @@ function ServicesPage() {
                       />
                       <Row
                         label="Buffer"
-                        value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
+                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
                       />
                       <Row
                         label="Offered"
@@ -422,19 +436,15 @@ type VariantRow = {
   priceMinor: string;
 };
 
-function toVariantRows(service: CatalogueService | null, useUnits: boolean): VariantRow[] {
+function toVariantRows(service: CatalogueService | null): VariantRow[] {
   if (!service) return [];
   return service.variants.map((v) => {
     const split = v.durationMinutes != null ? splitDuration(v.durationMinutes) : null;
     return {
       id: v.id,
       name: v.name,
-      durationValue: useUnits
-        ? (split?.value ?? "")
-        : v.durationMinutes != null
-          ? String(v.durationMinutes)
-          : "",
-      durationUnit: useUnits ? (split?.unit ?? "minutes") : "minutes",
+      durationValue: split?.value ?? "",
+      durationUnit: split?.unit ?? "minutes",
       priceMinor: v.priceMinor != null ? (v.priceMinor / 100).toFixed(2) : "",
     };
   });
@@ -460,6 +470,7 @@ function ServiceDialog({
   const updateService = useUpdateService();
   const updateStaff = useUpdateStaff();
   const staffList = useStaffList();
+  const soleStaff = useSoleStaff();
   const activeStaff = useMemo(
     () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
     [staffList.data],
@@ -487,15 +498,12 @@ function ServiceDialog({
   );
   const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
   const [deposit, setDeposit] = useState(depositToInput(service?.depositMinor));
-  // Detailers state how long they keep the vehicle ("2 days"); the split keeps
-  // the stored minutes editable in whichever unit reads naturally.
+  // Detailers state how long they keep the vehicle ("2 days"), trainers "1.5
+  // hours"; the split keeps the stored minutes editable in whichever unit reads
+  // naturally rather than bouncing "3.5 hours" back as "210 minutes".
   const initialDuration = splitDuration(service?.durationMinutes ?? 60);
-  const [duration, setDuration] = useState(
-    isDetailing ? initialDuration.value : String(service?.durationMinutes ?? 60),
-  );
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>(
-    isDetailing ? initialDuration.unit : "minutes",
-  );
+  const [duration, setDuration] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
   const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
   const [description, setDescription] = useState(service?.description ?? "");
   // Free text, but the categories already in use are offered as one-tap chips so
@@ -510,7 +518,7 @@ function ServiceDialog({
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
   // Calendar swatch; null = "no colour", which renders the theme default.
   const [colour, setColour] = useState<string | null>(service?.colour ?? null);
-  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service, isDetailing));
+  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service));
   // Creating: start from the business's opening hours so the offer matches the
   // door hours without retyping them. Editing: whatever is saved.
   const defaultWindows = (s: CatalogueService | null) =>
@@ -527,15 +535,15 @@ function ServiceDialog({
     setPrice(String(s ? s.basePriceMinor / 100 : 50));
     setDeposit(depositToInput(s?.depositMinor));
     const split = splitDuration(s?.durationMinutes ?? 60);
-    setDuration(isDetailing ? split.value : String(s?.durationMinutes ?? 60));
-    setDurationUnit(isDetailing ? split.unit : "minutes");
+    setDuration(split.value);
+    setDurationUnit(split.unit);
     setCapacity(String(s?.capacityMax ?? 1));
     setDescription(s?.description ?? "");
     setCategory(s?.category ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
     setColour(s?.colour ?? null);
-    setVariants(toVariantRows(s, isDetailing));
+    setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
   };
@@ -842,40 +850,31 @@ function ServiceDialog({
           <div className={cn("grid gap-4", isDetailing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
             <div className="grid gap-2">
               <Label htmlFor="s-dur">
-                {isDetailing ? "How long you'll have the vehicle" : "Duration (min)"}
+                {isDetailing ? "How long you'll have the vehicle" : "Duration"}
               </Label>
-              {isDetailing ? (
-                <div className="flex gap-2">
-                  <Input
-                    id="s-dur"
-                    inputMode="numeric"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    aria-invalid={Boolean(fieldErrors.durationMinutes)}
-                    className="flex-1"
-                  />
-                  <Select
-                    value={durationUnit}
-                    onValueChange={(v) => setDurationUnit(v as DurationUnit)}
-                  >
-                    <SelectTrigger className="w-28 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minutes">minutes</SelectItem>
-                      <SelectItem value="hours">hours</SelectItem>
-                      <SelectItem value="days">days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
+              <div className="flex gap-2">
                 <Input
                   id="s-dur"
+                  inputMode="decimal"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.durationMinutes)}
+                  className="flex-1"
                 />
-              )}
+                <Select
+                  value={durationUnit}
+                  onValueChange={(v) => setDurationUnit(v as DurationUnit)}
+                >
+                  <SelectTrigger className="w-28 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minutes">minutes</SelectItem>
+                    <SelectItem value="hours">hours</SelectItem>
+                    <SelectItem value="days">days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {fieldErrors.durationMinutes ? (
                 <p className="text-xs text-destructive">{fieldErrors.durationMinutes}</p>
               ) : null}
@@ -940,7 +939,7 @@ function ServiceDialog({
                     {
                       name: "",
                       durationValue: "",
-                      durationUnit: isDetailing ? durationUnit : "minutes",
+                      durationUnit,
                       priceMinor: "",
                     },
                   ])
@@ -970,46 +969,33 @@ function ServiceDialog({
                         placeholder={isDetailing ? "Large vehicle / SUV" : "60 minutes"}
                       />
                     </div>
-                    {isDetailing ? (
-                      <>
-                        <div className="grid w-20 gap-1">
-                          <Label className="text-xs text-muted-foreground">Duration</Label>
-                          <Input
-                            inputMode="numeric"
-                            value={v.durationValue}
-                            onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                            placeholder={duration}
-                          />
-                        </div>
-                        <div className="grid w-28 gap-1">
-                          <Label className="text-xs text-muted-foreground">Unit</Label>
-                          <Select
-                            value={v.durationUnit}
-                            onValueChange={(unit) =>
-                              updateVariant(i, { durationUnit: unit as DurationUnit })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="minutes">minutes</SelectItem>
-                              <SelectItem value="hours">hours</SelectItem>
-                              <SelectItem value="days">days</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="grid w-24 gap-1">
-                        <Label className="text-xs text-muted-foreground">Duration (min)</Label>
-                        <Input
-                          value={v.durationValue}
-                          onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                          placeholder={duration}
-                        />
-                      </div>
-                    )}
+                    <div className="grid w-20 gap-1">
+                      <Label className="text-xs text-muted-foreground">Duration</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={v.durationValue}
+                        onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
+                        placeholder={duration}
+                      />
+                    </div>
+                    <div className="grid w-28 gap-1">
+                      <Label className="text-xs text-muted-foreground">Unit</Label>
+                      <Select
+                        value={v.durationUnit}
+                        onValueChange={(unit) =>
+                          updateVariant(i, { durationUnit: unit as DurationUnit })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="minutes">minutes</SelectItem>
+                          <SelectItem value="hours">hours</SelectItem>
+                          <SelectItem value="days">days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid w-24 gap-1">
                       <Label className="text-xs text-muted-foreground">Price (£)</Label>
                       <Input
@@ -1032,75 +1018,78 @@ function ServiceDialog({
             )}
           </div>
 
-          <div className="grid gap-3 border-t pt-4">
-            <Label>Who delivers this {lower}</Label>
-            <RadioGroup
-              value={staffMode}
-              onValueChange={(v) => setStaffMode(v as "all" | "selected")}
-              className="grid gap-2 sm:grid-cols-2"
-            >
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "all" && "border-primary/40 bg-primary-soft/40",
-                )}
+          {/* With one person on the books "everyone" and "them" are the same answer. */}
+          {soleStaff ? null : (
+            <div className="grid gap-3 border-t pt-4">
+              <Label>Who delivers this {lower}</Label>
+              <RadioGroup
+                value={staffMode}
+                onValueChange={(v) => setStaffMode(v as "all" | "selected")}
+                className="grid gap-2 sm:grid-cols-2"
               >
-                <RadioGroupItem value="all" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">All {staffPluralLower}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Anyone on the team, including people you add later.
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "all" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="all" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">All {staffPluralLower}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Anyone on the team, including people you add later.
+                    </span>
                   </span>
-                </span>
-              </label>
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
-                )}
-              >
-                <RadioGroupItem value="selected" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">Only certain people</span>
-                  <span className="text-xs text-muted-foreground">
-                    Pick who can be booked for it.
+                </label>
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="selected" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">Only certain people</span>
+                    <span className="text-xs text-muted-foreground">
+                      Pick who can be booked for it.
+                    </span>
                   </span>
-                </span>
-              </label>
-            </RadioGroup>
-            {staffMode === "selected" ? (
-              activeStaff.length === 0 ? (
+                </label>
+              </RadioGroup>
+              {staffMode === "selected" ? (
+                activeStaff.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No {staffPluralLower} yet — add your team first.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {activeStaff.map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={staffIds.includes(m.id)}
+                          onCheckedChange={(checked) =>
+                            setStaffIds((ids) =>
+                              checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
+                            )
+                          }
+                        />
+                        {m.displayName}
+                      </label>
+                    ))}
+                  </div>
+                )
+              ) : null}
+              {fieldErrors.eligibleStaffIds ? (
+                <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
+              ) : null}
+              {reconcileNames.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  No {staffPluralLower} yet — add your team first.
+                  {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
+                  restricted services list — saving will add this {lower} to it.
                 </p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {activeStaff.map((m) => (
-                    <label key={m.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={staffIds.includes(m.id)}
-                        onCheckedChange={(checked) =>
-                          setStaffIds((ids) =>
-                            checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
-                          )
-                        }
-                      />
-                      {m.displayName}
-                    </label>
-                  ))}
-                </div>
-              )
-            ) : null}
-            {fieldErrors.eligibleStaffIds ? (
-              <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
-            ) : null}
-            {reconcileNames.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
-                restricted services list — saving will add this {lower} to it.
-              </p>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          )}
 
           <WeeklyWindowsEditor
             windows={windows}

@@ -414,6 +414,42 @@ export function useResendBookingMessage() {
   });
 }
 
+export type PaymentReminderResult = {
+  notifications: Notification[];
+  channels: ("email" | "sms")[];
+  outstandingMinor: number;
+};
+
+/**
+ * Nudge the customer about a balance still owed — the follow-up for "pay after the
+ * job" bookings. The API emails, and texts too when the customer can receive one; the
+ * result says which channels actually carried it. Errors surface to the caller.
+ */
+export function useSendPaymentReminder() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<PaymentReminderResult, { bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<PaymentReminderResult>(
+          `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/payment-reminder`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: (data) => {
+      const recipientId = data.notifications[0]?.recipientId;
+      if (recipientId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerNotifications(businessId, recipientId),
+        });
+      }
+    },
+  });
+}
+
 export function useMarkBankTransferReceived() {
   const businessId = useBusinessId();
   const qc = useQueryClient();

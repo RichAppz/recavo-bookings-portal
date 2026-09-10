@@ -15,14 +15,19 @@ import type { Customer } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import {
   INVOICE_LINE_LIMITS,
+  INVOICE_LINKED_RECORD_LIMITS,
   emptyLineDraft,
+  invoiceLinkedRecord,
   isIsoDate,
   lineToDraft,
+  linkedRecordInput,
   showsVat,
+  supportsLinkedRecord,
   validateLineDrafts,
   type InvoiceLineDraft,
   type LineDraftError,
 } from "@/lib/invoices";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,10 +48,18 @@ export function InvoiceDraftEditor({
   const update = useUpdateInvoice();
   const customers = useCustomers();
   const currentCustomer = useCustomer(invoice.customerId);
+  const tenant = useTenant();
+
+  // The record the invoice is about (vehicle, pet…). Labelled with the business's own
+  // term; hidden entirely when the API build doesn't know the field yet.
+  const recordTerm = tenant.terminology.linkedRecord;
+  const recordSupported = supportsLinkedRecord(invoice);
+  const savedRecordValue = invoiceLinkedRecord(invoice)?.value ?? "";
 
   const [lines, setLines] = useState<InvoiceLineDraft[]>(() => invoice.lines.map(lineToDraft));
   const [dueDate, setDueDate] = useState(invoice.dueDate ?? "");
   const [notes, setNotes] = useState(invoice.notes ?? "");
+  const [recordValue, setRecordValue] = useState(savedRecordValue);
   const [customerId, setCustomerId] = useState(invoice.customerId);
   const [pickedCustomer, setPickedCustomer] = useState<Customer | null>(null);
   const [lineErrors, setLineErrors] = useState<LineDraftError[]>([]);
@@ -59,6 +72,7 @@ export function InvoiceDraftEditor({
     setLines(invoice.lines.map(lineToDraft));
     setDueDate(invoice.dueDate ?? "");
     setNotes(invoice.notes ?? "");
+    setRecordValue(savedRecordValue);
     setCustomerId(invoice.customerId);
     setPickedCustomer(null);
     setLineErrors([]);
@@ -71,6 +85,7 @@ export function InvoiceDraftEditor({
     invoice.dueDate,
     invoice.notes,
     invoice.customerId,
+    savedRecordValue,
   ]);
 
   const selectedCustomer =
@@ -97,6 +112,7 @@ export function InvoiceDraftEditor({
     JSON.stringify(lines) !== JSON.stringify(invoice.lines.map(lineToDraft)) ||
     dueDate !== (invoice.dueDate ?? "") ||
     notes !== (invoice.notes ?? "") ||
+    (recordSupported && recordValue.trim() !== savedRecordValue) ||
     customerId !== invoice.customerId;
 
   const setLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
@@ -122,6 +138,15 @@ export function InvoiceDraftEditor({
       setFormError(`Notes can be at most ${INVOICE_LINE_LIMITS.notesMax} characters.`);
       return;
     }
+    const record = recordSupported
+      ? linkedRecordInput(invoiceLinkedRecord(invoice)?.label ?? recordTerm, recordValue)
+      : undefined;
+    if (record && record.value.length > INVOICE_LINKED_RECORD_LIMITS.valueMax) {
+      setFormError(
+        `${recordTerm} can be at most ${INVOICE_LINKED_RECORD_LIMITS.valueMax} characters.`,
+      );
+      return;
+    }
     setLineErrors([]);
     try {
       const saved = await update.mutateAsync({
@@ -130,6 +155,7 @@ export function InvoiceDraftEditor({
           lines: result.lines,
           dueDate: dueDate || null,
           notes: trimmedNotes || null,
+          ...(recordSupported ? { linkedRecord: record ?? null } : {}),
           ...(customerId !== invoice.customerId ? { customerId } : {}),
         },
       });
@@ -293,6 +319,23 @@ export function InvoiceDraftEditor({
           </div>
         </div>
 
+        {recordSupported ? (
+          <div className="grid gap-2">
+            <Label htmlFor="invoice-record">{recordTerm}</Label>
+            <Input
+              id="invoice-record"
+              value={recordValue}
+              maxLength={INVOICE_LINKED_RECORD_LIMITS.valueMax}
+              placeholder={`Which ${recordTerm.toLowerCase()} this invoice is for — optional`}
+              onChange={(e) => setRecordValue(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Filled from the booking&apos;s {recordTerm.toLowerCase()}. Printed on the PDF and in
+              the email; leave empty to omit it.
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="invoice-due">Due date</Label>
@@ -338,6 +381,7 @@ export function InvoiceDraftEditor({
                 setLines(invoice.lines.map(lineToDraft));
                 setDueDate(invoice.dueDate ?? "");
                 setNotes(invoice.notes ?? "");
+                setRecordValue(savedRecordValue);
                 setCustomerId(invoice.customerId);
                 setPickedCustomer(null);
                 setLineErrors([]);
