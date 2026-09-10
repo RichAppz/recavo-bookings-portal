@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   CustomerSearchPicker,
   type LinkedRecordField,
   QuickAddLinkedRecord,
+  type QuickAddLinkedRecordHandle,
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound } from "lucide-react";
@@ -172,6 +173,12 @@ export function AddBookingModal({
   // Inline "add another" form when the client already has records; with none,
   // the quick-add form shows on its own.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Details typed into the quick-add row but not yet "Added". Create booking saves
+  // them to the client first and puts the new record on the booking, so a car
+  // typed in and then forgotten about isn't silently lost (it used to be).
+  const quickAdd = useRef<QuickAddLinkedRecordHandle | null>(null);
+  const [quickAddPending, setQuickAddPending] = useState(false);
+  const onQuickAddInput = useCallback((has: boolean) => setQuickAddPending(has), []);
   const [addClientOpen, setAddClientOpen] = useState(false);
 
   const serviceList = services.data ?? [];
@@ -258,6 +265,8 @@ export function AddBookingModal({
   const hasLinkedRecords = Boolean(linkedRecordDefinition.data?.definition);
   const recordTerm = tenant.terminology.linkedRecord;
   const recordTermLower = recordTerm.toLowerCase();
+  // Short: it shares a line with Cancel / More details / Add and is truncated.
+  const quickAddHint = "Saved with the booking.";
   const activeRecords = (customerRecords.data ?? []).filter((r) => r.status === "active");
   // Vertical-aware nouns: "Trainer"/"Session" for PT, "Detailer"/"Service" for detailing.
   const staffNoun = tenant.terminology.staff.trim() || "Staff";
@@ -448,7 +457,8 @@ export function AddBookingModal({
   const blockers: string[] = [];
   if (!customerId) blockers.push("Choose a client");
   if (!service) blockers.push("Choose a service");
-  if (recordRequired && linkedRecordId === "none") blockers.push(`Choose a ${recordTermLower}`);
+  if (recordRequired && linkedRecordId === "none" && !quickAddPending)
+    blockers.push(`Choose a ${recordTermLower}`);
   if (!locationId) blockers.push("Choose a location");
   if (service) {
     if (scheduling === "slot") {
@@ -550,7 +560,7 @@ export function AddBookingModal({
       return;
     }
 
-    if (recordRequired && linkedRecordId === "none") {
+    if (recordRequired && linkedRecordId === "none" && !quickAddPending) {
       toast.error(`Choose a ${recordTermLower}`, {
         description: `This service needs a ${recordTermLower} on the booking.`,
       });
@@ -572,6 +582,26 @@ export function AddBookingModal({
       ]);
       if (currencies.size > 1) {
         toast.error("All services on a job must share the same currency");
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    // A vehicle typed into the quick-add row but never "Added" is saved to the
+    // client now and goes on the booking, rather than being dropped. Any problem
+    // with it (blank required field, API error) shows on the row and stops here.
+    let recordId: string | null = linkedRecordId !== "none" ? linkedRecordId : null;
+    if (quickAdd.current?.hasInput()) {
+      try {
+        const record = await quickAdd.current.submit();
+        if (!record) {
+          setSubmitting(false);
+          return;
+        }
+        recordId = record.id;
+      } catch {
+        // useCreateCustomerLinkedRecord toasts the error.
+        setSubmitting(false);
         return;
       }
     }
@@ -601,7 +631,7 @@ export function AddBookingModal({
         : { staffId: selectedSlot!.staffId, start: selectedSlot!.start }),
       ...(priceChanged ? { priceMinor: overridePriceMinor } : {}),
       leadCustomerId: customerId,
-      ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
+      ...(recordId ? { linkedRecordId: recordId } : {}),
       paymentMethod,
       // Only send an override when staff changed it; otherwise the API applies
       // the services' configured deposits (0 = force no deposit).
@@ -617,7 +647,6 @@ export function AddBookingModal({
         : {}),
     };
 
-    setSubmitting(true);
     try {
       const { bankTransfer } = await createBooking.mutateAsync(body);
       if (bankTransfer) {
@@ -755,6 +784,9 @@ export function AddBookingModal({
                     customerId={customerId}
                     fields={recordFields}
                     term={recordTerm}
+                    handleRef={quickAdd}
+                    onInputChange={onQuickAddInput}
+                    inputHint={quickAddHint}
                     onAdded={(record) => {
                       setLinkedRecordId(record.id);
                       toast.success(`${recordTerm} added`, {
@@ -768,6 +800,9 @@ export function AddBookingModal({
                     customerId={customerId}
                     fields={recordFields}
                     term={recordTerm}
+                    handleRef={quickAdd}
+                    onInputChange={onQuickAddInput}
+                    inputHint={quickAddHint}
                     autoFocus
                     onCancel={() => setQuickAddOpen(false)}
                     onAdded={(record) => {
