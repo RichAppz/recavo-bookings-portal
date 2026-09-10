@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Plus, Tag } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Tag } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
@@ -177,6 +177,8 @@ function timeAtOffset(offsetY: number): string {
   return `${`${Math.floor(clamped / 60)}`.padStart(2, "0")}:${`${clamped % 60}`.padStart(2, "0")}`;
 }
 
+/** Two taps on a month cell closer than this open the day rather than adding to it. */
+const DOUBLE_TAP_MS = 280;
 /** Bars shown per day in the month grid before it collapses to "+N more". */
 const MONTH_LANES = 3;
 /**
@@ -351,10 +353,36 @@ function CalendarPage() {
         : addDays(a, view === "day" ? dir : dir * 7),
     );
 
-  /** Clicking a day in the month grid opens that day, the way a diary works. */
   const openDay = (day: Date) => {
     setAnchor(day);
     setView("day");
+  };
+  /**
+   * Month cells: the whole box is the hit area. One tap starts a booking on that
+   * day; a second tap within the window opens the day instead. Done by hand rather
+   * than `dblclick` because mobile browsers are unreliable about firing it, and the
+   * first tap has to wait anyway so a double doesn't also start a booking.
+   */
+  const pendingTap = useRef<{ iso: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  useEffect(() => () => clearTimeout(pendingTap.current?.timer), []);
+  const tapDay = (day: Date) => {
+    const iso = isoDate(day);
+    const pending = pendingTap.current;
+    if (pending) {
+      clearTimeout(pending.timer);
+      pendingTap.current = null;
+      if (pending.iso === iso) {
+        openDay(day);
+        return;
+      }
+    }
+    pendingTap.current = {
+      iso,
+      timer: setTimeout(() => {
+        pendingTap.current = null;
+        openChooser(iso);
+      }, DOUBLE_TAP_MS),
+    };
   };
 
   const range =
@@ -676,33 +704,30 @@ function CalendarPage() {
                         outside && "bg-muted/30",
                       )}
                     >
-                      {/* Sits behind the bars so empty space opens the day, while a
+                      {/* Sits behind the bars so the whole empty box is the hit area
+                          for adding to this day (double tap opens the day), while a
                           bar still opens its own booking. Nesting the two as real
                           buttons would be invalid markup. */}
                       <button
                         type="button"
-                        onClick={() => openDay(day)}
+                        onClick={() => tapDay(day)}
                         className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
-                        aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+                        aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}. Double tap to open the day.`}
                       />
 
-                      <span
+                      {/* The date itself is the one-tap way into the day, for anyone
+                          who doesn't know about the double tap (and for keyboards). */}
+                      <button
+                        type="button"
+                        onClick={() => openDay(day)}
                         className={cn(
-                          "pointer-events-none relative inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums",
+                          "relative inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-xs tabular-nums hover:ring-2 hover:ring-primary/40",
                           outside ? "text-muted-foreground/60" : "text-foreground",
                           iso === todayIso && "bg-primary font-semibold text-primary-foreground",
                         )}
+                        aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
                       >
                         {day.getDate()}
-                      </span>
-                      {/* Quick add for this day; shows on hover (always on touch, which has no hover). */}
-                      <button
-                        type="button"
-                        onClick={() => openChooser(iso)}
-                        className="absolute top-1.5 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                        aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
-                      >
-                        <Plus className="size-3.5" />
                       </button>
 
                       {hidden > 0 ? (

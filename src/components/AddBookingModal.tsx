@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
@@ -62,8 +62,13 @@ import {
 import { outsideWorkingHours } from "@/lib/working-hours";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+/** Remembered choice of confirmation channels; "on"/"off" are the pre-tick-box values. */
+const NOTIFY_PREFS = ["email", "sms", "both", "none", "on", "off"] as const;
+type NotifyPref = (typeof NOTIFY_PREFS)[number];
 
 const DATE_INPUT =
   "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
@@ -119,15 +124,22 @@ export function AddBookingModal({
   const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [notes, setNotes] = useState("");
-  // Whether the client is told straight away (RECA-533). Some clients don't want the
-  // confirmation landing in their inbox, so this is remembered per business and comes
-  // back the way it was last left rather than resetting each time.
-  const [notifyPref, setNotifyPref] = useStoredState<"on" | "off">(
+  // How the client is told straight away (RECA-533): email, text, both or neither.
+  // Some clients don't want the confirmation landing in their inbox, so the last
+  // choice is remembered per business rather than resetting each time.
+  const [notifyPref, setNotifyPref] = useStoredState<NotifyPref>(
     `recavo.booking.notify.${tenant.businessId}`,
-    "on",
-    ["on", "off"],
+    "email",
+    NOTIFY_PREFS,
   );
-  const notifyCustomer = notifyPref === "on";
+  const smsCredits = useSmsCreditsSummary();
+  const wantsEmail = notifyPref === "email" || notifyPref === "both" || notifyPref === "on";
+  const wantsSms = notifyPref === "sms" || notifyPref === "both";
+  const setChannel = (channel: "email" | "sms", on: boolean) => {
+    const email = channel === "email" ? on : wantsEmail;
+    const sms = channel === "sms" ? on : wantsSms;
+    setNotifyPref(email && sms ? "both" : email ? "email" : sms ? "sms" : "none");
+  };
   const [submitting, setSubmitting] = useState(false);
   // Account details + reference from a pay-by-bank 201, read out to the customer
   // before closing (RECA-522).
@@ -163,6 +175,45 @@ export function AddBookingModal({
   const chosenCustomer = useCustomer(customerId || undefined);
   const selectedCustomer =
     customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
+  // A box is greyed out (not silently ignored) when that channel can't reach the
+  // client, so staff see why before they hit Create rather than in the history later.
+  const emailBlocked = selectedCustomer
+    ? selectedCustomer.emailDisplay || selectedCustomer.emailNormalised
+      ? null
+      : "no email address on file"
+    : null;
+  const smsBlocked = selectedCustomer
+    ? !(selectedCustomer.phoneDisplay || selectedCustomer.phoneNormalised)
+      ? "no mobile number on file"
+      : selectedCustomer.contactPreferences.operationalNotifications === false
+        ? "they've turned off text messages"
+        : smsCredits.level === "empty"
+          ? "you have no text credits left"
+          : null
+    : null;
+  const notifyChannels: ("email" | "sms")[] = [
+    ...(wantsEmail && !emailBlocked ? (["email"] as const) : []),
+    ...(wantsSms && !smsBlocked ? (["sms"] as const) : []),
+  ];
+  const notifyHint = (() => {
+    const blocked = [
+      emailBlocked ? `Email is off: ${emailBlocked}.` : null,
+      smsBlocked ? `Text is off: ${smsBlocked}.` : null,
+    ].filter(Boolean);
+    if (notifyChannels.length === 0) {
+      return [
+        "Nothing is sent now. Use Resend on the booking when they're ready to hear from you.",
+        ...blocked,
+      ].join(" ");
+    }
+    const by =
+      notifyChannels.length === 2
+        ? "email and text"
+        : notifyChannels[0] === "sms"
+          ? "text"
+          : "email";
+    return [`Goes out by ${by} as soon as the booking is created.`, ...blocked].join(" ");
+  })();
   const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
@@ -533,7 +584,7 @@ export function AddBookingModal({
         ? { depositMinor: depositMinor ?? 0 }
         : {}),
       notesInternal: notes || null,
-      ...(notifyCustomer ? {} : { notifyCustomer: false }),
+      notifyChannels,
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
       ...(scheduling === "slot" && selectedSlot?.slotToken
@@ -550,7 +601,9 @@ export function AddBookingModal({
         toast.success("Booking reserved — awaiting bank transfer");
         return;
       }
-      toast.success(notifyCustomer ? "Booking created" : "Booking created — client not notified");
+      toast.success(
+        notifyChannels.length > 0 ? "Booking created" : "Booking created — client not notified",
+      );
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -1236,30 +1289,40 @@ export function AddBookingModal({
               />
             </div>
 
-            <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-              <div className="grid gap-0.5">
-                <Label htmlFor="booking-notify" className="cursor-pointer">
-                  Send confirmation to client
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {notifyCustomer
-                    ? selectedCustomer?.contactPreferences.operationalNotifications === false
-                      ? "This client has turned off booking messages, so nothing will be sent."
-                      : `Goes out by ${
-                          selectedCustomer?.contactPreferences.preferredChannel === "sms"
-                            ? "SMS"
-                            : "email"
-                        } as soon as the booking is created.`
-                    : "Nothing is sent now. Use Resend on the booking when they're ready to hear from you."}
-                </p>
+            <fieldset className="grid gap-2 rounded-lg border p-3">
+              <legend className="text-sm font-medium">Send confirmation to client</legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                <label
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    emailBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
+                  )}
+                >
+                  <Checkbox
+                    checked={wantsEmail && !emailBlocked}
+                    disabled={Boolean(emailBlocked)}
+                    onCheckedChange={(checked) => setChannel("email", checked === true)}
+                    aria-label="Send confirmation by email"
+                  />
+                  Email
+                </label>
+                <label
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    smsBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
+                  )}
+                >
+                  <Checkbox
+                    checked={wantsSms && !smsBlocked}
+                    disabled={Boolean(smsBlocked)}
+                    onCheckedChange={(checked) => setChannel("sms", checked === true)}
+                    aria-label="Send confirmation by text message"
+                  />
+                  Text message
+                </label>
               </div>
-              <Switch
-                id="booking-notify"
-                checked={notifyCustomer}
-                onCheckedChange={(checked) => setNotifyPref(checked ? "on" : "off")}
-                aria-label="Send confirmation to client"
-              />
-            </div>
+              <p className="text-xs text-muted-foreground">{notifyHint}</p>
+            </fieldset>
           </div>
         )}
 
