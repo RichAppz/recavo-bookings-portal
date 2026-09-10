@@ -402,7 +402,7 @@ function CreateLinkDialog({
             can book or buy them even if they are hidden from your booking page.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
+        <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
           <div className="grid gap-2">
             <Label htmlFor="pl-name">Link name</Label>
             <Input

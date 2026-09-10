@@ -41,7 +41,7 @@ import {
   useStaffList,
   useStartPackagePurchase,
 } from "@/lib/api/hooks";
-import { customerDisplayName } from "@/lib/api/types";
+import { customerDisplayName, type Customer } from "@/lib/api/types";
 import { formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -144,7 +144,20 @@ function firstGate(
   return checks.find((c) => c.when)?.gate ?? null;
 }
 
-function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * The add-client drawer. Also opened over the top of the Add booking form via its
+ * "+" — pass `onCreated` there so the new client lands straight in the picker and
+ * the toast doesn't offer to navigate away from the half-filled booking.
+ */
+export function AddClientDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (customer: Customer) => void;
+}) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -196,6 +209,7 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           preferredChannel,
           operationalNotifications,
         });
+        onCreated?.(customer);
         if (possibleDuplicates.length > 0) {
           const first = possibleDuplicates[0];
           toast.warning(
@@ -204,20 +218,27 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             } already exist`,
             {
               description: `Did you mean ${customerDisplayName(first)}? Check you haven't created a duplicate.`,
-              action: {
-                label: "View match",
-                onClick: () =>
-                  void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
-              },
+              action: onCreated
+                ? undefined
+                : {
+                    label: "View match",
+                    onClick: () =>
+                      void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
+                  },
             },
           );
         } else {
           toast.success("Client added", {
-            action: {
-              label: "Open",
-              onClick: () =>
-                void navigate({ to: "/clients/$clientId", params: { clientId: customer.id } }),
-            },
+            action: onCreated
+              ? undefined
+              : {
+                  label: "Open",
+                  onClick: () =>
+                    void navigate({
+                      to: "/clients/$clientId",
+                      params: { clientId: customer.id },
+                    }),
+                },
           });
         }
         reset();
