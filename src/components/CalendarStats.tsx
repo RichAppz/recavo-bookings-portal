@@ -29,7 +29,9 @@ export function CalendarStats({
   const plural = `${noun}s`;
   const money = (minor: number) => formatMoney(minor, currency);
 
-  const tiles: { label: string; value: string; sub?: string }[] = [
+  // Phones get the two numbers people actually check on the move; the rest of
+  // the row shows from tablet width up.
+  const tiles: { label: string; value: string; sub?: string; desktopOnly?: boolean }[] = [
     {
       label: s.active === 1 ? bookingLabel : `${bookingLabel}s`,
       value: String(s.active),
@@ -42,6 +44,7 @@ export function CalendarStats({
     },
     {
       label: "Collected",
+      desktopOnly: true,
       value: money(s.collectedMinor),
       sub:
         s.bookedMinor > 0
@@ -50,16 +53,19 @@ export function CalendarStats({
     },
     {
       label: "To collect",
+      desktopOnly: true,
       value: money(s.outstandingMinor),
       sub: s.outstandingMinor > 0 ? "still owed" : undefined,
     },
     {
       label: "Time booked",
+      desktopOnly: true,
       value: s.timedMinutes > 0 ? formatHours(s.timedMinutes) : s.allDay > 0 ? "—" : "0 h",
       sub: s.allDay > 0 ? `+ ${s.allDay} all-day ${s.allDay === 1 ? noun : plural}` : undefined,
     },
     {
       label: s.clients === 1 ? "Client" : "Clients",
+      desktopOnly: true,
       value: String(s.clients),
       sub:
         s.clients > 0 && s.active > s.clients
@@ -78,7 +84,7 @@ export function CalendarStats({
       aria-label="Totals for the dates in view"
     >
       {tiles.map((t) => (
-        <div key={t.label} className="min-w-0 px-4 py-3">
+        <div key={t.label} className={cn("min-w-0 px-4 py-3", t.desktopOnly && "hidden sm:block")}>
           <p className="truncate text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
             {t.label}
           </p>

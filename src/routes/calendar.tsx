@@ -823,14 +823,6 @@ function CalendarPage() {
                             {showTag ? <span className="font-semibold">{tag}</span> : null}
                             {showService ? <span>{b.serviceSnapshot.name}</span> : null}
                           </Marquee>
-                          {/* Wide enough to say so: a bar over several days shows when it ends. */}
-                          {multi && endCol > startCol && !continuesAfter ? (
-                            <span className="ml-auto shrink-0 text-muted-foreground">
-                              {b.allDay
-                                ? `${endCol - startCol + 1} days`
-                                : `until ${timeLabel(b.end)}`}
-                            </span>
-                          ) : null}
                           {continuesAfter ? (
                             <span className="ml-auto text-muted-foreground">→</span>
                           ) : null}
