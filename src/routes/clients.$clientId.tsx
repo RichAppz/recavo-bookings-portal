@@ -1167,6 +1167,7 @@ function CustomerLinkedRecordsTab({
     [definition.data],
   );
   const hasSchema = fields.length > 0;
+  const canEdit = tenant.can(PERMISSIONS.CUSTOMER_UPDATE);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<LinkedRecord | null>(null);
@@ -1215,10 +1216,31 @@ function CustomerLinkedRecordsTab({
         <ul className="divide-y">
           {(records.data ?? []).map((r) => {
             const summary = summariseValues(fields, (r.values ?? {}) as Record<string, unknown>);
+            const openEdit = canEdit && !disabled ? () => setEditing(r) : undefined;
             return (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+                role={openEdit ? "button" : undefined}
+                tabIndex={openEdit ? 0 : undefined}
+                aria-label={openEdit ? `Edit ${r.displayLabel}` : undefined}
+                onClick={openEdit}
+                onKeyDown={
+                  openEdit
+                    ? (e) => {
+                        // Only when the row itself is focused — not the menu.
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openEdit();
+                        }
+                      }
+                    : undefined
+                }
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-3 px-5 py-4",
+                  openEdit &&
+                    "cursor-pointer transition-colors outline-none hover:bg-secondary/50 focus-visible:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+                )}
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{r.displayLabel}</p>
@@ -1229,7 +1251,9 @@ function CustomerLinkedRecordsTab({
                     Updated {ukDate(r.updatedAt.slice(0, 10))}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* Menu clicks (incl. the portaled items, which bubble through
+                    React's tree) must not also open the editor. */}
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <StatusBadge status={r.status} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
