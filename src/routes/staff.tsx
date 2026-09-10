@@ -46,6 +46,7 @@ import {
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
 import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
+import { useSoleLocation } from "@/lib/sole";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -440,6 +441,7 @@ function StaffDialog({
   const updateStaff = useUpdateStaff();
   const services = useServices();
   const locations = useLocationsList();
+  const soleLocation = useSoleLocation();
 
   const [displayName, setDisplayName] = useState(staff?.displayName ?? "");
   const [title, setTitle] = useState(staff?.title ?? "");
@@ -681,7 +683,7 @@ function StaffDialog({
 
           {/* With one location there is nothing to restrict by; the section only
               earns its place once there are several. */}
-          {(locations.data ?? []).length > 1 ? (
+          {soleLocation ? null : (
             <div className="grid gap-2 border-t pt-4">
               <Label>Locations</Label>
               {(locations.data ?? []).length === 0 ? (
@@ -703,7 +705,7 @@ function StaffDialog({
                 Leave all unchecked to make this trainer available everywhere.
               </p>
             </div>
-          ) : null}
+          )}
 
           <div className="grid gap-2 border-t pt-4">
             <div className="flex items-center justify-between">
@@ -761,7 +763,7 @@ function StaffDialog({
                         }
                       />
                     </div>
-                    {(locations.data ?? []).length > 1 ? (
+                    {soleLocation ? null : (
                       <div className="grid min-w-40 flex-1 gap-1">
                         <Label className="text-xs text-muted-foreground">Location</Label>
                         <Select
@@ -783,7 +785,7 @@ function StaffDialog({
                           </SelectContent>
                         </Select>
                       </div>
-                    ) : null}
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
