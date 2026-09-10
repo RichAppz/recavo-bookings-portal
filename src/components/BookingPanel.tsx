@@ -99,6 +99,7 @@ import {
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
   formatBookingWhen,
+  formatDuration,
   formatDurationLong,
   localDateTimeToIso,
   formatInTz,
@@ -557,7 +558,7 @@ export function BookingPanel({
                                 ) : null}
                                 <span className="text-xs text-muted-foreground">
                                   {" "}
-                                  · {li.durationMinutes} min
+                                  · {formatDuration(li.durationMinutes)}
                                 </span>
                               </span>
                               <span className="tabular-nums">

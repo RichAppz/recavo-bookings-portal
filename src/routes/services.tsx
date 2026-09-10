@@ -73,8 +73,9 @@ function serviceNoun(service: string) {
 
 /**
  * The API stores minutes, but a detailer thinks in "how long do I have the
- * car" — often days. These helpers translate both ways so the form can offer
- * minutes/hours/days without the backend knowing.
+ * car" — often days — and a trainer in "a 1.5 hour session". These helpers
+ * translate both ways so the form can offer minutes/hours/days for every
+ * vertical without the backend knowing.
  */
 type DurationUnit = "minutes" | "hours" | "days";
 const UNIT_MINUTES: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };
@@ -97,11 +98,16 @@ const SERVICE_COLOURS = [
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
+/**
+ * Stored minutes → the value/unit pair someone would have typed. Whole days and
+ * whole or half hours come back in that unit ("3.5" hours, not "210" minutes,
+ * which is what the owner typed); anything odder stays in minutes.
+ */
 function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
   if (minutes >= 1440 && minutes % 1440 === 0) {
     return { value: String(minutes / 1440), unit: "days" };
   }
-  if (minutes >= 60 && minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" };
+  if (minutes >= 60 && minutes % 30 === 0) return { value: String(minutes / 60), unit: "hours" };
   return { value: String(minutes), unit: "minutes" };
 }
 
@@ -321,7 +327,7 @@ function ServicesPage() {
                       />
                       <Row
                         label="Buffer"
-                        value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
+                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
                       />
                       <Row
                         label="Offered"
@@ -430,19 +436,15 @@ type VariantRow = {
   priceMinor: string;
 };
 
-function toVariantRows(service: CatalogueService | null, useUnits: boolean): VariantRow[] {
+function toVariantRows(service: CatalogueService | null): VariantRow[] {
   if (!service) return [];
   return service.variants.map((v) => {
     const split = v.durationMinutes != null ? splitDuration(v.durationMinutes) : null;
     return {
       id: v.id,
       name: v.name,
-      durationValue: useUnits
-        ? (split?.value ?? "")
-        : v.durationMinutes != null
-          ? String(v.durationMinutes)
-          : "",
-      durationUnit: useUnits ? (split?.unit ?? "minutes") : "minutes",
+      durationValue: split?.value ?? "",
+      durationUnit: split?.unit ?? "minutes",
       priceMinor: v.priceMinor != null ? (v.priceMinor / 100).toFixed(2) : "",
     };
   });
@@ -496,15 +498,12 @@ function ServiceDialog({
   );
   const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
   const [deposit, setDeposit] = useState(depositToInput(service?.depositMinor));
-  // Detailers state how long they keep the vehicle ("2 days"); the split keeps
-  // the stored minutes editable in whichever unit reads naturally.
+  // Detailers state how long they keep the vehicle ("2 days"), trainers "1.5
+  // hours"; the split keeps the stored minutes editable in whichever unit reads
+  // naturally rather than bouncing "3.5 hours" back as "210 minutes".
   const initialDuration = splitDuration(service?.durationMinutes ?? 60);
-  const [duration, setDuration] = useState(
-    isDetailing ? initialDuration.value : String(service?.durationMinutes ?? 60),
-  );
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>(
-    isDetailing ? initialDuration.unit : "minutes",
-  );
+  const [duration, setDuration] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
   const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
   const [description, setDescription] = useState(service?.description ?? "");
   // Free text, but the categories already in use are offered as one-tap chips so
@@ -519,7 +518,7 @@ function ServiceDialog({
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
   // Calendar swatch; null = "no colour", which renders the theme default.
   const [colour, setColour] = useState<string | null>(service?.colour ?? null);
-  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service, isDetailing));
+  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service));
   // Creating: start from the business's opening hours so the offer matches the
   // door hours without retyping them. Editing: whatever is saved.
   const defaultWindows = (s: CatalogueService | null) =>
@@ -536,15 +535,15 @@ function ServiceDialog({
     setPrice(String(s ? s.basePriceMinor / 100 : 50));
     setDeposit(depositToInput(s?.depositMinor));
     const split = splitDuration(s?.durationMinutes ?? 60);
-    setDuration(isDetailing ? split.value : String(s?.durationMinutes ?? 60));
-    setDurationUnit(isDetailing ? split.unit : "minutes");
+    setDuration(split.value);
+    setDurationUnit(split.unit);
     setCapacity(String(s?.capacityMax ?? 1));
     setDescription(s?.description ?? "");
     setCategory(s?.category ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
     setColour(s?.colour ?? null);
-    setVariants(toVariantRows(s, isDetailing));
+    setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
   };
@@ -851,40 +850,31 @@ function ServiceDialog({
           <div className={cn("grid gap-4", isDetailing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
             <div className="grid gap-2">
               <Label htmlFor="s-dur">
-                {isDetailing ? "How long you'll have the vehicle" : "Duration (min)"}
+                {isDetailing ? "How long you'll have the vehicle" : "Duration"}
               </Label>
-              {isDetailing ? (
-                <div className="flex gap-2">
-                  <Input
-                    id="s-dur"
-                    inputMode="numeric"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    aria-invalid={Boolean(fieldErrors.durationMinutes)}
-                    className="flex-1"
-                  />
-                  <Select
-                    value={durationUnit}
-                    onValueChange={(v) => setDurationUnit(v as DurationUnit)}
-                  >
-                    <SelectTrigger className="w-28 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minutes">minutes</SelectItem>
-                      <SelectItem value="hours">hours</SelectItem>
-                      <SelectItem value="days">days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
+              <div className="flex gap-2">
                 <Input
                   id="s-dur"
+                  inputMode="decimal"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.durationMinutes)}
+                  className="flex-1"
                 />
-              )}
+                <Select
+                  value={durationUnit}
+                  onValueChange={(v) => setDurationUnit(v as DurationUnit)}
+                >
+                  <SelectTrigger className="w-28 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minutes">minutes</SelectItem>
+                    <SelectItem value="hours">hours</SelectItem>
+                    <SelectItem value="days">days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {fieldErrors.durationMinutes ? (
                 <p className="text-xs text-destructive">{fieldErrors.durationMinutes}</p>
               ) : null}
@@ -949,7 +939,7 @@ function ServiceDialog({
                     {
                       name: "",
                       durationValue: "",
-                      durationUnit: isDetailing ? durationUnit : "minutes",
+                      durationUnit,
                       priceMinor: "",
                     },
                   ])
@@ -979,46 +969,33 @@ function ServiceDialog({
                         placeholder={isDetailing ? "Large vehicle / SUV" : "60 minutes"}
                       />
                     </div>
-                    {isDetailing ? (
-                      <>
-                        <div className="grid w-20 gap-1">
-                          <Label className="text-xs text-muted-foreground">Duration</Label>
-                          <Input
-                            inputMode="numeric"
-                            value={v.durationValue}
-                            onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                            placeholder={duration}
-                          />
-                        </div>
-                        <div className="grid w-28 gap-1">
-                          <Label className="text-xs text-muted-foreground">Unit</Label>
-                          <Select
-                            value={v.durationUnit}
-                            onValueChange={(unit) =>
-                              updateVariant(i, { durationUnit: unit as DurationUnit })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="minutes">minutes</SelectItem>
-                              <SelectItem value="hours">hours</SelectItem>
-                              <SelectItem value="days">days</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="grid w-24 gap-1">
-                        <Label className="text-xs text-muted-foreground">Duration (min)</Label>
-                        <Input
-                          value={v.durationValue}
-                          onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                          placeholder={duration}
-                        />
-                      </div>
-                    )}
+                    <div className="grid w-20 gap-1">
+                      <Label className="text-xs text-muted-foreground">Duration</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={v.durationValue}
+                        onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
+                        placeholder={duration}
+                      />
+                    </div>
+                    <div className="grid w-28 gap-1">
+                      <Label className="text-xs text-muted-foreground">Unit</Label>
+                      <Select
+                        value={v.durationUnit}
+                        onValueChange={(unit) =>
+                          updateVariant(i, { durationUnit: unit as DurationUnit })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="minutes">minutes</SelectItem>
+                          <SelectItem value="hours">hours</SelectItem>
+                          <SelectItem value="days">days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid w-24 gap-1">
                       <Label className="text-xs text-muted-foreground">Price (£)</Label>
                       <Input
