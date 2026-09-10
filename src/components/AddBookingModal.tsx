@@ -7,7 +7,7 @@ import {
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound } from "lucide-react";
-import { ServiceTilePicker, type PickedService } from "@/components/ServiceTilePicker";
+import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
 import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -796,7 +796,7 @@ export function AddBookingModal({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2 sm:col-span-2">
                 <Label>Services</Label>
-                <ServiceTilePicker
+                <ServiceMultiPicker
                   services={serviceList}
                   value={picked}
                   onChange={setPicked}
