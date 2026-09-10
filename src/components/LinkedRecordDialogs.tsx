@@ -829,6 +829,7 @@ export function QuickAddLinkedRecord({
   const quick = useMemo(() => quickAddFields(fields), [fields]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [emptyError, setEmptyError] = useState(false);
   // Snapshot of the quick values taken when "More details" opens, so the full form
   // starts pre-filled without resetting on every re-render while it's open.
   const [fullInitial, setFullInitial] = useState<{
@@ -852,15 +853,24 @@ export function QuickAddLinkedRecord({
       setErrors(nextErrors);
       return;
     }
+    // Nothing is required any more, but a record with nothing in it helps nobody.
+    if (Object.keys(payload).length === 0) {
+      setEmptyError(true);
+      return;
+    }
     setErrors({});
-    // "Ford Focus · AB12 CDE" reads better than the field order would give.
+    setEmptyError(false);
+    // "Ford Focus · AB12 CDE" reads better than the field order would give. The
+    // identifier is whatever's required, or failing that the first (searched) field.
+    const identifyingFields = quick.some((f) => f.required)
+      ? quick.filter((f) => f.required)
+      : quick.slice(0, 1);
     const descriptive = quick
-      .filter((f) => !f.required)
+      .filter((f) => !identifyingFields.includes(f))
       .map((f) => payload[f.fieldKey])
       .filter((v) => v !== undefined && v !== "")
       .join(" ");
-    const identifying = quick
-      .filter((f) => f.required)
+    const identifying = identifyingFields
       .map((f) => payload[f.fieldKey])
       .filter((v) => v !== undefined && v !== "")
       .join(" ");
@@ -880,6 +890,7 @@ export function QuickAddLinkedRecord({
   // One message for the whole row: "Registration is required", or the server's
   // complaint about a specific field.
   const firstError = (() => {
+    if (emptyError) return "Add at least one detail.";
     for (const f of quick) {
       const local = errors[f.fieldKey];
       if (local) return local === "Required" ? `${f.label} is required.` : `${f.label}: ${local}`;
@@ -892,7 +903,7 @@ export function QuickAddLinkedRecord({
   const requiredLabels = quick.filter((f) => f.required).map((f) => f.label.toLowerCase());
   const requiredHint =
     requiredLabels.length === 0
-      ? "All optional — add more later."
+      ? "Nothing's required — add what you know, the rest later."
       : `Only the ${requiredLabels.join(" and ")} is needed now.`;
 
   return (
@@ -949,6 +960,7 @@ export function QuickAddLinkedRecord({
               onChange={(e) => {
                 setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }));
                 if (errors[f.fieldKey]) setErrors((p) => ({ ...p, [f.fieldKey]: "" }));
+                if (emptyError) setEmptyError(false);
               }}
               onKeyDown={onKeyDown}
               disabled={create.isPending}
