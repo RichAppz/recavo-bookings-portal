@@ -6,8 +6,8 @@ import {
   QuickAddLinkedRecord,
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
-import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
-import { ServiceSearchPicker } from "@/components/ServiceSearchPicker";
+import { Layers, MapPin, Plus, UserRound } from "lucide-react";
+import { ServiceTilePicker, type PickedService } from "@/components/ServiceTilePicker";
 import { SetupGate } from "@/components/SetupGate";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +63,7 @@ import { outsideWorkingHours } from "@/lib/working-hours";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -107,6 +108,9 @@ export function AddBookingModal({
   const [allDay, setAllDay] = useState(false);
   // Price override (pounds, as typed). null = the catalogue total.
   const [priceInput, setPriceInput] = useState<string | null>(null);
+  // "10% off" / "£10 off" the list price. Typing a price clears it and vice versa,
+  // so there's only ever one reason the total differs from the list.
+  const [discount, setDiscount] = useState<Discount | null>(null);
 
   // Defaults come from wherever the modal was opened (a calendar day, a client's
   // profile) and differ between opens, so apply them each time it opens.
@@ -273,9 +277,18 @@ export function AddBookingModal({
   // additionalServices only apply to individual bookings and can't mix with credit (RECA-516).
   const isIndividual = !service || service.bookingMode === "individual";
   const multiAllowed = Boolean(service) && isIndividual && paymentMethod !== "credit";
-  const availableToAdd = serviceList.filter(
-    (s) => s.id !== serviceId && !additional.some((a) => a.serviceId === s.id),
-  );
+  // The tile picker sees one list; the first entry is the main service and the rest
+  // are the additional services, which is exactly how the API wants them.
+  const picked: PickedService[] = serviceId
+    ? [{ serviceId, variantId: variantId !== "none" ? variantId : null }, ...additional]
+    : [];
+  const setPicked = (next: PickedService[]) => {
+    const [main, ...rest] = next;
+    setServiceId(main?.serviceId ?? "");
+    setVariantId(main?.variantId ?? "none");
+    setAdditional(rest);
+    setSlotKey(null);
+  };
   // A date input reports "" while someone is part-way through typing a date;
   // an invalid Date would throw on toISOString and take the page down.
   const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -316,17 +329,26 @@ export function AddBookingModal({
 
   // Price override (RECA-532): the API puts the difference on the primary service, so
   // the total can never drop below what the additional services alone come to.
-  const priceOverridden = priceInput !== null;
+  const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
+  const discountInvalid =
+    discount !== null && discount.value.trim() !== "" && discountMinor === null;
+  const priceOverridden = priceInput !== null || discountMinor !== null;
   const overridePriceMinor: number | null = (() => {
-    if (!priceOverridden) return null;
-    try {
-      const minor = parseMoneyToMinor(priceInput);
-      return minor >= additionalTotalMinor ? minor : null;
-    } catch {
-      return null;
+    if (priceInput !== null) {
+      try {
+        const minor = parseMoneyToMinor(priceInput);
+        return minor >= additionalTotalMinor ? minor : null;
+      } catch {
+        return null;
+      }
     }
+    if (discountMinor !== null) {
+      const minor = rolledTotalMinor - discountMinor;
+      return minor >= additionalTotalMinor ? minor : null;
+    }
+    return null;
   })();
-  const priceInvalid = priceOverridden && overridePriceMinor === null;
+  const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
   const effectiveTotalMinor = overridePriceMinor ?? rolledTotalMinor;
   const priceChanged = overridePriceMinor !== null && overridePriceMinor !== rolledTotalMinor;
 
@@ -466,6 +488,7 @@ export function AddBookingModal({
     setPaymentMethod("none");
     setDepositInput(null);
     setPriceInput(null);
+    setDiscount(null);
     setScheduling("slot");
     setAllDay(false);
     setEndTouched(false);
@@ -771,131 +794,20 @@ export function AddBookingModal({
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* Service takes the full row unless a Variant field sits beside it, so the
-                  additional-services row underneath reads as part of the same choice. */}
-              <div
-                className={
-                  service && service.variants.length > 0 ? "grid gap-2" : "grid gap-2 sm:col-span-2"
-                }
-              >
-                <Label>Service</Label>
-                <ServiceSearchPicker
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>Services</Label>
+                <ServiceTilePicker
                   services={serviceList}
-                  value={serviceId}
-                  onSelect={(s) => {
-                    setServiceId(s.id);
-                    setVariantId("none");
-                    setSlotKey(null);
-                    setAdditional([]);
-                  }}
+                  value={picked}
+                  onChange={setPicked}
+                  multi={!service || multiAllowed}
+                  singleReason={
+                    paymentMethod === "credit"
+                      ? "Paying with a credit covers one service, so this replaced the other."
+                      : undefined
+                  }
                 />
               </div>
-              {/* Only worth a field when the service actually has variants. */}
-              {service && service.variants.length > 0 ? (
-                <div className="grid gap-2">
-                  <Label>Variant</Label>
-                  <Select
-                    value={variantId}
-                    onValueChange={(v) => {
-                      setVariantId(v);
-                      setSlotKey(null);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Default" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Default (no variant)</SelectItem>
-                      {(service?.variants ?? []).map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {[
-                            v.name,
-                            // Blank duration/price fall back to the service default,
-                            // so only show what the variant actually overrides.
-                            v.durationMinutes != null ? formatDuration(v.durationMinutes) : null,
-                            v.priceMinor != null
-                              ? formatMoney(v.priceMinor, service!.currency)
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
-              {multiAllowed ? (
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label>Additional services (optional)</Label>
-                  {additional.map((a, idx) => {
-                    const s = serviceById.get(a.serviceId);
-                    if (!s) return null;
-                    return (
-                      <div
-                        key={a.serviceId}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border p-2"
-                      >
-                        <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
-                        {s.variants.length > 0 ? (
-                          <Select
-                            value={a.variantId ?? "none"}
-                            onValueChange={(v) =>
-                              setAdditional((prev) =>
-                                prev.map((x, i) =>
-                                  i === idx ? { ...x, variantId: v === "none" ? null : v } : x,
-                                ),
-                              )
-                            }
-                          >
-                            <SelectTrigger className="h-8 w-44">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Default</SelectItem>
-                              {s.variants.map((v) => (
-                                <SelectItem key={v.id} value={v.id}>
-                                  {v.name} · {formatMoney(v.priceMinor ?? 0, s.currency)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            {formatMoney(s.basePriceMinor, s.currency)}
-                          </span>
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => setAdditional((prev) => prev.filter((_, i) => i !== idx))}
-                        >
-                          <X className="size-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                  {availableToAdd.length > 0 ? (
-                    <ServiceSearchPicker
-                      services={availableToAdd}
-                      value={null}
-                      placeholder="Add another service"
-                      onSelect={(s) =>
-                        setAdditional((prev) => [...prev, { serviceId: s.id, variantId: null }])
-                      }
-                    />
-                  ) : null}
-                  {additional.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Reserves the combined duration and rolls up to an estimated{" "}
-                      {formatMoney(rolledTotalMinor, service!.currency)}. The server confirms the
-                      final price and end time.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
               <div className="grid gap-2">
                 <Label>Location</Label>
                 <Select
@@ -974,7 +886,10 @@ export function AddBookingModal({
                       <button
                         type="button"
                         className="text-xs text-primary underline-offset-4 hover:underline"
-                        onClick={() => setPriceInput(null)}
+                        onClick={() => {
+                          setPriceInput(null);
+                          setDiscount(null);
+                        }}
                       >
                         List {formatMoney(rolledTotalMinor, service.currency)} · reset
                       </button>
@@ -983,15 +898,74 @@ export function AddBookingModal({
                   <Input
                     id="booking-price"
                     inputMode="decimal"
-                    value={priceOverridden ? priceInput : (rolledTotalMinor / 100).toFixed(2)}
-                    onChange={(e) => setPriceInput(e.target.value)}
+                    value={
+                      priceInput !== null
+                        ? priceInput
+                        : ((overridePriceMinor ?? rolledTotalMinor) / 100).toFixed(2)
+                    }
+                    onChange={(e) => {
+                      setPriceInput(e.target.value);
+                      setDiscount(null);
+                    }}
                     aria-invalid={priceInvalid}
                   />
+                  {/* Discount: a percentage or a fixed amount off the list price. Sets the
+                      same override as typing a price, just worked out for you. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Label htmlFor="booking-discount" className="text-xs text-muted-foreground">
+                      Discount
+                    </Label>
+                    <Input
+                      id="booking-discount"
+                      inputMode="decimal"
+                      placeholder="0"
+                      className="h-8 w-20"
+                      value={discount?.value ?? ""}
+                      onChange={(e) => {
+                        setPriceInput(null);
+                        setDiscount(
+                          e.target.value.trim() === ""
+                            ? null
+                            : { mode: discount?.mode ?? "percent", value: e.target.value },
+                        );
+                      }}
+                      aria-invalid={discountInvalid}
+                    />
+                    <Tabs
+                      value={discount?.mode ?? "percent"}
+                      onValueChange={(mode) => {
+                        setPriceInput(null);
+                        setDiscount({
+                          mode: mode as Discount["mode"],
+                          value: discount?.value ?? "",
+                        });
+                      }}
+                    >
+                      <TabsList className="h-8">
+                        <TabsTrigger value="percent" className="px-2.5 text-xs">
+                          % off
+                        </TabsTrigger>
+                        <TabsTrigger value="amount" className="px-2.5 text-xs">
+                          £ off
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {discountMinor !== null && overridePriceMinor !== null ? (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {discountLabel(discount!, (m) => formatMoney(m, service.currency))} · −
+                        {formatMoney(discountMinor, service.currency)}
+                      </span>
+                    ) : null}
+                  </div>
                   {priceInvalid ? (
                     <p className="text-xs text-destructive">
-                      {additionalTotalMinor > 0
-                        ? `Enter at least ${formatMoney(additionalTotalMinor, service.currency)} — the additional services keep their list prices.`
-                        : "Enter an amount, or reset to the list price."}
+                      {discountInvalid
+                        ? discount!.mode === "percent"
+                          ? "Enter a percentage between 0 and 100."
+                          : `Enter an amount up to ${formatMoney(rolledTotalMinor, service.currency)}.`
+                        : additionalTotalMinor > 0
+                          ? `Enter at least ${formatMoney(additionalTotalMinor, service.currency)} — the additional services keep their list prices.`
+                          : "Enter an amount, or reset to the list price."}
                     </p>
                   ) : priceChanged ? (
                     <p className="text-xs text-muted-foreground">
