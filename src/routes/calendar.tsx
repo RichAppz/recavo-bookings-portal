@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
-import { CalendarStats } from "@/components/CalendarStats";
+import { summariseBookings } from "@/lib/calendar-stats";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
@@ -469,6 +469,8 @@ function CalendarPage() {
       return first <= day && day <= last;
     });
   }, [filtered, view, anchor, days, timezone]);
+  const bookedMinor = useMemo(() => summariseBookings(statsBookings).bookedMinor, [statsBookings]);
+  const currency = tenant.business?.currency ?? statsBookings[0]?.currency ?? "GBP";
 
   type MonthEntry = { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock };
   type PlacedItem = {
@@ -560,7 +562,17 @@ function CalendarPage() {
             Today
           </Button>
         </div>
-        <p className="text-sm font-semibold">{range}</p>
+        <p className="text-sm font-semibold">
+          {range}
+          {!bookings.isLoading && bookedMinor > 0 ? (
+            <span
+              className="ml-2 font-medium text-muted-foreground tabular-nums"
+              aria-label={`${formatMoney(bookedMinor, currency)} booked in this range`}
+            >
+              {formatMoney(bookedMinor, currency)}
+            </span>
+          ) : null}
+        </p>
         <Tabs
           value={view}
           onValueChange={(v) => setView(v as typeof view)}
@@ -642,13 +654,6 @@ function CalendarPage() {
           ) : null}
         </div>
       </div>
-
-      <CalendarStats
-        bookings={statsBookings}
-        currency={tenant.business?.currency ?? statsBookings[0]?.currency ?? "GBP"}
-        bookingLabel={bookingLabel}
-        loading={bookings.isLoading}
-      />
 
       {bookings.data?.nextCursor ? (
         <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
