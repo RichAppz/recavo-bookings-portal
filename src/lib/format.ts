@@ -25,17 +25,29 @@ export function formatMoney(
 
 /** Parse a user-entered decimal amount into integer minor units. */
 /**
- * "90 min", "3 hours", "2 days" — whole days/hours read as such, oddities stay
- * in minutes. Detailing services can hold a vehicle for days, so raw minutes
- * ("2880 min") are unreadable there.
+ * Human-readable service duration for every vertical: "45 min", "1 hour",
+ * "4 hours", "1 hr 30 min", "1 day", "2 days", "1 day 4 hours". Detailing and
+ * ceramic-coating jobs hold a vehicle for days, so raw minutes ("2880 minutes")
+ * are unreadable there — and "90 minutes" was never great for a PT session either.
  */
 export function formatDuration(minutes: number): string {
-  if (minutes >= 1440 && minutes % 1440 === 0) {
-    const days = minutes / 1440;
-    return `${days} ${days === 1 ? "day" : "days"}`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
+  const whole = Math.round(minutes);
+  const days = Math.floor(whole / 1440);
+  const hours = Math.floor((whole % 1440) / 60);
+  const mins = whole % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} ${days === 1 ? "day" : "days"}`);
+  // "4 hours" when hours close the phrase; the shorter "hr" once minutes follow.
+  if (hours) {
+    parts.push(
+      mins
+        ? `${hours} ${hours === 1 ? "hr" : "hrs"}`
+        : `${hours} ${hours === 1 ? "hour" : "hours"}`,
+    );
   }
-  if (minutes >= 120 && minutes % 60 === 0) return `${minutes / 60} hours`;
-  return `${minutes} min`;
+  if (mins) parts.push(`${mins} min`);
+  return parts.join(" ");
 }
 
 export function parseMoneyToMinor(input: string | number): number {
