@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { paths } from "./schema";
+import type { MessageTemplate } from "@/lib/message-templates";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -2613,12 +2614,59 @@ export function usePublishPrivacyNotice() {
   });
 }
 
+/**
+ * Editable message templates, worded in the business's terminology, with the current
+ * text and supported placeholders. Resolves to `null` against an API that predates the
+ * list endpoint (404), so the editor can fall back to client-side defaults.
+ */
+export function useNotificationTemplates() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.notificationTemplates(businessId),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async (): Promise<MessageTemplate[] | null> => {
+      try {
+        const res = await api.get<{ templates: MessageTemplate[] }>(
+          `/api/v1/businesses/${businessId}/notification-templates`,
+        );
+        return res.data.templates;
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return null;
+        throw err;
+      }
+    },
+  });
+}
+
 export function useUpdateNotificationTemplate() {
   const businessId = useBusinessId();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: { key: string; bodyRegion: string }) => {
       await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
       return body;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.notificationTemplates(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Back to the default wording for one template. */
+export function useResetNotificationTemplate() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      await api.delete(
+        `/api/v1/businesses/${businessId}/notification-templates/${encodeURIComponent(key)}`,
+      );
+      return key;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.notificationTemplates(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
