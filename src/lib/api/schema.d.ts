@@ -19327,10 +19327,10 @@ export interface paths {
                         notesInternal?: string | null;
                         source?: string;
                         /**
-                         * @description `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions.
+                         * @description `none` confirms the slot and asks the customer to pay up front (the confirmation is a payment request with a pay link). `pay_later` confirms the slot with a plain confirmation — no payment request, no deposit — for businesses that take payment after the job; staff follow up with POST …/bookings/{bookingId}/payment-reminder. `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions.
                          * @enum {string}
                          */
-                        paymentMethod?: "none" | "credit" | "bank_transfer";
+                        paymentMethod?: "none" | "credit" | "bank_transfer" | "pay_later";
                         /** @description Staff override for the deposit securing this booking (RECA-523). Omitted = the services’ configured deposits; 0/null = no deposit. */
                         depositMinor?: number | null;
                         /**
@@ -19537,7 +19537,7 @@ export interface paths {
                         notesInternal?: string | null;
                         source?: string;
                         /** @enum {string} */
-                        paymentMethod?: "none" | "credit" | "bank_transfer";
+                        paymentMethod?: "none" | "credit" | "bank_transfer" | "pay_later";
                         /** @description Staff override for the deposit securing this booking (RECA-523). Omitted = the sum of the booked services’ configured deposits; 0/null = no deposit (full amount up front). A value at or above the total price collapses to "pay in full". */
                         depositMinor?: number | null;
                         /**
@@ -32071,6 +32071,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/payment-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the customer a reminder that a balance is outstanding
+         * @description Staff nudge for money still owed on a booking — the follow-up for “pay after the job” bookings. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. The message quotes the outstanding balance and every way to pay: the pay link when card payments are live, the bank details when transfers are enabled, otherwise an “in person / contact us” line. 409 for closed bookings or when a reminder went out within the last ten minutes; 422 when nothing is outstanding, the booking was paid by credit, the customer has no email, or every channel failed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The notifications that were sent */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            notifications: components["schemas"]["Notification"][];
+                            channels: ("email" | "sms")[];
+                            outstandingMinor: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/reminders/run": {
         parameters: {
             query?: never;
@@ -37264,7 +37419,7 @@ export interface components {
             /** @enum {string} */
             status: "draft" | "held" | "awaiting_payment" | "confirmed" | "completed" | "cancelled_by_customer" | "cancelled_by_business" | "late_cancelled" | "no_show" | "expired";
             /** @enum {string} */
-            paymentMethod: "none" | "credit" | "bank_transfer";
+            paymentMethod: "none" | "credit" | "bank_transfer" | "pay_later";
             /** @enum {string} */
             attendanceStatus: "unknown" | "attended" | "no_show";
             cancellation: {

@@ -703,7 +703,8 @@
             "enum": [
               "none",
               "credit",
-              "bank_transfer"
+              "bank_transfer",
+              "pay_later"
             ]
           },
           "attendanceStatus": {
@@ -33082,9 +33083,10 @@
                     "enum": [
                       "none",
                       "credit",
-                      "bank_transfer"
+                      "bank_transfer",
+                      "pay_later"
                     ],
-                    "description": "`bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions."
+                    "description": "`none` confirms the slot and asks the customer to pay up front (the confirmation is a payment request with a pay link). `pay_later` confirms the slot with a plain confirmation — no payment request, no deposit — for businesses that take payment after the job; staff follow up with POST …/bookings/{bookingId}/payment-reminder. `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions."
                   },
                   "depositMinor": {
                     "type": [
@@ -33730,7 +33732,8 @@
                     "enum": [
                       "none",
                       "credit",
-                      "bank_transfer"
+                      "bank_transfer",
+                      "pay_later"
                     ]
                   },
                   "depositMinor": {
@@ -52435,6 +52438,240 @@
                     },
                     "templateKey": {
                       "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/payment-reminder": {
+      "post": {
+        "summary": "Send the customer a reminder that a balance is outstanding",
+        "description": "Staff nudge for money still owed on a booking — the follow-up for “pay after the job” bookings. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. The message quotes the outstanding balance and every way to pay: the pay link when card payments are live, the bank details when transfers are enabled, otherwise an “in person / contact us” line. 409 for closed bookings or when a reminder went out within the last ten minutes; 422 when nothing is outstanding, the booking was paid by credit, the customer has no email, or every channel failed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The notifications that were sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "notifications",
+                    "channels",
+                    "outstandingMinor"
+                  ],
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    },
+                    "channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms"
+                        ]
+                      }
+                    },
+                    "outstandingMinor": {
+                      "type": "integer"
                     }
                   }
                 }
