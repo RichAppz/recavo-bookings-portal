@@ -53,7 +53,11 @@ import {
 } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
-import { matchesServiceFilter, serviceFilterExists } from "@/lib/service-categories";
+import {
+  matchesServiceFilter,
+  normaliseCategory,
+  serviceFilterExists,
+} from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -183,11 +187,17 @@ const DOUBLE_TAP_MS = 280;
 const MONTH_LANES = 3;
 /**
  * What a month bar says, left to right. The business picks which of these to show;
- * the order is fixed so bars stay scannable. `time` is the start time, or "All day".
+ * the order is fixed so bars stay scannable. `time` is the start time, or "All day";
+ * `category` is the service's category ("Cleaning · Full valet"), so two services
+ * with the same name in different groups do not read as the same job.
+ *
+ * The default only applies until the menu is first customised: a stored choice
+ * is kept as-is, so someone who deliberately trimmed their bars is not surprised
+ * by a new field appearing in them.
  */
-const MONTH_BAR_FIELDS = ["time", "client", "record", "service"] as const;
+const MONTH_BAR_FIELDS = ["time", "client", "record", "category", "service"] as const;
 type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
-const DEFAULT_MONTH_BAR_FIELDS = "time,record,service";
+const DEFAULT_MONTH_BAR_FIELDS = "time,record,category,service";
 
 function parseMonthBarFields(raw: string): Set<MonthBarField> {
   const set = new Set<MonthBarField>();
@@ -341,6 +351,15 @@ function CalendarPage() {
     for (const s of services.data ?? []) map.set(s.id, s.colour ?? SERVICE_FALLBACK_COLOUR);
     return (b: Booking) => map.get(b.serviceSnapshot.serviceId) ?? SERVICE_FALLBACK_COLOUR;
   }, [services.data]);
+  // The category comes from the live catalogue, not the snapshot: it is a grouping
+  // label the business tidies over time, so the calendar should follow the tidy-up.
+  const categoryFor = (b: Booking) =>
+    normaliseCategory(serviceById.get(b.serviceSnapshot.serviceId)?.category);
+  /** "Cleaning · Full valet" — or just the name when the service has no category. */
+  const serviceLabel = (b: Booking) => {
+    const category = categoryFor(b);
+    return category ? `${category} · ${b.serviceSnapshot.name}` : b.serviceSnapshot.name;
+  };
 
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
@@ -656,6 +675,13 @@ function CalendarPage() {
                   </DropdownMenuCheckboxItem>
                 ) : null}
                 <DropdownMenuCheckboxItem
+                  checked={monthBar.has("category")}
+                  onCheckedChange={() => toggleMonthBar("category")}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Category
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
                   checked={monthBar.has("service")}
                   onCheckedChange={() => toggleMonthBar("service")}
                   onSelect={(e) => e.preventDefault()}
@@ -824,16 +850,22 @@ function CalendarPage() {
                       const showTime = monthBar.has("time");
                       const showClient = monthBar.has("client") && client;
                       const showTag = monthBar.has("record") && tag;
-                      const showService = monthBar.has("service");
+                      const category = categoryFor(b);
+                      const showCategory = monthBar.has("category") && category;
+                      // "Category only" on a service that has none would leave the
+                      // bar blank, so the name steps in for that service.
+                      const showService =
+                        monthBar.has("service") ||
+                        (!showCategory && !showTime && !showClient && !showTag);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${
-                            b.serviceSnapshot.name
-                          }${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+                            b,
+                          )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={style}
                           className={cn(
                             "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
@@ -864,6 +896,11 @@ function CalendarPage() {
                             ) : null}
                             {showClient ? <span className="font-semibold">{client}</span> : null}
                             {showTag ? <span className="font-semibold">{tag}</span> : null}
+                            {showCategory ? (
+                              <span className="text-muted-foreground">
+                                {showService ? `${category} ·` : category}
+                              </span>
+                            ) : null}
                             {showService ? <span>{b.serviceSnapshot.name}</span> : null}
                           </Marquee>
                           {continuesAfter ? (
@@ -927,13 +964,14 @@ function CalendarPage() {
                       const payment = chipPayment(b);
                       const tag = tagFor(b);
                       const owner = staff.data?.find((s) => s.id === b.staffId);
+                      const category = categoryFor(b);
                       return (
                         <button
                           key={b.id}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
-                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name}${
+                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${serviceLabel(b)}${
                             isMultiDay(b) ? `, until ${endLabel(b)}` : ""
                           } — ${payment.label}`}
                           style={{
@@ -956,6 +994,11 @@ function CalendarPage() {
                           ) : null}
                           {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
                           <span className="truncate">{b.serviceSnapshot.name}</span>
+                          {/* Category trails the name here (not leads, as in month bars):
+                              a week column is narrow and the name must survive truncation. */}
+                          {category ? (
+                            <span className="truncate text-muted-foreground">· {category}</span>
+                          ) : null}
                           {view === "day" && owner ? (
                             <span className="truncate text-muted-foreground">
                               · {owner.displayName}
@@ -1045,12 +1088,13 @@ function CalendarPage() {
                       const tag = tagFor(b);
                       const { startsToday, endsToday, heightMin, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
+                      const category = categoryFor(b);
                       return (
                         <button
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
+                          aria-label={`${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
@@ -1064,6 +1108,12 @@ function CalendarPage() {
                             <ServiceDot colour={serviceColour(b)} />
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
+                              {category ? (
+                                <span className="font-normal text-muted-foreground">
+                                  {" "}
+                                  · {category}
+                                </span>
+                              ) : null}
                             </span>
                           </p>
                           {tag ? (
