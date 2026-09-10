@@ -43,6 +43,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -130,6 +131,8 @@ export function BookingPanel({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelBy, setCancelBy] = useState<"business" | "customer">("business");
   const [cancelReason, setCancelReason] = useState("");
+  // Off when the client already knows (they rang to cancel) and a message would be noise.
+  const [cancelNotify, setCancelNotify] = useState(true);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -313,12 +316,17 @@ export function BookingPanel({
       await cancelAction.mutateAsync({
         bookingId: booking.id,
         ifMatch: booking.version,
-        body: { by: cancelBy, reason: cancelReason.trim() || null },
+        body: {
+          by: cancelBy,
+          reason: cancelReason.trim() || null,
+          ...(cancelNotify ? {} : { notifyCustomer: false }),
+        },
       });
-      toast.success("Booking cancelled");
+      toast.success(cancelNotify ? "Booking cancelled" : "Booking cancelled — client not messaged");
       setConfirmCancel(false);
       setCancelReason("");
       setCancelBy("business");
+      setCancelNotify(true);
     } catch (err) {
       if (err instanceof ApiError && err.isConflict) void bookingQuery.refetch();
       toastApiError(err);
@@ -843,10 +851,25 @@ export function BookingPanel({
                   <MessageSquare className="size-4" /> Message
                 </Link>
               </Button>
+              {/* On a phone, hand off to the device's own Messages app. Hidden where
+                  there is a mouse (no SMS app to open); the number is E.164 so the
+                  sms: link works on iOS and Android alike. */}
+              {customerPhone ? (
+                <Button
+                  variant="outline"
+                  asChild
+                  className="hidden [@media(hover:none)]:inline-flex"
+                >
+                  <a href={`sms:${customerPhone}`}>
+                    <Smartphone className="size-4" /> Text
+                  </a>
+                </Button>
+              ) : null}
               <Button
                 variant="destructive"
                 disabled={isFinal}
                 onClick={() => setConfirmCancel(true)}
+                className={cn(customerPhone && "[@media(hover:none)]:col-span-2")}
               >
                 <Ban className="size-4" /> Cancel
               </Button>
@@ -862,6 +885,7 @@ export function BookingPanel({
           if (!o) {
             setCancelReason("");
             setCancelBy("business");
+            setCancelNotify(true);
           }
         }}
       >
@@ -874,7 +898,9 @@ export function BookingPanel({
                 ? wouldBeTimely
                   ? "Cancelling now is within the window — the package credit will be returned."
                   : "Cancelling now is outside the window — the package credit will not be returned."
-                : "The client will be notified."}
+                : cancelNotify
+                  ? "The client will be notified."
+                  : "The client will not be messaged."}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -905,6 +931,19 @@ export function BookingPanel({
                 onChange={(e) => setCancelReason(e.target.value)}
               />
             </div>
+            <label className="flex items-start gap-2.5 text-sm">
+              <Checkbox
+                checked={cancelNotify}
+                onCheckedChange={(v) => setCancelNotify(v === true)}
+                className="mt-0.5"
+              />
+              <span>
+                Send the client a cancellation message
+                <span className="block text-xs text-muted-foreground">
+                  Untick if they already know — reminders are removed either way.
+                </span>
+              </span>
+            </label>
           </div>
 
           <AlertDialogFooter>
