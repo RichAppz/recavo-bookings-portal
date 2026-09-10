@@ -20178,6 +20178,8 @@ export interface paths {
                         /** @enum {string} */
                         by: "customer" | "business";
                         reason?: string | null;
+                        /** @description Defaults to true. Set false to cancel without sending the customer the cancellation message (e.g. they asked over the phone). Reminders are still removed. */
+                        notifyCustomer?: boolean;
                     };
                 };
             };
