@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
+import { Copy, CreditCard, Landmark, Sparkles } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AppShell } from "@/components/AppShell";
 import { BrandingLogoField } from "@/components/BrandingLogoField";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
+import { MessageTemplatesSetting } from "@/components/MessageTemplatesSetting";
 import { InvoicingSetting } from "@/components/InvoicingSetting";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { Markdown } from "@/components/Markdown";
@@ -60,7 +61,6 @@ import {
   useUpdateBusiness,
   useUpdateConfiguration,
   useUpdateMembership,
-  useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
 import type {
   AiPolicyDraftResponse,
@@ -240,30 +240,6 @@ const INVITE_ROLES = [
   SYSTEM_ROLES.RESTRICTED_STAFF,
 ] as const;
 
-const NOTIFICATION_TEMPLATE_KEYS = [
-  {
-    key: "booking_confirmation",
-    label: "Booking confirmation",
-    placeholder:
-      "Hi {{first_name}}, your {{service}} with {{trainer}} is confirmed for {{date}} at {{time}}.",
-  },
-  {
-    key: "booking_reminder_24h",
-    label: "24-hour reminder",
-    placeholder: "Reminder: your {{service}} is tomorrow at {{time}}.",
-  },
-  {
-    key: "booking_cancelled",
-    label: "Booking cancelled",
-    placeholder: "Your {{service}} on {{date}} has been cancelled.",
-  },
-  {
-    key: "package_expiry",
-    label: "Package expiry warning",
-    placeholder: "Your package expires on {{expiry_date}}. Renew to keep booking.",
-  },
-] as const;
-
 const AUDIT_PAGE_SIZE = 25;
 
 function SettingsPage() {
@@ -349,7 +325,7 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="notifications" className="mt-4 grid gap-5">
             <BookingRemindersSetting />
-            <NotificationTemplatesTab />
+            <MessageTemplatesSetting />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <AuditTab />
@@ -1622,57 +1598,6 @@ function PrivacyTab() {
         </Can>
       </SectionCard>
     </div>
-  );
-}
-
-function NotificationTemplatesTab() {
-  const update = useUpdateNotificationTemplate();
-  const [bodies, setBodies] = useState<Record<string, string>>(() =>
-    Object.fromEntries(NOTIFICATION_TEMPLATE_KEYS.map((t) => [t.key, t.placeholder])),
-  );
-  return (
-    <SectionCard
-      title="Message templates"
-      description="API exposes PUT only — edit known template keys."
-    >
-      <Can
-        permission={PERMISSIONS.BUSINESS_UPDATE}
-        fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
-      >
-        <div className="grid gap-5">
-          {NOTIFICATION_TEMPLATE_KEYS.map((tpl) => (
-            <div key={tpl.key} className="grid gap-2">
-              <Label htmlFor={tpl.key}>
-                {tpl.label} <span className="font-normal text-muted-foreground">({tpl.key})</span>
-              </Label>
-              <Textarea
-                id={tpl.key}
-                rows={3}
-                value={bodies[tpl.key] ?? ""}
-                onChange={(e) => setBodies((p) => ({ ...p, [tpl.key]: e.target.value }))}
-              />
-              <Button
-                size="sm"
-                className="w-fit"
-                disabled={update.isPending || !(bodies[tpl.key] ?? "").trim()}
-                onClick={async () => {
-                  await update.mutateAsync({
-                    key: tpl.key,
-                    bodyRegion: (bodies[tpl.key] ?? "").trim(),
-                  });
-                  toast.success(`${tpl.label} saved`);
-                }}
-              >
-                Save {tpl.label}
-              </Button>
-            </div>
-          ))}
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="size-3.5" /> Merge tags are replaced automatically.
-          </p>
-        </div>
-      </Can>
-    </SectionCard>
   );
 }
 
