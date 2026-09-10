@@ -17,7 +17,7 @@ import {
   type PortalCredit,
 } from "@/lib/api/hooks";
 import type { AvailabilitySlot } from "@/lib/api/types";
-import { formatInTz, isoDate } from "@/lib/format";
+import { formatDuration, formatInTz, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
 function addDays(base: Date, days: number) {
@@ -133,7 +133,7 @@ export function BookWithCreditDialog({
                     >
                       <span className="block font-medium">{s.name}</span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {s.durationMinutes} minutes
+                        {formatDuration(s.durationMinutes)}
                       </span>
                     </button>
                   ))}
