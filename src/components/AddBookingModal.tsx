@@ -39,11 +39,13 @@ import {
   useAvailability,
   useConnectAccount,
   useCreateBooking,
+  useCustomerCredits,
   useCustomerLinkedRecords,
   useCustomer,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
+  usePackages,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
@@ -151,6 +153,22 @@ export function AddBookingModal({
   };
   const connect = useConnectAccount();
   const cardPaymentsLive = connect.data?.chargesEnabled === true;
+  // "Use package credit" only makes sense for a business that sells packages, and
+  // only for a client who actually holds credit. Hidden (not disabled) otherwise: a
+  // detailer with no packages should never see the option at all.
+  const packages = usePackages();
+  const customerCredits = useCustomerCredits(customerId || undefined);
+  const noPackages = packages.isSuccess && packages.data.length === 0;
+  const noCredit =
+    Boolean(customerId) &&
+    customerCredits.isSuccess &&
+    !customerCredits.data.some((c) => c.balance.available > 0);
+  const creditOffered = !noPackages && !noCredit;
+  // Never leave the form on a hidden option: fall back to the remembered up-front /
+  // after-the-job choice, which is always available.
+  useEffect(() => {
+    if (paymentMethod === "credit" && !creditOffered) setPaymentMethodState(paymentTiming);
+  }, [paymentMethod, creditOffered, paymentTiming]);
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
   const [depositInput, setDepositInput] = useState<string | null>(null);
@@ -1309,9 +1327,11 @@ export function AddBookingModal({
                     Request payment up front
                     {service ? ` — ${formatMoney(effectiveTotalMinor, service.currency)}` : ""}
                   </SelectItem>
-                  <SelectItem value="credit" disabled={additional.length > 0}>
-                    Use package credit
-                  </SelectItem>
+                  {creditOffered ? (
+                    <SelectItem value="credit" disabled={additional.length > 0}>
+                      Use package credit
+                    </SelectItem>
+                  ) : null}
                   {bankTransferEnabled ? (
                     <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
                       Bank transfer — awaits payment
