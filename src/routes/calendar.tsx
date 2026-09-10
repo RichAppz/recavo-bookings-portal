@@ -39,7 +39,15 @@ import {
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
-import { addDays, formatInTz, formatMoney, isoDate, startOfWeek, ukDateLong } from "@/lib/format";
+import {
+  addDays,
+  formatInTz,
+  formatMoney,
+  isAllDayEvent,
+  isoDate,
+  startOfWeek,
+  ukDateLong,
+} from "@/lib/format";
 import {
   customerDisplayName,
   type Booking,
@@ -450,6 +458,9 @@ function CalendarPage() {
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
   const timeLabel = (iso: string) =>
     formatInTz(iso, timezone, { hour: "2-digit", minute: "2-digit" });
+  // An all-day event holds the day, not a time on it: no "00:00" prefix, and in
+  // week/day view it sits in the all-day row rather than as a block at midnight.
+  const isAllDay = (ev: CalendarBlock) => isAllDayEvent(ev.start, ev.end, timezone);
 
   /**
    * Clip an item to today's column: one that began yesterday runs from the top of the
@@ -558,10 +569,10 @@ function CalendarPage() {
   const allDayPlaced =
     view === "month"
       ? []
-      : placeItems(
-          allDayIsos,
-          filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
-        );
+      : placeItems(allDayIsos, [
+          ...filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
+          ...events.filter(isAllDay).map((item) => ({ kind: "event" as const, item })),
+        ]);
   const allDayLanes = allDayPlaced.reduce((max, p) => Math.max(max, p.lane + 1), 0);
 
   return (
@@ -811,12 +822,16 @@ function CalendarPage() {
                       );
                       if (entry.kind === "event") {
                         const ev = entry.item;
+                        const allDay = isAllDay(ev);
                         return (
                           <button
                             key={ev.id}
                             type="button"
                             onClick={() => openEvent(ev)}
                             style={{ ...style, ...eventChipStyle(ev.colour) }}
+                            aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
+                              isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
+                            }`}
                             className={cn(
                               "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                               edges,
@@ -830,7 +845,7 @@ function CalendarPage() {
                                 >
                                   ↳
                                 </span>
-                              ) : (
+                              ) : allDay ? null : (
                                 <span className="font-semibold tabular-nums">
                                   {timeLabel(ev.start)}
                                 </span>
@@ -936,8 +951,8 @@ function CalendarPage() {
           </div>
 
           <div className="overflow-x-auto">
-            {/* All-day jobs (RECA-532) get a lane above the hours rather than a
-                00:00–00:00 block: they hold the whole day, not a time on it. */}
+            {/* All-day jobs (RECA-532) and all-day events get a lane above the hours
+                rather than a 00:00–00:00 block: they hold the whole day, not a time on it. */}
             {allDayPlaced.length > 0 ? (
               <div className="flex min-w-[720px] border-b bg-secondary/20">
                 <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
@@ -959,9 +974,48 @@ function CalendarPage() {
                     }}
                   >
                     {allDayPlaced.map((p) => {
-                      if (p.entry.kind !== "booking") return null;
-                      const b = p.entry.item;
                       const { startCol, endCol, lane, continuesBefore, continuesAfter } = p;
+                      if (p.entry.kind === "event") {
+                        const ev = p.entry.item;
+                        const owner = staff.data?.find((s) => s.id === ev.staffId);
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => openEvent(ev)}
+                            title={owner ? `Event · ${owner.displayName}` : "Event"}
+                            aria-label={`All day: ${ev.title}${
+                              isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
+                            }`}
+                            style={{
+                              ...eventChipStyle(ev.colour),
+                              gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                              gridRow: lane + 1,
+                            }}
+                            className={cn(
+                              "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1",
+                              continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
+                            )}
+                          >
+                            {continuesBefore ? (
+                              <span className="text-muted-foreground" aria-label="Continues">
+                                ↳
+                              </span>
+                            ) : null}
+                            <span className="truncate font-semibold">{ev.title}</span>
+                            {view === "day" && owner && !soleStaff ? (
+                              <span className="truncate text-muted-foreground">
+                                · {owner.displayName}
+                              </span>
+                            ) : null}
+                            {continuesAfter ? (
+                              <span className="ml-auto text-muted-foreground">→</span>
+                            ) : null}
+                          </button>
+                        );
+                      }
+                      const b = p.entry.item;
                       const cancelled = isCancelled(b);
                       const payment = chipPayment(b);
                       const tag = tagFor(b);
@@ -1032,7 +1086,7 @@ function CalendarPage() {
               {days.map((day) => {
                 const iso = isoDate(day);
                 const dayBookings = filtered.filter((b) => !b.allDay && coversDay(b, iso));
-                const dayEvents = events.filter((e) => coversDay(e, iso));
+                const dayEvents = events.filter((e) => !isAllDay(e) && coversDay(e, iso));
                 return (
                   <div key={iso} className="relative flex-1 border-l">
                     {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (

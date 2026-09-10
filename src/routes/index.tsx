@@ -62,7 +62,7 @@ import {
 import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
-import { formatInTz, formatMoney, isoDate, pct, ukDate } from "@/lib/format";
+import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
@@ -540,12 +540,18 @@ function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () =
         className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60"
       >
         <div className="w-16 shrink-0">
-          <p className="text-sm font-semibold tabular-nums">
-            {formatInTz(block.start, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {formatInTz(block.end, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
+          {isAllDayEvent(block.start, block.end, timezone) ? (
+            <p className="text-sm font-semibold">All day</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatInTz(block.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatInTz(block.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </>
+          )}
         </div>
         <span
           aria-hidden

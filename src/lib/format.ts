@@ -84,6 +84,31 @@ export function spansDays(startIso: string, endIso: string, timeZone: string): b
 }
 
 /**
+ * A staff event has no all-day flag of its own: the event form saves "All day" as
+ * midnight to midnight, so that shape is what all-day means. Whole days from
+ * midnight to a later midnight (one or several) count; a 00:00–00:00 range that
+ * is not on day boundaries in the business's timezone does not.
+ */
+export function isAllDayEvent(startIso: string, endIso: string, timeZone: string): boolean {
+  const minutesOf = (iso: string) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    }).formatToParts(new Date(iso));
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24;
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    return h * 60 + m;
+  };
+  return (
+    new Date(endIso).getTime() > new Date(startIso).getTime() &&
+    minutesOf(startIso) === 0 &&
+    minutesOf(endIso) === 0
+  );
+}
+
+/**
  * "17 Sept 2026, 09:00 – 10:00" for a same-day booking; multi-day jobs (a two-day
  * detailing) spell out the return day too: "17 Sept 2026, 09:00 – 19 Sept, 09:00".
  */
