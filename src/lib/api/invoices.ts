@@ -22,6 +22,7 @@ export type {
   Invoice,
   InvoiceLine,
   InvoiceLineInput,
+  InvoiceLinkedRecord,
   InvoiceOrigin,
   InvoiceStatus,
   UpdateInvoiceBody,

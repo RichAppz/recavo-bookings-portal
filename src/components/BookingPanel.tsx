@@ -535,7 +535,6 @@ export function BookingPanel({
                           : formatDurationLong(totalMinutes)
                       }
                     />
-                    <Detail label="Source" value={booking.source} />
                   </dl>
 
                   {(booking.lineItems?.length ?? 0) > 1 ? (

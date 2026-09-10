@@ -4321,6 +4321,25 @@
               "null"
             ]
           },
+          "linkedRecord": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The record the work was done on (vehicle, pet, …), snapshotted from the booking’s linked record when the draft was created and printed on the PDF and email. `label` is the business’s singular term for the record type (\"Vehicle\"); `value` is a short summary (\"AB12 CDE · Ford · Focus\"). Null when the invoice is not about a record.",
+            "required": [
+              "label",
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
           "customerId": {
             "type": "string",
             "format": "uuid"
@@ -44109,7 +44128,7 @@
       },
       "patch": {
         "summary": "Edit a draft invoice",
-        "description": "Replaces lines / due date / notes / customer on a draft. Issued invoices are frozen (409 CONFLICT). Requires invoice.manage and the `invoicing` feature.",
+        "description": "Replaces lines / due date / notes / customer / linked record on a draft. Issued invoices are frozen (409 CONFLICT). Requires invoice.manage and the `invoicing` feature.",
         "security": [
           {
             "bearerAuth": []
@@ -44199,6 +44218,27 @@
                   "customerId": {
                     "type": "string",
                     "format": "uuid"
+                  },
+                  "linkedRecord": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "Correct the vehicle / pet / … the invoice is about. Null or a blank `value` clears it. Both parts are trimmed.",
+                    "required": [
+                      "label",
+                      "value"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    }
                   }
                 }
               }

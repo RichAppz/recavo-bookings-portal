@@ -57,6 +57,7 @@ import {
   formatVatRate,
   invoiceAllows,
   invoiceBalanceMinor,
+  invoiceLinkedRecord,
   showsVat,
   type InvoiceAddress,
 } from "@/lib/invoices";
@@ -138,6 +139,7 @@ function InvoiceDetail() {
   const inv: Invoice = invoice;
   const balance = invoiceBalanceMinor(inv);
   const vat = showsVat(inv);
+  const record = invoiceLinkedRecord(inv);
   const customerName = customer.data ? customerDisplayName(customer.data) : inv.billTo.name;
   const customerEmail = inv.billTo.email ?? customer.data?.emailNormalised ?? null;
   const busy = issue.isPending || send.isPending || markPaid.isPending || voidInvoice.isPending;
@@ -388,6 +390,12 @@ function InvoiceDetail() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <SectionCard title="Lines" bodyClassName="p-0">
+          {record ? (
+            <div className="border-b px-4 py-3 text-sm">
+              <p className="text-xs font-medium text-muted-foreground">{record.label}</p>
+              <p className="mt-0.5 font-medium">{record.value}</p>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-secondary/60 text-xs text-muted-foreground">
