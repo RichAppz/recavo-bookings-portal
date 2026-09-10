@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Layers, Package, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupGate } from "@/components/SetupGate";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import type { ContactChannel } from "@/lib/api/types";
@@ -559,11 +560,15 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
   const createBooking = useCreateBooking();
   const groupServices = (services.data ?? []).filter((s) => s.capacityMax > 1);
   const locationList = locations.data ?? [];
-  // A single location needs no picker: it is filled in and the field stays hidden.
-  const soleLocationId = locationList.length === 1 ? locationList[0]!.id : null;
+  // A single location or staff member needs no picker: filled in, field hidden.
+  const soleLocationId = useSoleLocation()?.id ?? null;
+  const soleStaffId = useSoleStaff()?.id ?? null;
   useEffect(() => {
     if (open && soleLocationId && !locationId) setLocationId(soleLocationId);
   }, [open, soleLocationId, locationId]);
+  useEffect(() => {
+    if (open && soleStaffId && !staffId) setStaffId(soleStaffId);
+  }, [open, soleStaffId, staffId]);
 
   const gate = firstGate([
     {
@@ -617,7 +622,7 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
       onClose={onClose}
       gate={gate}
       what="this session"
-      dirty={customerId !== "" || serviceId !== "" || staffId !== ""}
+      dirty={customerId !== "" || serviceId !== "" || (staffId !== "" && staffId !== soleStaffId)}
       title="Create group session"
       description="Publish a group session and add the first attendee."
       submitLabel="Create session"
@@ -670,21 +675,23 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
         </Select>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label>Staff</Label>
-          <Select value={staffId} onValueChange={setStaffId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose staff" />
-            </SelectTrigger>
-            <SelectContent>
-              {(staff.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {soleStaffId ? null : (
+          <div className="grid gap-2">
+            <Label>Staff</Label>
+            <Select value={staffId} onValueChange={setStaffId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose staff" />
+              </SelectTrigger>
+              <SelectContent>
+                {(staff.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {soleLocationId ? null : (
           <div className="grid gap-2">
             <Label>Location</Label>
@@ -723,6 +730,10 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
   const [reason, setReason] = useState("Admin time");
   const staff = useStaffList();
   const addTimeOff = useAddStaffTimeOff();
+  const soleStaff = useSoleStaff();
+  useEffect(() => {
+    if (open && soleStaff && !staffId) setStaffId(soleStaff.id);
+  }, [open, soleStaff, staffId]);
   const member = (staff.data ?? []).find((s) => s.id === staffId);
 
   const gate = firstGate([
@@ -748,7 +759,7 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
       onClose={onClose}
       gate={gate}
       what="this block"
-      dirty={staffId !== "" || reason !== "Admin time"}
+      dirty={(staffId !== "" && staffId !== soleStaff?.id) || reason !== "Admin time"}
       title="Block availability"
       description="Stop new bookings being taken during a period."
       submitLabel="Block time"
@@ -771,21 +782,23 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
         toast.success("Availability blocked");
       }}
     >
-      <div className="grid gap-2">
-        <Label>Staff member</Label>
-        <Select value={staffId} onValueChange={setStaffId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose staff" />
-          </SelectTrigger>
-          <SelectContent>
-            {(staff.data ?? []).map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {soleStaff ? null : (
+        <div className="grid gap-2">
+          <Label>Staff member</Label>
+          <Select value={staffId} onValueChange={setStaffId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose staff" />
+            </SelectTrigger>
+            <SelectContent>
+              {(staff.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.displayName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="grid gap-2">
           <Label htmlFor="b-date">Date</Label>

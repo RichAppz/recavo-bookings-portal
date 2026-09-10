@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/hooks";
 import { customerDisplayName, type Booking } from "@/lib/api/types";
 import { bookingSettlement } from "@/lib/booking-payment";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { formatAllDaySpan, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
 export const Route = createFileRoute("/bookings")({
@@ -75,6 +76,9 @@ function BookingsPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   const staff = useStaffList();
+  // One staff member / one location: nothing to filter by and nothing to show.
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   const services = useServices();
   const locations = useLocationsList();
   const tenant = useTenant();
@@ -146,19 +150,21 @@ function BookingsPage() {
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
           />
-          <Select value={staffFilter} onValueChange={setStaffFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder={staffNoun} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All {staffNoun.toLowerCase()}s</SelectItem>
-              {(staff.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {soleStaff ? null : (
+            <Select value={staffFilter} onValueChange={setStaffFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder={staffNoun} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All {staffNoun.toLowerCase()}s</SelectItem>
+                {(staff.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <ServiceFilterSelect
             services={services.data ?? []}
             value={serviceFilter}
@@ -222,16 +228,18 @@ function BookingsPage() {
                     "Date and time",
                     "Client",
                     "Service",
-                    staffNoun,
-                    "Location",
+                    soleStaff ? null : staffNoun,
+                    soleLocation ? null : "Location",
                     "Amount",
                     "Status",
                     "",
-                  ].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
+                  ]
+                    .filter((h): h is string => h !== null)
+                    .map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -239,8 +247,16 @@ function BookingsPage() {
                   <BookingRow
                     key={b.id}
                     booking={b}
-                    trainerName={staff.data?.find((s) => s.id === b.staffId)?.displayName ?? "—"}
-                    locationName={locations.data?.find((l) => l.id === b.locationId)?.name ?? "—"}
+                    trainerName={
+                      soleStaff
+                        ? null
+                        : (staff.data?.find((s) => s.id === b.staffId)?.displayName ?? "—")
+                    }
+                    locationName={
+                      soleLocation
+                        ? null
+                        : (locations.data?.find((l) => l.id === b.locationId)?.name ?? "—")
+                    }
                     onSelect={() => setSelectedBookingId(b.id)}
                   />
                 ))}
@@ -291,8 +307,9 @@ function BookingRow({
   onSelect,
 }: {
   booking: Booking;
-  trainerName: string;
-  locationName: string;
+  /** Null hides the column (a one-person / one-place business). */
+  trainerName: string | null;
+  locationName: string | null;
   onSelect: () => void;
 }) {
   const customer = useCustomer(booking.leadCustomerId);
@@ -334,8 +351,10 @@ function BookingRow({
         </span>
       </td>
       <td className="px-4 py-3 whitespace-nowrap">{booking.serviceSnapshot.name}</td>
-      <td className="px-4 py-3 whitespace-nowrap">{trainerName}</td>
-      <td className="px-4 py-3 whitespace-nowrap">{locationName}</td>
+      {trainerName === null ? null : <td className="px-4 py-3 whitespace-nowrap">{trainerName}</td>}
+      {locationName === null ? null : (
+        <td className="px-4 py-3 whitespace-nowrap">{locationName}</td>
+      )}
       <td className="px-4 py-3 whitespace-nowrap tabular-nums">
         {formatMoney(booking.priceMinor, booking.currency)}
         {settlement.state === "deposit_paid" || settlement.state === "part_paid" ? (

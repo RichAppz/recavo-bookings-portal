@@ -66,6 +66,7 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -229,11 +230,8 @@ export function AddBookingModal({
   // A one-person business has nothing to choose: pick them and drop the field.
   // "Any staff member" and the single member are the same search, but pinning
   // the id means the availability quote and booking name them explicitly.
-  const activeStaff = useMemo(
-    () => (staff.data ?? []).filter((s) => s.status === "active"),
-    [staff.data],
-  );
-  const soleStaff = staff.isSuccess && activeStaff.length === 1 ? activeStaff[0] : null;
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   useEffect(() => {
     if (!open || !soleStaff) return;
     if (staffId !== soleStaff.id) setStaffId(soleStaff.id);
@@ -863,7 +861,7 @@ export function AddBookingModal({
                 />
               </div>
               {/* One location is picked for them above; nothing to ask. */}
-              {locationList.length > 1 ? (
+              {soleLocation ? null : (
                 <div className="grid gap-2">
                   <Label>Location</Label>
                   <Select
@@ -885,7 +883,7 @@ export function AddBookingModal({
                     </SelectContent>
                   </Select>
                 </div>
-              ) : null}
+              )}
               {soleStaff ? null : (
                 <div className="grid gap-2">
                   <Label>{staffNoun}</Label>
