@@ -34645,6 +34645,10 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "notifyCustomer": {
+                    "type": "boolean",
+                    "description": "Defaults to true. Set false to cancel without sending the customer the cancellation message (e.g. they asked over the phone). Reminders are still removed."
                   }
                 }
               }
