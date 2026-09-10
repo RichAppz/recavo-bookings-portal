@@ -492,13 +492,10 @@ function CalendarPage() {
    * item takes the topmost lane that's free across every column it covers, so a
    * two-day job is one uninterrupted bar and the day items pack in around it.
    */
-  const placeMonthItems = (weekIsos: string[]): PlacedItem[] => {
-    const entries: MonthEntry[] = [
-      ...filtered.map((item) => ({ kind: "booking" as const, item })),
-      ...events.map((item) => ({ kind: "event" as const, item })),
-    ];
+  const placeItems = (isos: string[], entries: MonthEntry[]): PlacedItem[] => {
+    const lastCol = isos.length - 1;
     const spans = entries.flatMap((entry) => {
-      const cols = weekIsos
+      const cols = isos
         .map((iso, i) => (coversDay(entry.item, iso) ? i : -1))
         .filter((i) => i >= 0);
       if (cols.length === 0) return [];
@@ -509,8 +506,8 @@ function CalendarPage() {
           entry,
           startCol,
           endCol,
-          continuesBefore: startCol === 0 && !startsOn(entry.item, weekIsos[0]!),
-          continuesAfter: endCol === 6 && !endsOn(entry.item, weekIsos[6]!),
+          continuesBefore: startCol === 0 && !startsOn(entry.item, isos[0]!),
+          continuesAfter: endCol === lastCol && !endsOn(entry.item, isos[lastCol]!),
         },
       ];
     });
@@ -529,6 +526,22 @@ function CalendarPage() {
       return { ...span, lane };
     });
   };
+  const placeMonthItems = (weekIsos: string[]) =>
+    placeItems(weekIsos, [
+      ...filtered.map((item) => ({ kind: "booking" as const, item })),
+      ...events.map((item) => ({ kind: "event" as const, item })),
+    ]);
+  // Week/day view: the all-day row lays multi-day jobs as one bar across the
+  // columns they cover, the same way the month grid does.
+  const allDayIsos = view === "month" ? [] : days.map(isoDate);
+  const allDayPlaced =
+    view === "month"
+      ? []
+      : placeItems(
+          allDayIsos,
+          filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
+        );
+  const allDayLanes = allDayPlaced.reduce((max, p) => Math.max(max, p.lane + 1), 0);
 
   return (
     <>
@@ -566,7 +579,7 @@ function CalendarPage() {
           {range}
           {!bookings.isLoading && bookedMinor > 0 ? (
             <span
-              className="ml-2 font-medium text-muted-foreground tabular-nums"
+              className="ml-3 font-medium text-muted-foreground tabular-nums"
               aria-label={`${formatMoney(bookedMinor, currency)} booked in this range`}
             >
               {formatMoney(bookedMinor, currency)}
@@ -886,58 +899,76 @@ function CalendarPage() {
           <div className="overflow-x-auto">
             {/* All-day jobs (RECA-532) get a lane above the hours rather than a
                 00:00–00:00 block: they hold the whole day, not a time on it. */}
-            {filtered.some((b) => b.allDay) ? (
+            {allDayPlaced.length > 0 ? (
               <div className="flex min-w-[720px] border-b bg-secondary/20">
                 <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
                   All day
                 </div>
-                {days.map((day) => {
-                  const iso = isoDate(day);
-                  const items = filtered
-                    .filter((b) => b.allDay && coversDay(b, iso))
-                    .sort((a, b) => a.start.localeCompare(b.start));
-                  return (
-                    <div key={iso} className="flex min-h-9 flex-1 flex-col gap-0.5 border-l p-1">
-                      {items.map((b) => {
-                        const cancelled = isCancelled(b);
-                        const payment = chipPayment(b);
-                        const tag = tagFor(b);
-                        const owner = staff.data?.find((s) => s.id === b.staffId);
-                        return (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => setSelectedBookingId(b.id)}
-                            title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
-                            aria-label={`All day: ${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name} — ${payment.label}`}
-                            className={cn(
-                              "flex w-full cursor-pointer items-center gap-1.5 truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
-                              payment.className,
-                              cancelled && "opacity-45 line-through",
-                            )}
-                          >
-                            <ServiceDot colour={serviceColour(b)} />
-                            {startsOn(b, iso) ? null : (
-                              <span className="text-muted-foreground" aria-label="Continues">
-                                ↳
-                              </span>
-                            )}
-                            {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
-                            <span className="truncate">{b.serviceSnapshot.name}</span>
-                            {view === "day" && owner ? (
-                              <span className="truncate text-muted-foreground">
-                                · {owner.displayName}
-                              </span>
-                            ) : null}
-                            {isMultiDay(b) && !endsOn(b, iso) ? (
-                              <span className="ml-auto text-muted-foreground">→</span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                <div className="relative min-h-9 flex-1">
+                  {/* Column rules sit behind the bars so a two-day job reads as one
+                      bar crossing the line, as it does in the month grid. */}
+                  <div className="pointer-events-none absolute inset-0 flex" aria-hidden>
+                    {allDayIsos.map((iso) => (
+                      <div key={iso} className="flex-1 border-l" />
+                    ))}
+                  </div>
+                  <div
+                    className="relative grid gap-y-0.5 py-1"
+                    style={{
+                      gridTemplateColumns: `repeat(${allDayIsos.length}, minmax(0, 1fr))`,
+                      gridTemplateRows: `repeat(${Math.max(1, allDayLanes)}, auto)`,
+                    }}
+                  >
+                    {allDayPlaced.map((p) => {
+                      if (p.entry.kind !== "booking") return null;
+                      const b = p.entry.item;
+                      const { startCol, endCol, lane, continuesBefore, continuesAfter } = p;
+                      const cancelled = isCancelled(b);
+                      const payment = chipPayment(b);
+                      const tag = tagFor(b);
+                      const owner = staff.data?.find((s) => s.id === b.staffId);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setSelectedBookingId(b.id)}
+                          title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
+                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${b.serviceSnapshot.name}${
+                            isMultiDay(b) ? `, until ${endLabel(b)}` : ""
+                          } — ${payment.label}`}
+                          style={{
+                            gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                            gridRow: lane + 1,
+                          }}
+                          className={cn(
+                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            payment.className,
+                            continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1",
+                            continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
+                            cancelled && "opacity-45 line-through",
+                          )}
+                        >
+                          <ServiceDot colour={serviceColour(b)} />
+                          {continuesBefore ? (
+                            <span className="text-muted-foreground" aria-label="Continues">
+                              ↳
+                            </span>
+                          ) : null}
+                          {tag ? <span className="shrink-0 font-semibold">{tag}</span> : null}
+                          <span className="truncate">{b.serviceSnapshot.name}</span>
+                          {view === "day" && owner ? (
+                            <span className="truncate text-muted-foreground">
+                              · {owner.displayName}
+                            </span>
+                          ) : null}
+                          {continuesAfter ? (
+                            <span className="ml-auto text-muted-foreground">→</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : null}
             <div className="relative flex min-w-[720px]">
