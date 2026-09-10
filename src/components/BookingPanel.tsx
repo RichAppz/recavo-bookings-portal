@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Ban,
+  BellRing,
   CalendarClock,
   CheckCircle2,
   CreditCard,
@@ -73,6 +74,7 @@ import {
   useMarkBankTransferReceived,
   useRecordBookingPayment,
   useResendBookingMessage,
+  useSendPaymentReminder,
   useServices,
   useStaffList,
   stripeCheckoutFrom,
@@ -151,6 +153,7 @@ export function BookingPanel({
   const markReceived = useMarkBankTransferReceived();
   const recordPayment = useRecordBookingPayment();
   const resend = useResendBookingMessage();
+  const paymentReminder = useSendPaymentReminder();
   const smsCredits = useSmsCreditsSummary();
   // Set when a manual text was refused for lack of credits (422) — the one place a
   // zero balance is an error rather than a silent email fallback (ADR 0020 §3.4).
@@ -194,13 +197,22 @@ export function BookingPanel({
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
+  // "Pay after the job": once the work is done (or any time it is still unpaid) staff
+  // can nudge the client about the balance. Same conditions as recording a payment.
+  const canRemindPayment = canRecordPayment && !bankPending;
+  const jobOver = booking ? new Date(booking.end).getTime() <= Date.now() : false;
   // What "Resend" would send, mirroring the API's choice by status (RECA-525).
   const resendLabel: string | null = (() => {
     switch (booking?.status) {
       case "awaiting_payment":
         return bankPending ? "payment instructions" : "payment request";
       case "confirmed":
-        return settlement && settlement.state === "unpaid" && booking.source !== "public"
+        // Pay-after-the-job bookings are confirmed plainly; the nudge is the separate
+        // "Send payment reminder" action.
+        return settlement &&
+          settlement.state === "unpaid" &&
+          booking.source !== "public" &&
+          booking.paymentMethod !== "pay_later"
           ? "payment request"
           : "confirmation";
       case "cancelled_by_customer":
@@ -244,6 +256,25 @@ export function BookingPanel({
         setResendError(
           err.detail ?? "You have no text credits left; buy a bundle to send text messages.",
         );
+        return;
+      }
+      toastApiError(err);
+    }
+  };
+
+  const remindPayment = async () => {
+    if (!booking || !settlement) return;
+    try {
+      const result = await paymentReminder.mutateAsync({ bookingId: booking.id });
+      const by = result.channels.includes("sms") ? "email and text" : "email";
+      toast.success(`Payment reminder sent by ${by}`, {
+        description: `${customer.data ? customerDisplayName(customer.data) : "The client"} was asked for the ${formatMoney(result.outstandingMinor, booking.currency)} outstanding.`,
+      });
+    } catch (err) {
+      // 409 = sent a few minutes ago; 422 = nothing outstanding / no email / send failed.
+      // Both carry a plain-English detail from the API, so show that as the headline.
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
+        toast.error("Payment reminder not sent", { description: err.detail });
         return;
       }
       toastApiError(err);
@@ -688,7 +719,26 @@ export function BookingPanel({
                             Record payment
                           </Button>
                         ) : null}
+                        {canRemindPayment ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={paymentReminder.isPending}
+                            onClick={() => void remindPayment()}
+                          >
+                            <BellRing className="size-4" />
+                            {paymentReminder.isPending ? "Sending…" : "Send payment reminder"}
+                          </Button>
+                        ) : null}
                       </div>
+                      {canRemindPayment ? (
+                        <p className="text-xs text-muted-foreground">
+                          The reminder emails {customerEmail ?? "the client"} the{" "}
+                          {formatMoney(settlement.outstandingMinor, booking.currency)} outstanding
+                          and how to pay
+                          {customerPhone && !smsOptedOut ? ", and texts them too" : ""}.
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -773,6 +823,21 @@ export function BookingPanel({
                 >
                   <Landmark className="size-4" /> Record payment ·{" "}
                   {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
+                </Button>
+              ) : null}
+              {canRemindPayment ? (
+                <Button
+                  variant="outline"
+                  className="col-span-2"
+                  disabled={paymentReminder.isPending}
+                  onClick={() => void remindPayment()}
+                >
+                  <BellRing className="size-4" />
+                  {paymentReminder.isPending
+                    ? "Sending…"
+                    : jobOver
+                      ? "Send payment reminder"
+                      : "Send payment reminder (job not yet done)"}
                 </Button>
               ) : null}
               <Button
