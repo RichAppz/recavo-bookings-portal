@@ -106,6 +106,7 @@ import {
   isoDate,
   parseMoneyToMinor,
 } from "@/lib/format";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -141,6 +142,8 @@ export function BookingPanel({
 
   const bookingQuery = useBooking(bookingId ?? undefined);
   const staffList = useStaffList();
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   const locations = useLocationsList();
   const confirmAction = useBookingAction("confirm");
   const cancelAction = useBookingAction("cancel");
@@ -472,11 +475,16 @@ export function BookingPanel({
                   </div>
 
                   <dl className="grid grid-cols-2 gap-y-3 text-sm">
-                    <Detail
-                      label={tenant.terminology.staff || "Staff"}
-                      value={trainer?.displayName ?? "—"}
-                    />
-                    <Detail label="Location" value={location?.name ?? "—"} />
+                    {/* Obvious who and where in a one-person, one-place business. */}
+                    {soleStaff ? null : (
+                      <Detail
+                        label={tenant.terminology.staff || "Staff"}
+                        value={trainer?.displayName ?? "—"}
+                      />
+                    )}
+                    {soleLocation ? null : (
+                      <Detail label="Location" value={location?.name ?? "—"} />
+                    )}
                     {booking.linkedRecordId ? (
                       <Detail
                         label={tenant.terminology.linkedRecord}

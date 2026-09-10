@@ -54,6 +54,7 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -148,6 +149,8 @@ function ServicesPage() {
   const services = useServices();
   const staff = useStaffList();
   const locations = useLocationsList();
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   const [editing, setEditing] = useState<CatalogueService | null>(null);
@@ -286,15 +289,18 @@ function ServicesPage() {
                     ) : null}
 
                     <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                      <Row
-                        label={
-                          tenant.terminology.staff.toLowerCase().endsWith("s")
-                            ? tenant.terminology.staff
-                            : `${tenant.terminology.staff}s`
-                        }
-                        value={describeDeliverers(s, staff.data ?? [])}
-                      />
-                      {(locations.data ?? []).length > 1 ? (
+                      {/* One person / one place: the rows would only ever say "All". */}
+                      {soleStaff ? null : (
+                        <Row
+                          label={
+                            tenant.terminology.staff.toLowerCase().endsWith("s")
+                              ? tenant.terminology.staff
+                              : `${tenant.terminology.staff}s`
+                          }
+                          value={describeDeliverers(s, staff.data ?? [])}
+                        />
+                      )}
+                      {soleLocation ? null : (
                         <Row
                           label="Locations"
                           value={
@@ -304,7 +310,7 @@ function ServicesPage() {
                               .join(", ") || "All"
                           }
                         />
-                      ) : null}
+                      )}
                       <Row
                         label="Booking notice"
                         value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
@@ -462,6 +468,7 @@ function ServiceDialog({
   const updateService = useUpdateService();
   const updateStaff = useUpdateStaff();
   const staffList = useStaffList();
+  const soleStaff = useSoleStaff();
   const activeStaff = useMemo(
     () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
     [staffList.data],
@@ -1034,75 +1041,78 @@ function ServiceDialog({
             )}
           </div>
 
-          <div className="grid gap-3 border-t pt-4">
-            <Label>Who delivers this {lower}</Label>
-            <RadioGroup
-              value={staffMode}
-              onValueChange={(v) => setStaffMode(v as "all" | "selected")}
-              className="grid gap-2 sm:grid-cols-2"
-            >
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "all" && "border-primary/40 bg-primary-soft/40",
-                )}
+          {/* With one person on the books "everyone" and "them" are the same answer. */}
+          {soleStaff ? null : (
+            <div className="grid gap-3 border-t pt-4">
+              <Label>Who delivers this {lower}</Label>
+              <RadioGroup
+                value={staffMode}
+                onValueChange={(v) => setStaffMode(v as "all" | "selected")}
+                className="grid gap-2 sm:grid-cols-2"
               >
-                <RadioGroupItem value="all" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">All {staffPluralLower}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Anyone on the team, including people you add later.
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "all" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="all" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">All {staffPluralLower}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Anyone on the team, including people you add later.
+                    </span>
                   </span>
-                </span>
-              </label>
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
-                )}
-              >
-                <RadioGroupItem value="selected" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">Only certain people</span>
-                  <span className="text-xs text-muted-foreground">
-                    Pick who can be booked for it.
+                </label>
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="selected" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">Only certain people</span>
+                    <span className="text-xs text-muted-foreground">
+                      Pick who can be booked for it.
+                    </span>
                   </span>
-                </span>
-              </label>
-            </RadioGroup>
-            {staffMode === "selected" ? (
-              activeStaff.length === 0 ? (
+                </label>
+              </RadioGroup>
+              {staffMode === "selected" ? (
+                activeStaff.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No {staffPluralLower} yet — add your team first.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {activeStaff.map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={staffIds.includes(m.id)}
+                          onCheckedChange={(checked) =>
+                            setStaffIds((ids) =>
+                              checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
+                            )
+                          }
+                        />
+                        {m.displayName}
+                      </label>
+                    ))}
+                  </div>
+                )
+              ) : null}
+              {fieldErrors.eligibleStaffIds ? (
+                <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
+              ) : null}
+              {reconcileNames.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  No {staffPluralLower} yet — add your team first.
+                  {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
+                  restricted services list — saving will add this {lower} to it.
                 </p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {activeStaff.map((m) => (
-                    <label key={m.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={staffIds.includes(m.id)}
-                        onCheckedChange={(checked) =>
-                          setStaffIds((ids) =>
-                            checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
-                          )
-                        }
-                      />
-                      {m.displayName}
-                    </label>
-                  ))}
-                </div>
-              )
-            ) : null}
-            {fieldErrors.eligibleStaffIds ? (
-              <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
-            ) : null}
-            {reconcileNames.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
-                restricted services list — saving will add this {lower} to it.
-              </p>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          )}
 
           <WeeklyWindowsEditor
             windows={windows}

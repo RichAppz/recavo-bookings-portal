@@ -29,6 +29,7 @@ import {
 } from "@/lib/api/hooks";
 import type { CalendarBlock } from "@/lib/api/types";
 import { isoDate } from "@/lib/format";
+import { useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -130,12 +131,12 @@ export function EventModal({
     setNotes("");
   }, [open, block, defaultDate, defaultTime, defaultStaffId]);
 
-  // Only one staff member? Save the click.
+  // A one-person business: pick them silently and drop the field.
+  const soleStaff = useSoleStaff();
   useEffect(() => {
-    if (!open || editing || staffId) return;
-    const list = staff.data ?? [];
-    if (list.length === 1 && list[0]) setStaffId(list[0].id);
-  }, [open, editing, staffId, staff.data]);
+    if (!open || editing || staffId || !soleStaff) return;
+    setStaffId(soleStaff.id);
+  }, [open, editing, staffId, soleStaff]);
 
   const saving = create.isPending || update.isPending || cancel.isPending;
   const staffLabel = tenant.terminology.staff || "Staff member";
@@ -231,21 +232,23 @@ export function EventModal({
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label>{staffLabel}</Label>
-            <Select value={staffId} onValueChange={setStaffId}>
-              <SelectTrigger>
-                <SelectValue placeholder={`Choose ${staffLabel.toLowerCase()}`} />
-              </SelectTrigger>
-              <SelectContent>
-                {(staff.data ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {soleStaff ? null : (
+            <div className="grid gap-2">
+              <Label>{staffLabel}</Label>
+              <Select value={staffId} onValueChange={setStaffId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={`Choose ${staffLabel.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(staff.data ?? []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
