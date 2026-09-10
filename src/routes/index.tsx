@@ -63,6 +63,7 @@ import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isoDate, pct, ukDate } from "@/lib/format";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -528,6 +529,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () => void }) {
   const tenant = useTenant();
   const staff = useStaffList();
+  const soleStaff = useSoleStaff();
   const owner = staff.data?.find((s) => s.id === block.staffId);
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
 
@@ -553,7 +555,7 @@ function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () =
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{block.title}</p>
           <p className="truncate text-xs text-muted-foreground">
-            Event · {owner?.displayName ?? "—"}
+            Event{soleStaff ? "" : ` · ${owner?.displayName ?? "—"}`}
             {block.notes ? ` · ${block.notes}` : ""}
           </p>
         </div>
@@ -569,6 +571,13 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
   const customer = useCustomer(booking.leadCustomerId);
   const trainer = staff.data?.find((s) => s.id === booking.staffId);
   const location = locations.data?.find((l) => l.id === booking.locationId);
+  // Who and where go without saying in a one-person, one-place business.
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
+  const where = [
+    soleStaff ? null : (trainer?.displayName ?? "—"),
+    soleLocation ? null : (location?.name ?? "—"),
+  ].filter(Boolean);
   const timezone = booking.timezone || "Europe/London";
 
   return (
@@ -601,8 +610,8 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
             ) : null}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {customer.data ? customerDisplayName(customer.data) : "…"} ·{" "}
-            {trainer?.displayName ?? "—"} · {location?.name ?? "—"}
+            {customer.data ? customerDisplayName(customer.data) : "…"}
+            {where.length > 0 ? ` · ${where.join(" · ")}` : ""}
           </p>
         </div>
         <div className="hidden shrink-0 items-center gap-2 sm:flex">

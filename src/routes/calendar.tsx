@@ -6,6 +6,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { summariseBookings } from "@/lib/calendar-stats";
+import { useSoleStaff } from "@/lib/sole";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
@@ -273,6 +274,7 @@ function CalendarPage() {
 
   const services = useServices();
   const staff = useStaffList();
+  const soleStaff = useSoleStaff();
   // A remembered filter can point at something since deleted; fall back to "all".
   useEffect(() => {
     if (services.data && !serviceFilterExists(serviceFilter, services.data)) {
@@ -618,7 +620,7 @@ function CalendarPage() {
         </Tabs>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           {/* A one-person business has nothing to filter by; the control is noise. */}
-          {(staff.data?.length ?? 0) > 1 ? (
+          {soleStaff ? null : (
             <Select value={staffFilter} onValueChange={setStaffFilter}>
               <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
@@ -634,7 +636,7 @@ function CalendarPage() {
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
+          )}
           <ServiceFilterSelect
             services={services.data ?? []}
             value={serviceFilter}
@@ -999,7 +1001,7 @@ function CalendarPage() {
                           {category ? (
                             <span className="truncate text-muted-foreground">· {category}</span>
                           ) : null}
-                          {view === "day" && owner ? (
+                          {view === "day" && owner && !soleStaff ? (
                             <span className="truncate text-muted-foreground">
                               · {owner.displayName}
                             </span>

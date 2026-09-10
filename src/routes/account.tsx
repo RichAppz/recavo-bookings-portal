@@ -35,7 +35,7 @@ import {
 import type { Booking, Payment } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
 import { bookingNeedsPayment, isSettledPaymentState } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
 const searchSchema = z.object({
@@ -605,7 +605,8 @@ function Offers({
                 <li key={s.id} className="flex items-center justify-between gap-3">
                   <span className="truncate">{s.name}</span>
                   <span className="shrink-0 text-muted-foreground">
-                    {s.durationMinutes} min · {formatMoney(s.basePriceMinor, s.currency)}
+                    {formatDuration(s.durationMinutes)} ·{" "}
+                    {formatMoney(s.basePriceMinor, s.currency)}
                   </span>
                 </li>
               ))}

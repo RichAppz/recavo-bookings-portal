@@ -10,6 +10,7 @@ import { Layers, MapPin, Plus, UserRound } from "lucide-react";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
 import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
+import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,6 +66,7 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -228,11 +230,8 @@ export function AddBookingModal({
   // A one-person business has nothing to choose: pick them and drop the field.
   // "Any staff member" and the single member are the same search, but pinning
   // the id means the availability quote and booking name them explicitly.
-  const activeStaff = useMemo(
-    () => (staff.data ?? []).filter((s) => s.status === "active"),
-    [staff.data],
-  );
-  const soleStaff = staff.isSuccess && activeStaff.length === 1 ? activeStaff[0] : null;
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   useEffect(() => {
     if (!open || !soleStaff) return;
     if (staffId !== soleStaff.id) setStaffId(soleStaff.id);
@@ -642,14 +641,48 @@ export function AddBookingModal({
     }
   };
 
+  // Anything a person typed or picked themselves counts as work worth protecting;
+  // the defaults the form filled in on their behalf (location, staff, date) do not.
+  const dirty =
+    customerId !== (defaultCustomerId ?? "") ||
+    serviceId !== "" ||
+    additional.length > 0 ||
+    slotKey !== null ||
+    notes.trim() !== "" ||
+    priceInput !== null ||
+    discount !== null ||
+    depositInput !== null ||
+    paymentMethod !== "none";
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // Esc, the backdrop and the close cross all land here. A half-filled form asks
+  // first; an untouched one (or the bank-transfer receipt) closes straight away.
+  const requestClose = () => {
+    if (dirty && !bankResult && !submitting) {
+      setConfirmDiscard(true);
+      return;
+    }
+    reset();
+    onOpenChange(false);
+  };
+
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) reset();
-        onOpenChange(o);
+        if (o) onOpenChange(true);
+        else requestClose();
       }}
     >
+      <DiscardChangesDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        what="this booking"
+        onDiscard={() => {
+          setConfirmDiscard(false);
+          reset();
+          onOpenChange(false);
+        }}
+      />
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{bankResult ? "Awaiting bank transfer" : "Add booking"}</DialogTitle>
@@ -827,27 +860,30 @@ export function AddBookingModal({
                   }
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>Location</Label>
-                <Select
-                  value={locationId}
-                  onValueChange={(v) => {
-                    setLocationId(v);
-                    setSlotKey(null);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locationList.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* One location is picked for them above; nothing to ask. */}
+              {soleLocation ? null : (
+                <div className="grid gap-2">
+                  <Label>Location</Label>
+                  <Select
+                    value={locationId}
+                    onValueChange={(v) => {
+                      setLocationId(v);
+                      setSlotKey(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locationList.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {soleStaff ? null : (
                 <div className="grid gap-2">
                   <Label>{staffNoun}</Label>
@@ -1321,7 +1357,7 @@ export function AddBookingModal({
 
         {bankResult ? null : (
           <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" onClick={requestClose}>
               {setupBlocked || catalogueLoading ? "Close" : "Cancel"}
             </Button>
             {setupBlocked || catalogueLoading ? null : (

@@ -46,6 +46,7 @@ import {
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
 import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
+import { useSoleLocation } from "@/lib/sole";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -440,6 +441,7 @@ function StaffDialog({
   const updateStaff = useUpdateStaff();
   const services = useServices();
   const locations = useLocationsList();
+  const soleLocation = useSoleLocation();
 
   const [displayName, setDisplayName] = useState(staff?.displayName ?? "");
   const [title, setTitle] = useState(staff?.title ?? "");
@@ -679,27 +681,31 @@ function StaffDialog({
             </p>
           </div>
 
-          <div className="grid gap-2 border-t pt-4">
-            <Label>Locations</Label>
-            {(locations.data ?? []).length === 0 ? (
-              <p className="text-xs text-muted-foreground">No locations created yet.</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(locations.data ?? []).map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={locationIds.includes(l.id)}
-                      onCheckedChange={() => setLocationIds((ids) => toggleId(ids, l.id))}
-                    />
-                    {l.name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Leave all unchecked to make this trainer available everywhere.
-            </p>
-          </div>
+          {/* With one location there is nothing to restrict by; the section only
+              earns its place once there are several. */}
+          {soleLocation ? null : (
+            <div className="grid gap-2 border-t pt-4">
+              <Label>Locations</Label>
+              {(locations.data ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No locations created yet.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(locations.data ?? []).map((l) => (
+                    <label key={l.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={locationIds.includes(l.id)}
+                        onCheckedChange={() => setLocationIds((ids) => toggleId(ids, l.id))}
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Leave all unchecked to make this trainer available everywhere.
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-2 border-t pt-4">
             <div className="flex items-center justify-between">
@@ -757,27 +763,29 @@ function StaffDialog({
                         }
                       />
                     </div>
-                    <div className="grid min-w-40 flex-1 gap-1">
-                      <Label className="text-xs text-muted-foreground">Location</Label>
-                      <Select
-                        value={r.locationId ?? "any"}
-                        onValueChange={(v) =>
-                          updateWorkingRule(i, { locationId: v === "any" ? null : v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="any">Any location</SelectItem>
-                          {(locations.data ?? []).map((l) => (
-                            <SelectItem key={l.id} value={l.id}>
-                              {l.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {soleLocation ? null : (
+                      <div className="grid min-w-40 flex-1 gap-1">
+                        <Label className="text-xs text-muted-foreground">Location</Label>
+                        <Select
+                          value={r.locationId ?? "any"}
+                          onValueChange={(v) =>
+                            updateWorkingRule(i, { locationId: v === "any" ? null : v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any location</SelectItem>
+                            {(locations.data ?? []).map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
