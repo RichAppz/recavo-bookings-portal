@@ -1,4 +1,4 @@
-import { parseMoneyToMinor } from "./format.ts";
+import { parseMoneyToMinor } from "@/lib/format";
 
 /** "10% off" or "£10 off" as staff type it; `value` is the raw input text. */
 export type Discount = { mode: "percent" | "amount"; value: string };
