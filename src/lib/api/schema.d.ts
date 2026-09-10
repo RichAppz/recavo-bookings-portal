@@ -26561,7 +26561,7 @@ export interface paths {
         head?: never;
         /**
          * Edit a draft invoice
-         * @description Replaces lines / due date / notes / customer on a draft. Issued invoices are frozen (409 CONFLICT). Requires invoice.manage and the `invoicing` feature.
+         * @description Replaces lines / due date / notes / customer / linked record on a draft. Issued invoices are frozen (409 CONFLICT). Requires invoice.manage and the `invoicing` feature.
          */
         patch: {
             parameters: {
@@ -26590,6 +26590,11 @@ export interface paths {
                         notes?: string | null;
                         /** Format: uuid */
                         customerId?: string;
+                        /** @description Correct the vehicle / pet / … the invoice is about. Null or a blank `value` clears it. Both parts are trimmed. */
+                        linkedRecord?: {
+                            label: string;
+                            value: string;
+                        } | null;
                     };
                 };
             };
@@ -38308,6 +38313,11 @@ export interface components {
             /** Format: uuid */
             bookingId: string | null;
             bookingReference?: string | null;
+            /** @description The record the work was done on (vehicle, pet, …), snapshotted from the booking’s linked record when the draft was created and printed on the PDF and email. `label` is the business’s singular term for the record type ("Vehicle"); `value` is a short summary ("AB12 CDE · Ford · Focus"). Null when the invoice is not about a record. */
+            linkedRecord?: {
+                label: string;
+                value: string;
+            } | null;
             /** Format: uuid */
             customerId: string;
             currency: string;

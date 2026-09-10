@@ -5,13 +5,16 @@ import {
   formatVatRate,
   invoiceAllows,
   invoiceBalanceMinor,
+  invoiceLinkedRecord,
   isCustomerVisible,
   isInvoiceOverdue,
   isValidNumberPrefix,
+  linkedRecordInput,
   nextInvoiceNumberPreview,
   percentInputToBps,
   showsVat,
   sortInvoicesNewestFirst,
+  supportsLinkedRecord,
   validateLineDrafts,
   type InvoiceStatus,
 } from "./invoices.ts";
@@ -182,5 +185,33 @@ describe("sortInvoicesNewestFirst", () => {
         "2026-08-30T10:00:00Z",
       ],
     );
+  });
+});
+
+describe("linked record on an invoice", () => {
+  const vehicle = { label: "Vehicle", value: "AB12 CDE · Ford · Focus" };
+
+  it("reads the snapshot, treating a missing key (older API) as no record", () => {
+    assert.deepEqual(invoiceLinkedRecord({ linkedRecord: vehicle }), vehicle);
+    assert.equal(invoiceLinkedRecord({ linkedRecord: null }), null);
+    assert.equal(invoiceLinkedRecord({}), null);
+  });
+
+  it("only offers the editor field when the API sends the key at all", () => {
+    assert.equal(supportsLinkedRecord({ linkedRecord: vehicle }), true);
+    assert.equal(supportsLinkedRecord({ linkedRecord: null }), true);
+    assert.equal(supportsLinkedRecord({}), false);
+  });
+
+  it("turns typed text into the PATCH body, clearing on blank", () => {
+    assert.deepEqual(linkedRecordInput("Vehicle", "  AB12 CDE · Ford Focus ST "), {
+      label: "Vehicle",
+      value: "AB12 CDE · Ford Focus ST",
+    });
+    assert.equal(linkedRecordInput("Vehicle", "   "), null);
+    assert.deepEqual(linkedRecordInput("  ", "AB12 CDE"), {
+      label: "Reference",
+      value: "AB12 CDE",
+    });
   });
 });
