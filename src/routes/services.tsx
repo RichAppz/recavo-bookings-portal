@@ -294,15 +294,17 @@ function ServicesPage() {
                         }
                         value={describeDeliverers(s, staff.data ?? [])}
                       />
-                      <Row
-                        label="Locations"
-                        value={
-                          s.locationIds
-                            .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                            .filter(Boolean)
-                            .join(", ") || "All"
-                        }
-                      />
+                      {(locations.data ?? []).length > 1 ? (
+                        <Row
+                          label="Locations"
+                          value={
+                            s.locationIds
+                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                              .filter(Boolean)
+                              .join(", ") || "All"
+                          }
+                        />
+                      ) : null}
                       <Row
                         label="Booking notice"
                         value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
