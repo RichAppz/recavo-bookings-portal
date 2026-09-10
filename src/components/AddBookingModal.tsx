@@ -9,6 +9,7 @@ import {
 import { Layers, MapPin, Plus, UserRound } from "lucide-react";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
 import { SetupGate } from "@/components/SetupGate";
+import { AddClientDialog } from "@/components/QuickActions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -171,6 +172,7 @@ export function AddBookingModal({
   // Inline "add another" form when the client already has records; with none,
   // the quick-add form shows on its own.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [addClientOpen, setAddClientOpen] = useState(false);
 
   const serviceList = services.data ?? [];
   const locationList = useMemo(() => locations.data ?? [], [locations.data]);
@@ -706,22 +708,39 @@ export function AddBookingModal({
             to="/clients"
             cta="Add client"
             onNavigate={() => onOpenChange(false)}
+            onAction={() => setAddClientOpen(true)}
           />
         ) : (
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Client</Label>
-              <CustomerSearchPicker
-                value={selectedCustomer}
-                suggestions={customerList}
-                placeholder="Choose or search for a client"
-                onSelect={(c) => {
-                  setCustomerId(c.id);
-                  // A record belongs to one client, so it can't survive a client change.
-                  setLinkedRecordId("none");
-                  setQuickAddOpen(false);
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <CustomerSearchPicker
+                    value={selectedCustomer}
+                    suggestions={customerList}
+                    placeholder="Choose or search for a client"
+                    onSelect={(c) => {
+                      setCustomerId(c.id);
+                      // A record belongs to one client, so it can't survive a client change.
+                      setLinkedRecordId("none");
+                      setQuickAddOpen(false);
+                    }}
+                  />
+                </div>
+                {/* New walk-in? Add them here without leaving the half-filled form. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setAddClientOpen(true)}
+                  aria-label="Add a new client"
+                  title="Add a new client"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
             </div>
 
             {hasLinkedRecords && customerId ? (
@@ -1321,6 +1340,16 @@ export function AddBookingModal({
           </DialogFooter>
         )}
       </DialogContent>
+      {/* Stacks over the booking drawer; the new client is selected on save. */}
+      <AddClientDialog
+        open={open && addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+        onCreated={(c) => {
+          setCustomerId(c.id);
+          setLinkedRecordId("none");
+          setQuickAddOpen(false);
+        }}
+      />
     </Dialog>
   );
 }
