@@ -33093,6 +33093,18 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify."
+                  },
+                  "notifyChannels": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "sms"
+                      ]
+                    },
+                    "description": "Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only."
                   }
                 }
               }
@@ -33728,6 +33740,18 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify."
+                  },
+                  "notifyChannels": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "sms"
+                      ]
+                    },
+                    "description": "Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only."
                   }
                 }
               }

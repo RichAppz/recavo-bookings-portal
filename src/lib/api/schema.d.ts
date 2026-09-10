@@ -19347,6 +19347,8 @@ export interface paths {
                          * @default true
                          */
                         notifyCustomer?: boolean;
+                        /** @description Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only. */
+                        notifyChannels?: ("email" | "sms")[];
                     };
                 };
             };
@@ -19552,6 +19554,8 @@ export interface paths {
                          * @default true
                          */
                         notifyCustomer?: boolean;
+                        /** @description Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only. */
+                        notifyChannels?: ("email" | "sms")[];
                     };
                 };
             };
