@@ -172,10 +172,30 @@ if (preflightOnly) {
 }
 assertBundleMatchesTarget();
 
+/**
+ * Nitro stamps `compatibility_date` with "today" in the *local* timezone, but
+ * Cloudflare validates it against UTC and rejects any date in the future. So a
+ * deploy from a BST/CEST shell between 23:00 UTC and local midnight fails with
+ * "Can't set compatibility date in the future". `deploy:*` runs the build under
+ * `TZ=UTC` to avoid that; this clamp is the backstop for any other build route.
+ */
+function clampCompatibilityDateToUtcToday(config) {
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  if (!config.compatibility_date || config.compatibility_date <= todayUtc) return;
+  console.warn(
+    `compatibility_date ${config.compatibility_date} is in the future (UTC today is ${todayUtc}); ` +
+      "clamping so Cloudflare accepts the deploy",
+  );
+  config.compatibility_date = todayUtc;
+}
+
 const path = ".output/server/wrangler.json";
 const config = JSON.parse(readFileSync(path, "utf8"));
 config.name = target.name;
 config.routes = target.domains.map((pattern) => ({ pattern, custom_domain: true }));
+clampCompatibilityDateToUtcToday(config);
 writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
 
-console.log(`${target.name} → ${target.domains.join(", ")}`);
+console.log(
+  `${target.name} → ${target.domains.join(", ")} (compatibility_date ${config.compatibility_date})`,
+);
