@@ -59,6 +59,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
+import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -111,6 +112,7 @@ import {
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { isMessageHistoryEntry } from "@/lib/message-history";
 import { cn } from "@/lib/utils";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
@@ -654,7 +656,11 @@ export function BookingPanel({
                   ) : (
                     <ul>
                       {historyEntries.map((entry, i) => (
-                        <HistoryRow key={String(entry.id ?? i)} entry={entry} timezone={timezone} />
+                        <HistoryRow
+                          key={String(entry.id ?? entry.notificationId ?? i)}
+                          entry={entry}
+                          timezone={timezone}
+                        />
                       ))}
                     </ul>
                   )}
@@ -1194,6 +1200,10 @@ function historyActionLabel(entry: BookingHistoryEntry): string {
 }
 
 function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone: string }) {
+  // Messages sent about the booking (confirmation, reminders…) with delivery status.
+  if (isMessageHistoryEntry(entry)) {
+    return <BookingMessageHistoryRow entry={entry} timezone={timezone} />;
+  }
   const ts = historyTimestamp(entry);
   const transition =
     entry.fromStatus && entry.toStatus

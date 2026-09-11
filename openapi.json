@@ -2807,7 +2807,8 @@
             "type": "string",
             "enum": [
               "email",
-              "in_app"
+              "in_app",
+              "sms"
             ]
           },
           "templateKey": {
@@ -2829,6 +2830,33 @@
             ],
             "format": "uuid"
           },
+          "requestedChannel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "email",
+              "in_app",
+              "sms",
+              null
+            ],
+            "description": "Channel asked for when it differs from `channel` (a text that went as email)."
+          },
+          "fallbackReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "no_phone",
+              "opted_out",
+              "no_credits",
+              "not_entitled",
+              "sms_unavailable",
+              null
+            ]
+          },
           "readAt": {
             "type": [
               "string",
@@ -2839,6 +2867,86 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BookingMessageHistoryEntry": {
+        "type": "object",
+        "required": [
+          "kind",
+          "notificationId",
+          "occurredAt",
+          "channel",
+          "requestedChannel",
+          "templateKey",
+          "status",
+          "reasonCode"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message"
+            ]
+          },
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "email",
+              "in_app",
+              "sms"
+            ]
+          },
+          "requestedChannel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "email",
+              "in_app",
+              "sms",
+              null
+            ],
+            "description": "Channel asked for when it differs from `channel` (a text that went as email)."
+          },
+          "templateKey": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "failed",
+              "fallback"
+            ],
+            "description": "`sent`: handed to the provider; `failed`: the provider refused it; `fallback`: went by email because the text could not."
+          },
+          "reasonCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "invalid_phone",
+              "no_phone",
+              "no_email",
+              "opted_out",
+              "no_credits",
+              "not_entitled",
+              "sms_unavailable",
+              "provider_error",
+              null
+            ],
+            "description": "Why it failed or fell back. Never raw provider text."
           }
         }
       },
@@ -35627,7 +35735,8 @@
     },
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
       "get": {
-        "summary": "Get booking status history",
+        "summary": "Get booking history (status changes and messages)",
+        "description": "Status transitions for the booking, followed by one entry per message sent about it. Message entries have `kind: \"message\"` and carry `channel` (`email` | `sms` | `in_app`), `requestedChannel` (set when a text went as email), `templateKey`, `status` (`sent` | `failed` | `fallback`) and a `reasonCode` staff can act on: `invalid_phone`, `no_phone`, `no_email`, `opted_out`, `no_credits`, `not_entitled`, `sms_unavailable`, `provider_error`; null when the message simply went. Raw provider errors and message bodies are never returned. Sort client-side by `occurredAt`.",
         "security": [
           {
             "bearerAuth": []
@@ -35655,7 +35764,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Ordered history entries",
+            "description": "History entries (status changes and messages)",
             "content": {
               "application/json": {
                 "schema": {
@@ -35667,8 +35776,15 @@
                     "history": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "$ref": "#/components/schemas/BookingMessageHistoryEntry"
+                          }
+                        ]
                       }
                     }
                   }
