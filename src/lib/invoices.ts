@@ -199,16 +199,19 @@ export type TaxConfig = {
   pricesIncludeVat?: boolean;
 };
 
-export type InvoiceAction = "edit" | "issue" | "send" | "markPaid" | "void" | "pdf";
+export type InvoiceAction =
+  "edit" | "issue" | "send" | "markPaid" | "void" | "redo" | "delete" | "pdf";
 
 /**
  * What each status allows (guide §5). Anything else is a 409 from the API, so
  * buttons are driven from here rather than letting users find out the hard way.
+ * A draft has no number, so it is deleted rather than voided; a numbered document
+ * is voided (and optionally redone as a fresh draft), never deleted.
  */
 const ACTIONS_BY_STATUS: Record<InvoiceStatus, ReadonlySet<InvoiceAction>> = {
-  draft: new Set(["edit", "issue", "void", "pdf"]),
-  issued: new Set(["send", "markPaid", "void", "pdf"]),
-  paid: new Set(["send", "void", "pdf"]),
+  draft: new Set(["edit", "issue", "delete", "pdf"]),
+  issued: new Set(["send", "markPaid", "void", "redo", "pdf"]),
+  paid: new Set(["send", "void", "redo", "pdf"]),
   void: new Set(["pdf"]),
 };
 
@@ -216,9 +219,27 @@ export function invoiceAllows(status: InvoiceStatus, action: InvoiceAction): boo
   return ACTIONS_BY_STATUS[status]?.has(action) ?? false;
 }
 
-/** Statuses a customer can see in their account; drafts and voids are 404 to them. */
+/**
+ * Statuses a customer can see in their account. Drafts are 404 to them; a voided
+ * invoice stays visible (stamped VOID) so a number they already hold is accounted for.
+ */
 export function isCustomerVisible(status: InvoiceStatus): boolean {
-  return status === "issued" || status === "paid";
+  return status === "issued" || status === "paid" || status === "void";
+}
+
+export type InvoiceStatusFilter = "all" | InvoiceStatus;
+
+/**
+ * Day-to-day list view: "All statuses" leaves voided invoices out, so a wrong one that
+ * has been voided (and redone) disappears from view. Choosing the explicit "Void"
+ * filter — or any other single status — shows exactly that status.
+ */
+export function visibleInvoices<T extends Pick<Invoice, "status">>(
+  list: readonly T[],
+  filter: InvoiceStatusFilter,
+): T[] {
+  if (filter === "all") return list.filter((inv) => inv.status !== "void");
+  return list.filter((inv) => inv.status === filter);
 }
 
 /** Balance due, clamped at zero (a fully-paid booking can pre-fill paidMinor above total). */

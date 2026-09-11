@@ -2807,7 +2807,8 @@
             "type": "string",
             "enum": [
               "email",
-              "in_app"
+              "in_app",
+              "sms"
             ]
           },
           "templateKey": {
@@ -2829,6 +2830,33 @@
             ],
             "format": "uuid"
           },
+          "requestedChannel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "email",
+              "in_app",
+              "sms",
+              null
+            ],
+            "description": "Channel asked for when it differs from `channel` (a text that went as email)."
+          },
+          "fallbackReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "no_phone",
+              "opted_out",
+              "no_credits",
+              "not_entitled",
+              "sms_unavailable",
+              null
+            ]
+          },
           "readAt": {
             "type": [
               "string",
@@ -2839,6 +2867,86 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BookingMessageHistoryEntry": {
+        "type": "object",
+        "required": [
+          "kind",
+          "notificationId",
+          "occurredAt",
+          "channel",
+          "requestedChannel",
+          "templateKey",
+          "status",
+          "reasonCode"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message"
+            ]
+          },
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "email",
+              "in_app",
+              "sms"
+            ]
+          },
+          "requestedChannel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "email",
+              "in_app",
+              "sms",
+              null
+            ],
+            "description": "Channel asked for when it differs from `channel` (a text that went as email)."
+          },
+          "templateKey": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent",
+              "failed",
+              "fallback"
+            ],
+            "description": "`sent`: handed to the provider; `failed`: the provider refused it; `fallback`: went by email because the text could not."
+          },
+          "reasonCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "invalid_phone",
+              "no_phone",
+              "no_email",
+              "opted_out",
+              "no_credits",
+              "not_entitled",
+              "sms_unavailable",
+              "provider_error",
+              null
+            ],
+            "description": "Why it failed or fell back. Never raw provider text."
           }
         }
       },
@@ -14014,7 +14122,7 @@
     "/api/v1/portal/invoices": {
       "get": {
         "summary": "List own invoices",
-        "description": "Issued and paid invoices for the authorised linked customer only (drafts and voids are never shown). Newest first.",
+        "description": "Issued, paid and voided invoices for the authorised linked customer only (drafts are never shown; a voided one stays listed so the number is accounted for). Newest first.",
         "security": [
           {
             "bearerAuth": []
@@ -35627,7 +35735,8 @@
     },
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
       "get": {
-        "summary": "Get booking status history",
+        "summary": "Get booking history (status changes and messages)",
+        "description": "Status transitions for the booking, followed by one entry per message sent about it. Message entries have `kind: \"message\"` and carry `channel` (`email` | `sms` | `in_app`), `requestedChannel` (set when a text went as email), `templateKey`, `status` (`sent` | `failed` | `fallback`) and a `reasonCode` staff can act on: `invalid_phone`, `no_phone`, `no_email`, `opted_out`, `no_credits`, `not_entitled`, `sms_unavailable`, `provider_error`; null when the message simply went. Raw provider errors and message bodies are never returned. Sort client-side by `occurredAt`.",
         "security": [
           {
             "bearerAuth": []
@@ -35655,7 +35764,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Ordered history entries",
+            "description": "History entries (status changes and messages)",
             "content": {
               "application/json": {
                 "schema": {
@@ -35667,8 +35776,15 @@
                     "history": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": true
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "$ref": "#/components/schemas/BookingMessageHistoryEntry"
+                          }
+                        ]
                       }
                     }
                   }
@@ -44492,6 +44608,196 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "Delete a draft invoice",
+        "description": "Hard-deletes a draft — it has no number, so nothing is kept on record. Anything issued, paid or void returns `409 CONFLICT`: void it instead. Requires invoice.manage (not gated by the bolt-on, so drafts can be tidied after a plan lapses).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "Deleted",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/businesses/{businessId}/invoices/{invoiceId}/issue": {
@@ -45143,7 +45449,7 @@
     "/api/v1/businesses/{businessId}/invoices/{invoiceId}/void": {
       "post": {
         "summary": "Void an invoice",
-        "description": "Draft or issued → `void`. The number (if any) is retained, never reused.",
+        "description": "Issued or paid → `void`. The document stays on record, stamped VOID, and the number is never reused; the customer still sees it in their account. A draft is `409 CONFLICT` — delete it instead. Requires invoice.manage and the `invoicing` feature.",
         "security": [
           {
             "bearerAuth": []
@@ -45195,6 +45501,226 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/void-and-redo": {
+      "post": {
+        "summary": "Void an invoice and open a corrected copy",
+        "description": "Voids an issued or paid invoice and creates a fresh draft copied from it — lines, customer, booking, notes, linked record and the amount already paid — in one transaction. The original keeps its number, stamped VOID. Requires `Idempotency-Key`, invoice.manage and the `invoicing` feature; a draft is `409 CONFLICT`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "The replacement draft (`invoice`) and the voided original (`voided`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invoice",
+                    "voided"
+                  ],
+                  "properties": {
+                    "invoice": {
+                      "$ref": "#/components/schemas/Invoice"
+                    },
+                    "voided": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"

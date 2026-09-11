@@ -16,18 +16,19 @@ import {
   sortInvoicesNewestFirst,
   supportsLinkedRecord,
   validateLineDrafts,
+  visibleInvoices,
   type InvoiceStatus,
 } from "./invoices.ts";
 
 describe("invoiceAllows", () => {
-  it("matches the status table from the integration guide", () => {
+  it("matches the status table: drafts are deleted, numbered invoices voided or redone", () => {
     const table: Record<InvoiceStatus, string[]> = {
-      draft: ["edit", "issue", "void", "pdf"],
-      issued: ["send", "markPaid", "void", "pdf"],
-      paid: ["send", "void", "pdf"],
+      draft: ["edit", "issue", "delete", "pdf"],
+      issued: ["send", "markPaid", "void", "redo", "pdf"],
+      paid: ["send", "void", "redo", "pdf"],
       void: ["pdf"],
     };
-    const actions = ["edit", "issue", "send", "markPaid", "void", "pdf"] as const;
+    const actions = ["edit", "issue", "send", "markPaid", "void", "redo", "delete", "pdf"] as const;
     for (const status of Object.keys(table) as InvoiceStatus[]) {
       for (const action of actions) {
         assert.equal(
@@ -39,11 +40,38 @@ describe("invoiceAllows", () => {
     }
   });
 
-  it("only issued and paid invoices are customer-visible", () => {
+  it("customers see issued, paid and voided invoices but never drafts", () => {
     assert.equal(isCustomerVisible("draft"), false);
     assert.equal(isCustomerVisible("issued"), true);
     assert.equal(isCustomerVisible("paid"), true);
-    assert.equal(isCustomerVisible("void"), false);
+    assert.equal(isCustomerVisible("void"), true);
+  });
+});
+
+describe("visibleInvoices", () => {
+  const list = [
+    { id: "a", status: "draft" as const },
+    { id: "b", status: "issued" as const },
+    { id: "c", status: "void" as const },
+    { id: "d", status: "paid" as const },
+  ];
+
+  it("hides voided invoices from the day-to-day 'all' view", () => {
+    assert.deepEqual(
+      visibleInvoices(list, "all").map((i) => i.id),
+      ["a", "b", "d"],
+    );
+  });
+
+  it("shows exactly the chosen status, including void when asked for", () => {
+    assert.deepEqual(
+      visibleInvoices(list, "void").map((i) => i.id),
+      ["c"],
+    );
+    assert.deepEqual(
+      visibleInvoices(list, "draft").map((i) => i.id),
+      ["a"],
+    );
   });
 });
 

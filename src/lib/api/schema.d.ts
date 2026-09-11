@@ -6720,7 +6720,7 @@ export interface paths {
         };
         /**
          * List own invoices
-         * @description Issued and paid invoices for the authorised linked customer only (drafts and voids are never shown). Newest first.
+         * @description Issued, paid and voided invoices for the authorised linked customer only (drafts are never shown; a voided one stays listed so the number is accounted for). Newest first.
          */
         get: {
             parameters: {
@@ -20787,7 +20787,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get booking status history */
+        /**
+         * Get booking history (status changes and messages)
+         * @description Status transitions for the booking, followed by one entry per message sent about it. Message entries have `kind: "message"` and carry `channel` (`email` | `sms` | `in_app`), `requestedChannel` (set when a text went as email), `templateKey`, `status` (`sent` | `failed` | `fallback`) and a `reasonCode` staff can act on: `invalid_phone`, `no_phone`, `no_email`, `opted_out`, `no_credits`, `not_entitled`, `sms_unavailable`, `provider_error`; null when the message simply went. Raw provider errors and message bodies are never returned. Sort client-side by `occurredAt`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -20800,7 +20803,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Ordered history entries */
+                /** @description History entries (status changes and messages) */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -20808,9 +20811,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            history: {
+                            history: ({
                                 [key: string]: unknown;
-                            }[];
+                            } | components["schemas"]["BookingMessageHistoryEntry"])[];
                         };
                     };
                 };
@@ -26556,7 +26559,138 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a draft invoice
+         * @description Hard-deletes a draft — it has no number, so nothing is kept on record. Anything issued, paid or void returns `409 CONFLICT`: void it instead. Requires invoice.manage (not gated by the bolt-on, so drafts can be tidied after a plan lapses).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -27194,7 +27328,7 @@ export interface paths {
         put?: never;
         /**
          * Void an invoice
-         * @description Draft or issued → `void`. The number (if any) is retained, never reused.
+         * @description Issued or paid → `void`. The document stays on record, stamped VOID, and the number is never reused; the customer still sees it in their account. A draft is `409 CONFLICT` — delete it instead. Requires invoice.manage and the `invoicing` feature.
          */
         post: {
             parameters: {
@@ -27227,6 +27361,160 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/void-and-redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void an invoice and open a corrected copy
+         * @description Voids an issued or paid invoice and creates a fresh draft copied from it — lines, customer, booking, notes, linked record and the amount already paid — in one transaction. The original keeps its number, stamped VOID. Requires `Idempotency-Key`, invoice.manage and the `invoicing` feature; a draft is `409 CONFLICT`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The replacement draft (`invoice`) and the voided original (`voided`) */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                            voided: components["schemas"]["Invoice"];
+                        };
+                    };
                 };
                 /** @description No content */
                 204: {
@@ -38301,17 +38589,50 @@ export interface components {
             recipientType: "customer" | "user";
             recipientId: string;
             /** @enum {string} */
-            channel: "email" | "in_app";
+            channel: "email" | "in_app" | "sms";
             templateKey: string;
             templateVersion: number;
             subject: string;
             body: string;
             /** Format: uuid */
             bookingId: string | null;
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel?: "email" | "in_app" | "sms" | null;
+            /** @enum {string|null} */
+            fallbackReason?: "no_phone" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | null;
             /** Format: date-time */
             readAt: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        BookingMessageHistoryEntry: {
+            /** @enum {string} */
+            kind: "message";
+            /** Format: uuid */
+            notificationId: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            channel: "email" | "in_app" | "sms";
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel: "email" | "in_app" | "sms" | null;
+            templateKey: string;
+            /**
+             * @description `sent`: handed to the provider; `failed`: the provider refused it; `fallback`: went by email because the text could not.
+             * @enum {string}
+             */
+            status: "sent" | "failed" | "fallback";
+            /**
+             * @description Why it failed or fell back. Never raw provider text.
+             * @enum {string|null}
+             */
+            reasonCode: "invalid_phone" | "no_phone" | "no_email" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | "provider_error" | null;
         };
         PublicCataloguePlan: {
             /** @enum {string} */
