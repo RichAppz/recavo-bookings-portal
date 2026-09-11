@@ -117,6 +117,9 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/** Flip to true once the Help centre points at real help content. */
+const SHOW_HELP_CENTRE = false;
+
 const NAV: NavGroup[] = [
   {
     heading: "Schedule",
@@ -374,16 +377,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             }}
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
-          <button
-            onClick={() => {
-              setMobileNav(false);
-              setSetupOpenRequest((n) => n + 1);
-              setTourOpen(true);
-            }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-          >
-            <LifeBuoy className="size-4.5" /> Help centre
-          </button>
+          {/* Help centre is hidden until it's hooked up to real help content. The
+              demo tour it opened is still reachable from the setup checklist. */}
+          {SHOW_HELP_CENTRE ? (
+            <button
+              onClick={() => {
+                setMobileNav(false);
+                setSetupOpenRequest((n) => n + 1);
+                setTourOpen(true);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            >
+              <LifeBuoy className="size-4.5" /> Help centre
+            </button>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
