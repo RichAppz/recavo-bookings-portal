@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { FileText, Plus, Settings } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CreateInvoiceDialog } from "@/components/CreateInvoiceDialog";
+import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { InvoicesTable } from "@/components/InvoicesTable";
 import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
@@ -16,14 +17,16 @@ import {
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useCustomers } from "@/lib/api/hooks";
-import { useInvoices, useInvoicingEntitled } from "@/lib/api/invoices";
+import { useInvoices, useInvoicingEntitled, type Invoice } from "@/lib/api/invoices";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatMoney, isoDate } from "@/lib/format";
 import {
   INVOICE_STATUSES,
   invoiceBalanceMinor,
   isInvoiceOverdue,
+  visibleInvoices,
   type InvoiceStatus,
+  type InvoiceStatusFilter,
 } from "@/lib/invoices";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Can, RequirePermission, useTenant } from "@/lib/tenant/tenant-context";
@@ -60,10 +63,11 @@ const STATUS_LABELS: Record<InvoiceStatus, string> = {
 
 function InvoicesPage() {
   const tenant = useTenant();
-  const [status, setStatus] = useState<"all" | InvoiceStatus>("all");
+  const [status, setStatus] = useState<InvoiceStatusFilter>("all");
   const [customerId, setCustomerId] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
+  const [deleting, setDeleting] = useState<Invoice | null>(null);
 
   const entitled = useInvoicingEntitled();
   const invoices = useInvoices({
@@ -75,7 +79,9 @@ function InvoicesPage() {
   const canManage = tenant.can(PERMISSIONS.INVOICE_MANAGE);
   const currency = tenant.business?.currency ?? "GBP";
 
-  const list = useMemo(() => invoices.data ?? [], [invoices.data]);
+  // "All statuses" hides voided invoices so a wrong one that was voided (and redone)
+  // leaves the day-to-day view; the explicit "Void" filter brings them back.
+  const list = useMemo(() => visibleInvoices(invoices.data ?? [], status), [invoices.data, status]);
   const totals = useMemo(() => {
     const today = isoDate(new Date());
     let outstanding = 0;
@@ -174,7 +180,7 @@ function InvoicesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={status} onValueChange={(v) => setStatus(v as "all" | InvoiceStatus)}>
+            <Select value={status} onValueChange={(v) => setStatus(v as InvoiceStatusFilter)}>
               <SelectTrigger className="w-36">
                 <SelectValue />
               </SelectTrigger>
@@ -195,6 +201,7 @@ function InvoicesPage() {
           loading={invoices.isLoading}
           error={invoices.isError}
           customerName={nameFor}
+          onDeleteDraft={canManage ? setDeleting : undefined}
           empty={
             <EmptyState
               icon={<FileText className="size-6" />}
@@ -220,6 +227,10 @@ function InvoicesPage() {
         />
       </SectionCard>
 
+      <DeleteDraftInvoiceDialog
+        invoice={deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      />
       <CreateInvoiceDialog open={createOpen} onOpenChange={setCreateOpen} />
       <InvoicingUpgradeDialog
         open={upsellOpen}

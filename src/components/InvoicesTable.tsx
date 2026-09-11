@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Zap } from "lucide-react";
+import { Trash2, Zap } from "lucide-react";
 import { TableGhost } from "@/components/ghost";
 import { EmptyState, StatusBadge } from "@/components/ui-bits";
+import { Button } from "@/components/ui/button";
 import type { Invoice } from "@/lib/api/invoices";
 import { formatMoney, isoDate, ukDate } from "@/lib/format";
-import { invoiceBalanceMinor, invoiceLinkedRecord, isInvoiceOverdue } from "@/lib/invoices";
+import {
+  invoiceAllows,
+  invoiceBalanceMinor,
+  invoiceLinkedRecord,
+  isInvoiceOverdue,
+} from "@/lib/invoices";
 import { cn } from "@/lib/utils";
 
 /** "Auto" tag for invoices raised by the job-completion worker rather than a person. */
@@ -51,6 +57,7 @@ export function InvoicesTable({
   customerName,
   empty,
   compact = false,
+  onDeleteDraft,
 }: {
   invoices: readonly Invoice[] | undefined;
   loading?: boolean;
@@ -60,6 +67,8 @@ export function InvoicesTable({
   customerName?: (customerId: string) => string | undefined;
   empty?: ReactNode;
   compact?: boolean;
+  /** When given, draft rows get a delete affordance (the caller confirms and deletes). */
+  onDeleteDraft?: (invoice: Invoice) => void;
 }) {
   if (loading) return <TableGhost rows={compact ? 3 : 6} />;
   if (error) {
@@ -82,6 +91,7 @@ export function InvoicesTable({
     "Total",
     "Balance",
     "Status",
+    ...(onDeleteDraft ? [""] : []),
   ];
 
   return (
@@ -89,8 +99,11 @@ export function InvoicesTable({
       <table className="w-full text-sm">
         <thead className="bg-secondary/60 text-xs text-muted-foreground">
           <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-4 py-2.5 text-left font-medium whitespace-nowrap">
+            {headers.map((h, i) => (
+              <th
+                key={h || `col-${i}`}
+                className="px-4 py-2.5 text-left font-medium whitespace-nowrap"
+              >
                 {h}
               </th>
             ))}
@@ -156,6 +169,22 @@ export function InvoicesTable({
                 <td className={cn("px-4", compact ? "py-2" : "py-3")}>
                   <InvoiceStatusBadge invoice={inv} />
                 </td>
+                {onDeleteDraft ? (
+                  <td className={cn("px-2 text-right", compact ? "py-1" : "py-2")}>
+                    {invoiceAllows(inv.status, "delete") ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Delete draft"
+                        title="Delete this draft"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => onDeleteDraft(inv)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             );
           })}

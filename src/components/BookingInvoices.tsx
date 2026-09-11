@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { FileText, Mail, Plus } from "lucide-react";
+import { FileText, Mail, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { TableGhost } from "@/components/ghost";
 import { InvoiceNumber, InvoiceOriginTag, InvoiceStatusBadge } from "@/components/InvoicesTable";
 import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
@@ -13,6 +14,7 @@ import {
   useCreateInvoice,
   useInvoicingEntitled,
   useSendInvoice,
+  type Invoice,
 } from "@/lib/api/invoices";
 import type { Booking } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
@@ -43,6 +45,7 @@ export function BookingInvoices({
   const send = useSendInvoice();
   const entitled = useInvoicingEntitled();
   const [upsell, setUpsell] = useState(false);
+  const [deleting, setDeleting] = useState<Invoice | null>(null);
 
   if (!tenant.can(PERMISSIONS.INVOICE_READ)) return null;
   const canManage = tenant.can(PERMISSIONS.INVOICE_MANAGE);
@@ -156,12 +159,28 @@ export function BookingInvoices({
                     <Mail className="size-4" /> Send
                   </Button>
                 ) : null}
+                {canManage && invoiceAllows(inv.status, "delete") ? (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Delete draft"
+                    title="Delete this draft"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleting(inv)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ) : null}
               </div>
             </li>
           ))}
         </ul>
       )}
 
+      <DeleteDraftInvoiceDialog
+        invoice={deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      />
       <InvoicingUpgradeDialog open={upsell} onOpenChange={setUpsell} />
     </div>
   );
