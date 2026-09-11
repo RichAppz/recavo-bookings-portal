@@ -20787,7 +20787,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get booking status history */
+        /**
+         * Get booking history (status changes and messages)
+         * @description Status transitions for the booking, followed by one entry per message sent about it. Message entries have `kind: "message"` and carry `channel` (`email` | `sms` | `in_app`), `requestedChannel` (set when a text went as email), `templateKey`, `status` (`sent` | `failed` | `fallback`) and a `reasonCode` staff can act on: `invalid_phone`, `no_phone`, `no_email`, `opted_out`, `no_credits`, `not_entitled`, `sms_unavailable`, `provider_error`; null when the message simply went. Raw provider errors and message bodies are never returned. Sort client-side by `occurredAt`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -20800,7 +20803,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Ordered history entries */
+                /** @description History entries (status changes and messages) */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -20808,9 +20811,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            history: {
+                            history: ({
                                 [key: string]: unknown;
-                            }[];
+                            } | components["schemas"]["BookingMessageHistoryEntry"])[];
                         };
                     };
                 };
@@ -38301,17 +38304,50 @@ export interface components {
             recipientType: "customer" | "user";
             recipientId: string;
             /** @enum {string} */
-            channel: "email" | "in_app";
+            channel: "email" | "in_app" | "sms";
             templateKey: string;
             templateVersion: number;
             subject: string;
             body: string;
             /** Format: uuid */
             bookingId: string | null;
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel?: "email" | "in_app" | "sms" | null;
+            /** @enum {string|null} */
+            fallbackReason?: "no_phone" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | null;
             /** Format: date-time */
             readAt: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        BookingMessageHistoryEntry: {
+            /** @enum {string} */
+            kind: "message";
+            /** Format: uuid */
+            notificationId: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            channel: "email" | "in_app" | "sms";
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel: "email" | "in_app" | "sms" | null;
+            templateKey: string;
+            /**
+             * @description `sent`: handed to the provider; `failed`: the provider refused it; `fallback`: went by email because the text could not.
+             * @enum {string}
+             */
+            status: "sent" | "failed" | "fallback";
+            /**
+             * @description Why it failed or fell back. Never raw provider text.
+             * @enum {string|null}
+             */
+            reasonCode: "invalid_phone" | "no_phone" | "no_email" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | "provider_error" | null;
         };
         PublicCataloguePlan: {
             /** @enum {string} */
