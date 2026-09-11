@@ -31,6 +31,10 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 /**
  * Dialogs render as a right-hand side drawer over the content (mobile: full width).
+ * `overflow-x-hidden`: `overflow-y-auto` alone makes the x-axis `auto` too, so any
+ * child wider than the sheet (a long word, an input row that can't shrink) turned
+ * into a sideways scroll on phones. Popovers and selects are portalled, so nothing
+ * legitimate is clipped.
  */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
@@ -41,7 +45,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "no-scrollbar fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-full flex-col gap-5 overflow-y-auto border-l bg-background p-6 shadow-xl outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
+        "no-scrollbar fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto border-l bg-background p-6 shadow-xl outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
         className,
       )}

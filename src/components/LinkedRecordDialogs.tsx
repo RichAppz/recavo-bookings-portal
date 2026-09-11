@@ -123,7 +123,7 @@ export function CustomerSearchPicker({
           aria-expanded={pickerOpen}
           className="w-full justify-between font-normal"
         >
-          <span className={cn(!value && "text-muted-foreground")}>
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
             {value ? customerDisplayName(value) : placeholder}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />
@@ -897,12 +897,18 @@ export function QuickAddLinkedRecord({
     <div className="rounded-lg border border-dashed p-3">
       {/* Fields in one row (labels as placeholders), then a single status line with
           the actions. Errors are reported in the status line, not under each field,
-          so the row never shifts. */}
+          so the row never shifts. Stacked on a phone: three text inputs side by side
+          can't shrink below their intrinsic width and used to push the whole
+          booking sheet wider than the screen. `minmax(0, …)` for the same reason. */}
       <div
-        className="grid gap-2"
-        style={{
-          gridTemplateColumns: quick.map((f) => (f.required ? "1.25fr" : "1fr")).join(" "),
-        }}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-(--quick-add-cols)"
+        style={
+          {
+            "--quick-add-cols": quick
+              .map((f) => (f.required ? "minmax(0, 1.25fr)" : "minmax(0, 1fr)"))
+              .join(" "),
+          } as React.CSSProperties
+        }
       >
         {quick.map((f, i) => {
           const id = `quick-lr-${f.fieldKey}`;
@@ -956,16 +962,19 @@ export function QuickAddLinkedRecord({
         })}
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-3">
+      {/* Phone: the hint gets its own line above the actions — squeezed next to them
+          it truncated to a few letters, and as `nowrap` text it set the row's minimum
+          width to the whole sentence, widening the sheet. */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <p
           className={cn(
-            "min-w-0 truncate text-xs",
+            "min-w-0 basis-full text-xs sm:flex-1 sm:basis-0 sm:truncate",
             firstError ? "text-destructive" : "text-muted-foreground",
           )}
         >
           {firstError ?? requiredHint}
         </p>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-3">
           {onCancel ? (
             <button
               type="button"
