@@ -325,8 +325,12 @@ function CalendarPage() {
     () => new Map((services.data ?? []).map((s) => [s.id, s])),
     [services.data],
   );
-  const filtered = (bookings.data?.bookings ?? []).filter((b) =>
-    matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)),
+  // Cancelled jobs stay in the Bookings list for the record but are left off
+  // the calendar: the slot is free again and staff plan around what's live.
+  const filtered = (bookings.data?.bookings ?? []).filter(
+    (b) =>
+      !isCancelled(b) &&
+      matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)),
   );
 
   // One batched lookup for every vehicle (or other linked record) in view, so
