@@ -32056,7 +32056,7 @@ export interface paths {
         };
         /**
          * List editable message templates
-         * @description The customer-facing messages a business may reword, labelled and defaulted in its own terminology, with the current wording and the placeholders each supports.
+         * @description The customer-facing messages a business may reword, labelled and defaulted in its own terminology, with the current email and text wording, a rendered preview of each, and the placeholders each supports.
          */
         get: {
             parameters: {
@@ -32190,8 +32190,8 @@ export interface paths {
             };
         };
         /**
-         * Edit a notification template region
-         * @description Saves the business’s own prose for one template. Blank text resets it to the default. Unknown keys are rejected.
+         * Edit a message template on one channel
+         * @description Saves the business’s own wording for one template: the email prose region, or (with `channel: "sms"`) the whole text message. Blank text resets it to the default. Unknown keys are rejected; text wording over 600 characters is rejected.
          */
         put: {
             parameters: {
@@ -32207,6 +32207,8 @@ export interface paths {
                     "application/json": {
                         key: string;
                         bodyRegion: string;
+                        /** @default email */
+                        channel?: components["schemas"]["MessageTemplateChannel"];
                     };
                 };
             };
@@ -32334,6 +32336,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/notification-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview message template wording
+         * @description Renders the given wording against sample values using the same renderer that sends the real message, so the settings preview and the delivered message always match. Blank `body` previews the default.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        key: string;
+                        /** @default email */
+                        channel?: components["schemas"]["MessageTemplateChannel"];
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Rendered preview */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MessageTemplatePreview"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/notification-templates/{key}": {
         parameters: {
             query?: never;
@@ -32347,7 +32506,9 @@ export interface paths {
         /** Reset a message template to its default wording */
         delete: {
             parameters: {
-                query?: never;
+                query?: {
+                    channel?: "email" | "sms";
+                };
                 header?: never;
                 path: {
                     businessId: string;
@@ -36445,6 +36606,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live updates stream (Server-Sent Events)
+         * @description Long-lived `text/event-stream` any active member may open (documents/live-updates.md). Frames are refetch hints, never content: `event: <type>` with a one-line JSON `data` of `{ type, businessId, bookingId?, customerId?, invoiceId? }`. The first frame is always `hello` — treat it as "refetch everything you care about" on connect and reconnect; there is no event replay. Then `sms_credits.changed` (credit consumed / refunded / purchased), `notification.recorded` (a message row was written — booking history, customer notifications), `booking.changed` (any booking state change) and `invoice.changed`. `: keepalive` comments every 25s. `EventSource` cannot send the bearer header, so clients use `fetch` + a stream reader and reconnect with backoff.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Event stream (never completes while the client stays connected) */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        "Cache-Control"?: string;
+                        "X-Accel-Buffering"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/admin/outbox/failed": {
         parameters: {
             query?: never;
@@ -39006,12 +39317,26 @@ export interface components {
             label: string;
             /** @description When the message is sent. */
             description: string;
-            /** @description Platform default prose with terminology filled in and placeholders intact. */
+            /** @description Fixed email subject line in the business’s terminology (not editable). */
+            emailSubject: string;
+            /** @description Platform default email prose with terminology filled in and placeholders intact. */
             defaultBodyRegion: string;
-            /** @description Current prose: the saved override, else `defaultBodyRegion`. */
+            /** @description Current email prose: the saved override, else `defaultBodyRegion`. */
             bodyRegion: string;
-            /** @description Whether the business has saved its own wording. */
+            /** @description Whether the business has saved its own email wording. */
             customised: boolean;
+            /** @description `bodyRegion` rendered against sample values by the sending renderer. */
+            emailPreview: string;
+            /** @description Platform default text message with terminology filled in and placeholders intact. Clauses in `[[…]]` are only sent when every placeholder inside them has a value. */
+            defaultSmsBody: string;
+            /** @description Current text message wording: the saved override, else `defaultSmsBody`. */
+            smsBody: string;
+            /** @description Whether the business has saved its own text wording. */
+            smsCustomised: boolean;
+            /** @description `smsBody` rendered against sample values, trailing link included — the text as it would send. */
+            smsPreview: string;
+            /** @description Label of the link appended to the text ("Details", "Pay") unless the wording places `{{link}}`; null when the message has no link. */
+            smsLinkLabel: string | null;
             placeholders: {
                 /** @description e.g. `{{first_name}}` */
                 token: string;
@@ -39020,6 +39345,19 @@ export interface components {
                 /** @description A believable value for a live preview. */
                 sample: string;
             }[];
+        };
+        /**
+         * @description Which wording: `email` is the prose above the details table; `sms` is the whole text message.
+         * @enum {string}
+         */
+        MessageTemplateChannel: "email" | "sms";
+        MessageTemplatePreview: {
+            /** @description The wording rendered against sample values. For `sms` this is the complete text, link included. */
+            preview: string;
+            /** @description Characters in `preview`. */
+            length: number;
+            /** @description GSM-7 segments the text would bill as; null for email. */
+            segments: number | null;
         };
         CustomerNote: {
             /** Format: uuid */
