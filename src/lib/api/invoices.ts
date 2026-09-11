@@ -263,9 +263,60 @@ export function useMarkInvoicePaid() {
   return useInvoiceTransition("mark-paid");
 }
 
-/** Any non-void status → void. The number is kept and never reused. */
+/**
+ * Issued or paid → void. The number is kept and never reused; the client's copy shows
+ * VOID. Drafts are a 409 here — use `useDeleteInvoice` for those.
+ */
 export function useVoidInvoice() {
   return useInvoiceTransition("void");
+}
+
+/** Hard-delete a draft (204). Anything numbered is a 409 — void it instead. */
+export function useDeleteInvoice() {
+  const cache = useInvoiceCache();
+  return useMutation<void, ApiError, { invoiceId: string }>({
+    mutationFn: async ({ invoiceId }) => {
+      await api.delete(`/api/v1/businesses/${cache.businessId}/invoices/${invoiceId}`);
+    },
+    onSuccess: (_, vars) => {
+      cache.qc.removeQueries({ queryKey: queryKeys.invoice(cache.businessId, vars.invoiceId) });
+      void cache.qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(cache.businessId) });
+    },
+    onError: (err, vars) => {
+      if (err.isConflict) cache.onConflict(vars.invoiceId);
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * "Void and redo": voids an issued/paid invoice and opens a replacement draft copied
+ * from it (lines, client, booking, notes, linked record, amount paid). Idempotent so a
+ * retry never voids twice or opens two drafts. Resolves to the new draft.
+ */
+export function useVoidAndRedoInvoice() {
+  const cache = useInvoiceCache();
+  return useMutation<{ invoice: Invoice; voided: Invoice }, ApiError, { invoiceId: string }>({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { invoiceId: string }, idempotencyKey: string) => {
+        const res = await api.post<{ invoice: Invoice; voided: Invoice }>(
+          `/api/v1/businesses/${cache.businessId}/invoices/${vars.invoiceId}/void-and-redo`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: ({ invoice, voided }) => {
+      cache.settle(voided);
+      cache.settle(invoice);
+    },
+    onError: (err, vars) => {
+      if (err.isConflict) cache.onConflict(vars.invoiceId);
+      if (isFeatureNotAvailable(err)) return;
+      toastApiError(err);
+    },
+  });
 }
 
 /* ---------------- PDF ---------------- */

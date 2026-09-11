@@ -1,9 +1,21 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Ban, CheckCircle2, ChevronDown, Download, Eye, Mail, Send } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  ArrowLeft,
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  Download,
+  Eye,
+  Mail,
+  RefreshCw,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { BookingPanel } from "@/components/BookingPanel";
+import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { DetailGhost } from "@/components/ghost";
 import { InvoiceDraftEditor } from "@/components/InvoiceDraftEditor";
 import { InvoiceOriginTag, InvoiceStatusBadge } from "@/components/InvoicesTable";
@@ -47,6 +59,7 @@ import {
   useIssueInvoice,
   useMarkInvoicePaid,
   useSendInvoice,
+  useVoidAndRedoInvoice,
   useVoidInvoice,
   type Invoice,
 } from "@/lib/api/invoices";
@@ -96,6 +109,7 @@ function addressLines(address: InvoiceAddress | null): string[] {
 function InvoiceDetail() {
   const { invoiceId } = Route.useParams();
   const tenant = useTenant();
+  const navigate = useNavigate();
   const businessId = useBusinessId();
   const invoiceQuery = useInvoice(invoiceId);
   const invoice = invoiceQuery.data;
@@ -106,8 +120,11 @@ function InvoiceDetail() {
   const send = useSendInvoice();
   const markPaid = useMarkInvoicePaid();
   const voidInvoice = useVoidInvoice();
+  const voidAndRedo = useVoidAndRedoInvoice();
 
   const [confirmVoid, setConfirmVoid] = useState(false);
+  const [confirmRedo, setConfirmRedo] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPaid, setConfirmPaid] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
@@ -142,7 +159,12 @@ function InvoiceDetail() {
   const record = invoiceLinkedRecord(inv);
   const customerName = customer.data ? customerDisplayName(customer.data) : inv.billTo.name;
   const customerEmail = inv.billTo.email ?? customer.data?.emailNormalised ?? null;
-  const busy = issue.isPending || send.isPending || markPaid.isPending || voidInvoice.isPending;
+  const busy =
+    issue.isPending ||
+    send.isPending ||
+    markPaid.isPending ||
+    voidInvoice.isPending ||
+    voidAndRedo.isPending;
 
   const allows = (action: Parameters<typeof invoiceAllows>[1]) =>
     canManage && invoiceAllows(inv.status, action);
@@ -235,11 +257,28 @@ function InvoiceDetail() {
     if (!guardEntitled()) return;
     try {
       await voidInvoice.mutateAsync({ invoiceId: inv.id });
-      toast.success(inv.number ? `Invoice ${inv.number} voided` : "Draft voided");
+      toast.success(`Invoice ${inv.number} voided`, {
+        description: "It stays on record stamped VOID; the number is not reused.",
+      });
     } catch (err) {
       if (isFeatureNotAvailable(err)) setUpsell(true);
     } finally {
       setConfirmVoid(false);
+    }
+  };
+
+  const doVoidAndRedo = async () => {
+    if (!guardEntitled()) return;
+    try {
+      const { invoice: draft } = await voidAndRedo.mutateAsync({ invoiceId: inv.id });
+      toast.success(`Invoice ${inv.number} voided — new draft opened`, {
+        description: "Correct the copy and issue it when ready.",
+      });
+      setConfirmRedo(false);
+      void navigate({ to: "/invoices/$invoiceId", params: { invoiceId: draft.id } });
+    } catch (err) {
+      if (isFeatureNotAvailable(err)) setUpsell(true);
+      setConfirmRedo(false);
     }
   };
 
@@ -366,9 +405,29 @@ function InvoiceDetail() {
               <CheckCircle2 className="size-4" /> Mark paid
             </Button>
           ) : null}
+          {allows("redo") ? (
+            <Button
+              variant="outline"
+              disabled={busy}
+              title="Void this invoice and open a corrected copy as a new draft"
+              onClick={() => setConfirmRedo(true)}
+            >
+              <RefreshCw className="size-4" /> Void &amp; redo
+            </Button>
+          ) : null}
           {allows("void") ? (
             <Button variant="ghost" disabled={busy} onClick={() => setConfirmVoid(true)}>
               <Ban className="size-4" /> Void
+            </Button>
+          ) : null}
+          {allows("delete") ? (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="size-4" /> Delete draft
             </Button>
           ) : null}
         </div>
@@ -615,21 +674,54 @@ function InvoiceDetail() {
       <AlertDialog open={confirmVoid} onOpenChange={setConfirmVoid}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Void {inv.number ?? "this draft"}?</AlertDialogTitle>
+            <AlertDialogTitle>Void {inv.number}?</AlertDialogTitle>
             <AlertDialogDescription>
-              {inv.number
-                ? `${inv.number} stays on record, stamped VOID, and its number is never reused. Raise a new invoice for any corrected charge.`
-                : "The draft is kept for your records but can no longer be edited or issued."}
+              {inv.number} stays on record and its number is never reused. The client&apos;s copy
+              (their account and the PDF) will show VOID, and it disappears from your day-to-day
+              list. {inv.status === "paid" ? "The payment stays recorded against it. " : ""}
+              To bill the corrected amount instead, use &ldquo;Void &amp; redo&rdquo;.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
             <AlertDialogAction disabled={voidInvoice.isPending} onClick={() => void doVoid()}>
-              Void invoice
+              {voidInvoice.isPending ? "Voiding…" : "Void invoice"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={confirmRedo} onOpenChange={setConfirmRedo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void {inv.number} and start a corrected copy?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {inv.number} is voided — it stays on record stamped VOID and the client&apos;s copy
+              shows that. A new draft is opened with the same lines, client, notes
+              {record ? ` and ${record.label.toLowerCase()}` : ""}
+              {inv.paidMinor > 0
+                ? `, with the ${formatMoney(inv.paidMinor, inv.currency)} already received carried over`
+                : ""}
+              . Fix what was wrong, then issue it to get the next number.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={voidAndRedo.isPending}
+              onClick={() => void doVoidAndRedo()}
+            >
+              {voidAndRedo.isPending ? "Working…" : "Void & open copy"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <DeleteDraftInvoiceDialog
+        invoice={confirmDelete ? inv : null}
+        onOpenChange={setConfirmDelete}
+        onDeleted={() => void navigate({ to: "/invoices" })}
+      />
 
       <InvoicingUpgradeDialog open={upsell} onOpenChange={setUpsell} />
       {inv.bookingId ? (
