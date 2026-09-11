@@ -815,7 +815,13 @@ export function AddBookingModal({
             onAction={() => setAddClientOpen(true)}
           />
         ) : (
-          <div className="grid gap-4">
+          // Nothing in here may be wider than the sheet. Every grid/flex item defaults to
+          // `min-width: auto`, so a long client name, vehicle label or service name in a
+          // nowrap trigger used to grow the row, then the grid, then the sheet itself,
+          // which scrolled sideways on phones. `truncate` alone can't stop that (it doesn't
+          // change intrinsic size); `min-w-0` on every descendant does, and the explicit
+          // 0-minimum column keeps the root from growing past its container too.
+          <div className="grid min-w-0 grid-cols-1 gap-4 **:min-w-0">
             <div className="grid gap-2">
               <Label>Client</Label>
               <div className="flex items-center gap-2">

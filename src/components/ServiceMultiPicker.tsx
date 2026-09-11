@@ -227,7 +227,12 @@ export function ServiceMultiPicker({
                     value={p.variantId ?? "none"}
                     onValueChange={(next) => setVariant(s.id, next === "none" ? null : next)}
                   >
-                    <SelectTrigger className="h-8 w-40" aria-label={`${s.name} variant`}>
+                    {/* On a phone the variant drops to its own full-width line under the
+                        name/price/remove row; beside them it left the name a few letters. */}
+                    <SelectTrigger
+                      className="order-last h-8 basis-full sm:order-none sm:w-40 sm:basis-auto"
+                      aria-label={`${s.name} variant`}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
