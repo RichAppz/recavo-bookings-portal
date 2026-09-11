@@ -603,15 +603,17 @@ function CalendarPage() {
           <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
             <ChevronRight className="size-4" />
           </Button>
-          <Button variant="ghost" onClick={() => setAnchor(new Date())}>
+          <Button variant="ghost" className="px-3" onClick={() => setAnchor(new Date())}>
             Today
           </Button>
         </div>
-        <p className="text-sm font-semibold">
-          {range}
+        {/* Today has 12px of internal padding, so the visual gap Today → label is
+            gap-3 + px-3 = 24px; match it label → total with gap-6. */}
+        <p className="flex items-baseline gap-6 text-sm font-semibold">
+          <span>{range}</span>
           {!bookings.isLoading && bookedMinor > 0 ? (
             <span
-              className="ml-3 font-medium text-muted-foreground tabular-nums"
+              className="font-medium text-muted-foreground tabular-nums"
               aria-label={`${formatMoney(bookedMinor, currency)} booked in this range`}
             >
               {formatMoney(bookedMinor, currency)}
