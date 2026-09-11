@@ -1,8 +1,14 @@
 import { useMemo, useState } from "react";
 import type { paths } from "./schema";
-import type { MessageTemplate } from "@/lib/message-templates";
+import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
 import { useLiveConnected } from "@/lib/live/live-status";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   ApiError,
   api,
@@ -2653,34 +2659,60 @@ export function usePublishPrivacyNotice() {
 
 /**
  * Editable message templates, worded in the business's terminology, with the current
- * text and supported placeholders. Resolves to `null` against an API that predates the
- * list endpoint (404), so the editor can fall back to client-side defaults.
+ * email and text wording, a server-rendered preview of each, and the placeholders each
+ * supports.
  */
 export function useNotificationTemplates() {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: queryKeys.notificationTemplates(businessId),
     enabled: Boolean(businessId),
-    retry: false,
-    queryFn: async (): Promise<MessageTemplate[] | null> => {
-      try {
-        const res = await api.get<{ templates: MessageTemplate[] }>(
-          `/api/v1/businesses/${businessId}/notification-templates`,
-        );
-        return res.data.templates;
-      } catch (err) {
-        if (err instanceof ApiError && (err.status === 404 || err.status === 405)) return null;
-        throw err;
-      }
+    queryFn: async (): Promise<MessageTemplate[]> => {
+      const res = await api.get<{ templates: MessageTemplate[] }>(
+        `/api/v1/businesses/${businessId}/notification-templates`,
+      );
+      return res.data.templates;
     },
   });
 }
 
+/**
+ * What the given wording would send, rendered against sample values by the same
+ * renderer the API sends with — the only preview there is, so it can never drift.
+ * Pass the debounced text; disabled while `body` is null.
+ */
+export function useNotificationTemplatePreview(input: {
+  key: string;
+  channel: TemplateChannel;
+  body: string | null;
+}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.notificationTemplatePreview(
+      businessId,
+      input.key,
+      input.channel,
+      input.body ?? "",
+    ),
+    enabled: Boolean(businessId) && input.body !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<TemplatePreview> => {
+      const res = await api.post<TemplatePreview>(
+        `/api/v1/businesses/${businessId}/notification-templates/preview`,
+        { key: input.key, channel: input.channel, body: input.body ?? "" },
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Saves the wording for one template on one channel (email prose or the whole text). */
 export function useUpdateNotificationTemplate() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { key: string; bodyRegion: string }) => {
+    mutationFn: async (body: { key: string; bodyRegion: string; channel: TemplateChannel }) => {
       await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
       return body;
     },
@@ -2691,16 +2723,16 @@ export function useUpdateNotificationTemplate() {
   });
 }
 
-/** Back to the default wording for one template. */
+/** Back to the default wording for one template on one channel. */
 export function useResetNotificationTemplate() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (key: string) => {
+    mutationFn: async (input: { key: string; channel: TemplateChannel }) => {
       await api.delete(
-        `/api/v1/businesses/${businessId}/notification-templates/${encodeURIComponent(key)}`,
+        `/api/v1/businesses/${businessId}/notification-templates/${encodeURIComponent(input.key)}?channel=${input.channel}`,
       );
-      return key;
+      return input;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.notificationTemplates(businessId) });

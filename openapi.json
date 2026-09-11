@@ -4178,9 +4178,16 @@
           "key",
           "label",
           "description",
+          "emailSubject",
           "defaultBodyRegion",
           "bodyRegion",
           "customised",
+          "emailPreview",
+          "defaultSmsBody",
+          "smsBody",
+          "smsCustomised",
+          "smsPreview",
+          "smsLinkLabel",
           "placeholders"
         ],
         "properties": {
@@ -4195,17 +4202,48 @@
             "type": "string",
             "description": "When the message is sent."
           },
+          "emailSubject": {
+            "type": "string",
+            "description": "Fixed email subject line in the business’s terminology (not editable)."
+          },
           "defaultBodyRegion": {
             "type": "string",
-            "description": "Platform default prose with terminology filled in and placeholders intact."
+            "description": "Platform default email prose with terminology filled in and placeholders intact."
           },
           "bodyRegion": {
             "type": "string",
-            "description": "Current prose: the saved override, else `defaultBodyRegion`."
+            "description": "Current email prose: the saved override, else `defaultBodyRegion`."
           },
           "customised": {
             "type": "boolean",
-            "description": "Whether the business has saved its own wording."
+            "description": "Whether the business has saved its own email wording."
+          },
+          "emailPreview": {
+            "type": "string",
+            "description": "`bodyRegion` rendered against sample values by the sending renderer."
+          },
+          "defaultSmsBody": {
+            "type": "string",
+            "description": "Platform default text message with terminology filled in and placeholders intact. Clauses in `[[…]]` are only sent when every placeholder inside them has a value."
+          },
+          "smsBody": {
+            "type": "string",
+            "description": "Current text message wording: the saved override, else `defaultSmsBody`."
+          },
+          "smsCustomised": {
+            "type": "boolean",
+            "description": "Whether the business has saved its own text wording."
+          },
+          "smsPreview": {
+            "type": "string",
+            "description": "`smsBody` rendered against sample values, trailing link included — the text as it would send."
+          },
+          "smsLinkLabel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Label of the link appended to the text (\"Details\", \"Pay\") unless the wording places `{{link}}`; null when the message has no link."
           },
           "placeholders": {
             "type": "array",
@@ -4237,6 +4275,39 @@
                 }
               }
             }
+          }
+        }
+      },
+      "MessageTemplateChannel": {
+        "type": "string",
+        "enum": [
+          "email",
+          "sms"
+        ],
+        "description": "Which wording: `email` is the prose above the details table; `sms` is the whole text message."
+      },
+      "MessageTemplatePreview": {
+        "type": "object",
+        "required": [
+          "preview",
+          "length",
+          "segments"
+        ],
+        "properties": {
+          "preview": {
+            "type": "string",
+            "description": "The wording rendered against sample values. For `sms` this is the complete text, link included."
+          },
+          "length": {
+            "type": "integer",
+            "description": "Characters in `preview`."
+          },
+          "segments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "GSM-7 segments the text would bill as; null for email."
           }
         }
       },
@@ -52764,7 +52835,7 @@
     "/api/v1/businesses/{businessId}/notification-templates": {
       "get": {
         "summary": "List editable message templates",
-        "description": "The customer-facing messages a business may reword, labelled and defaulted in its own terminology, with the current wording and the placeholders each supports.",
+        "description": "The customer-facing messages a business may reword, labelled and defaulted in its own terminology, with the current email and text wording, a rendered preview of each, and the placeholders each supports.",
         "security": [
           {
             "bearerAuth": []
@@ -52962,8 +53033,8 @@
         }
       },
       "put": {
-        "summary": "Edit a notification template region",
-        "description": "Saves the business’s own prose for one template. Blank text resets it to the default. Unknown keys are rejected.",
+        "summary": "Edit a message template on one channel",
+        "description": "Saves the business’s own wording for one template: the email prose region, or (with `channel: \"sms\"`) the whole text message. Blank text resets it to the default. Unknown keys are rejected; text wording over 600 characters is rejected.",
         "security": [
           {
             "bearerAuth": []
@@ -52997,6 +53068,10 @@
                   },
                   "bodyRegion": {
                     "type": "string"
+                  },
+                  "channel": {
+                    "$ref": "#/components/schemas/MessageTemplateChannel",
+                    "default": "email"
                   }
                 }
               }
@@ -53166,6 +53241,223 @@
         }
       }
     },
+    "/api/v1/businesses/{businessId}/notification-templates/preview": {
+      "post": {
+        "summary": "Preview message template wording",
+        "description": "Renders the given wording against sample values using the same renderer that sends the real message, so the settings preview and the delivered message always match. Blank `body` previews the default.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "body"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "channel": {
+                    "$ref": "#/components/schemas/MessageTemplateChannel",
+                    "default": "email"
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rendered preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTemplatePreview"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{businessId}/notification-templates/{key}": {
       "delete": {
         "summary": "Reset a message template to its default wording",
@@ -53190,6 +53482,19 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "email",
+                "sms"
+              ],
+              "default": "email"
             }
           }
         ],
@@ -59004,6 +59309,209 @@
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/live": {
+      "get": {
+        "summary": "Live updates stream (Server-Sent Events)",
+        "description": "Long-lived `text/event-stream` any active member may open (documents/live-updates.md). Frames are refetch hints, never content: `event: <type>` with a one-line JSON `data` of `{ type, businessId, bookingId?, customerId?, invoiceId? }`. The first frame is always `hello` — treat it as \"refetch everything you care about\" on connect and reconnect; there is no event replay. Then `sms_credits.changed` (credit consumed / refunded / purchased), `notification.recorded` (a message row was written — booking history, customer notifications), `booking.changed` (any booking state change) and `invoice.changed`. `: keepalive` comments every 25s. `EventSource` cannot send the bearer header, so clients use `fetch` + a stream reader and reconnect with backoff.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event stream (never completes while the client stays connected)",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-cache, no-transform"
+                }
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "type": "string",
+                  "example": "no"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "example": "event: hello\ndata: {\"type\":\"hello\",\"businessId\":\"…\"}\n\nevent: sms_credits.changed\ndata: {\"type\":\"sms_credits.changed\",\"businessId\":\"…\"}\n\n"
+                }
               }
             }
           },
