@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { paths } from "./schema";
 import type { MessageTemplate } from "@/lib/message-templates";
+import { useLiveConnected } from "@/lib/live/live-status";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
@@ -3501,14 +3502,17 @@ export type SmsCredits = {
 /**
  * Text credit balance for the business. Any active member may read it, so the
  * UI can say whether a text will actually go out. Credits are consumed by the
- * server as messages send, so this is refetched on focus rather than cached hard.
+ * server as messages send; the live-updates stream invalidates this the moment
+ * that happens, and while the stream is down it polls every 20s instead.
  */
 export function useSmsCredits() {
   const businessId = useBusinessId();
+  const liveConnected = useLiveConnected();
   return useQuery({
     queryKey: queryKeys.smsCredits(businessId),
     enabled: Boolean(businessId),
     staleTime: 30_000,
+    refetchInterval: liveConnected ? false : 20_000,
     queryFn: async () => {
       const res = await api.get<{ smsCredits: SmsCredits }>(
         `/api/v1/businesses/${businessId}/sms-credits`,

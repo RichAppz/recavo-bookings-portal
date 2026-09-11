@@ -72,6 +72,7 @@ import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
+import { useLiveUpdates } from "@/lib/live/use-live-updates";
 import { cn } from "@/lib/utils";
 
 function pluralizeTerm(term: string) {
@@ -199,6 +200,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
   const [search, setSearch] = useState("");
   const subscription = useSubscription();
+  // Staff-only push channel: credits, message history, bookings refresh as the API records them.
+  useLiveUpdates();
 
   useEffect(() => setMobileNav(false), [pathname]);
 
