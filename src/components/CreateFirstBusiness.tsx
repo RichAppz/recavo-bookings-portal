@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
+import { buildCreateBusinessPayload } from "@/lib/api/business-payload";
 import {
   clearPendingBusiness,
   clearSignUpBusinessMetadata,
@@ -18,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { VerticalPicker } from "@/components/VerticalPicker";
+import { BusinessDetailsFields } from "@/components/BusinessDetailsFields";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
@@ -66,15 +67,9 @@ export function CreateFirstBusiness() {
 
   const create = useMutation({
     mutationFn: async (vars: CreateVars) => {
-      const code = vars.referralCode?.trim();
       const res = await api.post<{ business?: { id: string } }>(
         "/api/v1/businesses",
-        {
-          legalName: vars.legalName.trim(),
-          ...(vars.tradingName?.trim() ? { tradingName: vars.tradingName.trim() } : {}),
-          industryTemplateKey: vars.industryTemplateKey,
-          ...(code ? { referralCode: code } : {}),
-        },
+        buildCreateBusinessPayload(vars),
         { idempotencyKey: newIdempotencyKey() },
       );
       return res.data;
@@ -181,35 +176,15 @@ export function CreateFirstBusiness() {
               });
             }}
           >
-            <div className="flex flex-col gap-4">
-              <Label>What do you do?</Label>
-              <VerticalPicker value={vertical} onChange={setVertical} disabled={create.isPending} />
-              <p className="text-xs text-muted-foreground">
-                Sets your labels and defaults — automotive adds a Vehicle record to each client
-                automatically.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="legalName">{VERTICALS[vertical].businessLabel}</Label>
-              <Input
-                id="legalName"
-                required
-                value={legalName}
-                onChange={(e) => setLegalName(e.target.value)}
-                placeholder={VERTICALS[vertical].businessPlaceholder}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tradingName">Trading name (optional)</Label>
-              <Input
-                id="tradingName"
-                value={tradingName}
-                onChange={(e) => setTradingName(e.target.value)}
-                placeholder="Peak PT"
-              />
-            </div>
+            <BusinessDetailsFields
+              vertical={vertical}
+              onVerticalChange={setVertical}
+              legalName={legalName}
+              onLegalNameChange={setLegalName}
+              tradingName={tradingName}
+              onTradingNameChange={setTradingName}
+              disabled={create.isPending}
+            />
 
             <div className="space-y-2">
               <Label htmlFor="referralCode">Referral code (optional)</Label>
