@@ -48,6 +48,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner } from "@/components/BillingBanner";
@@ -195,6 +196,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [addBusinessOpen, setAddBusinessOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
@@ -419,6 +421,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {b.tradingName}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  setMobileNav(false);
+                  setAddBusinessOpen(true);
+                }}
+              >
+                <Plus className="size-4" /> Add a business
+              </DropdownMenuItem>
               {canViewPlatform ? (
                 <>
                   <DropdownMenuSeparator />
@@ -618,6 +629,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <AddBusinessDialog open={addBusinessOpen} onOpenChange={setAddBusinessOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
       <OnboardingChecklist openRequest={setupOpenRequest} onOpenTour={() => setTourOpen(true)} />
