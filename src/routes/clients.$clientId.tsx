@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { z } from "zod";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -150,7 +151,14 @@ import { formatInTz, formatMoney, ukDate } from "@/lib/format";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
+/** Deep-link support: `?tab=linked&record=<id>` lands on the client's vehicle from a booking. */
+const searchSchema = z.object({
+  tab: z.string().optional(),
+  record: z.string().optional(),
+});
+
 export const Route = createFileRoute("/clients/$clientId")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Client profile — RECAVO" },
@@ -177,6 +185,7 @@ export const Route = createFileRoute("/clients/$clientId")({
 
 function ClientProfile() {
   const { clientId } = Route.useParams();
+  const search = Route.useSearch();
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -316,7 +325,7 @@ function ClientProfile() {
         ))}
       </div>
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={search.tab ?? "profile"}>
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
@@ -555,7 +564,11 @@ function ClientProfile() {
         </TabsContent>
 
         <TabsContent value="linked" className="mt-4">
-          <CustomerLinkedRecordsTab customerId={client.id} disabled={anonymised} />
+          <CustomerLinkedRecordsTab
+            customerId={client.id}
+            disabled={anonymised}
+            focusRecordId={search.record}
+          />
         </TabsContent>
 
         <TabsContent value="portal" className="mt-4">
@@ -1151,9 +1164,12 @@ function CustomerTagsTab({ customerId, disabled }: { customerId: string; disable
 function CustomerLinkedRecordsTab({
   customerId,
   disabled,
+  focusRecordId,
 }: {
   customerId: string;
   disabled: boolean;
+  /** Record to open on arrival (from a booking's vehicle link). */
+  focusRecordId?: string;
 }) {
   const tenant = useTenant();
   const term = tenant.terminology.linkedRecord;
@@ -1175,6 +1191,16 @@ function CustomerLinkedRecordsTab({
   const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
   const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
   const [deletingFor, setDeletingFor] = useState<LinkedRecord | null>(null);
+
+  // Arriving from a booking's vehicle link: open that record once it has loaded.
+  const [focused, setFocused] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusRecordId || focused === focusRecordId || !canEdit || disabled) return;
+    const target = (records.data ?? []).find((r) => r.id === focusRecordId);
+    if (!target) return;
+    setFocused(focusRecordId);
+    setEditing(target);
+  }, [focusRecordId, focused, records.data, canEdit, disabled]);
 
   // Resolve the transfer target from the live list so that after a 409 (stale
   // version) the refetched record — with its bumped version — flows into the
