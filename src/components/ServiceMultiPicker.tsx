@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { Check, ChevronDown, X } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { DialogTrigger } from "@radix-ui/react-dialog";
+import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { QuickAddServiceDialog } from "@/components/QuickAddServiceDialog";
 import { Badge } from "@/components/ui/badge";
+import { BottomSheet, BottomSheetContent, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -18,9 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useIsPhone } from "@/hooks/use-media-query";
 import type { CatalogueService } from "@/lib/api/types";
 import { formatDuration, formatMoney } from "@/lib/format";
+import { PERMISSIONS } from "@/lib/permissions";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
 /** One booked service: the catalogue entry plus which variant, if any. */
@@ -50,9 +55,22 @@ export function ServiceMultiPicker({
   singleReason?: string;
   id?: string;
 }) {
+  const tenant = useTenant();
+  // On a phone the list is a bottom sheet rather than a popover: a popover anchored
+  // to a trigger low on the form flips upwards and, with the keyboard up, runs off
+  // the top of the screen. A sheet always sits in the visible area.
+  const isPhone = useIsPhone();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [nudge, setNudge] = useState<string | null>(null);
+  // "+ New service" mid-booking — for anyone allowed to edit the catalogue.
+  const canAddService = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // "Session" for PT, "service" for detailing — same trimming as the Services page.
+  const serviceNoun = (
+    tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
+  ).toLowerCase();
+  const sheetRef = useRef<HTMLDivElement | null>(null);
   const byId = new Map(services.map((s) => [s.id, s]));
   const picked = value.filter((p) => byId.has(p.serviceId));
   const isPicked = (id: string) => picked.some((p) => p.serviceId === id);
@@ -114,97 +132,175 @@ export function ServiceMultiPicker({
         ? byId.get(picked[0].serviceId)!.name
         : `${byId.get(picked[0].serviceId)!.name} + ${picked.length - 1} more`;
 
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch("");
+  };
+
+  const trigger = (
+    <Button
+      id={id}
+      variant="outline"
+      role="combobox"
+      aria-expanded={open}
+      className="w-full justify-between font-normal"
+    >
+      <span className={cn("truncate", picked.length === 0 && "text-muted-foreground")}>
+        {triggerText}
+      </span>
+      <ChevronDown className="size-4 shrink-0 opacity-50" />
+    </Button>
+  );
+
+  // The search + list + footer, shared by the popover and the phone sheet.
+  const body = (
+    <Command
+      shouldFilter={false}
+      className={cn("min-h-0 flex-1", isPhone && "h-auto")}
+      data-svc-picker-body=""
+    >
+      <CommandInput placeholder="Search services…" value={search} onValueChange={setSearch} />
+      {/* The one part that scrolls; the search box above and footer below stay put. */}
+      <CommandList className={cn("min-h-0 flex-1", isPhone && "max-h-none")}>
+        {matches.length === 0 ? (
+          <p className="py-6 text-center text-sm">No services match.</p>
+        ) : (
+          groupByCategory(matches).map((group) => (
+            <CommandGroup
+              key={group.category ?? "__none"}
+              heading={grouped ? (group.category ?? "Other") : undefined}
+            >
+              {group.items.map((s) => {
+                const on = isPicked(s.id);
+                return (
+                  <CommandItem
+                    key={s.id}
+                    value={s.id}
+                    onSelect={() => toggle(s)}
+                    aria-checked={on}
+                    role="option"
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+                        on ? "border-primary bg-primary text-primary-foreground" : "bg-card",
+                      )}
+                      aria-hidden
+                    >
+                      {on ? <Check className="size-3" /> : null}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">{s.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[
+                          formatDuration(s.durationMinutes),
+                          formatMoney(s.basePriceMinor, s.currency),
+                          grouped ? null : s.category,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          ))
+        )}
+      </CommandList>
+      {/* Pinned under the list so it's there without scrolling: the customer asks for
+          something not on the menu and it's added on the spot. With a search that
+          found nothing, the row offers to add exactly what was typed. */}
+      {canAddService ? (
+        <button
+          type="button"
+          data-svc-picker-new=""
+          onClick={() => setQuickAddOpen(true)}
+          className="flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2 text-left text-sm text-primary hover:bg-secondary"
+        >
+          <Plus className="size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            {needle && matches.length === 0 ? (
+              <>
+                Add “{search.trim()}” as a new {serviceNoun}
+              </>
+            ) : (
+              `New ${serviceNoun}`
+            )}
+          </span>
+        </button>
+      ) : null}
+      {multi ? (
+        <div className="flex items-center justify-between border-t px-3 py-2">
+          <span className="text-xs text-muted-foreground">
+            {picked.length === 0
+              ? "Tick every service in this job."
+              : `${picked.length} picked · ${formatMoney(total, currency)}`}
+          </span>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Done
+          </Button>
+        </div>
+      ) : null}
+    </Command>
+  );
+
+  // Outside `Command` so its Enter/arrow handling never reaches the form fields
+  // (cmdk listens on its root and would toggle the highlighted service on Enter).
+  const quickAdd: ReactNode = canAddService ? (
+    <QuickAddServiceDialog
+      open={open && quickAddOpen}
+      onOpenChange={setQuickAddOpen}
+      services={services}
+      initialName={search}
+      onCreated={(created) => {
+        toggle(created);
+        setSearch("");
+      }}
+    />
+  ) : null;
+
   return (
     <div className="grid gap-2">
-      {/* `modal` so the list gets its own scroll-lock shard: without it the hosting
-          Dialog's lock swallows touch scrolling in the portalled popover on iOS. */}
-      <Popover
-        modal
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) setSearch("");
-        }}
-      >
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-full justify-between font-normal"
+      {isPhone ? (
+        <BottomSheet open={open} onOpenChange={onOpenChange}>
+          <DialogTrigger asChild>{trigger}</DialogTrigger>
+          <BottomSheetContent
+            ref={sheetRef}
+            aria-describedby={undefined}
+            data-svc-picker-sheet=""
+            // Don't drop into the search box: on a phone that raises the keyboard over
+            // half the list before anything's been read. Tapping it still works.
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              sheetRef.current?.focus();
+            }}
           >
-            <span className={cn("truncate", picked.length === 0 && "text-muted-foreground")}>
-              {triggerText}
-            </span>
-            <ChevronDown className="size-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput placeholder="Search services…" value={search} onValueChange={setSearch} />
-            <CommandList>
-              {matches.length === 0 ? (
-                <CommandEmpty>No services match.</CommandEmpty>
-              ) : (
-                groupByCategory(matches).map((group) => (
-                  <CommandGroup
-                    key={group.category ?? "__none"}
-                    heading={grouped ? (group.category ?? "Other") : undefined}
-                  >
-                    {group.items.map((s) => {
-                      const on = isPicked(s.id);
-                      return (
-                        <CommandItem
-                          key={s.id}
-                          value={s.id}
-                          onSelect={() => toggle(s)}
-                          aria-checked={on}
-                          role="option"
-                        >
-                          <span
-                            className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-sm border",
-                              on ? "border-primary bg-primary text-primary-foreground" : "bg-card",
-                            )}
-                            aria-hidden
-                          >
-                            {on ? <Check className="size-3" /> : null}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm">{s.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {[
-                                formatDuration(s.durationMinutes),
-                                formatMoney(s.basePriceMinor, s.currency),
-                                grouped ? null : s.category,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </p>
-                          </div>
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                ))
-              )}
-            </CommandList>
-            {multi ? (
-              <div className="flex items-center justify-between border-t px-3 py-2">
-                <span className="text-xs text-muted-foreground">
-                  {picked.length === 0
-                    ? "Tick every service in this job."
-                    : `${picked.length} picked · ${formatMoney(total, currency)}`}
-                </span>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                  Done
-                </Button>
-              </div>
-            ) : null}
-          </Command>
-        </PopoverContent>
-      </Popover>
+            <BottomSheetTitle className="sr-only">{triggerText}</BottomSheetTitle>
+            {body}
+            {quickAdd}
+          </BottomSheetContent>
+        </BottomSheet>
+      ) : (
+        // `modal` so the list gets its own scroll-lock shard: without it the hosting
+        // Dialog's lock swallows touch scrolling in the portalled popover.
+        <Popover modal open={open} onOpenChange={onOpenChange}>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          {/* Never taller than the room Radix has on the chosen side, so a popover that
+              flips above a low trigger is still fully on screen and the list scrolls
+              inside it instead of the top being cut off. */}
+          <PopoverContent
+            className="flex max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) flex-col p-0"
+            align="start"
+            side="bottom"
+            sticky="always"
+            collisionPadding={12}
+          >
+            {body}
+            {quickAdd}
+          </PopoverContent>
+        </Popover>
+      )}
 
       {picked.length > 0 ? (
         <ul className="grid gap-1.5" aria-label="Selected services">
