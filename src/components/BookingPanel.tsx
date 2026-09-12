@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Ban,
@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Pencil,
   CheckCircle2,
+  ChevronRight,
   CreditCard,
   Landmark,
   Mail,
@@ -153,6 +154,9 @@ export function BookingPanel({
   const [editOpen, setEditOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
+  // "Deposit taken" opens the same record-payment dialog preset to the deposit
+  // still owed, so confirming a deposit is one tap rather than typing the amount.
+  const [recordIntent, setRecordIntent] = useState<"payment" | "deposit">("payment");
   const [tab, setTab] = useState("details");
   const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
 
@@ -217,6 +221,12 @@ export function BookingPanel({
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
+  // Deposit still owed (RECA-523): what "Deposit taken" will record.
+  const depositOwedMinor =
+    settlement && settlement.depositMinor != null
+      ? Math.max(0, settlement.depositMinor - settlement.paidMinor)
+      : 0;
+  const canConfirmDeposit = canRecordPayment && !bankPending && depositOwedMinor > 0;
   // "Pay after the job": once the work is done (or any time it is still unpaid) staff
   // can nudge the client about the balance. Same conditions as recording a payment.
   const canRemindPayment = canRecordPayment && !bankPending;
@@ -720,10 +730,25 @@ export function BookingPanel({
                       <Detail label="Location" value={location?.name ?? "—"} />
                     )}
                     {booking.linkedRecordId ? (
-                      <Detail
-                        label={tenant.terminology.linkedRecord}
-                        value={linkedRecord.data?.displayLabel ?? "…"}
-                      />
+                      <div>
+                        <dt className="text-xs text-muted-foreground">
+                          {tenant.terminology.linkedRecord}
+                        </dt>
+                        <dd className="font-medium">
+                          {/* Straight to the client's record so staff can see the
+                              car's details, photos and history from the job. */}
+                          <Link
+                            to="/clients/$clientId"
+                            params={{ clientId: booking.leadCustomerId }}
+                            search={{ tab: "linked", record: booking.linkedRecordId }}
+                            onClick={onClose}
+                            className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline"
+                          >
+                            {linkedRecord.data?.displayLabel ?? "…"}
+                            <ChevronRight className="size-3.5 text-muted-foreground" />
+                          </Link>
+                        </dd>
+                      </div>
                     ) : null}
                     <Detail
                       label="Payment method"
@@ -754,6 +779,20 @@ export function BookingPanel({
                             : settlement.paidMinor > 0
                               ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far`
                               : "Requested, not yet paid"
+                        }
+                        action={
+                          canConfirmDeposit ? (
+                            <button
+                              type="button"
+                              className="text-left text-xs font-medium text-primary underline-offset-4 hover:underline"
+                              onClick={() => {
+                                setRecordIntent("deposit");
+                                setRecordOpen(true);
+                              }}
+                            >
+                              Deposit taken
+                            </button>
+                          ) : undefined
                         }
                       />
                     ) : null}
@@ -1292,10 +1331,14 @@ export function BookingPanel({
       {booking && settlement ? (
         <RecordPaymentDialog
           open={recordOpen}
-          onOpenChange={setRecordOpen}
+          onOpenChange={(open) => {
+            setRecordOpen(open);
+            if (!open) setRecordIntent("payment");
+          }}
           bookingId={booking.id}
           currency={booking.currency}
           outstandingMinor={settlement.outstandingMinor}
+          depositOwedMinor={recordIntent === "deposit" ? depositOwedMinor : undefined}
           pending={recordPayment.isPending}
           onSubmit={async (amountMinor, method) => {
             try {
@@ -1303,7 +1346,9 @@ export function BookingPanel({
               toast.success(
                 amountMinor >= settlement.outstandingMinor
                   ? "Payment recorded — paid in full"
-                  : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+                  : recordIntent === "deposit" && amountMinor >= depositOwedMinor
+                    ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
+                    : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
               );
               setRecordOpen(false);
             } catch (err) {
@@ -1395,12 +1440,15 @@ function Detail({
   label,
   value,
   hint,
+  action,
   className,
 }: {
   label: string;
   value: string;
   /** Small secondary line, e.g. the catalogue price a total was adjusted from. */
   hint?: string;
+  /** Inline follow-up, e.g. "Deposit taken" under an unpaid deposit. */
+  action?: ReactNode;
   className?: string;
 }) {
   return (
@@ -1408,6 +1456,7 @@ function Detail({
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
       {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
+      {action ? <dd className="mt-0.5">{action}</dd> : null}
     </div>
   );
 }
@@ -1528,6 +1577,7 @@ function RecordPaymentDialog({
   bookingId,
   currency,
   outstandingMinor,
+  depositOwedMinor,
   pending,
   onSubmit,
 }: {
@@ -1536,20 +1586,24 @@ function RecordPaymentDialog({
   bookingId: string;
   currency: string;
   outstandingMinor: number;
+  /** Set when opened via "Deposit taken": presets the amount and rewords the copy. */
+  depositOwedMinor?: number;
   pending: boolean;
   onSubmit: (amountMinor: number, method: RecordPaymentMethod) => Promise<void>;
 }) {
-  const [amount, setAmount] = useState(String(outstandingMinor / 100));
+  const forDeposit = depositOwedMinor != null && depositOwedMinor > 0;
+  const presetMinor = forDeposit ? depositOwedMinor : outstandingMinor;
+  const [amount, setAmount] = useState(String(presetMinor / 100));
   const [method, setMethod] = useState<RecordPaymentMethod>("cash");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setAmount(String(outstandingMinor / 100));
+      setAmount(String(presetMinor / 100));
       setMethod("cash");
       setError(null);
     }
-  }, [open, bookingId, outstandingMinor]);
+  }, [open, bookingId, presetMinor]);
 
   const submit = async () => {
     let minor: number;
@@ -1575,10 +1629,11 @@ function RecordPaymentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Record a payment</DialogTitle>
+          <DialogTitle>{forDeposit ? "Confirm deposit taken" : "Record a payment"}</DialogTitle>
           <DialogDescription>
-            Log money you've taken for this booking — cash, a bank transfer or a card taken
-            elsewhere. {formatMoney(outstandingMinor, currency)} is outstanding.
+            {forDeposit
+              ? `Log the ${formatMoney(depositOwedMinor, currency)} deposit you've taken — cash, a bank transfer or a card taken elsewhere. The remaining ${formatMoney(outstandingMinor - depositOwedMinor, currency)} stays outstanding.`
+              : `Log money you've taken for this booking — cash, a bank transfer or a card taken elsewhere. ${formatMoney(outstandingMinor, currency)} is outstanding.`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -1623,7 +1678,7 @@ function RecordPaymentDialog({
             Cancel
           </Button>
           <Button disabled={pending} onClick={() => void submit()}>
-            {pending ? "Recording…" : "Record payment"}
+            {pending ? "Recording…" : forDeposit ? "Deposit taken" : "Record payment"}
           </Button>
         </DialogFooter>
       </DialogContent>
