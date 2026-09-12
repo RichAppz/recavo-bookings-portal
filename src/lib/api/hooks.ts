@@ -661,10 +661,16 @@ export function useCreateService() {
       const res = await api.post<{ service: CatalogueService }>(
         `/api/v1/businesses/${businessId}/services`,
         body,
+        { idempotencyKey: newIdempotencyKey() },
       );
       return res.data.service;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Seed the list before the refetch lands so a caller can use the new service
+      // straight away — the booking form's quick-add ticks it in the picker at once.
+      qc.setQueryData<CatalogueService[]>(queryKeys.services(businessId), (old) =>
+        old && !old.some((s) => s.id === created.id) ? [...old, created] : old,
+      );
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
       invalidateOnboarding(qc, businessId);
     },
