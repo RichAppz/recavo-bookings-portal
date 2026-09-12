@@ -97,6 +97,7 @@ import {
   type Staff,
 } from "@/lib/api/types";
 import {
+  balanceDueLabel,
   bookingNeedsPayment,
   bookingSettlement,
   isSettledPaymentState,
@@ -215,12 +216,13 @@ export function BookingPanel({
       case "awaiting_payment":
         return bankPending ? "payment instructions" : "payment request";
       case "confirmed":
-        // Pay-after-the-job bookings are confirmed plainly; the nudge is the separate
-        // "Send payment reminder" action.
+        // Pay-after-the-job bookings are confirmed plainly unless a deposit secures
+        // them (then the deposit is requested); the balance nudge is the separate
+        // "Send payment reminder" action either way.
         return settlement &&
           settlement.state === "unpaid" &&
           booking.source !== "public" &&
-          booking.paymentMethod !== "pay_later"
+          (booking.paymentMethod !== "pay_later" || settlement.depositMinor != null)
           ? "payment request"
           : "confirmation";
       case "cancelled_by_customer":
@@ -449,7 +451,8 @@ export function BookingPanel({
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
-                    {formatMoney(settlement.outstandingMinor, booking.currency)} to collect
+                    {formatMoney(settlement.outstandingMinor, booking.currency)}{" "}
+                    {balanceDueLabel(settlement)}
                   </span>
                 ) : settlement?.state === "paid" ? (
                   <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
@@ -576,6 +579,13 @@ export function BookingPanel({
                       <Detail
                         label="Deposit"
                         value={formatMoney(settlement.depositMinor, booking.currency)}
+                        hint={
+                          settlement.paidMinor >= settlement.depositMinor
+                            ? "Paid"
+                            : settlement.paidMinor > 0
+                              ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far`
+                              : "Requested, not yet paid"
+                        }
                       />
                     ) : null}
                     {settlement && settlement.state !== "credit" && settlement.state !== "free" ? (
@@ -585,6 +595,14 @@ export function BookingPanel({
                           settlement.outstandingMinor > 0
                             ? formatMoney(settlement.outstandingMinor, booking.currency)
                             : "Paid in full"
+                        }
+                        hint={
+                          settlement.outstandingMinor > 0 && settlement.balanceAfterJob
+                            ? settlement.depositMinor != null &&
+                              settlement.paidMinor < settlement.depositMinor
+                              ? `${formatMoney(settlement.dueNowMinor, booking.currency)} deposit now, the rest after the job`
+                              : "Due after the job"
+                            : undefined
                         }
                       />
                     ) : null}
@@ -734,12 +752,16 @@ export function BookingPanel({
                     <div className="space-y-3 rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
                         {settlement.state === "deposit_paid"
-                          ? `Deposit of ${formatMoney(settlement.depositMinor ?? 0, booking.currency)} received — ${formatMoney(settlement.outstandingMinor, booking.currency)} balance to collect.`
+                          ? `Deposit of ${formatMoney(settlement.depositMinor ?? 0, booking.currency)} received — ${formatMoney(settlement.outstandingMinor, booking.currency)} balance ${balanceDueLabel(settlement)}.`
                           : settlement.state === "part_paid"
-                            ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far — ${formatMoney(settlement.outstandingMinor, booking.currency)} still to collect.`
+                            ? `${formatMoney(settlement.paidMinor, booking.currency)} received so far — ${formatMoney(settlement.outstandingMinor, booking.currency)} still ${balanceDueLabel(settlement)}.`
                             : hasSucceededPayment
                               ? "Payment received for this booking."
-                              : `Payment of ${formatMoney(settlement.outstandingMinor, booking.currency)} is due.`}
+                              : settlement.depositMinor != null
+                                ? `Deposit of ${formatMoney(settlement.depositMinor, booking.currency)} is due now; the remaining ${formatMoney(settlement.outstandingMinor - settlement.depositMinor, booking.currency)} is ${balanceDueLabel(settlement)}.`
+                                : settlement.balanceAfterJob
+                                  ? `${formatMoney(settlement.outstandingMinor, booking.currency)} is due after the job.`
+                                  : `Payment of ${formatMoney(settlement.outstandingMinor, booking.currency)} is due.`}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Button

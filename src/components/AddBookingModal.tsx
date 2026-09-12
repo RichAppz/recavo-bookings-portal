@@ -492,8 +492,9 @@ export function AddBookingModal({
     effectiveTotalMinor,
   );
   const depositOverridden = depositInput !== null;
-  // Nothing is asked for up front when paying after the job, so no deposit applies.
-  const depositApplies = paymentMethod !== "credit" && paymentMethod !== "pay_later";
+  // Credit settles by entitlement, never money. Every other method can take a deposit —
+  // including pay after the job, where it secures the date and the balance follows.
+  const depositApplies = paymentMethod !== "credit";
   const depositMinor: number | null = (() => {
     if (!depositApplies) return null;
     if (!depositOverridden) return defaultDepositMinor;
@@ -1357,7 +1358,10 @@ export function AddBookingModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pay_later">
-                    Pay after the job — confirmation only
+                    Pay after the job
+                    {service && depositMinor != null
+                      ? ` — ${formatMoney(depositMinor, service.currency)} deposit now`
+                      : " — confirmation only"}
                     {service ? ` (${formatMoney(effectiveTotalMinor, service.currency)})` : ""}
                   </SelectItem>
                   <SelectItem value="none">
@@ -1376,7 +1380,15 @@ export function AddBookingModal({
                   ) : null}
                 </SelectContent>
               </Select>
-              {paymentMethod === "pay_later" ? (
+              {paymentMethod === "pay_later" && depositMinor != null && service ? (
+                <p className="text-xs text-muted-foreground">
+                  The client gets a request for the {formatMoney(depositMinor, service.currency)}{" "}
+                  deposit{cardPaymentsLive ? " with a pay-online link" : ""}; the balance of{" "}
+                  {formatMoney(effectiveTotalMinor - depositMinor, service.currency)} is taken after
+                  the job. Nothing chases the balance beforehand — use “Send payment reminder” on
+                  the booking if it's still unpaid afterwards.
+                </p>
+              ) : paymentMethod === "pay_later" ? (
                 <p className="text-xs text-muted-foreground">
                   The client gets a plain booking confirmation — no payment request, pay link or
                   deposit. Take payment when the job is done, or use “Send payment reminder” on the
@@ -1433,10 +1445,14 @@ export function AddBookingModal({
                   className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
                 >
                   {depositInvalid
-                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it to take the full amount.`
-                    : depositMinor != null
-                      ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} balance to collect later.`
-                      : `No deposit — the full ${formatMoney(effectiveTotalMinor, service.currency)} is due.`}
+                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it to ${paymentMethod === "pay_later" ? "send a plain confirmation" : "take the full amount"}.`
+                    : paymentMethod === "pay_later"
+                      ? depositMinor != null
+                        ? `Requested now with the confirmation; the rest (${formatMoney(effectiveTotalMinor - depositMinor, service.currency)}) is taken after the job.`
+                        : "No deposit — plain confirmation, and the full amount is taken after the job."
+                      : depositMinor != null
+                        ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} balance to collect later.`
+                        : `No deposit — the full ${formatMoney(effectiveTotalMinor, service.currency)} is due.`}
                 </p>
               </div>
             ) : null}
