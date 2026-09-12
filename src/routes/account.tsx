@@ -40,6 +40,7 @@ import {
   isSettledPaymentState,
 } from "@/lib/booking-payment";
 import { formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 /**
@@ -130,7 +131,7 @@ function AccountPage() {
   if (studios.isLoading || !studios.data) {
     return (
       <AccountShell view={view} title={copy.title}>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="surface-card h-[124px] animate-pulse" />
           ))}
@@ -413,7 +414,11 @@ function Overview({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Explicit `grid-cols-1` (minmax(0, 1fr)) on every phone-width grid: a bare
+          `grid` sizes its single implicit column to the widest item's min-content, and
+          with a nowrap (`truncate`) name inside, that can be wider than the screen. The
+          column then grows past the viewport and the whole page scrolls sideways. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Next booking"
           value={
@@ -452,7 +457,7 @@ function Overview({
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <SectionCard
           title="Upcoming bookings"
           action={
@@ -477,44 +482,58 @@ function Overview({
             </div>
           ) : (
             <ul className="divide-y">
-              {upcoming.slice(0, 6).map((b) => (
-                <li
-                  key={b.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {formatInTz(b.start, b.timezone, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {solo ? "" : ` · ${b.studio.tradingName}`}
-                    </p>
-                    {customerMoneyHint(b, history) ? (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {customerMoneyHint(b, history)}
+              {upcoming.slice(0, 6).map((b) => {
+                const needsPay = bookingNeedsPayment(b, history);
+                const hint = customerMoneyHint(b, history);
+                return (
+                  // Phone: the status chip sits beside the name, the date and money
+                  // lines wrap underneath, and "Pay now" drops to its own line. Squeezed
+                  // into one row next to two buttons, the text had a few letters left.
+                  // From `sm` up it is the original one-line row: text left, actions right.
+                  <li
+                    key={b.id}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1 basis-full sm:basis-0">
+                      <div className="flex items-center justify-between gap-2 sm:block">
+                        <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
+                        <StatusBadge status={b.status} className="sm:hidden" />
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
+                        {formatInTz(b.start, b.timezone, {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {solo ? "" : ` · ${b.studio.tradingName}`}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {bookingNeedsPayment(b, history) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={payingId === b.id}
-                        onClick={() => onPay(b)}
-                      >
-                        {payingId === b.id ? "Starting…" : "Pay now"}
-                      </Button>
-                    ) : null}
-                    <StatusBadge status={b.status} />
-                  </div>
-                </li>
-              ))}
+                      {hint ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">{hint}</p>
+                      ) : null}
+                    </div>
+                    <div
+                      className={cn(
+                        "shrink-0 items-center gap-2",
+                        needsPay ? "flex" : "hidden sm:flex",
+                      )}
+                    >
+                      {needsPay ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={payingId === b.id}
+                          onClick={() => onPay(b)}
+                        >
+                          {payingId === b.id ? "Starting…" : "Pay now"}
+                        </Button>
+                      ) : null}
+                      <StatusBadge status={b.status} className="hidden sm:inline-flex" />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </SectionCard>
@@ -600,7 +619,7 @@ function Offers({
 }) {
   if (loading && offers.length === 0) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 2 }, (_, i) => (
           <div key={i} className="surface-card h-[164px] animate-pulse" />
         ))}
@@ -617,7 +636,7 @@ function Offers({
     );
   }
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {offers.map((offer) => {
         return (
           <div
@@ -682,7 +701,7 @@ function Credits({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {credits.map((c) => (
         <div key={c.id} className="surface-card flex flex-col gap-4 p-5">
           <div className="flex items-start justify-between gap-3">

@@ -799,7 +799,9 @@ export function BookingFlow({
   const embedded = layout === "embedded";
 
   return (
-    <div className={embedded ? undefined : "min-h-screen bg-background"}>
+    // `overflow-x-clip`: a long word in a service name can never widen the page on a
+    // phone. `clip` rather than `hidden` so this does not become a scroll container.
+    <div className={embedded ? undefined : "min-h-screen overflow-x-clip bg-background"}>
       {embedded ? null : (
         <header className="border-b bg-nav text-nav-foreground">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
