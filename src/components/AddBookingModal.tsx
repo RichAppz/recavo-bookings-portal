@@ -91,6 +91,20 @@ type PaymentTiming = (typeof TIMING_DEFAULTS)[number];
 const DATE_INPUT =
   "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
 
+/** Sits at the end of the slot grid: books the whole day (or days, for a long job). */
+function AllDayTile({ onPick }: { onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className="rounded-lg border border-dashed py-2 text-xs font-medium transition-colors hover:bg-secondary"
+      title="Block the whole day — the client sees the date rather than a time"
+    >
+      All day
+    </button>
+  );
+}
+
 export function AddBookingModal({
   open,
   onOpenChange,
@@ -449,6 +463,15 @@ export function AddBookingModal({
     const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000);
     return minutes > 0 ? { start, end, minutes } : null;
   }, [scheduling, allDay, date, startTime, endDate, endTime]);
+
+  // "All day" from the slot grid: one tap instead of switching tabs and ticking
+  // the box. The end-date effect above fills in the last day from the job length.
+  const pickAllDay = () => {
+    setScheduling("custom");
+    setAllDay(true);
+    setSlotKey(null);
+    setEndTouched(false);
+  };
 
   // A set time needs someone to do it — "any staff" only makes sense for a quote.
   const customStaffId = staffId !== "all" ? staffId : (soleStaff?.id ?? null);
@@ -1240,11 +1263,18 @@ export function AddBookingModal({
                         ))}
                       </div>
                     ) : slots.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        {validDate
-                          ? emptySlotsMessage(service?.availabilityWindows, date)
-                          : "Pick a date to see available times."}
-                      </p>
+                      <div className="grid gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {validDate
+                            ? emptySlotsMessage(service?.availabilityWindows, date)
+                            : "Pick a date to see available times."}
+                        </p>
+                        {validDate ? (
+                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                            <AllDayTile onPick={pickAllDay} />
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                         {slots.map((s) => {
@@ -1272,6 +1302,7 @@ export function AddBookingModal({
                             </button>
                           );
                         })}
+                        <AllDayTile onPick={pickAllDay} />
                       </div>
                     )}
                     {selectedSlot &&
