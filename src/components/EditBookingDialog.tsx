@@ -868,7 +868,12 @@ export function EditBookingDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pay_later">Pay after the job — confirmation only</SelectItem>
+                    <SelectItem value="pay_later">
+                      Pay after the job
+                      {booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                        ? ` — ${formatMoney(booking.depositMinor, currency)} deposit now`
+                        : " — confirmation only"}
+                    </SelectItem>
                     <SelectItem value="none">Request payment up front</SelectItem>
                     {tenant.configuration?.bankTransfer?.enabled === true ||
                     booking.paymentMethod === "bank_transfer" ? (
@@ -896,7 +901,9 @@ export function EditBookingDialog({
               {paymentEditable && paymentMethod !== booking.paymentMethod ? (
                 <p className="text-xs text-muted-foreground">
                   {paymentMethod === "pay_later"
-                    ? "No payment is asked for up front; take it when the job is done."
+                    ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                      ? `The ${formatMoney(booking.depositMinor, currency)} deposit still secures the date; the balance is taken when the job is done.`
+                      : "No payment is asked for up front; take it when the job is done."
                     : paymentMethod === "none"
                       ? "The next message to the client is a payment request for the balance."
                       : "The client is asked to pay by bank transfer using your account details."}
