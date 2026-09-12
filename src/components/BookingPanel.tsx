@@ -995,22 +995,6 @@ export function BookingPanel({
             </div>
 
             <footer className="grid min-w-0 grid-cols-2 gap-2 border-t p-4">
-              {/* Change what's booked (services, price, who, where, vehicle, notes);
-                  when it happens is Reschedule's job. Final bookings are a record. */}
-              <Button
-                variant="outline"
-                className="col-span-2"
-                disabled={isFinal}
-                title={isFinal ? editLockedReason(booking.status) : undefined}
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="size-4" /> Edit booking
-              </Button>
-              {isFinal ? (
-                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
-                  {editLockedReason(booking.status)}
-                </p>
-              ) : null}
               {showAttendance ? (
                 <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
                   <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -1087,18 +1071,32 @@ export function BookingPanel({
                   {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
                 </Button>
               ) : null}
-              {/* Two-up row: Reschedule | Edit booking. The Edit button (PATCH
-                  /bookings/:id, feat/edit-booking) belongs in the second cell; until it
-                  lands Reschedule takes the full row. Everything else — reminders,
-                  resend, message, cancel, delete — lives in the header's ⋯ menu. */}
+              {/* Two-up row: Reschedule (when) | Edit booking (what: services, price,
+                  who, where, vehicle, notes). Everything else — reminders, resend,
+                  message, cancel, delete — lives in the header's ⋯ menu. Final
+                  bookings are a record, so both lock. */}
               <Button
                 variant="outline"
-                className="col-span-2 min-w-0"
+                className="min-w-0"
                 disabled={isFinal}
                 onClick={() => setRescheduleOpen(true)}
               >
                 <CalendarClock className="size-4" /> Reschedule
               </Button>
+              <Button
+                variant="outline"
+                className="min-w-0"
+                disabled={isFinal}
+                title={isFinal ? editLockedReason(booking.status) : undefined}
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="size-4" /> Edit booking
+              </Button>
+              {isFinal ? (
+                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                  {editLockedReason(booking.status)}
+                </p>
+              ) : null}
               {resendError ? (
                 <p className="col-span-2 text-xs text-destructive">
                   {resendError}{" "}
