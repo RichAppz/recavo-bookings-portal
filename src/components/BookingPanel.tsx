@@ -333,6 +333,14 @@ export function BookingPanel({
     booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
   const showAttendance = booking?.status === "confirmed" || attendanceMarked;
   const attendanceLocked = attendanceMarked || booking?.status !== "confirmed";
+  // Footer actions: a pending bank transfer is "confirmed" by marking the money
+  // received; anything else not yet live gets a plain Confirm.
+  const showConfirm =
+    bankPending ||
+    booking?.status === "awaiting_payment" ||
+    booking?.status === "held" ||
+    booking?.status === "draft";
+  const showRecordPayment = canRecordPayment && !bankPending;
 
   // Why delete is off, mirroring the API's 409s so staff see the reason before the click.
   const hasIssuedInvoice = (invoices.data ?? []).some((inv) => inv.status !== "draft");
@@ -509,6 +517,22 @@ export function BookingPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
+                  {/* Edit (what: services, price, who, where, vehicle, notes) and
+                      Reschedule (when). The edit dialog only shows the time and hands
+                      off to Reschedule, so the diary move gets its own entry too.
+                      Final bookings are a record, so both lock. */}
+                  <DropdownMenuItem disabled={isFinal} onSelect={() => setEditOpen(true)}>
+                    <Pencil className="size-4" /> Edit booking
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={isFinal} onSelect={() => setRescheduleOpen(true)}>
+                    <CalendarClock className="size-4" /> Reschedule
+                  </DropdownMenuItem>
+                  {isFinal ? (
+                    <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+                      {editLockedReason(booking.status)}
+                    </p>
+                  ) : null}
+                  <DropdownMenuSeparator />
                   {canRemindPayment ? (
                     <DropdownMenuItem
                       disabled={paymentReminder.isPending}
@@ -615,7 +639,9 @@ export function BookingPanel({
             <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5">
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
-                <StatusBadge status={booking.attendanceStatus} />
+                {/* Only once marked: an "Unknown" pill before then just restates the
+                    untouched attendance row in the footer. */}
+                {attendanceMarked ? <StatusBadge status={booking.attendanceStatus} /> : null}
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
@@ -1066,122 +1092,94 @@ export function BookingPanel({
               </Tabs>
             </div>
 
-            <footer className="grid min-w-0 grid-cols-2 gap-2 border-t p-4">
-              {showAttendance ? (
-                <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
-                  <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                    Attendance
-                  </span>
-                  <div className="flex flex-1 items-center justify-end gap-4">
-                    <label
-                      className={cn(
-                        "flex items-center gap-2 text-sm",
-                        attendanceLocked ? "cursor-default" : "cursor-pointer",
-                      )}
-                    >
-                      <Checkbox
-                        checked={booking.attendanceStatus === "attended"}
-                        disabled={attendanceLocked || attendanceAction.isPending}
-                        aria-label="Attended"
-                        onCheckedChange={(v) => {
-                          if (v === true) void run(attendanceAction, { attended: true });
-                        }}
-                      />
-                      Attended
-                    </label>
-                    <label
-                      className={cn(
-                        "flex items-center gap-2 text-sm",
-                        attendanceLocked ? "cursor-default" : "cursor-pointer",
-                      )}
-                    >
-                      <Checkbox
-                        checked={booking.attendanceStatus === "no_show"}
-                        disabled={attendanceLocked || attendanceAction.isPending}
-                        aria-label="No-show"
-                        onCheckedChange={(v) => {
-                          if (v === true) void run(attendanceAction, { attended: false });
-                        }}
-                      />
-                      No-show
-                    </label>
+            {/* Only what needs doing on the job right now: attendance, confirming, and
+                taking the money. Everything else — edit, reschedule, reminders, resend,
+                message, cancel, delete — lives in the header's ⋯ menu. No footer at all
+                when none of those apply (a cancelled or expired booking, say). */}
+            {showAttendance || showConfirm || showRecordPayment || resendError ? (
+              <footer className="flex min-w-0 flex-col gap-2 border-t p-4">
+                {showAttendance ? (
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
+                    <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Attendance
+                    </span>
+                    <div className="flex flex-1 items-center justify-end gap-4">
+                      <label
+                        className={cn(
+                          "flex items-center gap-2 text-sm",
+                          attendanceLocked ? "cursor-default" : "cursor-pointer",
+                        )}
+                      >
+                        <Checkbox
+                          checked={booking.attendanceStatus === "attended"}
+                          disabled={attendanceLocked || attendanceAction.isPending}
+                          aria-label="Attended"
+                          onCheckedChange={(v) => {
+                            if (v === true) void run(attendanceAction, { attended: true });
+                          }}
+                        />
+                        Attended
+                      </label>
+                      <label
+                        className={cn(
+                          "flex items-center gap-2 text-sm",
+                          attendanceLocked ? "cursor-default" : "cursor-pointer",
+                        )}
+                      >
+                        <Checkbox
+                          checked={booking.attendanceStatus === "no_show"}
+                          disabled={attendanceLocked || attendanceAction.isPending}
+                          aria-label="No-show"
+                          onCheckedChange={(v) => {
+                            if (v === true) void run(attendanceAction, { attended: false });
+                          }}
+                        />
+                        No-show
+                      </label>
+                    </div>
+                    {attendanceMarked ? (
+                      <p className="basis-full text-xs text-muted-foreground">
+                        Attendance is final once marked.
+                      </p>
+                    ) : null}
                   </div>
-                  {attendanceMarked ? (
-                    <p className="basis-full text-xs text-muted-foreground">
-                      Attendance is final once marked.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {bankPending ? (
-                <Button
-                  className="col-span-2"
-                  disabled={markReceived.isPending}
-                  onClick={() => setConfirmReceived(true)}
-                >
-                  <Landmark className="size-4" /> Mark bank transfer received
-                </Button>
-              ) : booking.status === "awaiting_payment" ||
-                booking.status === "held" ||
-                booking.status === "draft" ? (
-                <Button
-                  variant="outline"
-                  className="col-span-2"
-                  disabled={confirmAction.isPending}
-                  onClick={() => run(confirmAction)}
-                >
-                  <CheckCircle2 className="size-4" /> Confirm booking
-                </Button>
-              ) : null}
-              {canRecordPayment && !bankPending ? (
-                <Button
-                  variant="outline"
-                  className="col-span-2"
-                  onClick={() => setRecordOpen(true)}
-                >
-                  <Landmark className="size-4" /> Record payment ·{" "}
-                  {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
-                </Button>
-              ) : null}
-              {/* Two-up row: Reschedule (when) | Edit booking (what: services, price,
-                  who, where, vehicle, notes). Everything else — reminders, resend,
-                  message, cancel, delete — lives in the header's ⋯ menu. Final
-                  bookings are a record, so both lock. */}
-              <Button
-                variant="outline"
-                className="min-w-0"
-                disabled={isFinal}
-                onClick={() => setRescheduleOpen(true)}
-              >
-                <CalendarClock className="size-4" /> Reschedule
-              </Button>
-              <Button
-                variant="outline"
-                className="min-w-0"
-                disabled={isFinal}
-                title={isFinal ? editLockedReason(booking.status) : undefined}
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="size-4" /> Edit booking
-              </Button>
-              {isFinal ? (
-                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
-                  {editLockedReason(booking.status)}
-                </p>
-              ) : null}
-              {resendError ? (
-                <p className="col-span-2 text-xs text-destructive">
-                  {resendError}{" "}
-                  <Link
-                    to="/billing/sms-credits"
-                    onClick={onClose}
-                    className="font-medium underline underline-offset-2"
+                ) : null}
+                {bankPending ? (
+                  <Button
+                    disabled={markReceived.isPending}
+                    onClick={() => setConfirmReceived(true)}
                   >
-                    Buy texts
-                  </Link>
-                </p>
-              ) : null}
-            </footer>
+                    <Landmark className="size-4" /> Mark bank transfer received
+                  </Button>
+                ) : showConfirm ? (
+                  <Button
+                    variant="outline"
+                    disabled={confirmAction.isPending}
+                    onClick={() => run(confirmAction)}
+                  >
+                    <CheckCircle2 className="size-4" /> Confirm booking
+                  </Button>
+                ) : null}
+                {showRecordPayment ? (
+                  <Button variant="outline" onClick={() => setRecordOpen(true)}>
+                    <Landmark className="size-4" /> Record payment ·{" "}
+                    {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
+                  </Button>
+                ) : null}
+                {resendError ? (
+                  <p className="text-xs text-destructive">
+                    {resendError}{" "}
+                    <Link
+                      to="/billing/sms-credits"
+                      onClick={onClose}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Buy texts
+                    </Link>
+                  </p>
+                ) : null}
+              </footer>
+            ) : null}
           </>
         )}
       </aside>
