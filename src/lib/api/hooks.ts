@@ -392,6 +392,34 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
 }
 
 /**
+ * Staff delete a booking outright: silent (nobody is messaged), soft on the API side,
+ * gone from every list. A 409 means money or an invoice is attached — the caller shows
+ * the API's reason, so no toast here. Invalidates everything the booking appeared in.
+ */
+export function useDeleteBooking() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; customerId?: string | null }) => {
+      await api.delete(`/api/v1/businesses/${businessId}/bookings/${vars.bookingId}`);
+    },
+    onSuccess: (_data, vars) => {
+      // Detail/history/payments for this booking are dead: drop rather than refetch a 404.
+      qc.removeQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.calendarBlocksAll(businessId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "reports", "dashboard"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+      if (vars.customerId) {
+        void qc.invalidateQueries({
+          queryKey: [...queryKeys.customer(businessId, vars.customerId), "bookings"],
+        });
+      }
+    },
+  });
+}
+
+/**
  * Staff confirms a pay-by-bank booking once the money lands (RECA-522).
  * Idempotent; a 422 means it's not awaiting a bank transfer any more (e.g. a
  * colleague already confirmed it) — the caller should refresh, so no toast here.
@@ -696,10 +724,16 @@ export function useCreateService() {
       const res = await api.post<{ service: CatalogueService }>(
         `/api/v1/businesses/${businessId}/services`,
         body,
+        { idempotencyKey: newIdempotencyKey() },
       );
       return res.data.service;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Seed the list before the refetch lands so a caller can use the new service
+      // straight away — the booking form's quick-add ticks it in the picker at once.
+      qc.setQueryData<CatalogueService[]>(queryKeys.services(businessId), (old) =>
+        old && !old.some((s) => s.id === created.id) ? [...old, created] : old,
+      );
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
       invalidateOnboarding(qc, businessId);
     },
