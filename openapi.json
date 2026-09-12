@@ -12462,7 +12462,7 @@
     "/api/v1/portal/bookings": {
       "get": {
         "summary": "List own bookings",
-        "description": "Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232).",
+        "description": "Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232). Bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (ordered by start time, RECA-482).",
         "security": [
           {
             "bearerAuth": []
@@ -12478,11 +12478,39 @@
               "format": "uuid"
             },
             "description": "Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81)."
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Own bookings page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "bookings",
+                    "nextCursor"
+                  ],
+                  "properties": {
+                    "bookings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Booking"
+                      }
+                    },
+                    "nextCursor": {
+                      "$ref": "#/components/schemas/NextCursor"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -14378,7 +14406,7 @@
     "/api/v1/portal/payments": {
       "get": {
         "summary": "List own payments",
-        "description": "Payments for the authorised linked customer only (business_id + customer_id; RECA-81).",
+        "description": "Payments for the authorised linked customer only (business_id + customer_id; RECA-81). Newest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (RECA-482).",
         "security": [
           {
             "bearerAuth": []
@@ -14394,11 +14422,39 @@
               "format": "uuid"
             },
             "description": "Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81)."
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Own payments page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "payments",
+                    "nextCursor"
+                  ],
+                  "properties": {
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Payment"
+                      }
+                    },
+                    "nextCursor": {
+                      "$ref": "#/components/schemas/NextCursor"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -15172,7 +15228,7 @@
     "/api/v1/portal/conversations": {
       "get": {
         "summary": "Get own conversation",
-        "description": "Conversation for the authorised linked customer in the current business (RECA-81).",
+        "description": "Conversation for the authorised linked customer in the current business (RECA-81). Read-only: `conversation` is null until the first message opens the thread (RECA-482 — a GET never creates rows).",
         "security": [
           {
             "bearerAuth": []
@@ -15192,7 +15248,29 @@
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Own conversation, or null before the first message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation"
+                  ],
+                  "properties": {
+                    "conversation": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Conversation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -15356,6 +15434,7 @@
     "/api/v1/portal/conversations/messages": {
       "get": {
         "summary": "List portal conversation messages",
+        "description": "Oldest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more. Empty until the first message opens the thread (RECA-482).",
         "security": [
           {
             "bearerAuth": []
@@ -15371,17 +15450,24 @@
               "format": "uuid"
             },
             "description": "Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81)."
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
           }
         ],
         "responses": {
           "200": {
-            "description": "Messages",
+            "description": "Messages page",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "required": [
-                    "messages"
+                    "messages",
+                    "nextCursor"
                   ],
                   "properties": {
                     "messages": {
@@ -15389,6 +15475,9 @@
                       "items": {
                         "$ref": "#/components/schemas/ConversationMessage"
                       }
+                    },
+                    "nextCursor": {
+                      "$ref": "#/components/schemas/NextCursor"
                     }
                   }
                 }
@@ -15555,7 +15644,7 @@
       },
       "post": {
         "summary": "Post a message to own conversation",
-        "description": "Customer appends a message to their own conversation (business_id + customer_id bound server-side). Rate-limited (RECA-81).",
+        "description": "Customer appends a message to their own conversation (business_id + customer_id bound server-side); the first message opens the thread. Rate-limited and requires `Idempotency-Key` so a retried send posts once (RECA-81 / RECA-482).",
         "security": [
           {
             "bearerAuth": []
@@ -15571,6 +15660,15 @@
               "format": "uuid"
             },
             "description": "Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "requestBody": {
@@ -54849,6 +54947,236 @@
                     },
                     "outstandingMinor": {
                       "type": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/booking-reminder": {
+      "post": {
+        "summary": "Send the customer a reminder that their booking is coming up",
+        "description": "Staff send the same `reminder` message the scheduled reminder rules use, by hand from the booking panel. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. 409 when the booking is not messageable (cancelled, held, completed, no-show), has already started, or a reminder went out within the last ten minutes; 422 when the customer has no email or every channel failed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The notifications that were sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "notifications",
+                    "channels"
+                  ],
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    },
+                    "channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "email",
+                          "sms"
+                        ]
+                      }
                     }
                   }
                 }

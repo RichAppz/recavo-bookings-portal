@@ -487,6 +487,42 @@ export function useSendPaymentReminder() {
   });
 }
 
+export type BookingReminderResult = {
+  notifications: Notification[];
+  channels: ("email" | "sms")[];
+};
+
+/**
+ * Send the "your booking is coming up" reminder by hand — the same message the
+ * scheduled reminder rules send. The API emails, and texts too when the customer can
+ * receive one; the result says which channels actually carried it. 409 when the
+ * booking is not live, has already started, or a reminder went out minutes ago.
+ */
+export function useSendBookingReminder() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<BookingReminderResult, { bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<BookingReminderResult>(
+          `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/booking-reminder`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: (data) => {
+      const recipientId = data.notifications[0]?.recipientId;
+      if (recipientId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerNotifications(businessId, recipientId),
+        });
+      }
+    },
+  });
+}
+
 export function useMarkBankTransferReceived() {
   const businessId = useBusinessId();
   const qc = useQueryClient();

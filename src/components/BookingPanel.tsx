@@ -15,7 +15,6 @@ import {
   MoreHorizontal,
   Phone,
   Send,
-  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -83,6 +82,7 @@ import {
   useMarkBankTransferReceived,
   useRecordBookingPayment,
   useResendBookingMessage,
+  useSendBookingReminder,
   useSendPaymentReminder,
   useServices,
   useStaffList,
@@ -175,6 +175,7 @@ export function BookingPanel({
   const recordPayment = useRecordBookingPayment();
   const resend = useResendBookingMessage();
   const paymentReminder = useSendPaymentReminder();
+  const bookingReminder = useSendBookingReminder();
   const deleteBooking = useDeleteBooking();
   const smsCredits = useSmsCreditsSummary();
   // Set when a manual text was refused for lack of credits (422) — the one place a
@@ -271,6 +272,56 @@ export function BookingPanel({
         : smsCredits.credits
           ? `${customerPhone} · ${smsCredits.credits.balance} left`
           : customerPhone;
+
+  // Reminders group in the ⋯ menu. Both items always show under the heading; when one
+  // cannot go, the reason sits as its sub-text, mirroring the API's 409/422s so staff
+  // see why before the tap. Sub-text otherwise says which channels will carry it.
+  const reminderChannelsHint =
+    smsBlocked || smsCredits.level === "empty" ? "By email" : "By email and text";
+  const bookingStarted = booking ? new Date(booking.start).getTime() <= Date.now() : false;
+  // The API only reminds confirmed / awaiting-payment bookings that have not started.
+  const bookingReminderBlocked: string | null = !booking
+    ? null
+    : booking.status === "completed"
+      ? "Job already done"
+      : booking.status !== "confirmed" && booking.status !== "awaiting_payment"
+        ? closedReminderReason(booking.status)
+        : bookingStarted
+          ? "Job already started"
+          : !customerEmail
+            ? "No email on file"
+            : null;
+  const paymentReminderBlocked: string | null = !booking
+    ? null
+    : settlement?.state === "credit"
+      ? "Paid with a package credit"
+      : (settlement?.outstandingMinor ?? 0) <= 0
+        ? "Nothing outstanding"
+        : bankPending
+          ? "Awaiting bank transfer"
+          : !canRemindPayment
+            ? closedReminderReason(booking.status)
+            : !customerEmail
+              ? "No email on file"
+              : null;
+
+  const remindBooking = async () => {
+    if (!booking) return;
+    try {
+      const result = await bookingReminder.mutateAsync({ bookingId: booking.id });
+      const by = result.channels.includes("sms") ? "email and text" : "email";
+      toast.success(`Booking reminder sent by ${by}`, {
+        description: `${customer.data ? customerDisplayName(customer.data) : "The client"} was reminded about ${formatBookingWhen(booking, timezone)}.`,
+      });
+    } catch (err) {
+      // 409 = not live / already started / sent minutes ago; 422 = no email / send failed.
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
+        toast.error("Booking reminder not sent", { description: err.detail });
+        return;
+      }
+      toastApiError(err);
+    }
+  };
 
   const sendAgain = async (channel: ResendChannel) => {
     if (!booking) return;
@@ -533,22 +584,44 @@ export function BookingPanel({
                     </p>
                   ) : null}
                   <DropdownMenuSeparator />
-                  {canRemindPayment ? (
-                    <DropdownMenuItem
-                      disabled={paymentReminder.isPending}
-                      onSelect={() => void remindPayment()}
-                    >
-                      <BellRing className="size-4" />
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate">
-                          {paymentReminder.isPending ? "Sending…" : "Send payment reminder"}
-                        </span>
-                        {!jobOver ? (
-                          <span className="text-xs text-muted-foreground">Job not done yet</span>
-                        ) : null}
+                  {/* Reminders: a flat group rather than a submenu. At phone widths a
+                      side-opening Radix submenu cannot sit beside a 16rem menu and
+                      gets clipped off the left edge, so the options are indented
+                      beneath a heading instead. Both always show; the sub-text says
+                      why one is off, or which channels will carry it. */}
+                  <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
+                    <BellRing className="size-4" /> Reminders
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="pl-8"
+                    disabled={Boolean(bookingReminderBlocked) || bookingReminder.isPending}
+                    onSelect={() => void remindBooking()}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">
+                        {bookingReminder.isPending ? "Sending…" : "Send booking reminder"}
                       </span>
-                    </DropdownMenuItem>
-                  ) : null}
+                      <span className="truncate text-xs text-muted-foreground">
+                        {bookingReminderBlocked ?? reminderChannelsHint}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="pl-8"
+                    disabled={Boolean(paymentReminderBlocked) || paymentReminder.isPending}
+                    onSelect={() => void remindPayment()}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">
+                        {paymentReminder.isPending ? "Sending…" : "Send payment reminder"}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {paymentReminderBlocked ??
+                          (!jobOver ? "Job not done yet" : reminderChannelsHint)}
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {resendLabel ? (
                     // Flat rather than a submenu: side-opening submenus collide with
                     // the edge of a phone screen.
@@ -588,16 +661,6 @@ export function BookingPanel({
                       <MessageSquare className="size-4" /> Message
                     </Link>
                   </DropdownMenuItem>
-                  {/* On a phone, hand off to the device's own Messages app. Hidden where
-                      there is a mouse (no SMS app to open); the number is E.164 so the
-                      sms: link works on iOS and Android alike. */}
-                  {customerPhone ? (
-                    <DropdownMenuItem asChild className="hidden [@media(hover:none)]:flex">
-                      <a href={`sms:${customerPhone}`}>
-                        <Smartphone className="size-4" /> Text
-                      </a>
-                    </DropdownMenuItem>
-                  ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled={isFinal} onSelect={openCancel}>
                     <Ban className="size-4" /> Cancel booking…
@@ -1481,6 +1544,22 @@ function historyActorLabel(entry: BookingHistoryEntry): string {
 function historyActionLabel(entry: BookingHistoryEntry): string {
   const raw = entry.action ?? entry.toStatus ?? entry.status ?? "Updated";
   return humanize(String(raw));
+}
+
+/** Why a reminder is off for a booking that is not live (menu sub-text). */
+function closedReminderReason(status: string): string {
+  switch (status) {
+    case "no_show":
+      return "Marked as a no-show";
+    case "expired":
+      return "This hold expired";
+    case "cancelled_by_customer":
+    case "cancelled_by_business":
+    case "late_cancelled":
+      return "Booking cancelled";
+    default:
+      return "Not confirmed yet";
+  }
 }
 
 /** Why "Edit booking" is off: the booking has reached a final state and is now a record. */

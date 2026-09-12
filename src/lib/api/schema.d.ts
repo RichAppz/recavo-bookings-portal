@@ -5203,13 +5203,17 @@ export interface paths {
         };
         /**
          * List own bookings
-         * @description Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232).
+         * @description Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232). Bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (ordered by start time, RECA-482).
          */
         get: {
             parameters: {
                 query: {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -5217,13 +5221,18 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Success */
+                /** @description Own bookings page */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            bookings: components["schemas"]["Booking"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -6573,13 +6582,17 @@ export interface paths {
         };
         /**
          * List own payments
-         * @description Payments for the authorised linked customer only (business_id + customer_id; RECA-81).
+         * @description Payments for the authorised linked customer only (business_id + customer_id; RECA-81). Newest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (RECA-482).
          */
         get: {
             parameters: {
                 query: {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -6587,13 +6600,18 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Success */
+                /** @description Own payments page */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            payments: components["schemas"]["Payment"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -7172,7 +7190,7 @@ export interface paths {
         };
         /**
          * Get own conversation
-         * @description Conversation for the authorised linked customer in the current business (RECA-81).
+         * @description Conversation for the authorised linked customer in the current business (RECA-81). Read-only: `conversation` is null until the first message opens the thread (RECA-482 — a GET never creates rows).
          */
         get: {
             parameters: {
@@ -7186,13 +7204,17 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Success */
+                /** @description Own conversation, or null before the first message */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            conversation: components["schemas"]["Conversation"] | null;
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -7317,12 +7339,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List portal conversation messages */
+        /**
+         * List portal conversation messages
+         * @description Oldest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more. Empty until the first message opens the thread (RECA-482).
+         */
         get: {
             parameters: {
                 query: {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -7330,7 +7359,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Messages */
+                /** @description Messages page */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -7339,6 +7368,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             messages: components["schemas"]["ConversationMessage"][];
+                            nextCursor: components["schemas"]["NextCursor"];
                         };
                     };
                 };
@@ -7453,7 +7483,7 @@ export interface paths {
         put?: never;
         /**
          * Post a message to own conversation
-         * @description Customer appends a message to their own conversation (business_id + customer_id bound server-side). Rate-limited (RECA-81).
+         * @description Customer appends a message to their own conversation (business_id + customer_id bound server-side); the first message opens the thread. Rate-limited and requires `Idempotency-Key` so a retried send posts once (RECA-81 / RECA-482).
          */
         post: {
             parameters: {
@@ -7461,7 +7491,9 @@ export interface paths {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
                 };
-                header?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -33152,6 +33184,160 @@ export interface paths {
                             notifications: components["schemas"]["Notification"][];
                             channels: ("email" | "sms")[];
                             outstandingMinor: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/booking-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the customer a reminder that their booking is coming up
+         * @description Staff send the same `reminder` message the scheduled reminder rules use, by hand from the booking panel. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. 409 when the booking is not messageable (cancelled, held, completed, no-show), has already started, or a reminder went out within the last ten minutes; 422 when the customer has no email or every channel failed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The notifications that were sent */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            notifications: components["schemas"]["Notification"][];
+                            channels: ("email" | "sms")[];
                         };
                     };
                 };
