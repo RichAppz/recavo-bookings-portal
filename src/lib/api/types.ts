@@ -1,4 +1,4 @@
-import type { components } from "./schema";
+import type { components, paths } from "./schema";
 
 export type schemas = components["schemas"];
 
@@ -19,6 +19,11 @@ export type Booking = schemas["Booking"];
 export type CalendarBlock = schemas["CalendarBlock"];
 /** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */
 export type ServiceLineItem = Booking["lineItems"][number];
+/** One field of a structured "edit booking" diff (RECA edit booking). */
+export type BookingChange = schemas["BookingChange"];
+/** Body of `PATCH …/bookings/{id}` — only the fields present change. */
+export type AmendBookingBody =
+  paths["/api/v1/businesses/{businessId}/bookings/{bookingId}"]["patch"]["requestBody"]["content"]["application/json"];
 /** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
 export type BookingHistoryEntry = {
   at?: string;
@@ -34,6 +39,9 @@ export type BookingHistoryEntry = {
   actorType?: string;
   actorId?: string | null;
   actorName?: string | null;
+  /** `amended` entries carry a structured diff instead of a status move. */
+  kind?: "status" | "amended" | string;
+  changes?: BookingChange[] | null;
   [key: string]: unknown;
 };
 export type AvailabilitySlot = schemas["AvailabilitySlot"];
