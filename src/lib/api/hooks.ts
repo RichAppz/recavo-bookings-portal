@@ -4652,14 +4652,14 @@ export function useSendPortalMessage(businessId: string | undefined) {
     string,
     { previous: ConversationMessage[] | undefined; optimisticId: string }
   >({
-    mutationFn: async (body: string) => {
+    mutationFn: createIdempotentMutationFn(async (body: string, idempotencyKey: string) => {
       const res = await api.post<{ message: ConversationMessage }>(
         "/api/v1/portal/conversations/messages",
         { body },
-        { query: { businessId } },
+        { query: { businessId }, idempotencyKey },
       );
       return res.data.message;
-    },
+    }),
     onMutate: async (body) => {
       const key = queryKeys.portalMessages(businessId ?? "");
       await qc.cancelQueries({ queryKey: key });
