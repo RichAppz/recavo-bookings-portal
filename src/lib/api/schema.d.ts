@@ -20473,6 +20473,341 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a booking
+         * @description Returns a single booking aggregate (immutable service snapshot, status, attendees). Used by staff calendar/detail views.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Booking detail */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            booking: components["schemas"]["Booking"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a booking
+         * @description Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.
+         *
+         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule. Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
+         *
+         *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
+         *
+         *     Each edit appends a `kind: "amended"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Optimistic concurrency version (integer as string). */
+                    "If-Match": string;
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        serviceId?: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /** @description Full replacement list of extra services; `[]` removes them all. */
+                        additionalServices?: {
+                            /** Format: uuid */
+                            serviceId: string;
+                            /** Format: uuid */
+                            variantId?: string | null;
+                        }[];
+                        /** Format: uuid */
+                        staffId?: string;
+                        /** Format: uuid */
+                        locationId?: string;
+                        /** Format: uuid */
+                        linkedRecordId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Only while nothing has been paid. The vehicle must belong to the new client.
+                         */
+                        leadCustomerId?: string;
+                        /** @description Staff total for the job. A number overrides the catalogue total (applied to the primary line item); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
+                        priceMinor?: number | null;
+                        /**
+                         * @description Confirmed bookings only; to or from `credit` is not allowed.
+                         * @enum {string}
+                         */
+                        paymentMethod?: "none" | "bank_transfer" | "pay_later";
+                        notesInternal?: string | null;
+                        /** @description When present, the client is sent the updated details on these channels (the confirmation / payment request for the booking’s current state). */
+                        notify?: {
+                            channels: ("email" | "sms")[];
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Edited booking (unchanged, with the same version, when nothing differed) */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            booking: components["schemas"]["Booking"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/attendance": {
         parameters: {
             query?: never;
@@ -20629,157 +20964,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a booking
-         * @description Returns a single booking aggregate (immutable service snapshot, status, attendees). Used by staff calendar/detail views.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    businessId: string;
-                    bookingId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Booking detail */
-                200: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            booking: components["schemas"]["Booking"];
-                        };
-                    };
-                };
-                /** @description Created */
-                201: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description No content */
-                204: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Validation failed (VALIDATION_FAILED) */
-                400: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Unauthenticated (UNAUTHENTICATED) */
-                401: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
-                402: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
-                403: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Not found (NOT_FOUND) */
-                404: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
-                409: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Unprocessable (UNPROCESSABLE) */
-                422: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Rate limited (RATE_LIMITED) */
-                429: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Internal error (INTERNAL) */
-                500: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
         parameters: {
             query?: never;
@@ -20811,9 +20995,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            history: ({
+                            history: (components["schemas"]["BookingStatusHistoryEntry"] | components["schemas"]["BookingMessageHistoryEntry"] | {
                                 [key: string]: unknown;
-                            } | components["schemas"]["BookingMessageHistoryEntry"])[];
+                            })[];
                         };
                     };
                 };
@@ -38944,6 +39128,99 @@ export interface components {
              * @enum {string|null}
              */
             reasonCode: "invalid_phone" | "no_phone" | "no_email" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | "provider_error" | null;
+        };
+        BookingChange: {
+            /** @enum {string} */
+            field: "services";
+            from: string[];
+            to: string[];
+        } | {
+            /** @enum {string} */
+            field: "price";
+            from: number;
+            to: number;
+            currency: string;
+        } | {
+            /** @enum {string} */
+            field: "deposit";
+            from: number | null;
+            to: number | null;
+            currency: string;
+        } | {
+            /** @enum {string} */
+            field: "duration";
+            /** @description Minutes. */
+            from: number;
+            /** @description Minutes. */
+            to: number;
+            /**
+             * Format: date-time
+             * @description New end of the job.
+             */
+            end: string;
+        } | {
+            /** @enum {string} */
+            field: "staff" | "location" | "leadCustomer";
+            from: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            };
+            to: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            };
+        } | {
+            /** @enum {string} */
+            field: "linkedRecord";
+            from: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            } | null;
+            to: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            } | null;
+        } | {
+            /** @enum {string} */
+            field: "paymentMethod";
+            /** @enum {string} */
+            from: "none" | "credit" | "bank_transfer" | "pay_later";
+            /** @enum {string} */
+            to: "none" | "credit" | "bank_transfer" | "pay_later";
+        } | {
+            /** @enum {string} */
+            field: "notesInternal";
+            from: string | null;
+            to: string | null;
+        };
+        BookingStatusHistoryEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId?: string;
+            /** Format: uuid */
+            bookingId: string;
+            /**
+             * @default status
+             * @enum {string}
+             */
+            kind: "status" | "amended";
+            fromStatus: string | null;
+            toStatus: string;
+            actorId: string;
+            reason: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Present (non-empty) when `kind` is `amended`. */
+            changes?: components["schemas"]["BookingChange"][] | null;
         };
         PublicCataloguePlan: {
             /** @enum {string} */

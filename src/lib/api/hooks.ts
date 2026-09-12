@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { paths } from "./schema";
 import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
 import { useLiveConnected } from "@/lib/live/live-status";
+import { toast } from "sonner";
 import {
   keepPreviousData,
   useMutation,
@@ -23,6 +24,7 @@ import {
 import type {
   AiPolicyDraftRequest,
   AiPolicyDraftResponse,
+  AmendBookingBody,
   AuditEvent,
   BankTransferInstructions,
   AvailabilitySlot,
@@ -514,6 +516,67 @@ export function useRecordBookingPayment() {
       });
     },
   });
+}
+
+/**
+ * Edit what a live booking is — services, staff, location, vehicle, client, price,
+ * payment method, internal notes — without touching when it happens (that's
+ * reschedule). Sends `If-Match` with the version staff were looking at, so a
+ * colleague's concurrent change is a 409 rather than a silent overwrite: the toast
+ * says so and the booking is refetched. Every other error toasts its API detail.
+ */
+export function useAmendBooking() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Booking,
+      { bookingId: string; ifMatch: number; body: AmendBookingBody }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.patch<{ booking: Booking }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}`,
+        vars.body,
+        { idempotencyKey, ifMatch: vars.ifMatch },
+      );
+      return res.data.booking;
+    }),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(queryKeys.booking(businessId, vars.bookingId), data);
+      // Lists, the calendar and this booking's history all read from the bookings prefix.
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      // A longer or shorter job frees or takes diary time.
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+      toast.success(
+        vars.body.notify && vars.body.notify.channels.length > 0
+          ? "Booking updated — client sent the new details"
+          : "Booking updated",
+      );
+    },
+    onError: (err, vars) => {
+      if (err instanceof ApiError && (err.status === 412 || isStaleVersionConflict(err))) {
+        toast.error("Someone else changed this booking", {
+          description: "It's been refreshed — check the details and save again.",
+        });
+        void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+        });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        toast.error("The longer job clashes with another booking", {
+          description: err.detail ?? "Reschedule it first, or pick a shorter service.",
+        });
+        return;
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/** The API's optimistic-lock 409, as opposed to a business-rule 409 (refund first…). */
+function isStaleVersionConflict(err: ApiError): boolean {
+  return err.isConflict && /changed by someone else/i.test(err.detail ?? "");
 }
 
 export function useBookingHistory(bookingId: string | undefined) {
