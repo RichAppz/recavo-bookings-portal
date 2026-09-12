@@ -2950,6 +2950,375 @@
           }
         }
       },
+      "BookingChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "services"
+                ]
+              },
+              "from": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "to": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Service labels (\"Full valet · Large\") before and after, primary first."
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to",
+              "currency"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "price"
+                ]
+              },
+              "from": {
+                "type": "integer"
+              },
+              "to": {
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to",
+              "currency"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "deposit"
+                ]
+              },
+              "from": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "to": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to",
+              "end"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "duration"
+                ]
+              },
+              "from": {
+                "type": "integer",
+                "description": "Minutes."
+              },
+              "to": {
+                "type": "integer",
+                "description": "Minutes."
+              },
+              "end": {
+                "type": "string",
+                "format": "date-time",
+                "description": "New end of the job."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "staff",
+                  "location",
+                  "leadCustomer"
+                ]
+              },
+              "from": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "label"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Display name at the time of the edit; null when not resolvable (e.g. client)."
+                  }
+                }
+              },
+              "to": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "label"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Display name at the time of the edit; null when not resolvable (e.g. client)."
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "linkedRecord"
+                ]
+              },
+              "from": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "id",
+                  "label"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Display name at the time of the edit; null when not resolvable (e.g. client)."
+                  }
+                }
+              },
+              "to": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "id",
+                  "label"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Display name at the time of the edit; null when not resolvable (e.g. client)."
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "paymentMethod"
+                ]
+              },
+              "from": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "credit",
+                  "bank_transfer",
+                  "pay_later"
+                ]
+              },
+              "to": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "credit",
+                  "bank_transfer",
+                  "pay_later"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "field",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "notesInternal"
+                ]
+              },
+              "from": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "to": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BookingStatusHistoryEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "bookingId",
+          "fromStatus",
+          "toStatus",
+          "actorId",
+          "reason",
+          "occurredAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "status",
+              "amended"
+            ],
+            "default": "status"
+          },
+          "fromStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toStatus": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookingChange"
+            },
+            "description": "Present (non-empty) when `kind` is `amended`."
+          }
+        }
+      },
       "PublicCataloguePlan": {
         "type": "object",
         "required": [
@@ -35364,9 +35733,10 @@
         }
       }
     },
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}/attendance": {
-      "post": {
-        "summary": "Mark booking attendance",
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
+      "patch": {
+        "summary": "Edit a booking",
+        "description": "Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.\n\nTime is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule. Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.\n\nMoney: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.\n\nEach edit appends a `kind: \"amended\"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.",
         "security": [
           {
             "bearerAuth": []
@@ -35392,6 +35762,15 @@
             }
           },
           {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optimistic concurrency version (integer as string)."
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": true,
@@ -35407,12 +35786,104 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "attended"
-                ],
+                "additionalProperties": false,
                 "properties": {
-                  "attended": {
-                    "type": "boolean"
+                  "serviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "variantId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "additionalServices": {
+                    "type": "array",
+                    "description": "Full replacement list of extra services; `[]` removes them all.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "serviceId"
+                      ],
+                      "properties": {
+                        "serviceId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "variantId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  },
+                  "staffId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "locationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "linkedRecordId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "leadCustomerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Only while nothing has been paid. The vehicle must belong to the new client."
+                  },
+                  "priceMinor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "description": "Staff total for the job. A number overrides the catalogue total (applied to the primary line item); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change)."
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "bank_transfer",
+                      "pay_later"
+                    ],
+                    "description": "Confirmed bookings only; to or from `credit` is not allowed."
+                  },
+                  "notesInternal": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "notify": {
+                    "type": "object",
+                    "required": [
+                      "channels"
+                    ],
+                    "properties": {
+                      "channels": {
+                        "type": "array",
+                        "maxItems": 2,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms"
+                          ]
+                        }
+                      }
+                    },
+                    "description": "When present, the client is sent the updated details on these channels (the confirmation / payment request for the booking’s current state)."
                   }
                 }
               }
@@ -35421,7 +35892,7 @@
         },
         "responses": {
           "200": {
-            "description": "Updated booking",
+            "description": "Edited booking (unchanged, with the same version, when nothing differed)",
             "content": {
               "application/json": {
                 "schema": {
@@ -35595,9 +36066,7 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
+      },
       "get": {
         "summary": "Get a booking",
         "description": "Returns a single booking aggregate (immutable service snapshot, status, attendees). Used by staff calendar/detail views.",
@@ -35987,6 +36456,239 @@
         }
       }
     },
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/attendance": {
+      "post": {
+        "summary": "Mark booking attendance",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "attended"
+                ],
+                "properties": {
+                  "attended": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated booking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "booking"
+                  ],
+                  "properties": {
+                    "booking": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
       "get": {
         "summary": "Get booking history (status changes and messages)",
@@ -36032,11 +36734,14 @@
                       "items": {
                         "oneOf": [
                           {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/components/schemas/BookingStatusHistoryEntry"
                           },
                           {
                             "$ref": "#/components/schemas/BookingMessageHistoryEntry"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": true
                           }
                         ]
                       }

@@ -4,6 +4,7 @@ import {
   Ban,
   BellRing,
   CalendarClock,
+  Pencil,
   CheckCircle2,
   CreditCard,
   Landmark,
@@ -62,6 +63,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
+import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { useBookingInvoices } from "@/lib/api/invoices";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
@@ -118,6 +120,7 @@ import {
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { isMessageHistoryEntry } from "@/lib/message-history";
+import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { cn } from "@/lib/utils";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
@@ -146,6 +149,7 @@ export function BookingPanel({
   const [cancelNotify, setCancelNotify] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [tab, setTab] = useState("details");
@@ -991,6 +995,22 @@ export function BookingPanel({
             </div>
 
             <footer className="grid min-w-0 grid-cols-2 gap-2 border-t p-4">
+              {/* Change what's booked (services, price, who, where, vehicle, notes);
+                  when it happens is Reschedule's job. Final bookings are a record. */}
+              <Button
+                variant="outline"
+                className="col-span-2"
+                disabled={isFinal}
+                title={isFinal ? editLockedReason(booking.status) : undefined}
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="size-4" /> Edit booking
+              </Button>
+              {isFinal ? (
+                <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                  {editLockedReason(booking.status)}
+                </p>
+              ) : null}
               {showAttendance ? (
                 <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
                   <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -1270,6 +1290,17 @@ export function BookingPanel({
         />
       ) : null}
 
+      {booking && editOpen ? (
+        <EditBookingDialog
+          booking={booking}
+          onClose={() => setEditOpen(false)}
+          onReschedule={() => {
+            setEditOpen(false);
+            setRescheduleOpen(true);
+          }}
+        />
+      ) : null}
+
       {booking ? (
         <RescheduleDialog
           open={rescheduleOpen}
@@ -1365,10 +1396,27 @@ function historyActionLabel(entry: BookingHistoryEntry): string {
   return humanize(String(raw));
 }
 
+/** Why "Edit booking" is off: the booking has reached a final state and is now a record. */
+function editLockedReason(status: string): string {
+  switch (status) {
+    case "completed":
+      return "Marked as attended — it can't be edited now.";
+    case "no_show":
+      return "Marked as a no-show — it can't be edited now.";
+    case "expired":
+      return "This hold expired — make a new booking instead.";
+    default:
+      return "Cancelled bookings can't be edited — make a new booking instead.";
+  }
+}
+
 function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone: string }) {
   // Messages sent about the booking (confirmation, reminders…) with delivery status.
   if (isMessageHistoryEntry(entry)) {
     return <BookingMessageHistoryRow entry={entry} timezone={timezone} />;
+  }
+  if (entry.kind === "amended") {
+    return <AmendedHistoryRow entry={entry} timezone={timezone} />;
   }
   const ts = historyTimestamp(entry);
   const transition =
@@ -1384,6 +1432,36 @@ function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone:
         <p className="text-sm font-medium">{historyActionLabel(entry)}</p>
         {transition ? <p className="text-xs text-muted-foreground">{transition}</p> : null}
         {reason ? <p className="mt-1 text-xs text-muted-foreground">“{reason}”</p> : null}
+        <p className="mt-1 text-xs text-muted-foreground">
+          {historyActorLabel(entry)}
+          {ts ? ` · ${formatInTz(ts, timezone, { dateStyle: "medium", timeStyle: "short" })}` : ""}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+/** A staff edit: what changed, in plain English, rather than a status move. */
+function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone: string }) {
+  const tenant = useTenant();
+  const terms = {
+    staff: tenant.terminology.staff.trim() || "Staff",
+    linkedRecord: tenant.terminology.linkedRecord.trim() || "Record",
+  };
+  const changes = Array.isArray(entry.changes) ? entry.changes : [];
+  const ts = historyTimestamp(entry);
+  return (
+    <li className="flex gap-3 border-b py-3 last:border-0">
+      <div className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{summariseBookingChanges(changes, terms)}</p>
+        {changes.length > 0 ? (
+          <ul className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+            {changes.map((c, i) => (
+              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms)}</li>
+            ))}
+          </ul>
+        ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
           {historyActorLabel(entry)}
           {ts ? ` · ${formatInTz(ts, timezone, { dateStyle: "medium", timeStyle: "short" })}` : ""}
