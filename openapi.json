@@ -33702,7 +33702,7 @@
                       "bank_transfer",
                       "pay_later"
                     ],
-                    "description": "`none` confirms the slot and asks the customer to pay up front (the confirmation is a payment request with a pay link). `pay_later` confirms the slot with a plain confirmation — no payment request, no deposit — for businesses that take payment after the job; staff follow up with POST …/bookings/{bookingId}/payment-reminder. `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions."
+                    "description": "`none` confirms the slot and asks the customer to pay up front (the confirmation is a payment request with a pay link). `pay_later` confirms the slot for businesses that take payment after the job: with no deposit the customer gets a plain confirmation; with a deposit (`depositMinor`, or the services’ configured deposits) they get a payment request for the deposit only and the balance waits until after the job. Nothing chases the balance automatically — staff follow up with POST …/bookings/{bookingId}/payment-reminder. `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions."
                   },
                   "depositMinor": {
                     "type": [
