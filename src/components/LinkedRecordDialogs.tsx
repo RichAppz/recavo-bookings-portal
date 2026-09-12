@@ -129,14 +129,23 @@ export function CustomerSearchPicker({
           <ChevronDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command shouldFilter={false}>
+      {/* Capped at the room Radix has on whichever side it opens, so a list that flips
+          above a low trigger stays fully on screen and scrolls inside, rather than
+          running off the top the way the services picker did on phones. */}
+      <PopoverContent
+        className="flex max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) flex-col p-0"
+        align="start"
+        side="bottom"
+        sticky="always"
+        collisionPadding={12}
+      >
+        <Command shouldFilter={false} className="min-h-0 flex-1">
           <CommandInput
             placeholder="Search clients by name, email or phone…"
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList>
+          <CommandList className="min-h-0 flex-1">
             {!searching && !hasSuggestions ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">
                 Type at least 2 characters to search.
