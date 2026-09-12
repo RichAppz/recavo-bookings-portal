@@ -54,6 +54,7 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
+import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -72,15 +73,6 @@ function serviceNoun(service: string) {
 }
 
 /**
- * The API stores minutes, but a detailer thinks in "how long do I have the
- * car" — often days — and a trainer in "a 1.5 hour session". These helpers
- * translate both ways so the form can offer minutes/hours/days for every
- * vertical without the backend knowing.
- */
-type DurationUnit = "minutes" | "hours" | "days";
-const UNIT_MINUTES: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };
-
-/**
  * Preset swatches for the calendar dot. Chosen to stay distinguishable from each
  * other and from the payment colours the calendar chips already use (teal,
  * green, amber, red), so a service dot never reads as a payment state.
@@ -97,19 +89,6 @@ const SERVICE_COLOURS = [
 ];
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
-
-/**
- * Stored minutes → the value/unit pair someone would have typed. Whole days and
- * whole or half hours come back in that unit ("3.5" hours, not "210" minutes,
- * which is what the owner typed); anything odder stays in minutes.
- */
-function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
-  if (minutes >= 1440 && minutes % 1440 === 0) {
-    return { value: String(minutes / 1440), unit: "days" };
-  }
-  if (minutes >= 60 && minutes % 30 === 0) return { value: String(minutes / 60), unit: "hours" };
-  return { value: String(minutes), unit: "minutes" };
-}
 
 /** Deposit input shows blank for "no deposit" so the field reads as optional. */
 function depositToInput(minor: number | null | undefined): string {
