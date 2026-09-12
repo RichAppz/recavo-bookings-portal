@@ -9,6 +9,8 @@ import {
   Landmark,
   Mail,
   MessageSquare,
+  MessageSquareText,
+  Phone,
   Send,
   Smartphone,
   UserX,
@@ -483,24 +485,50 @@ export function BookingPanel({
                     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                       {booking.attendees.length > 1 ? "Attendees" : "Client"}
                     </p>
-                    <Link
-                      to="/clients/$clientId"
-                      params={{ clientId: booking.leadCustomerId }}
-                      onClick={onClose}
-                      className="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:bg-secondary"
-                    >
-                      <PersonAvatar
-                        name={customer.data ? customerDisplayName(customer.data) : "Client"}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {customer.data ? customerDisplayName(customer.data) : "Loading…"}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {customer.data?.emailDisplay ?? customer.data?.phoneDisplay ?? ""}
-                        </p>
-                      </div>
-                    </Link>
+                    <div className="flex items-center gap-2 rounded-xl border p-2 pl-3">
+                      <Link
+                        to="/clients/$clientId"
+                        params={{ clientId: booking.leadCustomerId }}
+                        onClick={onClose}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 transition-colors hover:text-primary"
+                      >
+                        <PersonAvatar
+                          name={customer.data ? customerDisplayName(customer.data) : "Client"}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {customer.data ? customerDisplayName(customer.data) : "Loading…"}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {customer.data?.emailDisplay ?? customer.data?.phoneDisplay ?? ""}
+                          </p>
+                        </div>
+                      </Link>
+                      {/* Ring or text the client from the device's own apps; the number
+                          is E.164 so tel:/sms: links work on iOS and Android alike. */}
+                      {customerPhone ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button variant="outline" size="icon" asChild className="rounded-full">
+                            <a
+                              href={`tel:${customerPhone}`}
+                              aria-label={`Call ${customer.data?.phoneDisplay ?? "client"}`}
+                              title="Call"
+                            >
+                              <Phone className="size-4" />
+                            </a>
+                          </Button>
+                          <Button variant="outline" size="icon" asChild className="rounded-full">
+                            <a
+                              href={`sms:${customerPhone}`}
+                              aria-label={`Text ${customer.data?.phoneDisplay ?? "client"}`}
+                              title="Text"
+                            >
+                              <MessageSquareText className="size-4" />
+                            </a>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
                     {booking.attendees.length > 1 ? (
                       <p className="text-xs text-muted-foreground">
                         {booking.seatCount} of {booking.attendees.length} spaces booked
