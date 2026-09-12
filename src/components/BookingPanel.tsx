@@ -10,10 +10,11 @@ import {
   Mail,
   MessageSquare,
   MessageSquareText,
+  MoreHorizontal,
   Phone,
   Send,
   Smartphone,
-  UserX,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
+import { useBookingInvoices } from "@/lib/api/invoices";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,6 +74,7 @@ import {
   useBookingHistory,
   useBookingPayments,
   useCustomer,
+  useDeleteBooking,
   useLinkedRecord,
   useLocationsList,
   useMarkBankTransferReceived,
@@ -141,6 +144,7 @@ export function BookingPanel({
   const [cancelReason, setCancelReason] = useState("");
   // Off when the client already knows (they rang to cancel) and a message would be noise.
   const [cancelNotify, setCancelNotify] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -162,6 +166,7 @@ export function BookingPanel({
   const recordPayment = useRecordBookingPayment();
   const resend = useResendBookingMessage();
   const paymentReminder = useSendPaymentReminder();
+  const deleteBooking = useDeleteBooking();
   const smsCredits = useSmsCreditsSummary();
   // Set when a manual text was refused for lack of credits (422) — the one place a
   // zero balance is an error rather than a silent email fallback (ADR 0020 §3.4).
@@ -173,6 +178,8 @@ export function BookingPanel({
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
+  // Same query the Payments tab uses, so this costs nothing extra.
+  const invoices = useBookingInvoices(booking?.id);
 
   if (!bookingId) return null;
 
@@ -294,6 +301,32 @@ export function BookingPanel({
     const tb = new Date(historyTimestamp(b) ?? 0).getTime();
     return tb - ta;
   });
+  // Has the client ever heard about this booking? Drives the cancel dialog's default:
+  // no point sending a cancellation for a job they were never told about. Until the
+  // history loads, assume they were (the safer default).
+  const clientWasTold = history.data
+    ? history.data.some(
+        (entry) =>
+          isMessageHistoryEntry(entry) && (entry.status === "sent" || entry.status === "fallback"),
+      )
+    : true;
+
+  // Attendance: the API only moves a confirmed booking to completed / no-show, and never
+  // back, so the checkboxes are live on a confirmed job and locked once one is ticked.
+  const attendanceMarked =
+    booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
+  const showAttendance = booking?.status === "confirmed" || attendanceMarked;
+  const attendanceLocked = attendanceMarked || booking?.status !== "confirmed";
+
+  // Why delete is off, mirroring the API's 409s so staff see the reason before the click.
+  const hasIssuedInvoice = (invoices.data ?? []).some((inv) => inv.status !== "draft");
+  const deleteBlocked: string | null = !booking
+    ? null
+    : (settlement?.paidMinor ?? 0) > 0 || hasSucceededPayment
+      ? "Has payments — refund or cancel instead"
+      : hasIssuedInvoice
+        ? "Has an invoice — void it or cancel instead"
+        : null;
 
   const windowHours = booking?.serviceSnapshot.cancellationPolicy.windowHours ?? 0;
   const cancelDeadlineIso = booking
@@ -372,6 +405,34 @@ export function BookingPanel({
     }
   };
 
+  const openCancel = () => {
+    setCancelNotify(clientWasTold);
+    setConfirmCancel(true);
+  };
+
+  const submitDelete = async () => {
+    if (!booking) return;
+    try {
+      await deleteBooking.mutateAsync({
+        bookingId: booking.id,
+        customerId: booking.leadCustomerId,
+      });
+      toast.success("Booking deleted");
+      setConfirmDelete(false);
+      onClose();
+    } catch (err) {
+      // 409 = money or an invoice is attached; the API says which in plain English.
+      if (err instanceof ApiError && err.status === 409 && err.detail) {
+        toast.error("Booking not deleted", { description: err.detail });
+        setConfirmDelete(false);
+        void payments.refetch();
+        void invoices.refetch();
+        return;
+      }
+      toastApiError(err);
+    }
+  };
+
   const handleTakePayment = async () => {
     if (!booking) return;
     try {
@@ -415,7 +476,7 @@ export function BookingPanel({
               <TableGhost rows={3} />
             </div>
           ) : (
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
               <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
               <p className="text-sm text-muted-foreground">
@@ -423,9 +484,102 @@ export function BookingPanel({
               </p>
             </div>
           )}
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close panel">
-            <X className="size-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {booking ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="More actions">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {canRemindPayment ? (
+                    <DropdownMenuItem
+                      disabled={paymentReminder.isPending}
+                      onSelect={() => void remindPayment()}
+                    >
+                      <BellRing className="size-4" />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">
+                          {paymentReminder.isPending ? "Sending…" : "Send payment reminder"}
+                        </span>
+                        {!jobOver ? (
+                          <span className="text-xs text-muted-foreground">Job not done yet</span>
+                        ) : null}
+                      </span>
+                    </DropdownMenuItem>
+                  ) : null}
+                  {resendLabel ? (
+                    // Flat rather than a submenu: side-opening submenus collide with
+                    // the edge of a phone screen.
+                    <>
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                        Resend {resendLabel} to{" "}
+                        {customer.data ? customerDisplayName(customer.data) : "the client"}
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        disabled={!customerEmail || resend.isPending}
+                        onSelect={() => void sendAgain("email")}
+                      >
+                        <Mail className="size-4" />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span>By email</span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {customerEmail ?? "No email on file"}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={Boolean(smsBlocked) || resend.isPending}
+                        onSelect={() => void sendAgain("sms")}
+                      >
+                        <Send className="size-4" />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span>By text</span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {smsBlocked ?? smsHint}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  <DropdownMenuItem asChild>
+                    <Link to="/messages" onClick={onClose}>
+                      <MessageSquare className="size-4" /> Message
+                    </Link>
+                  </DropdownMenuItem>
+                  {/* On a phone, hand off to the device's own Messages app. Hidden where
+                      there is a mouse (no SMS app to open); the number is E.164 so the
+                      sms: link works on iOS and Android alike. */}
+                  {customerPhone ? (
+                    <DropdownMenuItem asChild className="hidden [@media(hover:none)]:flex">
+                      <a href={`sms:${customerPhone}`}>
+                        <Smartphone className="size-4" /> Text
+                      </a>
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={isFinal} onSelect={openCancel}>
+                    <Ban className="size-4" /> Cancel booking…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={Boolean(deleteBlocked) || deleteBooking.isPending}
+                    onSelect={() => setConfirmDelete(true)}
+                    className="text-destructive focus:text-destructive data-[disabled]:text-muted-foreground"
+                  >
+                    <Trash2 className="size-4" />
+                    <span className="flex-1">Delete booking…</span>
+                  </DropdownMenuItem>
+                  {deleteBlocked ? (
+                    <p className="px-2 pb-1.5 text-xs text-muted-foreground">{deleteBlocked}</p>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close panel">
+              <X className="size-4" />
+            </Button>
+          </div>
         </header>
 
         {bookingQuery.isError ? (
@@ -836,7 +990,53 @@ export function BookingPanel({
               </Tabs>
             </div>
 
-            <footer className="grid grid-cols-2 gap-2 border-t p-4">
+            <footer className="grid min-w-0 grid-cols-2 gap-2 border-t p-4">
+              {showAttendance ? (
+                <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
+                  <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    Attendance
+                  </span>
+                  <div className="flex flex-1 items-center justify-end gap-4">
+                    <label
+                      className={cn(
+                        "flex items-center gap-2 text-sm",
+                        attendanceLocked ? "cursor-default" : "cursor-pointer",
+                      )}
+                    >
+                      <Checkbox
+                        checked={booking.attendanceStatus === "attended"}
+                        disabled={attendanceLocked || attendanceAction.isPending}
+                        aria-label="Attended"
+                        onCheckedChange={(v) => {
+                          if (v === true) void run(attendanceAction, { attended: true });
+                        }}
+                      />
+                      Attended
+                    </label>
+                    <label
+                      className={cn(
+                        "flex items-center gap-2 text-sm",
+                        attendanceLocked ? "cursor-default" : "cursor-pointer",
+                      )}
+                    >
+                      <Checkbox
+                        checked={booking.attendanceStatus === "no_show"}
+                        disabled={attendanceLocked || attendanceAction.isPending}
+                        aria-label="No-show"
+                        onCheckedChange={(v) => {
+                          if (v === true) void run(attendanceAction, { attended: false });
+                        }}
+                      />
+                      No-show
+                    </label>
+                  </div>
+                  {attendanceMarked ? (
+                    <p className="basis-full text-xs text-muted-foreground">
+                      Attendance is final once marked.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {bankPending ? (
                 <Button
                   className="col-span-2"
@@ -867,80 +1067,18 @@ export function BookingPanel({
                   {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
                 </Button>
               ) : null}
-              {canRemindPayment ? (
-                <Button
-                  variant="outline"
-                  className="col-span-2"
-                  disabled={paymentReminder.isPending}
-                  onClick={() => void remindPayment()}
-                >
-                  <BellRing className="size-4" />
-                  {paymentReminder.isPending
-                    ? "Sending…"
-                    : jobOver
-                      ? "Send payment reminder"
-                      : "Send payment reminder (job not yet done)"}
-                </Button>
-              ) : null}
+              {/* Two-up row: Reschedule | Edit booking. The Edit button (PATCH
+                  /bookings/:id, feat/edit-booking) belongs in the second cell; until it
+                  lands Reschedule takes the full row. Everything else — reminders,
+                  resend, message, cancel, delete — lives in the header's ⋯ menu. */}
               <Button
                 variant="outline"
-                disabled={attendanceAction.isPending}
-                onClick={() => run(attendanceAction, { attended: true })}
-              >
-                <CheckCircle2 className="size-4" /> Mark attended
-              </Button>
-              <Button
-                variant="outline"
-                disabled={attendanceAction.isPending}
-                onClick={() => run(attendanceAction, { attended: false })}
-              >
-                <UserX className="size-4" /> No-show
-              </Button>
-              <Button
-                variant="outline"
-                className="col-span-2"
+                className="col-span-2 min-w-0"
                 disabled={isFinal}
                 onClick={() => setRescheduleOpen(true)}
               >
                 <CalendarClock className="size-4" /> Reschedule
               </Button>
-              {resendLabel ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="col-span-2" disabled={resend.isPending}>
-                      <Send className="size-4" />
-                      {resend.isPending ? "Sending…" : `Resend ${resendLabel}`}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                      Send the {resendLabel} again to{" "}
-                      {customer.data ? customerDisplayName(customer.data) : "the customer"}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={!customerEmail}
-                      onSelect={() => void sendAgain("email")}
-                    >
-                      <Mail className="size-4" />
-                      <span className="flex-1">Email</span>
-                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
-                        {customerEmail ?? "No email on file"}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={Boolean(smsBlocked)}
-                      onSelect={() => void sendAgain("sms")}
-                    >
-                      <Smartphone className="size-4" />
-                      <span className="flex-1">Text message</span>
-                      <span className="max-w-[9rem] truncate text-xs text-muted-foreground">
-                        {smsBlocked ?? smsHint}
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
               {resendError ? (
                 <p className="col-span-2 text-xs text-destructive">
                   {resendError}{" "}
@@ -953,33 +1091,6 @@ export function BookingPanel({
                   </Link>
                 </p>
               ) : null}
-              <Button variant="outline" asChild>
-                <Link to="/messages" onClick={onClose}>
-                  <MessageSquare className="size-4" /> Message
-                </Link>
-              </Button>
-              {/* On a phone, hand off to the device's own Messages app. Hidden where
-                  there is a mouse (no SMS app to open); the number is E.164 so the
-                  sms: link works on iOS and Android alike. */}
-              {customerPhone ? (
-                <Button
-                  variant="outline"
-                  asChild
-                  className="hidden [@media(hover:none)]:inline-flex"
-                >
-                  <a href={`sms:${customerPhone}`}>
-                    <Smartphone className="size-4" /> Text
-                  </a>
-                </Button>
-              ) : null}
-              <Button
-                variant="destructive"
-                disabled={isFinal}
-                onClick={() => setConfirmCancel(true)}
-                className={cn(customerPhone && "[@media(hover:none)]:col-span-2")}
-              >
-                <Ban className="size-4" /> Cancel
-              </Button>
             </footer>
           </>
         )}
@@ -1047,7 +1158,9 @@ export function BookingPanel({
               <span>
                 Send the client a cancellation message
                 <span className="block text-xs text-muted-foreground">
-                  Untick if they already know — reminders are removed either way.
+                  {clientWasTold
+                    ? "Untick if they already know — reminders are removed either way."
+                    : "Off by default: the client was never sent a confirmation for this booking."}
                 </span>
               </span>
             </label>
@@ -1063,6 +1176,31 @@ export function BookingPanel({
               }}
             >
               {cancelAction.isPending ? "Cancelling…" : "Cancel booking"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It's removed from the calendar and lists and nobody is notified. Payments recorded
+              against it stay on the client's record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep booking</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteBooking.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void submitDelete();
+              }}
+            >
+              {deleteBooking.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
