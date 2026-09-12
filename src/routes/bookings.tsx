@@ -27,7 +27,7 @@ import {
   useStaffList,
 } from "@/lib/api/hooks";
 import { customerDisplayName, type Booking } from "@/lib/api/types";
-import { bookingSettlement } from "@/lib/booking-payment";
+import { balanceDueLabel, bookingSettlement } from "@/lib/booking-payment";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { formatAllDaySpan, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
@@ -359,7 +359,8 @@ function BookingRow({
         {formatMoney(booking.priceMinor, booking.currency)}
         {settlement.state === "deposit_paid" || settlement.state === "part_paid" ? (
           <span className="block text-xs text-warning-foreground">
-            {formatMoney(settlement.outstandingMinor, booking.currency)} to collect
+            {formatMoney(settlement.outstandingMinor, booking.currency)}{" "}
+            {balanceDueLabel(settlement)}
           </span>
         ) : settlement.depositMinor != null && settlement.state === "unpaid" ? (
           <span className="block text-xs text-muted-foreground">

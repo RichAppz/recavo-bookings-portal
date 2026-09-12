@@ -34,9 +34,34 @@ import {
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
-import { bookingNeedsPayment, isSettledPaymentState } from "@/lib/booking-payment";
+import {
+  bookingNeedsPayment,
+  bookingSettlement,
+  isSettledPaymentState,
+} from "@/lib/booking-payment";
 import { formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
+
+/**
+ * What the customer owes on a booking, in their words (RECA-523): the deposit while
+ * that is what "Pay now" takes, then the balance — "after the job" when the business
+ * settles up afterwards. Nothing for bookings with no money story to tell.
+ */
+function customerMoneyHint(booking: Booking, payments: readonly Payment[]): string | null {
+  // Settled card payments from before paidMinor existed count as paid too.
+  if (!bookingNeedsPayment(booking, payments)) return null;
+  const s = bookingSettlement(booking);
+  if (s.state === "free" || s.state === "credit" || s.state === "paid") return null;
+  const later = s.balanceAfterJob ? "after the job" : "later";
+  const owed = formatMoney(s.outstandingMinor, booking.currency);
+  if (s.depositMinor != null && s.paidMinor < s.depositMinor) {
+    return `${formatMoney(s.dueNowMinor, booking.currency)} deposit to pay now · ${formatMoney(s.outstandingMinor - s.dueNowMinor, booking.currency)} ${later}`;
+  }
+  if (s.state === "deposit_paid") return `Deposit paid · ${owed} ${later}`;
+  if (s.state === "part_paid")
+    return `${formatMoney(s.paidMinor, booking.currency)} paid · ${owed} ${later}`;
+  return s.balanceAfterJob ? `${owed} to pay after the job` : `${owed} to pay`;
+}
 
 const searchSchema = z.object({
   view: z
@@ -469,6 +494,11 @@ function Overview({
                       })}
                       {solo ? "" : ` · ${b.studio.tradingName}`}
                     </p>
+                    {customerMoneyHint(b, history) ? (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {customerMoneyHint(b, history)}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {bookingNeedsPayment(b, history) ? (
