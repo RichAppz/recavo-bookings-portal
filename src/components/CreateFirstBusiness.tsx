@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { BusinessDetailsFields } from "@/components/BusinessDetailsFields";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
+import { bookingUrlFor } from "@/lib/hosts";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
 function referralFieldError(error: unknown): string | null {
@@ -44,7 +45,23 @@ type CreateVars = {
   referralCode?: string;
 };
 
-export function CreateFirstBusiness() {
+/** Hostname of the customer site paired with this origin, e.g. `book.recavo.app`. */
+function customerSiteLabel(): string {
+  if (typeof window === "undefined") return "book.recavo.app";
+  return new URL(bookingUrlFor("")).hostname;
+}
+
+/**
+ * `customerElsewhere`: this account books sessions as a client of some studio
+ * but runs nothing. Shown in the mobile app, which has no customer side, so
+ * the person learns where their bookings live instead of wondering why the
+ * app wants a business name.
+ */
+export function CreateFirstBusiness({
+  customerElsewhere = false,
+}: {
+  customerElsewhere?: boolean;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { signOut, supabaseUser } = useAuth();
@@ -159,6 +176,12 @@ export function CreateFirstBusiness() {
             Your account isn't linked to a business yet. Pick your trade and add your name to get
             started with bookings, clients and payments.
           </p>
+          {customerElsewhere ? (
+            <p className="mt-3 rounded-lg bg-secondary/70 px-3 py-2 text-xs text-muted-foreground">
+              This app is for running a business. The sessions you've booked as a client are at{" "}
+              <span className="font-medium text-foreground">{customerSiteLabel()}</span>.
+            </p>
+          ) : null}
 
           <form
             className="mt-6 space-y-4"

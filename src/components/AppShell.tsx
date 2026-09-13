@@ -72,6 +72,7 @@ import {
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
 import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
+import { isNativeApp } from "@/lib/native";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -266,11 +267,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       );
     }
+    const isCustomer = (portalBusinesses.data ?? []).length > 0;
+    // The mobile app is the business console only — there is no customer side
+    // to hand over to — so whoever signs in there is here to run a business,
+    // even if the same address also books sessions somewhere as a client.
+    if (isNativeApp()) {
+      return <CreateFirstBusiness customerElsewhere={isCustomer} />;
+    }
     // Someone who bought sessions has a customer record but nothing to run, so
     // send them to their own account rather than offering to set up a studio.
     // /account rather than one studio's page: which studio came first is an
     // accident of history, and picking it for them hides the others.
-    if ((portalBusinesses.data ?? []).length > 0) {
+    if (isCustomer) {
       return <Navigate to="/account" replace />;
     }
     // Nothing to go on: no membership, no customer link. The hostname is the last
