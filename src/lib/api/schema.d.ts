@@ -19381,6 +19381,11 @@ export interface paths {
                          * @default false
                          */
                         dropIn?: boolean;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
                         /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
                          * @default true
@@ -19593,6 +19598,11 @@ export interface paths {
                          * @default false
                          */
                         dropIn?: boolean;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
                         /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
                          * @default true
@@ -20868,6 +20878,11 @@ export interface paths {
                          */
                         paymentMethod?: "none" | "bank_transfer" | "pay_later";
                         notesInternal?: string | null;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
                         /** @description When present, the client is sent the updated details on these channels (the confirmation / payment request for the booking’s current state). */
                         notify?: {
                             channels: ("email" | "sms")[];
@@ -38887,6 +38902,13 @@ export interface components {
             createdActorId: string;
             notesCustomer: string | null;
             notesInternal: string | null;
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            clientLift: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
             /** @description Map of policy type → policy_documents.id effective at booking create (RECA-67). At least `cancellation` is set when a published cancellation policy exists. */
             applicablePolicyDocumentIds: {
                 /** Format: uuid */
@@ -39604,6 +39626,23 @@ export interface components {
             field: "notesInternal";
             from: string | null;
             to: string | null;
+        } | {
+            /** @enum {string} */
+            field: "clientLift";
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            from: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            to: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
         };
         BookingStatusHistoryEntry: {
             /** Format: uuid */

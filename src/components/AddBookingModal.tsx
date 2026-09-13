@@ -13,6 +13,7 @@ import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
+import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,6 +58,7 @@ import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
+import { clientLiftFromDraft, EMPTY_LIFT_DRAFT, type ClientLiftDraft } from "@/lib/client-lift";
 import {
   allDayHolds,
   describeHold,
@@ -223,6 +225,10 @@ export function AddBookingModal({
   const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [notes, setNotes] = useState("");
+  // Automotive only: the client needs running somewhere once they've left the car.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  const [lift, setLift] = useState<ClientLiftDraft>(EMPTY_LIFT_DRAFT);
+  const clientLift = isCarDetailing ? clientLiftFromDraft(lift) : null;
   // How the client is told straight away (RECA-533): email, text, both or neither.
   // Some clients don't want the confirmation landing in their inbox, so the last
   // choice is remembered per business rather than resetting each time.
@@ -727,6 +733,7 @@ export function AddBookingModal({
     setOverride(null);
     setEndTouched(false);
     setNotes("");
+    setLift(EMPTY_LIFT_DRAFT);
     setAdditional([]);
     setBankResult(null);
   };
@@ -900,6 +907,7 @@ export function AddBookingModal({
       // the services' configured deposits (0 = force no deposit).
       ...(depositOverridden && depositApplies ? { depositMinor: depositMinor ?? 0 } : {}),
       notesInternal: notes || null,
+      ...(clientLift ? { clientLift } : {}),
       notifyChannels,
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
@@ -923,6 +931,7 @@ export function AddBookingModal({
     additional.length > 0 ||
     slotKey !== null ||
     notes.trim() !== "" ||
+    lift.needed ||
     priceInput !== null ||
     discount !== null ||
     depositInput !== null ||
@@ -1129,6 +1138,11 @@ export function AddBookingModal({
                   </div>
                 )}
               </div>
+            ) : null}
+
+            {/* Once the car is in, does the client need running somewhere? */}
+            {isCarDetailing && customerId ? (
+              <ClientLiftFields value={lift} onChange={setLift} idPrefix="booking" />
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
