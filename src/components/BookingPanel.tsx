@@ -1700,7 +1700,7 @@ function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; ti
         {changes.length > 0 ? (
           <ul className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
             {changes.map((c, i) => (
-              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms)}</li>
+              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms, timezone)}</li>
             ))}
           </ul>
         ) : null}

@@ -20355,7 +20355,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reschedule a booking */
+        /**
+         * Reschedule a booking, or quietly correct its time
+         * @description Moves a live booking to `start` (optionally with another staff member), re-reserving the diary: a clash is 409 BOOKING_CONFLICT and nothing changes. An all-day booking snaps to whole local days and keeps its day count unless `end` gives a new last day. `end` is refused (400 NOT_ALL_DAY) for timed bookings — their length comes from the services.
+         *
+         *     By default this is a reschedule: the client is sent the "your booking has moved" message, the history reads "rescheduled" and `booking.rescheduled` is emitted. With `correction: true` the same move is treated as staff fixing a typo in the diary: nothing is sent to the client, the history gets a `kind: "amended"` entry whose `changes` carry a `when` change (the console shows "Date corrected"), `booking.time_corrected` is emitted and the notice/horizon window is not applied. Scheduled reminders re-anchor to the new time either way. Requires `Idempotency-Key`.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -20373,8 +20378,18 @@ export interface paths {
                     "application/json": {
                         /** Format: date-time */
                         start: string;
+                        /**
+                         * Format: date-time
+                         * @description All-day bookings only: the new last day (any instant on it; exclusive-midnight also accepted).
+                         */
+                        end?: string;
                         /** Format: uuid */
                         staffId?: string;
+                        /**
+                         * @description true = a quiet correction: no client message, "date corrected" in the history.
+                         * @default false
+                         */
+                        correction?: boolean;
                     };
                 };
             };
@@ -20786,7 +20801,7 @@ export interface paths {
          * Edit a booking
          * @description Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.
          *
-         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule. Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
+         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
          *
          *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
          *
@@ -39473,6 +39488,25 @@ export interface components {
              * @description New end of the job.
              */
             end: string;
+        } | {
+            /** @enum {string} */
+            field: "when";
+            /**
+             * Format: date-time
+             * @description Previous start.
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Corrected start.
+             */
+            to: string;
+            /**
+             * Format: date-time
+             * @description Corrected end.
+             */
+            end: string;
+            allDay: boolean;
         } | {
             /** @enum {string} */
             field: "staff" | "location" | "leadCustomer";

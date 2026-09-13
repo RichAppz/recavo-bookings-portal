@@ -24,6 +24,14 @@ export type BookingChange = schemas["BookingChange"];
 /** Body of `PATCH …/bookings/{id}` — only the fields present change. */
 export type AmendBookingBody =
   paths["/api/v1/businesses/{businessId}/bookings/{bookingId}"]["patch"]["requestBody"]["content"]["application/json"];
+/**
+ * Body of the quiet date fix (`POST …/reschedule` with `correction: true`, which the
+ * hook adds): the new start and, for all-day jobs, the new last day.
+ */
+export type CorrectBookingTimeBody = Omit<
+  paths["/api/v1/businesses/{businessId}/bookings/{bookingId}/reschedule"]["post"]["requestBody"]["content"]["application/json"],
+  "correction"
+>;
 /** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
 export type BookingHistoryEntry = {
   at?: string;
