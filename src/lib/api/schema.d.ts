@@ -33157,7 +33157,7 @@ export interface paths {
         put?: never;
         /**
          * Send the customer a reminder that a balance is outstanding
-         * @description Staff nudge for money still owed on a booking — the follow-up for “pay after the job” bookings. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. The message quotes the outstanding balance and every way to pay: the pay link when card payments are live, the bank details when transfers are enabled, otherwise an “in person / contact us” line. 409 for closed bookings or when a reminder went out within the last ten minutes; 422 when nothing is outstanding, the booking was paid by credit, the customer has no email, or every channel failed.
+         * @description Staff nudge for money still owed on a booking — the follow-up for “pay after the job” bookings. Emails when the customer has an email address; texts when they have a mobile number, have not opted out of operational messages and the business is entitled to SMS or holds credits — so a phone-only customer is texted alone. The message quotes the outstanding balance and every way to pay: the pay link when card payments are live, the bank details when transfers are enabled, otherwise an “in person / contact us” line. 409 for closed bookings or when a reminder went out within the last ten minutes; 422 when nothing is outstanding, the booking was paid by credit, the customer can be reached on neither channel (no contact details, or no email plus no text credits / opted out), or every channel failed.
          */
         post: {
             parameters: {
@@ -33312,7 +33312,7 @@ export interface paths {
         put?: never;
         /**
          * Send the customer a reminder that their booking is coming up
-         * @description Staff send the same `reminder` message the scheduled reminder rules use, by hand from the booking panel. Always emails; also texts when the customer has a mobile number, has not opted out of operational messages and the business is entitled to SMS or holds credits. 409 when the booking is not messageable (cancelled, held, completed, no-show), has already started, or a reminder went out within the last ten minutes; 422 when the customer has no email or every channel failed.
+         * @description Staff send the same `reminder` message the scheduled reminder rules use, by hand from the booking panel. Emails when the customer has an email address; texts when they have a mobile number, have not opted out of operational messages and the business is entitled to SMS or holds credits — so a phone-only customer is texted alone. 409 when the booking is not messageable (cancelled, held, completed, no-show), has already started, or a reminder went out within the last ten minutes; 422 when the customer can be reached on neither channel (no contact details, or no email plus no text credits / opted out), or every channel failed.
          */
         post: {
             parameters: {
