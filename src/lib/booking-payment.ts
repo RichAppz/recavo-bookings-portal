@@ -38,8 +38,13 @@ export type BookingSettlement = {
   paidMinor: number;
   depositMinor: number | null;
   outstandingMinor: number;
-  /** What checkout collects right now: the deposit remainder while securing, else the balance. */
+  /** What checkout collects right now: the deposit remainder until it is covered, else the balance. */
   dueNowMinor: number;
+  /**
+   * "Pay after the job": whatever is left once the deposit is in is not chased before
+   * the work — it is collected afterwards (in person, or with "Send payment reminder").
+   */
+  balanceAfterJob: boolean;
 };
 
 /**
@@ -61,9 +66,10 @@ export function bookingSettlement(
       ? booking.depositMinor
       : null;
   const outstandingMinor = Math.max(0, priceMinor - paidMinor);
-  const securing = booking.status === "held" || booking.status === "awaiting_payment";
+  // Mirrors the API's dueNowMinor: the deposit is asked for first whatever the status
+  // (a staff booking is confirmed from the start), then the balance.
   const dueNowMinor =
-    securing && deposit != null ? Math.max(0, deposit - paidMinor) : outstandingMinor;
+    deposit != null && paidMinor < deposit ? Math.max(0, deposit - paidMinor) : outstandingMinor;
 
   let state: SettlementState;
   if (booking.paymentMethod === "credit") state = "credit";
@@ -73,7 +79,20 @@ export function bookingSettlement(
   else if (deposit != null && paidMinor >= deposit) state = "deposit_paid";
   else state = "part_paid";
 
-  return { state, priceMinor, paidMinor, depositMinor: deposit, outstandingMinor, dueNowMinor };
+  return {
+    state,
+    priceMinor,
+    paidMinor,
+    depositMinor: deposit,
+    outstandingMinor,
+    dueNowMinor,
+    balanceAfterJob: booking.paymentMethod === "pay_later",
+  };
+}
+
+/** "to collect" / "due after the job" — where the outstanding balance stands. */
+export function balanceDueLabel(settlement: Pick<BookingSettlement, "balanceAfterJob">): string {
+  return settlement.balanceAfterJob ? "due after the job" : "to collect";
 }
 
 /** The at-a-glance colour family a settlement falls into (calendar chips, legends). */
@@ -103,7 +122,10 @@ export function paymentTone(
   }
 }
 
-/** Short human label for a settlement, e.g. "Deposit paid · £40.00 to collect". */
+/**
+ * Short human label for a settlement, e.g. "Deposit paid · £40.00 to collect" — or
+ * "Deposit paid · £100.00 due after the job" when the booking is paid afterwards.
+ */
 export function paymentLabel(
   settlement: BookingSettlement,
   currency: string,
@@ -114,11 +136,13 @@ export function paymentLabel(
     case "paid":
       return "Paid in full";
     case "deposit_paid":
-      return `Deposit paid · ${owed} to collect`;
+      return `Deposit paid · ${owed} ${balanceDueLabel(settlement)}`;
     case "part_paid":
-      return `Part paid · ${owed} to collect`;
+      return `Part paid · ${owed} ${balanceDueLabel(settlement)}`;
     case "unpaid":
-      return `Unpaid · ${owed} due`;
+      return settlement.depositMinor != null
+        ? `Unpaid · ${formatMoney(settlement.depositMinor, currency)} deposit due`
+        : `Unpaid · ${owed} due`;
     case "credit":
       return "Paid with credit";
     case "free":

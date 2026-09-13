@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 
 export function PageHeader({
   title,
   description,
+  onDismissDescription,
   actions,
 }: {
   title: string;
   description?: string;
+  /** When set, the description is a dismissible hint — the page remembers the choice. */
+  onDismissDescription?: () => void;
   actions?: ReactNode;
 }) {
   return (
@@ -17,7 +20,20 @@ export function PageHeader({
       <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 flex max-w-2xl items-start gap-2 text-sm text-muted-foreground">
+            <span>{description}</span>
+            {onDismissDescription ? (
+              <button
+                type="button"
+                onClick={onDismissDescription}
+                aria-label="Hide this hint"
+                title="Hide this hint"
+                className="-my-1 shrink-0 rounded-md p-1 transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -167,7 +183,7 @@ export function SectionCard({
   return (
     <section className={cn("surface-card flex min-w-0 flex-col", className)}>
       {title ? (
-        <header className="flex items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">{title}</h2>
             {description ? (

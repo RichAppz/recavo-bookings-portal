@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   CustomerSearchPicker,
   type LinkedRecordField,
   QuickAddLinkedRecord,
+  type QuickAddLinkedRecordHandle,
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
-import { Layers, MapPin, Plus, UserRound, X } from "lucide-react";
+import { Layers, MapPin, Plus, UserRound } from "lucide-react";
+import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
+import { ServiceDefaultsHint } from "@/components/BookingConsumables";
 import { SetupGate } from "@/components/SetupGate";
+import { AddClientDialog } from "@/components/QuickActions";
+import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
+import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
+import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,36 +33,102 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
 import {
   useAvailability,
-  useBookingAction,
+  useBookings,
+  useConnectAccount,
   useCreateBooking,
-  useCreateBookingHold,
+  useCustomerCredits,
   useCustomerLinkedRecords,
   useCustomer,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
+  usePackages,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
+import type { BookingConflict } from "@/lib/api/errors";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
+import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
+import { clientLiftFromDraft, EMPTY_LIFT_DRAFT, type ClientLiftDraft } from "@/lib/client-lift";
 import {
+  allDayHolds,
+  describeHold,
+  heldAllDayNote,
+  timedClashNote,
+  timedJobsWithin,
+} from "@/lib/drop-in";
+import {
+  addDays,
   formatDuration,
+  formatDurationLong,
   formatInTz,
   formatMoney,
   isoDate,
+  localDateTimeToIso,
+  parseIso,
   parseMoneyToMinor,
   spansDays,
 } from "@/lib/format";
+import { outsideWorkingHours } from "@/lib/working-hours";
+import {
+  formatWorkingSpan,
+  layoutExplicitWindow,
+  layoutWorkingDuration,
+  scheduleFor,
+  type WorkingLayout,
+} from "@/lib/working-days";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { useStoredState } from "@/lib/use-stored-state";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
+import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+/** Remembered choice of confirmation channels; "on"/"off" are the pre-tick-box values. */
+const NOTIFY_PREFS = ["email", "sms", "both", "none", "on", "off"] as const;
+type NotifyPref = (typeof NOTIFY_PREFS)[number];
+
+/**
+ * How the money is handled. `none` = request payment up front (the confirmation is a
+ * payment request); `pay_later` = pay after the job (plain confirmation, staff send a
+ * payment reminder or take it in person later); `credit` / `bank_transfer` as named.
+ */
+type PaymentMethod = "none" | "credit" | "bank_transfer" | "pay_later";
+/** The two "no money yet" choices; the last one used is remembered per business. */
+const TIMING_DEFAULTS = ["none", "pay_later"] as const;
+type PaymentTiming = (typeof TIMING_DEFAULTS)[number];
+
+const DATE_INPUT =
+  "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
+
+/** Sits at the end of the slot grid: books the whole day (or days, for a long job). */
+function AllDayTile({ onPick }: { onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className="rounded-lg border border-dashed py-2 text-xs font-medium transition-colors hover:bg-secondary"
+      title="Block the whole day — the client sees the date rather than a time"
+    >
+      All day
+    </button>
+  );
+}
+
+/** Start-time grid for staff-made bookings; the public page stays back-to-back. */
+const STAFF_SLOT_STEP_MINUTES = 30;
 
 export function AddBookingModal({
   open,
@@ -63,10 +136,16 @@ export function AddBookingModal({
   defaultCustomerId,
   defaultDate,
   defaultStaffId,
+  defaultServiceId,
+  defaultLinkedRecordId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultCustomerId?: string;
+  /** Pre-pick the main service — e.g. "Book" on a follow-up for a ceramic top-up. */
+  defaultServiceId?: string;
+  /** Pre-pick the client's vehicle/record the follow-up was for. */
+  defaultLinkedRecordId?: string;
   /** ISO date (YYYY-MM-DD) to start on — e.g. the day clicked in the calendar. */
   defaultDate?: string;
   /** Pre-select a staff member — e.g. the calendar's current staff filter. */
@@ -80,22 +159,113 @@ export function AddBookingModal({
   const [locationId, setLocationId] = useState("");
   const [date, setDate] = useState(defaultDate ?? isoDate(new Date()));
   const [slotKey, setSlotKey] = useState<string | null>(null);
+  // Staff either pick from the availability quote ("slot") or set the window
+  // themselves ("custom") — start/end, or whole days (RECA-532).
+  const [scheduling, setScheduling] = useState<"slot" | "custom">("slot");
+  const [startTime, setStartTime] = useState("09:00");
+  const [endDate, setEndDate] = useState(defaultDate ?? isoDate(new Date()));
+  const [endTime, setEndTime] = useState("10:00");
+  // Once the end has been edited by hand it stops following start + service length.
+  const [endTouched, setEndTouched] = useState(false);
+  const [allDay, setAllDay] = useState(false);
+  // Staff confirmed this booking may share its day with the other kind of work: a
+  // short job squeezed in beside an all-day one (a "drop-in"), or an all-day job on
+  // a day that already has timed work. Sent as `dropIn: true`; the API then ignores
+  // clashes with that other kind only. Customers never see or set this.
+  const [dropIn, setDropIn] = useState(false);
+  // A 409 the API marked overridable: what clashed and the body to re-send with
+  // `dropIn: true` once staff confirm (under a fresh Idempotency-Key).
+  const [override, setOverride] = useState<{
+    conflicts: BookingConflict[];
+    body: Record<string, unknown>;
+    allDay: boolean;
+  } | null>(null);
+  // Price override (pounds, as typed). null = the catalogue total.
+  const [priceInput, setPriceInput] = useState<string | null>(null);
+  // "10% off" / "£10 off" the list price. Typing a price clears it and vice versa,
+  // so there's only ever one reason the total differs from the list.
+  const [discount, setDiscount] = useState<Discount | null>(null);
 
   // Defaults come from wherever the modal was opened (a calendar day, a client's
   // profile) and differ between opens, so apply them each time it opens.
   useEffect(() => {
     if (!open) return;
     setDate(defaultDate ?? isoDate(new Date()));
+    setEndDate(defaultDate ?? isoDate(new Date()));
+    setEndTouched(false);
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
-  }, [open, defaultDate, defaultStaffId]);
-  const [paymentMethod, setPaymentMethod] = useState<"none" | "credit" | "bank_transfer">("none");
+    setDropIn(false);
+    // Opened from a follow-up: the client, the service and the vehicle are known.
+    if (defaultCustomerId) setCustomerId(defaultCustomerId);
+    if (defaultServiceId) {
+      setServiceId(defaultServiceId);
+      setVariantId("none");
+    }
+    if (defaultLinkedRecordId) setLinkedRecordId(defaultLinkedRecordId);
+  }, [
+    open,
+    defaultDate,
+    defaultStaffId,
+    defaultCustomerId,
+    defaultServiceId,
+    defaultLinkedRecordId,
+  ]);
+  // A detailer who is paid after the job should not have to pick that every time, so
+  // the up-front / after-the-job choice sticks per business.
+  const [paymentTiming, setPaymentTiming] = useStoredState<PaymentTiming>(
+    `recavo.booking.payment.${tenant.businessId}`,
+    "none",
+    TIMING_DEFAULTS,
+  );
+  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(paymentTiming);
+  const setPaymentMethod = (next: PaymentMethod) => {
+    setPaymentMethodState(next);
+    if (next === "none" || next === "pay_later") setPaymentTiming(next);
+  };
+  const connect = useConnectAccount();
+  const cardPaymentsLive = connect.data?.chargesEnabled === true;
+  // "Use package credit" only makes sense for a business that sells packages, and
+  // only for a client who actually holds credit. Hidden (not disabled) otherwise: a
+  // detailer with no packages should never see the option at all.
+  const packages = usePackages();
+  const customerCredits = useCustomerCredits(customerId || undefined);
+  const noPackages = packages.isSuccess && packages.data.length === 0;
+  const noCredit =
+    Boolean(customerId) &&
+    customerCredits.isSuccess &&
+    !customerCredits.data.some((c) => c.balance.available > 0);
+  const creditOffered = !noPackages && !noCredit;
+  // Never leave the form on a hidden option: fall back to the remembered up-front /
+  // after-the-job choice, which is always available.
+  useEffect(() => {
+    if (paymentMethod === "credit" && !creditOffered) setPaymentMethodState(paymentTiming);
+  }, [paymentMethod, creditOffered, paymentTiming]);
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
   const [depositInput, setDepositInput] = useState<string | null>(null);
   const [linkedRecordId, setLinkedRecordId] = useState("none");
-  const [mode, setMode] = useState<"create" | "hold">("create");
   const [notes, setNotes] = useState("");
+  // Automotive only: the client needs running somewhere once they've left the car.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  const [lift, setLift] = useState<ClientLiftDraft>(EMPTY_LIFT_DRAFT);
+  const clientLift = isCarDetailing ? clientLiftFromDraft(lift) : null;
+  // How the client is told straight away (RECA-533): email, text, both or neither.
+  // Some clients don't want the confirmation landing in their inbox, so the last
+  // choice is remembered per business rather than resetting each time.
+  const [notifyPref, setNotifyPref] = useStoredState<NotifyPref>(
+    `recavo.booking.notify.${tenant.businessId}`,
+    "email",
+    NOTIFY_PREFS,
+  );
+  const smsCredits = useSmsCreditsSummary();
+  const wantsEmail = notifyPref === "email" || notifyPref === "both" || notifyPref === "on";
+  const wantsSms = notifyPref === "sms" || notifyPref === "both";
+  const setChannel = (channel: "email" | "sms", on: boolean) => {
+    const email = channel === "email" ? on : wantsEmail;
+    const sms = channel === "sms" ? on : wantsSms;
+    setNotifyPref(email && sms ? "both" : email ? "email" : sms ? "sms" : "none");
+  };
   const [submitting, setSubmitting] = useState(false);
   // Account details + reference from a pay-by-bank 201, read out to the customer
   // before closing (RECA-522).
@@ -109,8 +279,6 @@ export function AddBookingModal({
   const locations = useLocationsList();
   const customers = useCustomers();
   const createBooking = useCreateBooking();
-  const createHold = useCreateBookingHold();
-  const confirmAction = useBookingAction("confirm");
   // Vehicle (or other linked record) on the job — RECA-90. Only offered when the
   // business has a record schema; required when the service or definition says so.
   const linkedRecordDefinition = useLinkedRecordDefinition();
@@ -125,6 +293,13 @@ export function AddBookingModal({
   // Inline "add another" form when the client already has records; with none,
   // the quick-add form shows on its own.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Details typed into the quick-add row but not yet "Added". Create booking saves
+  // them to the client first and puts the new record on the booking, so a car
+  // typed in and then forgotten about isn't silently lost (it used to be).
+  const quickAdd = useRef<QuickAddLinkedRecordHandle | null>(null);
+  const [quickAddPending, setQuickAddPending] = useState(false);
+  const onQuickAddInput = useCallback((has: boolean) => setQuickAddPending(has), []);
+  const [addClientOpen, setAddClientOpen] = useState(false);
 
   const serviceList = services.data ?? [];
   const locationList = useMemo(() => locations.data ?? [], [locations.data]);
@@ -133,6 +308,45 @@ export function AddBookingModal({
   const chosenCustomer = useCustomer(customerId || undefined);
   const selectedCustomer =
     customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
+  // A box is greyed out (not silently ignored) when that channel can't reach the
+  // client, so staff see why before they hit Create rather than in the history later.
+  const emailBlocked = selectedCustomer
+    ? selectedCustomer.emailDisplay || selectedCustomer.emailNormalised
+      ? null
+      : "no email address on file"
+    : null;
+  const smsBlocked = selectedCustomer
+    ? !(selectedCustomer.phoneDisplay || selectedCustomer.phoneNormalised)
+      ? "no mobile number on file"
+      : selectedCustomer.contactPreferences.operationalNotifications === false
+        ? "they've turned off text messages"
+        : smsCredits.level === "empty"
+          ? "you have no text credits left"
+          : null
+    : null;
+  const notifyChannels: ("email" | "sms")[] = [
+    ...(wantsEmail && !emailBlocked ? (["email"] as const) : []),
+    ...(wantsSms && !smsBlocked ? (["sms"] as const) : []),
+  ];
+  const notifyHint = (() => {
+    const blocked = [
+      emailBlocked ? `Email is off: ${emailBlocked}.` : null,
+      smsBlocked ? `Text is off: ${smsBlocked}.` : null,
+    ].filter(Boolean);
+    if (notifyChannels.length === 0) {
+      return [
+        "Nothing is sent now. Use Resend on the booking when they're ready to hear from you.",
+        ...blocked,
+      ].join(" ");
+    }
+    const by =
+      notifyChannels.length === 2
+        ? "email and text"
+        : notifyChannels[0] === "sms"
+          ? "text"
+          : "email";
+    return [`Goes out by ${by} as soon as the booking is created.`, ...blocked].join(" ");
+  })();
   const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
@@ -141,11 +355,8 @@ export function AddBookingModal({
   // A one-person business has nothing to choose: pick them and drop the field.
   // "Any staff member" and the single member are the same search, but pinning
   // the id means the availability quote and booking name them explicitly.
-  const activeStaff = useMemo(
-    () => (staff.data ?? []).filter((s) => s.status === "active"),
-    [staff.data],
-  );
-  const soleStaff = staff.isSuccess && activeStaff.length === 1 ? activeStaff[0] : null;
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   useEffect(() => {
     if (!open || !soleStaff) return;
     if (staffId !== soleStaff.id) setStaffId(soleStaff.id);
@@ -171,6 +382,8 @@ export function AddBookingModal({
   const hasLinkedRecords = Boolean(linkedRecordDefinition.data?.definition);
   const recordTerm = tenant.terminology.linkedRecord;
   const recordTermLower = recordTerm.toLowerCase();
+  // Short: it shares a line with Cancel / More details / Add and is truncated.
+  const quickAddHint = "Saved with the booking.";
   const activeRecords = (customerRecords.data ?? []).filter((r) => r.status === "active");
   // Vertical-aware nouns: "Trainer"/"Session" for PT, "Detailer"/"Service" for detailing.
   const staffNoun = tenant.terminology.staff.trim() || "Staff";
@@ -192,9 +405,18 @@ export function AddBookingModal({
   // additionalServices only apply to individual bookings and can't mix with credit (RECA-516).
   const isIndividual = !service || service.bookingMode === "individual";
   const multiAllowed = Boolean(service) && isIndividual && paymentMethod !== "credit";
-  const availableToAdd = serviceList.filter(
-    (s) => s.id !== serviceId && !additional.some((a) => a.serviceId === s.id),
-  );
+  // The tile picker sees one list; the first entry is the main service and the rest
+  // are the additional services, which is exactly how the API wants them.
+  const picked: PickedService[] = serviceId
+    ? [{ serviceId, variantId: variantId !== "none" ? variantId : null }, ...additional]
+    : [];
+  const setPicked = (next: PickedService[]) => {
+    const [main, ...rest] = next;
+    setServiceId(main?.serviceId ?? "");
+    setVariantId(main?.variantId ?? "none");
+    setAdditional(rest);
+    setSlotKey(null);
+  };
   // A date input reports "" while someone is part-way through typing a date;
   // an invalid Date would throw on toISOString and take the page down.
   const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -208,13 +430,40 @@ export function AddBookingModal({
     staffId: staffId !== "all" ? staffId : undefined,
     from: validDate ? dayStart.toISOString() : "",
     to: validDate ? dayEnd.toISOString() : "",
-    enabled: open && validDate,
+    // Once staff opt for a drop-in the quote ignores all-day holds, so the times
+    // the day actually has room for (around timed work and events) show up.
+    dropIn: dropIn && scheduling === "slot",
+    // Every half hour the day has room for, not just back-to-back from opening: a
+    // 2-hour job should be bookable at 09:00, and a drop-in at any free time.
+    granularityMinutes: STAFF_SLOT_STEP_MINUTES,
+    enabled: open && validDate && scheduling === "slot",
   });
 
   const slots = useMemo(
     () => (availability.data ?? []).sort((a, b) => a.start.localeCompare(b.start)),
     [availability.data],
   );
+
+  // What is already on the diary for the day(s) in question — so an empty slot
+  // grid can say *why* ("Held all day by …") and offer a drop-in, and an all-day
+  // pick can warn about the timed work it would share the day with.
+  const diaryEnd = (() => {
+    if (allDay && scheduling === "custom" && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      const last = new Date(`${endDate}T00:00:00.000Z`);
+      if (!Number.isNaN(last.getTime()) && last.getTime() >= dayStart.getTime()) {
+        return new Date(last.getTime() + 24 * 60 * 60 * 1000);
+      }
+    }
+    return dayEnd;
+  })();
+  const diary = useBookings({
+    from: validDate ? dayStart.toISOString() : "",
+    to: validDate ? diaryEnd.toISOString() : "",
+    staffId: staffId !== "all" ? staffId : undefined,
+    limit: 200,
+    enabled: open && validDate && Boolean(serviceId),
+  });
+  const diaryBookings = useMemo(() => diary.data?.bookings ?? [], [diary.data]);
 
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
@@ -233,22 +482,191 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
+  // Price override (RECA-532): every service keeps its list price and the API records
+  // the difference as a discount line, so any total from zero up is valid.
+  const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
+  const discountInvalid =
+    discount !== null && discount.value.trim() !== "" && discountMinor === null;
+  const priceOverridden = priceInput !== null || discountMinor !== null;
+  const overridePriceMinor: number | null = (() => {
+    if (priceInput !== null) {
+      try {
+        const minor = parseMoneyToMinor(priceInput);
+        return minor >= 0 ? minor : null;
+      } catch {
+        return null;
+      }
+    }
+    if (discountMinor !== null) return rolledTotalMinor - discountMinor;
+    return null;
+  })();
+  const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
+  const effectiveTotalMinor = overridePriceMinor ?? rolledTotalMinor;
+  const priceChanged = overridePriceMinor !== null && overridePriceMinor !== rolledTotalMinor;
+
+  // Catalogue length of the whole job — the default end when staff set the time.
+  const catalogueDurationMinutes = (() => {
+    if (!service) return 60;
+    const variant = variantId !== "none" ? service.variants.find((v) => v.id === variantId) : null;
+    const primary = variant?.durationMinutes ?? service.durationMinutes;
+    return (
+      primary +
+      additional.reduce((sum, a) => {
+        const s = serviceById.get(a.serviceId);
+        if (!s) return sum;
+        const v = a.variantId ? s.variants.find((x) => x.id === a.variantId) : undefined;
+        return sum + (v?.durationMinutes ?? s.durationMinutes);
+      }, 0)
+    );
+  })();
+
+  // A set time needs someone to do it — "any staff" only makes sense for a quote.
+  const customStaffId = staffId !== "all" ? staffId : (soleStaff?.id ?? null);
+  const customStaff = customStaffId
+    ? ((staff.data ?? []).find((s) => s.id === customStaffId) ?? null)
+    : null;
+  // The days this person works here: a job of a day or more is laid over these only,
+  // the same way the API will save it, so the end we suggest is the end it gets.
+  const customLocation = locationList.find((l) => l.id === locationId) ?? null;
+  const workingSchedule = useMemo(
+    () => scheduleFor(customStaff, customLocation, timezone),
+    [customStaff, customLocation, timezone],
+  );
+
+  // End follows start + service length until someone edits it. A job of a day or more
+  // skips the days that aren't worked: a 3-day job from Thursday ends on Monday.
+  useEffect(() => {
+    if (scheduling !== "custom" || endTouched || !validDate) return;
+    const startIso = allDay
+      ? localDateTimeToIso(date, "00:00")
+      : localDateTimeToIso(date, startTime);
+    if (!startIso) return;
+    const layout = layoutWorkingDuration(
+      startIso,
+      catalogueDurationMinutes,
+      workingSchedule,
+      timezone,
+      {
+        allDay,
+      },
+    );
+    if (allDay) {
+      setEndDate(layout.occupiedDays[layout.occupiedDays.length - 1] ?? date);
+      return;
+    }
+    const end = new Date(layout.end);
+    setEndDate(isoDate(end));
+    setEndTime(`${`${end.getHours()}`.padStart(2, "0")}:${`${end.getMinutes()}`.padStart(2, "0")}`);
+  }, [
+    scheduling,
+    endTouched,
+    validDate,
+    allDay,
+    date,
+    startTime,
+    catalogueDurationMinutes,
+    workingSchedule,
+    timezone,
+  ]);
+
+  // The staff-set window as ISO instants (browser-local wall clock, like events). For
+  // all-day the server snaps to local midnights at the location; we send day bounds.
+  // `minutes` is what the API will store as the job's length: the days between start
+  // and end that aren't worked stay free and don't count.
+  const customWindow = useMemo<{
+    start: string;
+    end: string;
+    minutes: number;
+    layout: WorkingLayout;
+  } | null>(() => {
+    if (scheduling !== "custom") return null;
+    const start = allDay ? localDateTimeToIso(date, "00:00") : localDateTimeToIso(date, startTime);
+    const end = allDay
+      ? /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+        ? localDateTimeToIso(isoDate(addDays(parseIso(endDate), 1)), "00:00")
+        : null
+      : localDateTimeToIso(endDate, endTime);
+    if (!start || !end) return null;
+    if (new Date(end).getTime() <= new Date(start).getTime()) return null;
+    const layout = layoutExplicitWindow(start, end, workingSchedule, timezone, { allDay });
+    return { start, end, minutes: layout.minutes, layout };
+  }, [scheduling, allDay, date, startTime, endDate, endTime, workingSchedule, timezone]);
+  const customSpan = customWindow ? formatWorkingSpan(customWindow.layout, timezone) : null;
+
+  // "All day" from the slot grid: one tap instead of switching tabs and ticking
+  // the box. The end-date effect above fills in the last day from the job length.
+  const pickAllDay = () => {
+    setScheduling("custom");
+    setAllDay(true);
+    setSlotKey(null);
+    setEndTouched(false);
+  };
+  const hoursWarning = useMemo(() => {
+    if (scheduling !== "custom" || allDay || !customWindow || !customStaff) return null;
+    return outsideWorkingHours(customStaff, customWindow, locationId || null, timezone);
+  }, [scheduling, allDay, customWindow, customStaff, locationId, timezone]);
+
+  // All-day jobs the new booking would sit beside: the whole day for a slot pick,
+  // the exact window for a hand-set time. Filtered to the chosen staff member —
+  // someone else's all-day job never blocked this one anyway.
+  const holdWindow =
+    scheduling === "custom" && !allDay && customWindow
+      ? customWindow
+      : { start: dayStart.toISOString(), end: dayEnd.toISOString() };
+  const holdStaffId = scheduling === "custom" ? customStaffId : staffId !== "all" ? staffId : null;
+  const holds = useMemo(
+    () => (validDate && !allDay ? allDayHolds(diaryBookings, holdWindow, holdStaffId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [validDate, allDay, diaryBookings, holdWindow.start, holdWindow.end, holdStaffId],
+  );
+  const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
+  // The mirror: timed work on the day(s) an all-day job would take.
+  const timedOnDay = useMemo(
+    () =>
+      allDay && scheduling === "custom" && customWindow
+        ? timedJobsWithin(diaryBookings, customWindow, customStaffId)
+        : [],
+    [allDay, scheduling, customWindow, diaryBookings, customStaffId],
+  );
+  const timedNote = timedClashNote(timedOnDay, timezone);
+  // A "yes" to sharing the day is about *this* day, this person and this kind of
+  // booking; change any of them and it is asked again.
+  // …except when the switch itself was "book it as a drop-in instead", which
+  // arms the next reset to land on yes.
+  const armDropIn = useRef(false);
+  useEffect(() => {
+    if (armDropIn.current) {
+      armDropIn.current = false;
+      setDropIn(true);
+      return;
+    }
+    setDropIn(false);
+  }, [date, endDate, staffId, scheduling, allDay]);
+  // Sent when staff have said the two kinds of work may share the day. A slot picked
+  // from a drop-in quote always carries it; a hand-set window only while there is
+  // still something on the diary to share with.
+  const sendDropIn =
+    dropIn && (scheduling === "slot" || (allDay ? timedOnDay.length > 0 : holds.length > 0));
+
   // The API sums the booked services' deposits unless staff override it here.
   const defaultDepositMinor = configuredDepositMinor(
     [
       ...(service ? [service] : []),
       ...additional.map((a) => serviceById.get(a.serviceId)).filter((s) => s != null),
     ],
-    rolledTotalMinor,
+    effectiveTotalMinor,
   );
   const depositOverridden = depositInput !== null;
+  // Credit settles by entitlement, never money. Every other method can take a deposit —
+  // including pay after the job, where it secures the date and the balance follows.
+  const depositApplies = paymentMethod !== "credit";
   const depositMinor: number | null = (() => {
-    if (paymentMethod === "credit") return null;
+    if (!depositApplies) return null;
     if (!depositOverridden) return defaultDepositMinor;
     if (!depositInput.trim()) return null;
     try {
       const minor = parseMoneyToMinor(depositInput);
-      return minor > 0 && minor < rolledTotalMinor ? minor : null;
+      return minor > 0 && minor < effectiveTotalMinor ? minor : null;
     } catch {
       return null;
     }
@@ -259,13 +677,58 @@ export function AddBookingModal({
     (() => {
       try {
         const minor = parseMoneyToMinor(depositInput);
-        return minor < 0 || minor >= rolledTotalMinor;
+        return minor < 0 || minor >= effectiveTotalMinor;
       } catch {
         return true;
       }
     })();
 
+  // Everything still standing between the form and a booking, in the order the
+  // fields appear. The Create button stays clickable while this is non-empty so
+  // a click can say what's missing instead of silently doing nothing.
+  const blockers: string[] = [];
+  if (!customerId) blockers.push("Choose a client");
+  if (!service) blockers.push("Choose a service");
+  if (recordRequired && linkedRecordId === "none" && !quickAddPending)
+    blockers.push(`Choose a ${recordTermLower}`);
+  if (!locationId) blockers.push("Choose a location");
+  if (service) {
+    if (scheduling === "slot") {
+      if (!selectedSlot)
+        blockers.push(slots.length > 0 ? "Pick a time slot" : "Pick a date with an available slot");
+    } else {
+      if (!customStaffId) blockers.push(`Choose a ${staffLower}`);
+      if (!customWindow)
+        blockers.push(allDay ? "Set the first and last day" : "Set a start and end time");
+    }
+    if (priceInvalid) blockers.push("Check the price");
+    if (depositInvalid) blockers.push("Check the deposit");
+  }
+  const blocked = blockers.length > 0;
+
   const handleConflict = () => {
+    if (scheduling === "custom") {
+      const who = customStaff?.displayName ?? `the ${staffLower}`;
+      if (allDay) {
+        // Two all-day jobs can't share a day, but a timed drop-in alongside one can.
+        toast.error(`${who} already has an all-day job then`, {
+          description: "Book this one at a set time alongside it instead?",
+          action: {
+            label: "Pick a time",
+            onClick: () => {
+              armDropIn.current = true;
+              setAllDay(false);
+              setEndTouched(false);
+            },
+          },
+        });
+        return;
+      }
+      toast.error(`Clashes with another booking for ${who}`, {
+        description: "Pick a different time, or someone else.",
+      });
+      return;
+    }
     toast.error("That slot was just taken", {
       description: "Availability has been refreshed — pick another time.",
     });
@@ -275,23 +738,108 @@ export function AddBookingModal({
 
   const reset = () => {
     setCustomerId(defaultCustomerId ?? "");
-    setLinkedRecordId("none");
-    setServiceId("");
+    setLinkedRecordId(defaultLinkedRecordId ?? "none");
+    setServiceId(defaultServiceId ?? "");
     setVariantId("none");
     setStaffId("all");
     setLocationId("");
     setSlotKey(null);
-    setPaymentMethod("none");
+    setPaymentMethodState(paymentTiming);
     setDepositInput(null);
-    setMode("create");
+    setPriceInput(null);
+    setDiscount(null);
+    setScheduling("slot");
+    setAllDay(false);
+    setDropIn(false);
+    setOverride(null);
+    setEndTouched(false);
     setNotes("");
+    setLift(EMPTY_LIFT_DRAFT);
     setAdditional([]);
     setBankResult(null);
   };
 
+  // Sends the booking; a 409 the API marks overridable (only all-day jobs in the way
+  // of a timed booking, or only timed jobs in the way of an all-day one) opens the
+  // "book anyway?" confirmation instead of a toast. Returns true once created.
+  const create = async (body: Record<string, unknown>): Promise<boolean> => {
+    try {
+      const { bankTransfer } = await createBooking.mutateAsync(body);
+      if (bankTransfer) {
+        // Keep the dialog open on the details so staff can read them out.
+        setBankResult(bankTransfer);
+        toast.success("Booking reserved — awaiting bank transfer");
+        return true;
+      }
+      toast.success(
+        notifyChannels.length > 0 ? "Booking created" : "Booking created — client not notified",
+      );
+      reset();
+      onOpenChange(false);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+        setOverride({ conflicts: err.conflicts, body, allDay: body.allDay === true });
+      } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        handleConflict();
+      } else {
+        toastApiError(err);
+      }
+      return false;
+    }
+  };
+
+  // Staff confirmed the clash: same booking, now flagged as sharing the day. The
+  // mutation rotated its Idempotency-Key on the 409, so this is a fresh request.
+  const confirmOverride = async () => {
+    if (!override) return;
+    setSubmitting(true);
+    try {
+      const ok = await create({ ...override.body, dropIn: true });
+      if (ok) setOverride(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submit = async () => {
-    if (!customerId || !service || !locationId || !selectedSlot) {
-      toast.error("Choose a client, service, location and time slot");
+    // Several gaps at once: list them all rather than revealing one per click.
+    // A single gap falls through to the specific message for it below.
+    if (blockers.length > 1) {
+      toast.error("A few things are still needed", {
+        description: (
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {blockers.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        ),
+      });
+      return;
+    }
+    if (!customerId || !service || !locationId) {
+      toast.error(blockers[0] ?? "Choose a client, service and location");
+      return;
+    }
+    if (scheduling === "slot" && !selectedSlot) {
+      toast.error("Pick a time slot", {
+        description:
+          slots.length > 0 ? undefined : "No availability on this date — try another day.",
+      });
+      return;
+    }
+    if (scheduling === "custom" && (!customWindow || !customStaffId)) {
+      toast.error(!customStaffId ? `Choose a ${staffLower}` : "Check the times", {
+        description: !customStaffId
+          ? "A set time needs someone to do the work."
+          : "The end must come after the start.",
+      });
+      return;
+    }
+    if (priceInvalid) {
+      toast.error("Check the price", {
+        description: "Enter an amount, or reset to the list price.",
+      });
       return;
     }
 
@@ -302,7 +850,7 @@ export function AddBookingModal({
       return;
     }
 
-    if (recordRequired && linkedRecordId === "none") {
+    if (recordRequired && linkedRecordId === "none" && !quickAddPending) {
       toast.error(`Choose a ${recordTermLower}`, {
         description: `This service needs a ${recordTermLower} on the booking.`,
       });
@@ -328,6 +876,26 @@ export function AddBookingModal({
       }
     }
 
+    setSubmitting(true);
+    // A vehicle typed into the quick-add row but never "Added" is saved to the
+    // client now and goes on the booking, rather than being dropped. Any problem
+    // with it (blank required field, API error) shows on the row and stops here.
+    let recordId: string | null = linkedRecordId !== "none" ? linkedRecordId : null;
+    if (quickAdd.current?.hasInput()) {
+      try {
+        const record = await quickAdd.current.submit();
+        if (!record) {
+          setSubmitting(false);
+          return;
+        }
+        recordId = record.id;
+      } catch {
+        // useCreateCustomerLinkedRecord toasts the error.
+        setSubmitting(false);
+        return;
+      }
+    }
+
     // Staff hold/create bodies use start + staffId from the availability quote.
     // Public booking requires `slotToken`; staff OpenAPI does not — the token is
     // still used server-side when the quote is revalidated on hold/book.
@@ -343,63 +911,82 @@ export function AddBookingModal({
           }
         : {}),
       locationId,
-      staffId: selectedSlot.staffId,
-      start: selectedSlot.start,
+      ...(scheduling === "custom" && customWindow && customStaffId
+        ? {
+            staffId: customStaffId,
+            start: customWindow.start,
+            end: customWindow.end,
+            ...(allDay ? { allDay: true } : {}),
+          }
+        : { staffId: selectedSlot!.staffId, start: selectedSlot!.start }),
+      ...(priceChanged ? { priceMinor: overridePriceMinor } : {}),
+      ...(sendDropIn ? { dropIn: true } : {}),
       leadCustomerId: customerId,
-      ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
+      ...(recordId ? { linkedRecordId: recordId } : {}),
       paymentMethod,
       // Only send an override when staff changed it; otherwise the API applies
       // the services' configured deposits (0 = force no deposit).
-      ...(depositOverridden && paymentMethod !== "credit"
-        ? { depositMinor: depositMinor ?? 0 }
-        : {}),
+      ...(depositOverridden && depositApplies ? { depositMinor: depositMinor ?? 0 } : {}),
       notesInternal: notes || null,
+      ...(clientLift ? { clientLift } : {}),
+      notifyChannels,
       source: "staff_console",
       // Include slotToken when present so backends that accept it can bind the quote.
-      ...(selectedSlot.slotToken ? { slotToken: selectedSlot.slotToken } : {}),
+      ...(scheduling === "slot" && selectedSlot?.slotToken
+        ? { slotToken: selectedSlot.slotToken }
+        : {}),
     };
 
-    setSubmitting(true);
     try {
-      // Holds reject bank_transfer — the method is chosen at final booking only.
-      if (mode === "hold" && paymentMethod !== "bank_transfer") {
-        const held = await createHold.mutateAsync(body);
-        await confirmAction.mutateAsync({
-          bookingId: held.id,
-          ifMatch: held.version,
-        });
-        toast.success("Slot held and booking confirmed");
-      } else {
-        const { bankTransfer } = await createBooking.mutateAsync(body);
-        if (bankTransfer) {
-          // Keep the dialog open on the details so staff can read them out.
-          setBankResult(bankTransfer);
-          toast.success("Booking reserved — awaiting bank transfer");
-          return;
-        }
-        toast.success("Booking created");
-      }
-      reset();
-      onOpenChange(false);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
-        handleConflict();
-      } else {
-        toastApiError(err);
-      }
+      await create(body);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Anything a person typed or picked themselves counts as work worth protecting;
+  // the defaults the form filled in on their behalf (location, staff, date) do not.
+  const dirty =
+    customerId !== (defaultCustomerId ?? "") ||
+    serviceId !== (defaultServiceId ?? "") ||
+    additional.length > 0 ||
+    slotKey !== null ||
+    notes.trim() !== "" ||
+    lift.needed ||
+    priceInput !== null ||
+    discount !== null ||
+    depositInput !== null ||
+    paymentMethod !== "none";
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // Esc, the backdrop and the close cross all land here. A half-filled form asks
+  // first; an untouched one (or the bank-transfer receipt) closes straight away.
+  const requestClose = () => {
+    if (dirty && !bankResult && !submitting) {
+      setConfirmDiscard(true);
+      return;
+    }
+    reset();
+    onOpenChange(false);
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) reset();
-        onOpenChange(o);
+        if (o) onOpenChange(true);
+        else requestClose();
       }}
     >
+      <DiscardChangesDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        what="this booking"
+        onDiscard={() => {
+          setConfirmDiscard(false);
+          reset();
+          onOpenChange(false);
+        }}
+      />
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{bankResult ? "Awaiting bank transfer" : "Add booking"}</DialogTitle>
@@ -408,7 +995,7 @@ export function AddBookingModal({
               ? "The booking is reserved. Read these details out to the customer — they've been emailed too."
               : setupBlocked
                 ? "Finish a quick bit of setup first — then you can take bookings."
-                : "Search availability, pick a quote slot, then create directly or hold then confirm."}
+                : "Pick the client and service, choose a time, and the booking is confirmed straight away."}
           </DialogDescription>
         </DialogHeader>
 
@@ -458,22 +1045,45 @@ export function AddBookingModal({
             to="/clients"
             cta="Add client"
             onNavigate={() => onOpenChange(false)}
+            onAction={() => setAddClientOpen(true)}
           />
         ) : (
-          <div className="grid gap-4">
+          // Nothing in here may be wider than the sheet. Every grid/flex item defaults to
+          // `min-width: auto`, so a long client name, vehicle label or service name in a
+          // nowrap trigger used to grow the row, then the grid, then the sheet itself,
+          // which scrolled sideways on phones. `truncate` alone can't stop that (it doesn't
+          // change intrinsic size); `min-w-0` on every descendant does, and the explicit
+          // 0-minimum column keeps the root from growing past its container too.
+          <div className="grid min-w-0 grid-cols-1 gap-4 **:min-w-0">
             <div className="grid gap-2">
               <Label>Client</Label>
-              <CustomerSearchPicker
-                value={selectedCustomer}
-                suggestions={customerList}
-                placeholder="Choose or search for a client"
-                onSelect={(c) => {
-                  setCustomerId(c.id);
-                  // A record belongs to one client, so it can't survive a client change.
-                  setLinkedRecordId("none");
-                  setQuickAddOpen(false);
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <CustomerSearchPicker
+                    value={selectedCustomer}
+                    suggestions={customerList}
+                    placeholder="Choose or search for a client"
+                    onSelect={(c) => {
+                      setCustomerId(c.id);
+                      // A record belongs to one client, so it can't survive a client change.
+                      setLinkedRecordId("none");
+                      setQuickAddOpen(false);
+                    }}
+                  />
+                </div>
+                {/* New walk-in? Add them here without leaving the half-filled form. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setAddClientOpen(true)}
+                  aria-label="Add a new client"
+                  title="Add a new client"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
             </div>
 
             {hasLinkedRecords && customerId ? (
@@ -488,6 +1098,9 @@ export function AddBookingModal({
                     customerId={customerId}
                     fields={recordFields}
                     term={recordTerm}
+                    handleRef={quickAdd}
+                    onInputChange={onQuickAddInput}
+                    inputHint={quickAddHint}
                     onAdded={(record) => {
                       setLinkedRecordId(record.id);
                       toast.success(`${recordTerm} added`, {
@@ -501,6 +1114,9 @@ export function AddBookingModal({
                     customerId={customerId}
                     fields={recordFields}
                     term={recordTerm}
+                    handleRef={quickAdd}
+                    onInputChange={onQuickAddInput}
+                    inputHint={quickAddHint}
                     autoFocus
                     onCancel={() => setQuickAddOpen(false)}
                     onAdded={(record) => {
@@ -545,84 +1161,54 @@ export function AddBookingModal({
               </div>
             ) : null}
 
+            {/* Once the car is in, does the client need running somewhere? */}
+            {isCarDetailing && customerId ? (
+              <ClientLiftFields value={lift} onChange={setLift} idPrefix="booking" />
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Service</Label>
-                <Select
-                  value={serviceId}
-                  onValueChange={(v) => {
-                    setServiceId(v);
-                    setVariantId("none");
-                    setSlotKey(null);
-                    setAdditional([]);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>Services</Label>
+                <ServiceMultiPicker
+                  services={serviceList}
+                  value={picked}
+                  onChange={setPicked}
+                  multi={!service || multiAllowed}
+                  singleReason={
+                    paymentMethod === "credit"
+                      ? "Paying with a credit covers one service, so this replaced the other."
+                      : undefined
+                  }
+                />
+                {/* Detailing: the materials the job will start with (staff records; not charged). */}
+                {isCarDetailing && picked.length > 0 ? (
+                  <ServiceDefaultsHint serviceIds={picked.map((p) => p.serviceId)} />
+                ) : null}
               </div>
-              <div className="grid gap-2">
-                <Label>Variant</Label>
-                <Select
-                  value={variantId}
-                  onValueChange={(v) => {
-                    setVariantId(v);
-                    setSlotKey(null);
-                  }}
-                  disabled={!service || service.variants.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Default" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Default (no variant)</SelectItem>
-                    {(service?.variants ?? []).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {[
-                          v.name,
-                          // Blank duration/price fall back to the service default,
-                          // so only show what the variant actually overrides.
-                          v.durationMinutes != null ? formatDuration(v.durationMinutes) : null,
-                          v.priceMinor != null
-                            ? formatMoney(v.priceMinor, service!.currency)
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label>Location</Label>
-                <Select
-                  value={locationId}
-                  onValueChange={(v) => {
-                    setLocationId(v);
-                    setSlotKey(null);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locationList.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* One location is picked for them above; nothing to ask. */}
+              {soleLocation ? null : (
+                <div className="grid gap-2">
+                  <Label>Location</Label>
+                  <Select
+                    value={locationId}
+                    onValueChange={(v) => {
+                      setLocationId(v);
+                      setSlotKey(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locationList.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {soleStaff ? null : (
                 <div className="grid gap-2">
                   <Label>{staffNoun}</Label>
@@ -637,7 +1223,9 @@ export function AddBookingModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Any {staffLower}</SelectItem>
+                      <SelectItem value="all">
+                        {scheduling === "custom" ? `Choose a ${staffLower}…` : `Any ${staffLower}`}
+                      </SelectItem>
                       {(staff.data ?? []).map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.displayName}
@@ -645,198 +1233,471 @@ export function AddBookingModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {scheduling === "custom" && !customStaffId ? (
+                    <p className="text-xs text-destructive">
+                      A set time needs a {staffLower} to do the work.
+                    </p>
+                  ) : null}
                 </div>
               )}
-              <div className="grid gap-2">
-                <Label htmlFor="booking-date">Date</Label>
-                <input
-                  id="booking-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => {
-                    setDate(e.target.value);
-                    setSlotKey(null);
-                  }}
-                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Flow</Label>
-                <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="create">Create confirmed</SelectItem>
-                    <SelectItem value="hold" disabled={paymentMethod === "bank_transfer"}>
-                      Hold then confirm
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {scheduling === "slot" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="booking-date">Date</Label>
+                  <input
+                    id="booking-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => {
+                      setDate(e.target.value);
+                      setSlotKey(null);
+                    }}
+                    className={DATE_INPUT}
+                  />
+                </div>
+              ) : null}
             </div>
 
-            {multiAllowed ? (
-              <div className="grid gap-2">
-                <Label>Additional services (optional)</Label>
-                {additional.map((a, idx) => {
-                  const s = serviceById.get(a.serviceId);
-                  if (!s) return null;
-                  return (
-                    <div
-                      key={a.serviceId}
-                      className="flex flex-wrap items-center gap-2 rounded-lg border p-2"
-                    >
-                      <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
-                      {s.variants.length > 0 ? (
-                        <Select
-                          value={a.variantId ?? "none"}
-                          onValueChange={(v) =>
-                            setAdditional((prev) =>
-                              prev.map((x, i) =>
-                                i === idx ? { ...x, variantId: v === "none" ? null : v } : x,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-44">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Default</SelectItem>
-                            {s.variants.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.name} · {formatMoney(v.priceMinor ?? 0, s.currency)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {formatMoney(s.basePriceMinor, s.currency)}
-                        </span>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => setAdditional((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-                {availableToAdd.length > 0 ? (
-                  <Select
-                    value=""
-                    onValueChange={(v) =>
-                      setAdditional((prev) => [...prev, { serviceId: v, variantId: null }])
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Add another service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableToAdd.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                {additional.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Reserves the combined duration and rolls up to an estimated{" "}
-                    {formatMoney(rolledTotalMinor, service!.currency)}. The server confirms the
-                    final price and end time.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <Label>Available times</Label>
-              {!serviceId || !locationId ? (
-                <p className="text-xs text-muted-foreground">
-                  Choose a service and location to see availability.
-                </p>
-              ) : availability.isLoading ? (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
-                  ))}
-                </div>
-              ) : slots.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {validDate
-                    ? emptySlotsMessage(service?.availabilityWindows, date)
-                    : "Pick a date to see available times."}
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {slots.map((s) => {
-                    const key = `${s.start}:${s.staffId}`;
-                    return (
+            {service ? (
+              <div className="grid gap-3 rounded-xl border p-3">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="booking-price">Price (£)</Label>
+                    {priceOverridden ? (
                       <button
-                        key={key}
                         type="button"
-                        onClick={() => setSlotKey(key)}
-                        className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                          key === slotKey
-                            ? "border-primary bg-primary-soft text-primary"
-                            : "hover:bg-secondary"
-                        }`}
-                        title={
-                          s.remainingCapacity > 1
-                            ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
-                            : formatMoney(s.priceMinor, s.currency)
-                        }
+                        className="text-xs text-primary underline-offset-4 hover:underline"
+                        onClick={() => {
+                          setPriceInput(null);
+                          setDiscount(null);
+                        }}
                       >
-                        {formatInTz(s.start, s.displayTimezone || timezone, {
+                        List {formatMoney(rolledTotalMinor, service.currency)} · reset
+                      </button>
+                    ) : null}
+                  </div>
+                  <Input
+                    id="booking-price"
+                    inputMode="decimal"
+                    value={
+                      priceInput !== null
+                        ? priceInput
+                        : ((overridePriceMinor ?? rolledTotalMinor) / 100).toFixed(2)
+                    }
+                    onChange={(e) => {
+                      setPriceInput(e.target.value);
+                      setDiscount(null);
+                    }}
+                    aria-invalid={priceInvalid}
+                  />
+                  {/* Discount: a percentage or a fixed amount off the list price. Sets the
+                      same override as typing a price, just worked out for you. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Label htmlFor="booking-discount" className="text-xs text-muted-foreground">
+                      Discount
+                    </Label>
+                    <Input
+                      id="booking-discount"
+                      inputMode="decimal"
+                      placeholder="0"
+                      className="h-8 w-20"
+                      value={discount?.value ?? ""}
+                      onChange={(e) => {
+                        setPriceInput(null);
+                        setDiscount(
+                          e.target.value.trim() === ""
+                            ? null
+                            : { mode: discount?.mode ?? "percent", value: e.target.value },
+                        );
+                      }}
+                      aria-invalid={discountInvalid}
+                    />
+                    <Tabs
+                      value={discount?.mode ?? "percent"}
+                      onValueChange={(mode) => {
+                        setPriceInput(null);
+                        setDiscount({
+                          mode: mode as Discount["mode"],
+                          value: discount?.value ?? "",
+                        });
+                      }}
+                    >
+                      <TabsList className="h-8">
+                        <TabsTrigger value="percent" className="px-2.5 text-xs">
+                          % off
+                        </TabsTrigger>
+                        <TabsTrigger value="amount" className="px-2.5 text-xs">
+                          £ off
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                    {discountMinor !== null && overridePriceMinor !== null ? (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {discountLabel(discount!, (m) => formatMoney(m, service.currency))} · −
+                        {formatMoney(discountMinor, service.currency)}
+                      </span>
+                    ) : null}
+                  </div>
+                  {priceInvalid ? (
+                    <p className="text-xs text-destructive">
+                      {discountInvalid
+                        ? discount!.mode === "percent"
+                          ? "Enter a percentage between 0 and 100."
+                          : `Enter an amount up to ${formatMoney(rolledTotalMinor, service.currency)}.`
+                        : "Enter an amount, or reset to the list price."}
+                    </p>
+                  ) : priceChanged ? (
+                    <p className="text-xs text-muted-foreground">
+                      Adjusted from the {formatMoney(rolledTotalMinor, service.currency)} list price
+                      — the services stay at list and the{" "}
+                      {formatAdjustment(effectiveTotalMinor - rolledTotalMinor, (m) =>
+                        formatMoney(m, service.currency),
+                      )}{" "}
+                      shows as a{" "}
+                      {adjustmentLabel(effectiveTotalMinor - rolledTotalMinor).toLowerCase()} line.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Time</Label>
+                  <Tabs
+                    value={scheduling}
+                    onValueChange={(v) => {
+                      setScheduling(v as typeof scheduling);
+                      setSlotKey(null);
+                      setEndTouched(false);
+                    }}
+                  >
+                    <TabsList className="h-8">
+                      <TabsTrigger value="slot" className="text-xs">
+                        Pick a slot
+                      </TabsTrigger>
+                      <TabsTrigger value="custom" className="text-xs">
+                        Set the time
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                {scheduling === "custom" ? (
+                  <div className="grid gap-3">
+                    {/* Whole day or a specific time is the first choice, not a checkbox
+                        tucked under the dates: people didn't spot that unticking
+                        "All day" is how you get a start time. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div
+                        role="radiogroup"
+                        aria-label="Whole day or a specific time"
+                        className="inline-flex rounded-lg border p-0.5 text-xs font-medium"
+                      >
+                        {(
+                          [
+                            [true, "All day"],
+                            [false, "Pick a time"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="radio"
+                            aria-checked={allDay === value}
+                            onClick={() => {
+                              setAllDay(value);
+                              setEndTouched(false);
+                            }}
+                            className={cn(
+                              "rounded-md px-3 py-1.5 transition-colors",
+                              allDay === value
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs tabular-nums",
+                          customWindow ? "text-muted-foreground" : "text-destructive",
+                        )}
+                      >
+                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
+                            coating booked all day is "All day · 2 hrs", never "1 day". */}
+                        {customWindow
+                          ? allDay
+                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
+                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
+                          : "The end must come after the start."}
+                      </span>
+                    </div>
+                    <div className="grid gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-start-date">Start</Label>
+                        <div className="flex gap-2">
+                          <input
+                            id="booking-start-date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
+                          />
+                          {allDay ? null : (
+                            <input
+                              type="time"
+                              aria-label="Start time"
+                              value={startTime}
+                              onChange={(e) => setStartTime(e.target.value)}
+                              className={cn(DATE_INPUT, "w-28 shrink-0")}
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-end-date">{allDay ? "Last day" : "End"}</Label>
+                        <div className="flex gap-2">
+                          <input
+                            id="booking-end-date"
+                            type="date"
+                            value={endDate}
+                            min={date}
+                            onChange={(e) => {
+                              setEndDate(e.target.value);
+                              setEndTouched(true);
+                            }}
+                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
+                          />
+                          {allDay ? null : (
+                            <input
+                              type="time"
+                              aria-label="End time"
+                              value={endTime}
+                              onChange={(e) => {
+                                setEndTime(e.target.value);
+                                setEndTouched(true);
+                              }}
+                              className={cn(DATE_INPUT, "w-28 shrink-0")}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {customSpan ? (
+                      <p className="text-xs text-muted-foreground">
+                        {/* "Thu 24 – Mon 28 Sept · 3 working days": the days the job runs
+                            on; the weekend in between stays free. */}
+                        {`Runs ${customSpan}${
+                          customWindow && customWindow.layout.segments.length > 1
+                            ? `; the ${customStaff?.displayName ?? staffLower} is free on the days between.`
+                            : "."
+                        }`}
+                      </p>
+                    ) : null}
+                    {allDay ? (
+                      <p className="text-xs text-muted-foreground">
+                        {`Blocks ${customStaff?.displayName ?? `the ${staffLower}`} for the whole ${
+                          customWindow && customWindow.minutes > 1440 ? "days" : "day"
+                        }; the client sees the ${
+                          customWindow && customWindow.minutes > 1440 ? "dates" : "date"
+                        } rather than a time.`}
+                      </p>
+                    ) : null}
+                    {hoursWarning ? (
+                      <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                        {hoursWarning}
+                      </p>
+                    ) : null}
+                    {/* The mirror of a drop-in: an all-day job landing on a day that
+                        already has timed work. Staff say so explicitly; the request
+                        then carries dropIn and the API lets the two share the day. */}
+                    {allDay && timedNote ? (
+                      dropIn ? (
+                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                          {timedNote}. Booking anyway — both stay on the calendar.{" "}
+                          <button
+                            type="button"
+                            className="underline underline-offset-4"
+                            onClick={() => setDropIn(false)}
+                          >
+                            Undo
+                          </button>
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                          <span>{timedNote} — book anyway?</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setDropIn(true)}
+                          >
+                            Book anyway
+                          </Button>
+                        </div>
+                      )
+                    ) : null}
+                    {!allDay && holds.length > 0 ? (
+                      dropIn ? (
+                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                          {holdNote}. Booked as a drop-in alongside it.{" "}
+                          <button
+                            type="button"
+                            className="underline underline-offset-4"
+                            onClick={() => setDropIn(false)}
+                          >
+                            Undo
+                          </button>
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                          <span>{holdNote}.</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setDropIn(true)}
+                          >
+                            Squeeze in a drop-in
+                          </Button>
+                        </div>
+                      )
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {!serviceId || !locationId ? (
+                      <p className="text-xs text-muted-foreground">
+                        Choose a service and location to see availability.
+                      </p>
+                    ) : availability.isLoading ? (
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {Array.from({ length: 6 }, (_, i) => (
+                          <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
+                        ))}
+                      </div>
+                    ) : slots.length === 0 ? (
+                      <div className="grid gap-2">
+                        {/* Held by all-day work: say so, and offer to squeeze the job in
+                            beside it. Picking that re-quotes the day ignoring the hold
+                            (timed jobs and events still block). */}
+                        {holds.length > 0 && !dropIn ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
+                            <span className="text-muted-foreground">{holdNote}.</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => setDropIn(true)}
+                            >
+                              Squeeze in a drop-in
+                            </Button>
+                          </div>
+                        ) : dropIn ? (
+                          <p className="text-xs text-muted-foreground">
+                            {`No room for a drop-in${customStaff ? ` for ${customStaff.displayName}` : ""} — timed work, an event or working hours are in the way. `}
+                            <button
+                              type="button"
+                              className="text-primary underline underline-offset-4"
+                              onClick={() => setDropIn(false)}
+                            >
+                              Undo
+                            </button>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {validDate
+                              ? emptySlotsMessage(service?.availabilityWindows, date)
+                              : "Pick a date to see available times."}
+                          </p>
+                        )}
+                        {validDate ? (
+                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                            <AllDayTile onPick={pickAllDay} />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {slots.map((s) => {
+                          const key = `${s.start}:${s.staffId}`;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSlotKey(key)}
+                              className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
+                                key === slotKey
+                                  ? "border-primary bg-primary-soft text-primary"
+                                  : "hover:bg-secondary"
+                              }`}
+                              title={
+                                s.remainingCapacity > 1
+                                  ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
+                                  : formatMoney(s.priceMinor, s.currency)
+                              }
+                            >
+                              {formatInTz(s.start, s.displayTimezone || timezone, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </button>
+                          );
+                        })}
+                        <AllDayTile onPick={pickAllDay} />
+                      </div>
+                    )}
+                    {scheduling === "slot" && dropIn && slots.length > 0 ? (
+                      <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                        {holds.length > 0 ? `${holdNote}. ` : ""}
+                        Times shown are for a drop-in alongside the all-day job.{" "}
+                        <button
+                          type="button"
+                          className="underline underline-offset-4"
+                          onClick={() => setDropIn(false)}
+                        >
+                          Undo
+                        </button>
+                      </p>
+                    ) : null}
+                    {selectedSlot &&
+                    spansDays(
+                      selectedSlot.start,
+                      selectedSlot.end,
+                      selectedSlot.displayTimezone || timezone,
+                    ) ? (
+                      <p className="text-xs text-muted-foreground">
+                        Drop-off{" "}
+                        {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
+                          weekday: "short",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {selectedSlot &&
-              spansDays(
-                selectedSlot.start,
-                selectedSlot.end,
-                selectedSlot.displayTimezone || timezone,
-              ) ? (
-                <p className="text-xs text-muted-foreground">
-                  Drop-off{" "}
-                  {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
-                    weekday: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {" · "}ready{" "}
-                  {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-              ) : null}
-              {selectedSlot ? (
-                <p className="text-xs text-muted-foreground">
-                  Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
-                  {selectedSlot.remainingCapacity > 1
-                    ? ` · ${selectedSlot.remainingCapacity} places left`
-                    : ""}
-                  {selectedSlot.slotToken ? " · slot token attached" : ""}
-                </p>
-              ) : null}
-            </div>
+                        {" · "}ready{" "}
+                        {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    ) : null}
+                    {selectedSlot ? (
+                      <p className="text-xs text-muted-foreground">
+                        Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                        {selectedSlot.remainingCapacity > 1
+                          ? ` · ${selectedSlot.remainingCapacity} places left`
+                          : ""}
+                        {selectedSlot.slotToken ? " · slot token attached" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label>Payment method</Label>
@@ -845,8 +1706,6 @@ export function AddBookingModal({
                 onValueChange={(v) => {
                   const next = v as typeof paymentMethod;
                   if (next === "credit") setAdditional([]);
-                  // Holds reject bank_transfer, so the flow falls back to direct create.
-                  if (next === "bank_transfer") setMode("create");
                   setPaymentMethod(next);
                 }}
               >
@@ -854,20 +1713,50 @@ export function AddBookingModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="pay_later">
+                    Pay after the job
+                    {service && depositMinor != null
+                      ? ` — ${formatMoney(depositMinor, service.currency)} deposit now`
+                      : " — confirmation only"}
+                    {service ? ` (${formatMoney(effectiveTotalMinor, service.currency)})` : ""}
+                  </SelectItem>
                   <SelectItem value="none">
-                    Take payment separately
-                    {service ? ` — ${formatMoney(rolledTotalMinor, service.currency)}` : ""}
+                    Request payment up front
+                    {service ? ` — ${formatMoney(effectiveTotalMinor, service.currency)}` : ""}
                   </SelectItem>
-                  <SelectItem value="credit" disabled={additional.length > 0}>
-                    Use package credit
-                  </SelectItem>
+                  {creditOffered ? (
+                    <SelectItem value="credit" disabled={additional.length > 0}>
+                      Use package credit
+                    </SelectItem>
+                  ) : null}
                   {bankTransferEnabled ? (
-                    <SelectItem value="bank_transfer" disabled={rolledTotalMinor <= 0}>
+                    <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
                       Bank transfer — awaits payment
                     </SelectItem>
                   ) : null}
                 </SelectContent>
               </Select>
+              {paymentMethod === "pay_later" && depositMinor != null && service ? (
+                <p className="text-xs text-muted-foreground">
+                  The client gets a request for the {formatMoney(depositMinor, service.currency)}{" "}
+                  deposit{cardPaymentsLive ? " with a pay-online link" : ""}; the balance of{" "}
+                  {formatMoney(effectiveTotalMinor - depositMinor, service.currency)} is taken after
+                  the job. Nothing chases the balance beforehand — use “Send payment reminder” on
+                  the booking if it's still unpaid afterwards.
+                </p>
+              ) : paymentMethod === "pay_later" ? (
+                <p className="text-xs text-muted-foreground">
+                  The client gets a plain booking confirmation — no payment request, pay link or
+                  deposit. Take payment when the job is done, or use “Send payment reminder” on the
+                  booking if it's still unpaid afterwards.
+                </p>
+              ) : paymentMethod === "none" && effectiveTotalMinor > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  The confirmation is a payment request showing the amount due
+                  {cardPaymentsLive ? " with a pay-online link" : ""}. Nothing is taken now — use
+                  “Take card payment” or “Record payment” on the booking when the money arrives.
+                </p>
+              ) : null}
               {paymentMethod === "bank_transfer" ? (
                 <p className="text-xs text-muted-foreground">
                   The booking waits as “awaiting payment”
@@ -880,7 +1769,7 @@ export function AddBookingModal({
               ) : null}
             </div>
 
-            {service && paymentMethod !== "credit" && rolledTotalMinor > 0 ? (
+            {service && depositApplies && effectiveTotalMinor > 0 ? (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="booking-deposit">Deposit to secure (£)</Label>
@@ -912,10 +1801,14 @@ export function AddBookingModal({
                   className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
                 >
                   {depositInvalid
-                    ? `Enter an amount under ${formatMoney(rolledTotalMinor, service.currency)}, or clear it to take the full amount.`
-                    : depositMinor != null
-                      ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(rolledTotalMinor - depositMinor, service.currency)} balance to collect later.`
-                      : `No deposit — the full ${formatMoney(rolledTotalMinor, service.currency)} is due.`}
+                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it to ${paymentMethod === "pay_later" ? "send a plain confirmation" : "take the full amount"}.`
+                    : paymentMethod === "pay_later"
+                      ? depositMinor != null
+                        ? `Requested now with the confirmation; the rest (${formatMoney(effectiveTotalMinor - depositMinor, service.currency)}) is taken after the job.`
+                        : "No deposit — plain confirmation, and the full amount is taken after the job."
+                      : depositMinor != null
+                        ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} balance to collect later.`
+                        : `No deposit — the full ${formatMoney(effectiveTotalMinor, service.currency)} is due.`}
                 </p>
               </div>
             ) : null}
@@ -929,28 +1822,87 @@ export function AddBookingModal({
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
+
+            <fieldset className="grid gap-2 rounded-lg border p-3">
+              <legend className="text-sm font-medium">Send confirmation to client</legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                <label
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    emailBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
+                  )}
+                >
+                  <Checkbox
+                    checked={wantsEmail && !emailBlocked}
+                    disabled={Boolean(emailBlocked)}
+                    onCheckedChange={(checked) => setChannel("email", checked === true)}
+                    aria-label="Send confirmation by email"
+                  />
+                  Email
+                </label>
+                <label
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    smsBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
+                  )}
+                >
+                  <Checkbox
+                    checked={wantsSms && !smsBlocked}
+                    disabled={Boolean(smsBlocked)}
+                    onCheckedChange={(checked) => setChannel("sms", checked === true)}
+                    aria-label="Send confirmation by text message"
+                  />
+                  Text message
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">{notifyHint}</p>
+            </fieldset>
           </div>
         )}
 
         {bankResult ? null : (
           <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" onClick={requestClose}>
               {setupBlocked || catalogueLoading ? "Close" : "Cancel"}
             </Button>
             {setupBlocked || catalogueLoading ? null : (
-              <Button onClick={submit} disabled={submitting || !selectedSlot}>
-                {submitting
-                  ? mode === "hold"
-                    ? "Holding…"
-                    : "Creating…"
-                  : mode === "hold"
-                    ? "Hold & confirm"
-                    : "Create booking"}
+              <Button
+                onClick={submit}
+                // Looks disabled while something is missing but stays clickable, so
+                // the click can explain what's left rather than doing nothing.
+                disabled={submitting}
+                aria-disabled={submitting || blocked}
+                className={cn(blocked && !submitting && "opacity-50")}
+                title={blocked ? blockers.join(" · ") : undefined}
+              >
+                {submitting ? "Creating…" : "Create booking"}
               </Button>
             )}
           </DialogFooter>
         )}
       </DialogContent>
+      {/* The API said the only things in the way can share the day: ask, then re-send. */}
+      <DropInConfirmDialog
+        open={override !== null}
+        onOpenChange={(next) => {
+          if (!next && !submitting) setOverride(null);
+        }}
+        conflicts={override?.conflicts ?? []}
+        newBookingAllDay={override?.allDay ?? false}
+        timezone={timezone}
+        busy={submitting}
+        onConfirm={() => void confirmOverride()}
+      />
+      {/* Stacks over the booking drawer; the new client is selected on save. */}
+      <AddClientDialog
+        open={open && addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+        onCreated={(c) => {
+          setCustomerId(c.id);
+          setLinkedRecordId("none");
+          setQuickAddOpen(false);
+        }}
+      />
     </Dialog>
   );
 }

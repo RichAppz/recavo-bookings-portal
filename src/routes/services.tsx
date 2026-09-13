@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { Check, Clock, Eye, EyeOff, Plus, Trash2, Users } from "lucide-react";
+import { BellRing, Check, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -26,17 +26,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  groupByCategory,
+  hasCategories,
+  knownCategories,
+  normaliseCategory,
+} from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
+  useConsumables,
   useCreateService,
+  useDeleteService,
   useLocationsList,
+  useReplaceServiceConsumables,
+  useServiceConsumables,
   useServices,
   useStaffList,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
+import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
+import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
+import {
+  draftFromRule,
+  followUpRuleSummary,
+  ruleFromDraft,
+  type FollowUpRuleDraft,
+} from "@/lib/follow-ups";
+import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
+import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { ApiError } from "@/lib/api";
 import {
   formatAvailabilityWindows,
@@ -45,6 +66,8 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
+import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -60,14 +83,6 @@ function serviceNoun(service: string) {
   const plural = lower.endsWith("s") ? noun : `${noun}s`;
   return { noun, lower, plural, pluralLower: plural.toLowerCase() };
 }
-
-/**
- * The API stores minutes, but a detailer thinks in "how long do I have the
- * car" — often days. These helpers translate both ways so the form can offer
- * minutes/hours/days without the backend knowing.
- */
-type DurationUnit = "minutes" | "hours" | "days";
-const UNIT_MINUTES: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };
 
 /**
  * Preset swatches for the calendar dot. Chosen to stay distinguishable from each
@@ -86,14 +101,6 @@ const SERVICE_COLOURS = [
 ];
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
-
-function splitDuration(minutes: number): { value: string; unit: DurationUnit } {
-  if (minutes >= 1440 && minutes % 1440 === 0) {
-    return { value: String(minutes / 1440), unit: "days" };
-  }
-  if (minutes >= 60 && minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" };
-  return { value: String(minutes), unit: "minutes" };
-}
 
 /** Deposit input shows blank for "no deposit" so the field reads as optional. */
 function depositToInput(minor: number | null | undefined): string {
@@ -139,8 +146,22 @@ function ServicesPage() {
   const services = useServices();
   const staff = useStaffList();
   const locations = useLocationsList();
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
   const updateService = useUpdateService();
+  const deleteService = useDeleteService();
+  // "N consumables" on each card: the catalogue rows carry the services they're on,
+  // so one request covers every card. Detailing only; nothing is fetched otherwise.
+  const consumables = useConsumables({ enabled: isDetailing });
+  const consumableCountByService = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of consumables.data ?? []) {
+      for (const id of c.serviceIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [consumables.data]);
   const [editing, setEditing] = useState<CatalogueService | null>(null);
+  const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
   // New services default to the business's opening hours — the location picked
   // in the sidebar, else the first active one with hours set.
@@ -201,126 +222,184 @@ function ServicesPage() {
           action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
         />
       ) : (
-        <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {(services.data ?? []).map((s) => (
-            <article key={s.id} className="surface-card flex flex-col p-5">
-              <div className="flex items-start justify-between gap-3">
-                <span
-                  className="size-2.5 rounded-full"
-                  // Same fallback as the calendar dot, so the card matches what staff see there.
-                  style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
-                />
-                <div className="flex items-center gap-2">
-                  {s.publicVisible ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Eye className="size-3.5" /> Public
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <EyeOff className="size-3.5" /> Hidden from booking page
-                    </span>
-                  )}
-                  <StatusBadge status={s.active ? "active" : "inactive"} />
-                </div>
-              </div>
-              <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-
-              <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="size-4 text-muted-foreground" />
-                  {formatDuration(s.durationMinutes)}
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold">
-                  {formatMoney(s.basePriceMinor, s.currency)}
-                  {s.capacityMax > 1 ? " pp" : ""}
-                </span>
-                {s.depositMinor && s.depositMinor > 0 ? (
-                  <span className="text-muted-foreground">
-                    {formatMoney(s.depositMinor, s.currency)} deposit
+        <div className="space-y-8">
+          {groupByCategory(services.data ?? []).map((group) => (
+            <section key={group.category ?? "__none"} className="space-y-3">
+              {/* Headings only once categories are in use; a flat catalogue stays flat. */}
+              {hasCategories(services.data ?? []) ? (
+                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                  {group.category ?? "Other"}
+                  <span className="ml-2 font-normal tabular-nums normal-case">
+                    {group.items.length}
                   </span>
-                ) : null}
-                {isDetailing && s.capacityMax === 1 ? null : (
-                  <span className="flex items-center gap-1.5">
-                    <Users className="size-4 text-muted-foreground" />
-                    {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
-                  </span>
-                )}
-              </div>
-
-              {s.variants.length > 0 ? (
-                <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-                  {s.variants.map((v) => (
-                    <li key={v.id} className="flex items-center justify-between">
-                      <span>{v.name}</span>
-                      <span className="tabular-nums">
-                        {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
-                        {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                </h2>
               ) : null}
+              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {group.items.map((s) => (
+                  <article key={s.id} className="surface-card flex flex-col p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className="size-2.5 rounded-full"
+                        // Same fallback as the calendar dot, so the card matches what staff see there.
+                        style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
+                      />
+                      <div className="flex items-center gap-2">
+                        {s.publicVisible ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Eye className="size-3.5" /> Public
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <EyeOff className="size-3.5" /> Hidden from booking page
+                          </span>
+                        )}
+                        <StatusBadge status={s.active ? "active" : "inactive"} />
+                      </div>
+                    </div>
+                    <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
 
-              <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                <Row
-                  label={
-                    tenant.terminology.staff.toLowerCase().endsWith("s")
-                      ? tenant.terminology.staff
-                      : `${tenant.terminology.staff}s`
-                  }
-                  value={describeDeliverers(s, staff.data ?? [])}
-                />
-                <Row
-                  label="Locations"
-                  value={
-                    s.locationIds
-                      .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                      .filter(Boolean)
-                      .join(", ") || "All"
-                  }
-                />
-                <Row
-                  label="Booking notice"
-                  value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
-                />
-                <Row label="Cancellation" value={`${s.cancellationPolicy.windowHours} hours`} />
-                <Row
-                  label="Buffer"
-                  value={`${s.bufferBeforeMinutes + s.bufferAfterMinutes} minutes`}
-                />
-                <Row label="Offered" value={formatAvailabilityWindows(s.availabilityWindows)} />
-              </dl>
+                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-4 text-muted-foreground" />
+                        {formatDuration(s.durationMinutes)}
+                      </span>
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        {formatMoney(s.basePriceMinor, s.currency)}
+                        {s.capacityMax > 1 ? " pp" : ""}
+                      </span>
+                      {s.depositMinor && s.depositMinor > 0 ? (
+                        <span className="text-muted-foreground">
+                          {formatMoney(s.depositMinor, s.currency)} deposit
+                        </span>
+                      ) : null}
+                      {isDetailing && s.capacityMax === 1 ? null : (
+                        <span className="flex items-center gap-1.5">
+                          <Users className="size-4 text-muted-foreground" />
+                          {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
+                        </span>
+                      )}
+                      {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
+                        <span
+                          className="flex items-center gap-1.5 text-muted-foreground"
+                          title="Materials this service uses by default — your records only"
+                        >
+                          <Package className="size-4" />
+                          {consumableCountByService.get(s.id)}{" "}
+                          {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
+                        </span>
+                      ) : null}
+                      {s.followUp ? (
+                        <span
+                          className="flex items-center gap-1.5 text-muted-foreground"
+                          title={`Clients (and you) are reminded ${s.followUp.leadDays} days before it is due again`}
+                        >
+                          <BellRing className="size-4" />
+                          {followUpRuleSummary(s.followUp)}
+                        </span>
+                      ) : null}
+                    </div>
 
-              <div className="mt-5 flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Switch
-                    checked={s.active}
-                    disabled={updateService.isPending}
-                    onCheckedChange={(v) => {
-                      updateService.mutate(
-                        {
-                          serviceId: s.id,
-                          version: s.version,
-                          body: { active: v },
-                        },
-                        {
-                          onSuccess: () =>
-                            toast.success(v ? `${noun} activated` : `${noun} paused`),
-                        },
-                      );
-                    }}
-                  />
-                  {s.active ? "Bookable" : "Hidden"}
-                </span>
-                <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                  Edit {lower}
-                </Button>
+                    {s.variants.length > 0 ? (
+                      <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+                        {s.variants.map((v) => (
+                          <li key={v.id} className="flex items-center justify-between">
+                            <span>{v.name}</span>
+                            <span className="tabular-nums">
+                              {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
+                              {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                      {/* One person / one place: the rows would only ever say "All". */}
+                      {soleStaff ? null : (
+                        <Row
+                          label={
+                            tenant.terminology.staff.toLowerCase().endsWith("s")
+                              ? tenant.terminology.staff
+                              : `${tenant.terminology.staff}s`
+                          }
+                          value={describeDeliverers(s, staff.data ?? [])}
+                        />
+                      )}
+                      {soleLocation ? null : (
+                        <Row
+                          label="Locations"
+                          value={
+                            s.locationIds
+                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                              .filter(Boolean)
+                              .join(", ") || "All"
+                          }
+                        />
+                      )}
+                      <Row
+                        label="Booking notice"
+                        value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
+                      />
+                      <Row
+                        label="Cancellation"
+                        value={`${s.cancellationPolicy.windowHours} hours`}
+                      />
+                      <Row
+                        label="Buffer"
+                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
+                      />
+                      <Row
+                        label="Offered"
+                        value={formatAvailabilityWindows(s.availabilityWindows)}
+                      />
+                    </dl>
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Switch
+                          checked={s.active}
+                          disabled={updateService.isPending}
+                          onCheckedChange={(v) => {
+                            updateService.mutate(
+                              {
+                                serviceId: s.id,
+                                version: s.version,
+                                body: { active: v },
+                              },
+                              {
+                                onSuccess: () =>
+                                  toast.success(v ? `${noun} activated` : `${noun} paused`),
+                              },
+                            );
+                          }}
+                        />
+                        {s.active ? "Bookable" : "Hidden"}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete ${lower}`}
+                          onClick={() => setDeleting(s)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                          Edit {lower}
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </article>
+            </section>
           ))}
         </div>
       )}
+
+      {tenant.business ? <PackageLinksCard slug={tenant.business.slug} /> : null}
 
       <ServiceDialog
         open={creating || editing !== null}
@@ -329,6 +408,30 @@ function ServicesPage() {
         onClose={() => {
           setCreating(false);
           setEditing(null);
+        }}
+      />
+
+      <DeleteOrFallbackDialog
+        item={deleting}
+        onClose={() => setDeleting(null)}
+        copy={(s) => ({
+          title: `Delete ${s.name}?`,
+          description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
+          inUseTitle: `Pause this ${lower} instead?`,
+          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
+          fallbackLabel: "Pause",
+        })}
+        onDelete={async (s) => {
+          await deleteService.mutateAsync(s.id);
+          toast.success(`${noun} deleted`);
+        }}
+        onFallback={async (s) => {
+          await updateService.mutateAsync({
+            serviceId: s.id,
+            version: s.version,
+            body: { active: false },
+          });
+          toast.success(`${noun} paused`);
         }}
       />
     </>
@@ -353,19 +456,15 @@ type VariantRow = {
   priceMinor: string;
 };
 
-function toVariantRows(service: CatalogueService | null, useUnits: boolean): VariantRow[] {
+function toVariantRows(service: CatalogueService | null): VariantRow[] {
   if (!service) return [];
   return service.variants.map((v) => {
     const split = v.durationMinutes != null ? splitDuration(v.durationMinutes) : null;
     return {
       id: v.id,
       name: v.name,
-      durationValue: useUnits
-        ? (split?.value ?? "")
-        : v.durationMinutes != null
-          ? String(v.durationMinutes)
-          : "",
-      durationUnit: useUnits ? (split?.unit ?? "minutes") : "minutes",
+      durationValue: split?.value ?? "",
+      durationUnit: split?.unit ?? "minutes",
       priceMinor: v.priceMinor != null ? (v.priceMinor / 100).toFixed(2) : "",
     };
   });
@@ -383,7 +482,7 @@ function ServiceDialog({
   onClose: () => void;
 }) {
   const tenant = useTenant();
-  const { noun, lower } = serviceNoun(tenant.terminology.service);
+  const { noun, lower, pluralLower } = serviceNoun(tenant.terminology.service);
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   // Example names must read like the user's trade, not like a PT product.
   const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
@@ -391,6 +490,7 @@ function ServiceDialog({
   const updateService = useUpdateService();
   const updateStaff = useUpdateStaff();
   const staffList = useStaffList();
+  const soleStaff = useSoleStaff();
   const activeStaff = useMemo(
     () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
     [staffList.data],
@@ -418,22 +518,27 @@ function ServiceDialog({
   );
   const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
   const [deposit, setDeposit] = useState(depositToInput(service?.depositMinor));
-  // Detailers state how long they keep the vehicle ("2 days"); the split keeps
-  // the stored minutes editable in whichever unit reads naturally.
+  // Detailers state how long they keep the vehicle ("2 days"), trainers "1.5
+  // hours"; the split keeps the stored minutes editable in whichever unit reads
+  // naturally rather than bouncing "3.5 hours" back as "210 minutes".
   const initialDuration = splitDuration(service?.durationMinutes ?? 60);
-  const [duration, setDuration] = useState(
-    isDetailing ? initialDuration.value : String(service?.durationMinutes ?? 60),
-  );
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>(
-    isDetailing ? initialDuration.unit : "minutes",
-  );
+  const [duration, setDuration] = useState(initialDuration.value);
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
   const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
   const [description, setDescription] = useState(service?.description ?? "");
+  // Free text, but the categories already in use are offered as one-tap chips so
+  // "Polishing" is spelt the same way on every service and groups cleanly.
+  const [category, setCategory] = useState(service?.category ?? "");
+  const catalogue = useServices();
+  const categorySuggestions = useMemo(
+    () => knownCategories(catalogue.data ?? []),
+    [catalogue.data],
+  );
   const [active, setActive] = useState(service?.active ?? true);
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
   // Calendar swatch; null = "no colour", which renders the theme default.
   const [colour, setColour] = useState<string | null>(service?.colour ?? null);
-  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service, isDetailing));
+  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service));
   // Creating: start from the business's opening hours so the offer matches the
   // door hours without retyping them. Editing: whatever is saved.
   const defaultWindows = (s: CatalogueService | null) =>
@@ -441,7 +546,31 @@ function ServiceDialog({
   const [windows, setWindows] = useState<AvailabilityWindow[]>(() => defaultWindows(service));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const submitting = createService.isPending || updateService.isPending;
+  // Consumables used (detailing only): the materials a job of this service uses by
+  // default, saved through their own endpoint once the service itself has saved.
+  // Staff-only records — they never touch the price.
+  const consumableCatalogue = useConsumables({ enabled: isDetailing && open });
+  const serviceUsage = useServiceConsumables(service?.id, { enabled: isDetailing && open });
+  const replaceServiceUsage = useReplaceServiceConsumables();
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageDirty, setUsageDirty] = useState(false);
+  const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
+  // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
+  // so it saves with the service itself. All verticals.
+  const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
+    draftFromRule(service?.followUp),
+  );
+  const [followUpError, setFollowUpError] = useState<{
+    field: "intervalMonths" | "leadDays" | "label";
+    message: string;
+  } | null>(null);
+  // The defaults arrive after the dialog opens; adopt them until staff start editing.
+  useEffect(() => {
+    if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
+  }, [open, usageDirty, serviceUsage.data]);
+
+  const submitting =
+    createService.isPending || updateService.isPending || replaceServiceUsage.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
     setName(s?.name ?? "");
@@ -450,16 +579,22 @@ function ServiceDialog({
     setPrice(String(s ? s.basePriceMinor / 100 : 50));
     setDeposit(depositToInput(s?.depositMinor));
     const split = splitDuration(s?.durationMinutes ?? 60);
-    setDuration(isDetailing ? split.value : String(s?.durationMinutes ?? 60));
-    setDurationUnit(isDetailing ? split.unit : "minutes");
+    setDuration(split.value);
+    setDurationUnit(split.unit);
     setCapacity(String(s?.capacityMax ?? 1));
     setDescription(s?.description ?? "");
+    setCategory(s?.category ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
     setColour(s?.colour ?? null);
-    setVariants(toVariantRows(s, isDetailing));
+    setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
+    setUsageRows([]);
+    setUsageDirty(false);
+    setUsageInvalid(null);
+    setFollowUpDraft(draftFromRule(s?.followUp));
+    setFollowUpError(null);
   };
 
   // Radix only reports open changes it initiates itself, so a dialog opened by the
@@ -550,10 +685,29 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
+    // Validate the consumables before anything saves, so a bad row can't leave the
+    // service written and its materials not.
+    const usage = isDetailing && usageDirty ? rowsToItems(usageRows) : null;
+    if (usage && !usage.ok) {
+      setUsageInvalid(usage.index);
+      toast.error("Pick a consumable and a quantity above zero on each line");
+      throw new Error("validation");
+    }
+    setUsageInvalid(null);
+
+    const followUp = ruleFromDraft(followUpDraft);
+    if (!followUp.ok) {
+      setFollowUpError({ field: followUp.field, message: followUp.message });
+      toast.error("Check the follow-up reminder");
+      throw new Error("validation");
+    }
+    setFollowUpError(null);
+
     const body: Record<string, unknown> = {
       name,
       eligibleStaffIds,
       description: description || null,
+      category: normaliseCategory(category),
       durationMinutes,
       basePriceMinor,
       capacityMax,
@@ -563,6 +717,7 @@ function ServiceDialog({
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: windows,
+      followUp: followUp.rule,
     };
 
     setFieldErrors({});
@@ -578,6 +733,15 @@ function ServiceDialog({
       } else {
         saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
         toast.success(`${noun} created`);
+      }
+      // Materials used by default. Its own endpoint, so it follows the service save;
+      // a failure here is toasted by the hook and leaves the service itself saved.
+      if (usage?.ok) {
+        try {
+          await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
+        } catch {
+          toast.warning("The consumables list didn't save — open the service and try again.");
+        }
       }
       // A staff record with its own service list would silently veto this service
       // even though it was just assigned to them here. Bring those lists into line
@@ -654,6 +818,49 @@ function ServiceDialog({
             />
           </div>
           <div className="grid gap-2">
+            <Label htmlFor="s-category">Category (optional)</Label>
+            <Input
+              id="s-category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder={isDetailing ? "Polishing" : "Classes"}
+              list="s-category-options"
+              autoComplete="off"
+            />
+            <datalist id="s-category-options">
+              {categorySuggestions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            {categorySuggestions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {categorySuggestions.map((c) => {
+                  const on = normaliseCategory(category)?.toLowerCase() === c.toLowerCase();
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(on ? "" : c)}
+                      aria-pressed={on}
+                      className={cn(
+                        "cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                        on
+                          ? "border-primary bg-primary-soft text-primary"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Groups {pluralLower} on your booking page and in the calendar filter — e.g. all your
+              polishing work under one heading.
+            </p>
+          </div>
+          <div className="grid gap-2">
             <Label htmlFor="s-colour">Calendar colour</Label>
             <div className="flex flex-wrap items-center gap-2">
               {SERVICE_COLOURS.map((hex) => {
@@ -717,43 +924,36 @@ function ServiceDialog({
               this is the dot.
             </p>
           </div>
-          <div className={cn("grid gap-4", isDetailing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+          {/* Detailing stacks duration over price: the long label wraps and would
+              leave the price field floating half a line lower beside it. */}
+          <div className={cn("grid gap-4", isDetailing ? "" : "sm:grid-cols-3")}>
             <div className="grid gap-2">
               <Label htmlFor="s-dur">
-                {isDetailing ? "How long you'll have the vehicle" : "Duration (min)"}
+                {isDetailing ? "How long you'll have the vehicle" : "Duration"}
               </Label>
-              {isDetailing ? (
-                <div className="flex gap-2">
-                  <Input
-                    id="s-dur"
-                    inputMode="numeric"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    aria-invalid={Boolean(fieldErrors.durationMinutes)}
-                    className="flex-1"
-                  />
-                  <Select
-                    value={durationUnit}
-                    onValueChange={(v) => setDurationUnit(v as DurationUnit)}
-                  >
-                    <SelectTrigger className="w-28 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minutes">minutes</SelectItem>
-                      <SelectItem value="hours">hours</SelectItem>
-                      <SelectItem value="days">days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
+              <div className="flex gap-2">
                 <Input
                   id="s-dur"
+                  inputMode="decimal"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.durationMinutes)}
+                  className="flex-1"
                 />
-              )}
+                <Select
+                  value={durationUnit}
+                  onValueChange={(v) => setDurationUnit(v as DurationUnit)}
+                >
+                  <SelectTrigger className="w-28 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minutes">minutes</SelectItem>
+                    <SelectItem value="hours">hours</SelectItem>
+                    <SelectItem value="days">days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {fieldErrors.durationMinutes ? (
                 <p className="text-xs text-destructive">{fieldErrors.durationMinutes}</p>
               ) : null}
@@ -818,7 +1018,7 @@ function ServiceDialog({
                     {
                       name: "",
                       durationValue: "",
-                      durationUnit: isDetailing ? durationUnit : "minutes",
+                      durationUnit,
                       priceMinor: "",
                     },
                   ])
@@ -848,46 +1048,33 @@ function ServiceDialog({
                         placeholder={isDetailing ? "Large vehicle / SUV" : "60 minutes"}
                       />
                     </div>
-                    {isDetailing ? (
-                      <>
-                        <div className="grid w-20 gap-1">
-                          <Label className="text-xs text-muted-foreground">Duration</Label>
-                          <Input
-                            inputMode="numeric"
-                            value={v.durationValue}
-                            onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                            placeholder={duration}
-                          />
-                        </div>
-                        <div className="grid w-28 gap-1">
-                          <Label className="text-xs text-muted-foreground">Unit</Label>
-                          <Select
-                            value={v.durationUnit}
-                            onValueChange={(unit) =>
-                              updateVariant(i, { durationUnit: unit as DurationUnit })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="minutes">minutes</SelectItem>
-                              <SelectItem value="hours">hours</SelectItem>
-                              <SelectItem value="days">days</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="grid w-24 gap-1">
-                        <Label className="text-xs text-muted-foreground">Duration (min)</Label>
-                        <Input
-                          value={v.durationValue}
-                          onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                          placeholder={duration}
-                        />
-                      </div>
-                    )}
+                    <div className="grid w-20 gap-1">
+                      <Label className="text-xs text-muted-foreground">Duration</Label>
+                      <Input
+                        inputMode="decimal"
+                        value={v.durationValue}
+                        onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
+                        placeholder={duration}
+                      />
+                    </div>
+                    <div className="grid w-28 gap-1">
+                      <Label className="text-xs text-muted-foreground">Unit</Label>
+                      <Select
+                        value={v.durationUnit}
+                        onValueChange={(unit) =>
+                          updateVariant(i, { durationUnit: unit as DurationUnit })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="minutes">minutes</SelectItem>
+                          <SelectItem value="hours">hours</SelectItem>
+                          <SelectItem value="days">days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid w-24 gap-1">
                       <Label className="text-xs text-muted-foreground">Price (£)</Label>
                       <Input
@@ -910,75 +1097,117 @@ function ServiceDialog({
             )}
           </div>
 
-          <div className="grid gap-3 border-t pt-4">
-            <Label>Who delivers this {lower}</Label>
-            <RadioGroup
-              value={staffMode}
-              onValueChange={(v) => setStaffMode(v as "all" | "selected")}
-              className="grid gap-2 sm:grid-cols-2"
-            >
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "all" && "border-primary/40 bg-primary-soft/40",
-                )}
-              >
-                <RadioGroupItem value="all" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">All {staffPluralLower}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Anyone on the team, including people you add later.
-                  </span>
-                </span>
-              </label>
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                  staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
-                )}
-              >
-                <RadioGroupItem value="selected" className="mt-0.5" />
-                <span className="grid gap-0.5">
-                  <span className="text-sm font-medium">Only certain people</span>
-                  <span className="text-xs text-muted-foreground">
-                    Pick who can be booked for it.
-                  </span>
-                </span>
-              </label>
-            </RadioGroup>
-            {staffMode === "selected" ? (
-              activeStaff.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No {staffPluralLower} yet — add your team first.
-                </p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {activeStaff.map((m) => (
-                    <label key={m.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={staffIds.includes(m.id)}
-                        onCheckedChange={(checked) =>
-                          setStaffIds((ids) =>
-                            checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
-                          )
-                        }
-                      />
-                      {m.displayName}
-                    </label>
-                  ))}
-                </div>
-              )
-            ) : null}
-            {fieldErrors.eligibleStaffIds ? (
-              <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
-            ) : null}
-            {reconcileNames.length > 0 ? (
+          {/* Detailing: what a job of this service uses up. Records only; never priced in. */}
+          {isDetailing ? (
+            <div className="grid gap-2 border-t pt-4">
+              <Label>Consumables used</Label>
               <p className="text-xs text-muted-foreground">
-                {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
-                restricted services list — saving will add this {lower} to it.
+                What one job of this {lower} typically uses — a bottle of coating, two pads. New
+                bookings start with this list, which you can adjust per job. For your records only;
+                it never changes the price or shows to clients.
               </p>
-            ) : null}
-          </div>
+              {serviceUsage.isLoading || consumableCatalogue.isLoading ? (
+                <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
+              ) : (
+                <ConsumableUsageEditor
+                  rows={usageRows}
+                  onChange={(rows) => {
+                    setUsageRows(rows);
+                    setUsageDirty(true);
+                    setUsageInvalid(null);
+                  }}
+                  catalogue={consumableCatalogue.data ?? []}
+                  invalidIndex={usageInvalid}
+                  idPrefix="sc"
+                />
+              )}
+            </div>
+          ) : null}
+
+          {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
+          <FollowUpRuleEditor
+            draft={followUpDraft}
+            onChange={(next) => {
+              setFollowUpDraft(next);
+              setFollowUpError(null);
+            }}
+            error={followUpError}
+            serviceNoun={lower}
+            idPrefix="sfu"
+          />
+
+          {/* With one person on the books "everyone" and "them" are the same answer. */}
+          {soleStaff ? null : (
+            <div className="grid gap-3 border-t pt-4">
+              <Label>Who delivers this {lower}</Label>
+              <RadioGroup
+                value={staffMode}
+                onValueChange={(v) => setStaffMode(v as "all" | "selected")}
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "all" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="all" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">All {staffPluralLower}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Anyone on the team, including people you add later.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                    staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
+                  )}
+                >
+                  <RadioGroupItem value="selected" className="mt-0.5" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">Only certain people</span>
+                    <span className="text-xs text-muted-foreground">
+                      Pick who can be booked for it.
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
+              {staffMode === "selected" ? (
+                activeStaff.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No {staffPluralLower} yet — add your team first.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {activeStaff.map((m) => (
+                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={staffIds.includes(m.id)}
+                          onCheckedChange={(checked) =>
+                            setStaffIds((ids) =>
+                              checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
+                            )
+                          }
+                        />
+                        {m.displayName}
+                      </label>
+                    ))}
+                  </div>
+                )
+              ) : null}
+              {fieldErrors.eligibleStaffIds ? (
+                <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
+              ) : null}
+              {reconcileNames.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
+                  restricted services list — saving will add this {lower} to it.
+                </p>
+              ) : null}
+            </div>
+          )}
 
           <WeeklyWindowsEditor
             windows={windows}

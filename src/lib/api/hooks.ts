@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import type { paths } from "./schema";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
+import { useLiveConnected } from "@/lib/live/live-status";
+import { toast } from "sonner";
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   ApiError,
   api,
@@ -15,12 +24,14 @@ import {
 import type {
   AiPolicyDraftRequest,
   AiPolicyDraftResponse,
+  AmendBookingBody,
   AuditEvent,
   BankTransferInstructions,
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
   CalendarBlock,
+  CorrectBookingTimeBody,
   Business,
   BusinessConfiguration,
   BusinessLifecycle,
@@ -28,6 +39,10 @@ import type {
   CatalogueService,
   ConnectAccount,
   ConsentRecord,
+  Consumable,
+  ConsumableUsageInput,
+  ConsumableUsageLine,
+  BookingConsumablesUsage,
   Conversation,
   ConversationMessage,
   CreditLedgerEntry,
@@ -53,6 +68,7 @@ import type {
   OnboardingStepKey,
   OutboxEvent,
   Package,
+  PackageLink,
   PackagePurchase,
   Payment,
   PaymentReceipt,
@@ -62,6 +78,9 @@ import type {
   PublicCataloguePlan,
   Refund,
   Resource,
+  ServiceFollowUp,
+  ServiceFollowUpAction,
+  ServiceFollowUpStatus,
   SaasInterval,
   SaasPlanCode,
   Staff,
@@ -164,6 +183,18 @@ export function useAvailability(filters: {
   to?: string;
   variantId?: string;
   staffId?: string;
+  /**
+   * Staff-only: quote times as if all-day jobs were not there, so a short job can be
+   * squeezed in beside a day-long one (a "drop-in"). Timed bookings and events still
+   * block. The booking must then be created with `dropIn: true`.
+   */
+  dropIn?: boolean;
+  /**
+   * Minutes between offered start times. The API defaults to the service length
+   * (back-to-back, right for the public page); staff pass a finer grid so any time
+   * the diary has room for is on offer.
+   */
+  granularityMinutes?: number;
   enabled?: boolean;
 }) {
   const businessId = useBusinessId();
@@ -178,6 +209,8 @@ export function useAvailability(filters: {
     to: filters.to!,
     ...(filters.variantId ? { variantId: filters.variantId } : {}),
     ...(filters.staffId ? { staffId: filters.staffId } : {}),
+    ...(filters.dropIn ? { dropIn: "true" } : {}),
+    ...(filters.granularityMinutes ? { granularityMinutes: filters.granularityMinutes } : {}),
   };
 
   return useQuery({
@@ -376,7 +409,39 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
         queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
       });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      // A reschedule clash is the dialog's to explain (it may offer a drop-in).
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Staff delete a booking outright: silent (nobody is messaged), soft on the API side,
+ * gone from every list. A 409 means money or an invoice is attached — the caller shows
+ * the API's reason, so no toast here. Invalidates everything the booking appeared in.
+ */
+export function useDeleteBooking() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; customerId?: string | null }) => {
+      await api.delete(`/api/v1/businesses/${businessId}/bookings/${vars.bookingId}`);
+    },
+    onSuccess: (_data, vars) => {
+      // Detail/history/payments for this booking are dead: drop rather than refetch a 404.
+      qc.removeQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.calendarBlocksAll(businessId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "reports", "dashboard"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+      if (vars.customerId) {
+        void qc.invalidateQueries({
+          queryKey: [...queryKeys.customer(businessId, vars.customerId), "bookings"],
+        });
+      }
+    },
   });
 }
 
@@ -403,10 +468,93 @@ export function useResendBookingMessage() {
       );
       return res.data;
     },
-    onSuccess: (data) => {
-      // The customer's notification log shows the new entry.
+    onSuccess: (data, vars) => {
+      // The customer's notification log and the booking's history show the new entry.
       void qc.invalidateQueries({
         queryKey: queryKeys.customerNotifications(businessId, data.notification.recipientId),
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
+    },
+  });
+}
+
+export type PaymentReminderResult = {
+  notifications: Notification[];
+  channels: ("email" | "sms")[];
+  outstandingMinor: number;
+};
+
+/**
+ * Nudge the customer about a balance still owed — the follow-up for "pay after the
+ * job" bookings. The API emails when the customer has an address and texts when they
+ * can receive one (so a phone-only client is texted alone); the result says which
+ * channels actually carried it. Errors surface to the caller.
+ */
+export function useSendPaymentReminder() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<PaymentReminderResult, { bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<PaymentReminderResult>(
+          `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/payment-reminder`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: (data, vars) => {
+      const recipientId = data.notifications[0]?.recipientId;
+      if (recipientId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerNotifications(businessId, recipientId),
+        });
+      }
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
+    },
+  });
+}
+
+export type BookingReminderResult = {
+  notifications: Notification[];
+  channels: ("email" | "sms")[];
+};
+
+/**
+ * Send the "your booking is coming up" reminder by hand — the same message the
+ * scheduled reminder rules send. The API emails when the customer has an address and
+ * texts when they can receive one (so a phone-only client is texted alone); the
+ * result says which channels actually carried it. 409 when the
+ * booking is not live, has already started, or a reminder went out minutes ago.
+ */
+export function useSendBookingReminder() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<BookingReminderResult, { bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<BookingReminderResult>(
+          `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/booking-reminder`,
+          {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onSuccess: (data, vars) => {
+      const recipientId = data.notifications[0]?.recipientId;
+      if (recipientId) {
+        void qc.invalidateQueries({
+          queryKey: queryKeys.customerNotifications(businessId, recipientId),
+        });
+      }
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
       });
     },
   });
@@ -469,6 +617,106 @@ export function useRecordBookingPayment() {
       });
     },
   });
+}
+
+/**
+ * Edit what a live booking is — services, staff, location, vehicle, client, price,
+ * payment method, internal notes — without touching when it happens (that's
+ * reschedule). Sends `If-Match` with the version staff were looking at, so a
+ * colleague's concurrent change is a 409 rather than a silent overwrite: the toast
+ * says so and the booking is refetched. Every other error toasts its API detail.
+ */
+export function useAmendBooking() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Booking,
+      { bookingId: string; ifMatch: number; body: AmendBookingBody }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.patch<{ booking: Booking }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}`,
+        vars.body,
+        { idempotencyKey, ifMatch: vars.ifMatch },
+      );
+      return res.data.booking;
+    }),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(queryKeys.booking(businessId, vars.bookingId), data);
+      // Lists, the calendar and this booking's history all read from the bookings prefix.
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      // A longer or shorter job frees or takes diary time.
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+      toast.success(
+        vars.body.notify && vars.body.notify.channels.length > 0
+          ? "Booking updated — client sent the new details"
+          : "Booking updated",
+      );
+    },
+    onError: (err, vars) => {
+      if (err instanceof ApiError && (err.status === 412 || isStaleVersionConflict(err))) {
+        toast.error("Someone else changed this booking", {
+          description: "It's been refreshed — check the details and save again.",
+        });
+        void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
+        void qc.invalidateQueries({
+          queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+        });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        toast.error("The longer job clashes with another booking", {
+          description: err.detail ?? "Reschedule it first, or pick a shorter service.",
+        });
+        return;
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Quietly fix a booking's date/time — a typo in the diary, not a move the client asked
+ * for. Same endpoint and clash rules as reschedule, but with `correction: true` the
+ * client is not messaged and the history reads "Date corrected by staff". Reminders
+ * still re-anchor to the new time. `end` is for all-day jobs (their new last day).
+ * No toast on success: the caller says what happened; a clash toasts here.
+ */
+export function useCorrectBookingTime() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Booking,
+      { bookingId: string; body: CorrectBookingTimeBody }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ booking: Booking }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/reschedule`,
+        { ...vars.body, correction: true },
+        { idempotencyKey },
+      );
+      return res.data.booking;
+    }),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(queryKeys.booking(businessId, vars.bookingId), data);
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        toast.error("That time clashes with another booking", {
+          description: err.detail ?? "Pick a different day or time.",
+        });
+        return;
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/** The API's optimistic-lock 409, as opposed to a business-rule 409 (refund first…). */
+function isStaleVersionConflict(err: ApiError): boolean {
+  return err.isConflict && /changed by someone else/i.test(err.detail ?? "");
 }
 
 export function useBookingHistory(bookingId: string | undefined) {
@@ -588,14 +836,39 @@ export function useCreateService() {
       const res = await api.post<{ service: CatalogueService }>(
         `/api/v1/businesses/${businessId}/services`,
         body,
+        { idempotencyKey: newIdempotencyKey() },
       );
       return res.data.service;
+    },
+    onSuccess: (created) => {
+      // Seed the list before the refetch lands so a caller can use the new service
+      // straight away — the booking form's quick-add ticks it in the picker at once.
+      qc.setQueryData<CatalogueService[]>(queryKeys.services(businessId), (old) =>
+        old && !old.some((s) => s.id === created.id) ? [...old, created] : old,
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Hard-delete a service that no booking has ever referenced. Anything with booking
+ * history comes back 409 and can only be deactivated; the caller decides how to present
+ * that, so errors are not toasted here.
+ */
+export function useDeleteService() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (serviceId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/services/${serviceId}`);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
       invalidateOnboarding(qc, businessId);
     },
-    onError: (err) => toastApiError(err),
   });
 }
 
@@ -625,6 +898,315 @@ export function useUpdateService() {
       }
       toastApiError(err);
     },
+  });
+}
+
+/* ---------------- Consumables (automotive, staff-only) ---------------- */
+
+/**
+ * The materials catalogue — active and archived. Automotive only; callers pass
+ * `enabled: false` for other verticals so nothing is fetched for them.
+ */
+export function useConsumables(opts: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.consumables(businessId),
+    enabled: Boolean(businessId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ consumables: Consumable[] }>(
+        `/api/v1/businesses/${businessId}/consumables`,
+      );
+      return res.data.consumables;
+    },
+  });
+}
+
+export function useCreateConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      name: string;
+      unit: string;
+      unitCostMinor?: number | null;
+      sku?: string | null;
+      notes?: string | null;
+    }) => {
+      const res = await api.post<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables`,
+        body,
+        { idempotencyKey: newIdempotencyKey() },
+      );
+      return res.data.consumable;
+    },
+    onSuccess: (created) => {
+      // Seed the list so a picker that opened the "add" dialog can tick it at once.
+      qc.setQueryData<Consumable[]>(queryKeys.consumables(businessId), (old) =>
+        old && !old.some((c) => c.id === created.id) ? [...old, created] : old,
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      consumableId: string;
+      version: number;
+      body: {
+        name?: string;
+        unit?: string;
+        unitCostMinor?: number | null;
+        sku?: string | null;
+        notes?: string | null;
+        status?: "active" | "archived";
+      };
+    }) => {
+      const res = await api.patch<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables/${vars.consumableId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.consumable;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Remove a consumable. The API hard-deletes one nothing refers to and archives one
+ * a service or booking still names (so old jobs keep resolving what they used);
+ * `deleted` tells the caller which happened.
+ */
+export function useDeleteConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (consumableId: string) => {
+      const res = await api.delete<{ deleted: boolean; consumable: Consumable | null }>(
+        `/api/v1/businesses/${businessId}/consumables/${consumableId}`,
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Default usage for one service ("a ceramic coat uses 1 bottle"). */
+export function useServiceConsumables(
+  serviceId: string | undefined,
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.serviceConsumables(businessId, serviceId ?? ""),
+    enabled: Boolean(businessId && serviceId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ items: ConsumableUsageLine[] }>(
+        `/api/v1/businesses/${businessId}/services/${serviceId}/consumables`,
+      );
+      return res.data.items;
+    },
+  });
+}
+
+/**
+ * Default usage for several services at once — the Add booking form's read-only
+ * "Includes: 1 bottle ceramic, 2 pads" from whatever has been picked so far.
+ */
+export function useServicesConsumables(
+  serviceIds: readonly string[],
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQueries({
+    queries: serviceIds.map((serviceId) => ({
+      queryKey: queryKeys.serviceConsumables(businessId, serviceId),
+      enabled: Boolean(businessId) && opts.enabled !== false,
+      queryFn: async () => {
+        const res = await api.get<{ items: ConsumableUsageLine[] }>(
+          `/api/v1/businesses/${businessId}/services/${serviceId}/consumables`,
+        );
+        return res.data.items;
+      },
+    })),
+  });
+}
+
+/** Replace a service's default usage list. */
+export function useReplaceServiceConsumables() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { serviceId: string; items: ConsumableUsageInput[] }) => {
+      const res = await api.put<{ items: ConsumableUsageLine[] }>(
+        `/api/v1/businesses/${businessId}/services/${vars.serviceId}/consumables`,
+        { items: vars.items },
+      );
+      return res.data.items;
+    },
+    onSuccess: (items, vars) => {
+      qc.setQueryData(queryKeys.serviceConsumables(businessId, vars.serviceId), items);
+      // `serviceIds` on each catalogue row feeds "used by N services".
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** What a job used (seeded from its services' defaults; staff adjust). Staff eyes only. */
+export function useBookingConsumables(
+  bookingId: string | undefined,
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingConsumables(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<BookingConsumablesUsage>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/consumables`,
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Replace a booking's usage list; the API snapshots each line's unit cost as it writes. */
+export function useReplaceBookingConsumables() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; items: ConsumableUsageInput[] }) => {
+      const res = await api.put<BookingConsumablesUsage>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/consumables`,
+        { items: vars.items },
+      );
+      return res.data;
+    },
+    onSuccess: (usage, vars) => {
+      qc.setQueryData(queryKeys.bookingConsumables(businessId, vars.bookingId), usage);
+      // The change lands in the booking's history as an amended diff.
+      void qc.invalidateQueries({ queryKey: queryKeys.bookingHistory(businessId, vars.bookingId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Service follow-ups (top-up reminders) ---------------- */
+
+export type FollowUpListFilters = {
+  /** One or more statuses; the API takes them comma-separated. */
+  status?: ServiceFollowUpStatus[];
+  /** Window on `dueAt`. */
+  from?: string;
+  to?: string;
+  customerId?: string;
+  bookingId?: string;
+  enabled?: boolean;
+};
+
+function followUpQuery(filters: FollowUpListFilters) {
+  return {
+    ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+    ...(filters.customerId ? { customerId: filters.customerId } : {}),
+    ...(filters.bookingId ? { bookingId: filters.bookingId } : {}),
+  };
+}
+
+/**
+ * Follow-ups due, ordered by due date, cursor-paged. Staff-only: created by the
+ * API when a job whose service carries a follow-up rule is done.
+ */
+export function useFollowUps(filters: FollowUpListFilters = {}) {
+  const businessId = useBusinessId();
+  const query = followUpQuery(filters);
+  const q = usePaginatedQuery<ServiceFollowUp, "followUps">({
+    queryKey: queryKeys.followUps(businessId, query),
+    path: `/api/v1/businesses/${businessId}/follow-ups`,
+    listKey: "followUps",
+    query,
+    limit: 50,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+  return { ...q, items: flattenPages(q.data, "followUps") };
+}
+
+/** The follow-ups one job left behind (BookingPanel's "Next top-up due" row). */
+export function useBookingFollowUps(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  const query = { bookingId: bookingId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, query),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ followUps: ServiceFollowUp[] }>(
+        `/api/v1/businesses/${businessId}/follow-ups`,
+        { query },
+      );
+      return res.data.followUps;
+    },
+  });
+}
+
+/** A client's follow-ups, open ones first (client profile card). */
+export function useCustomerFollowUps(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const query = { customerId: customerId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, query),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ followUps: ServiceFollowUp[] }>(
+        `/api/v1/businesses/${businessId}/follow-ups`,
+        { query },
+      );
+      return res.data.followUps;
+    },
+  });
+}
+
+/**
+ * Act on one follow-up: dismiss, snooze (`until`), send now, reopen. The API answers
+ * 409 when the action does not fit the current status and 422 when nobody could be
+ * reached by `send_now`; both are toasted and the list is refreshed either way.
+ */
+export function useFollowUpAction() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      followUpId: string;
+      action: ServiceFollowUpAction;
+      until?: string;
+    }) => {
+      const res = await api.patch<{ followUp: ServiceFollowUp }>(
+        `/api/v1/businesses/${businessId}/follow-ups/${vars.followUpId}`,
+        { action: vars.action, ...(vars.until ? { until: vars.until } : {}) },
+      );
+      return res.data.followUp;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 
@@ -893,15 +1475,35 @@ export function useCustomers(
   return useQuery({
     queryKey: queryKeys.customers(businessId, query),
     enabled: Boolean(businessId) && filters.enabled !== false,
-    queryFn: async () => {
-      const res = await api.get<{ items: Customer[]; nextCursor?: string | null }>(
-        `/api/v1/businesses/${businessId}/customers`,
-        { query },
-      );
-      return res.data;
+    queryFn: async ({ signal }) => {
+      // Every caller of this hook is a picker — "which client is this booking /
+      // invoice / message for?" — and a picker that quietly stops at the first
+      // page hides everyone past client 25. Walk the cursor to the end (largest
+      // page the API allows) so the list is the whole client book.
+      type Page = { items: Customer[]; nextCursor?: string | null };
+      const items: Customer[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < CUSTOMER_PICKER_MAX_PAGES; page += 1) {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/customers`,
+          {
+            query: { ...query, limit: CUSTOMER_PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
+            signal,
+          },
+        );
+        items.push(...res.data.items);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return { items, nextCursor: null as string | null };
     },
   });
 }
+
+/** Largest page size the customers endpoint accepts. */
+const CUSTOMER_PAGE_LIMIT = 100;
+/** 5,000 clients — well past any single business here; guards against a runaway cursor. */
+const CUSTOMER_PICKER_MAX_PAGES = 50;
 
 /** Cursor-paginated customers list (`items` + `nextCursor`). */
 export function useCustomersInfinite(
@@ -936,6 +1538,40 @@ export function useCustomer(customerId: string | undefined) {
         `/api/v1/businesses/${businessId}/customers/${customerId}`,
       );
       return res.data.customer;
+    },
+  });
+}
+
+/**
+ * Names for a set of customers, one cached lookup each (the list endpoint has no
+ * id filter). Used by calendar bars that show the client; `enabled` lets the
+ * caller skip the fetches entirely when that column is switched off.
+ */
+export function useCustomersById(
+  customerIds: readonly (string | null | undefined)[],
+  enabled = true,
+) {
+  const businessId = useBusinessId();
+  const ids = useMemo(
+    () => Array.from(new Set(customerIds.filter((id): id is string => Boolean(id)))).sort(),
+    [customerIds],
+  );
+  return useQueries({
+    queries: ids.map((customerId) => ({
+      queryKey: queryKeys.customer(businessId, customerId),
+      enabled: Boolean(businessId) && enabled,
+      staleTime: 5 * 60_000,
+      queryFn: async () => {
+        const res = await api.get<{ customer: Customer }>(
+          `/api/v1/businesses/${businessId}/customers/${customerId}`,
+        );
+        return res.data.customer;
+      },
+    })),
+    combine: (results) => {
+      const map = new Map<string, Customer>();
+      for (const r of results) if (r.data) map.set(r.data.id, r.data);
+      return map;
     },
   });
 }
@@ -1317,6 +1953,29 @@ export function usePatchLinkedRecord(customerId: string | undefined) {
 }
 
 /**
+ * Hard-delete a linked record that no booking has ever referenced. Anything with
+ * booking history comes back 409 and can only be archived (RECA-90); the caller
+ * decides how to present that, so errors are not toasted here.
+ */
+export function useDeleteLinkedRecord() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { recordId: string; customerId: string }) => {
+      await api.delete(`/api/v1/businesses/${businessId}/linked-records/${vars.recordId}`);
+      return vars;
+    },
+    onSuccess: (vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.customerLinkedRecords(businessId, vars.customerId),
+      });
+      qc.removeQueries({ queryKey: queryKeys.linkedRecord(businessId, vars.recordId) });
+    },
+  });
+}
+
+/**
  * Transfer a linked record (e.g. a vehicle that changed hands) to another customer
  * in the same business (RECA-521). If-Match guarded; the record keeps its id so
  * booking history stays intact. Errors are left to the caller (the transfer dialog
@@ -1460,6 +2119,24 @@ export function useCreatePackage() {
   });
 }
 
+/**
+ * Hard-delete a package nobody has ever bought. Once sold it comes back 409 and can
+ * only be archived (`active=false`); errors are left to the caller.
+ */
+export function useDeletePackage() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (packageId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/packages/${packageId}`);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
+  });
+}
+
 export function useUpdatePackage() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -1479,6 +2156,85 @@ export function useUpdatePackage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.packages(businessId) });
       invalidateOnboarding(qc, businessId);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Package links (share a hand-picked set of packages) ---------------- */
+
+export function usePackageLinks() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.packageLinks(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ links: PackageLink[] }>(
+        `/api/v1/businesses/${businessId}/package-links`,
+      );
+      return res.data.links;
+    },
+  });
+}
+
+export function useCreatePackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      name: string;
+      serviceIds: string[];
+      packageIds: string[];
+      /** Hand the link to these clients as it is created. */
+      customerIds?: string[];
+    }) => {
+      const res = await api.post<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links`,
+        body,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useRevokePackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (linkId: string) => {
+      const res = await api.delete<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links/${linkId}`,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Hand a link to a client (or take it back). It then appears under Offers in their
+ * account; it does not change who can open the URL.
+ */
+export function useAssignPackageLink() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { linkId: string; customerId: string; assigned: boolean }) => {
+      const url = `/api/v1/businesses/${businessId}/package-links/${vars.linkId}/customers/${vars.customerId}`;
+      const res = vars.assigned
+        ? await api.put<{ link: PackageLink }>(url, {})
+        : await api.delete<{ link: PackageLink }>(url);
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -2419,12 +3175,85 @@ export function usePublishPrivacyNotice() {
   });
 }
 
+/**
+ * Editable message templates, worded in the business's terminology, with the current
+ * email and text wording, a server-rendered preview of each, and the placeholders each
+ * supports.
+ */
+export function useNotificationTemplates() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.notificationTemplates(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async (): Promise<MessageTemplate[]> => {
+      const res = await api.get<{ templates: MessageTemplate[] }>(
+        `/api/v1/businesses/${businessId}/notification-templates`,
+      );
+      return res.data.templates;
+    },
+  });
+}
+
+/**
+ * What the given wording would send, rendered against sample values by the same
+ * renderer the API sends with — the only preview there is, so it can never drift.
+ * Pass the debounced text; disabled while `body` is null.
+ */
+export function useNotificationTemplatePreview(input: {
+  key: string;
+  channel: TemplateChannel;
+  body: string | null;
+}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.notificationTemplatePreview(
+      businessId,
+      input.key,
+      input.channel,
+      input.body ?? "",
+    ),
+    enabled: Boolean(businessId) && input.body !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<TemplatePreview> => {
+      const res = await api.post<TemplatePreview>(
+        `/api/v1/businesses/${businessId}/notification-templates/preview`,
+        { key: input.key, channel: input.channel, body: input.body ?? "" },
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Saves the wording for one template on one channel (email prose or the whole text). */
 export function useUpdateNotificationTemplate() {
   const businessId = useBusinessId();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { key: string; bodyRegion: string }) => {
+    mutationFn: async (body: { key: string; bodyRegion: string; channel: TemplateChannel }) => {
       await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
       return body;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.notificationTemplates(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Back to the default wording for one template on one channel. */
+export function useResetNotificationTemplate() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { key: string; channel: TemplateChannel }) => {
+      await api.delete(
+        `/api/v1/businesses/${businessId}/notification-templates/${encodeURIComponent(input.key)}?channel=${input.channel}`,
+      );
+      return input;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.notificationTemplates(businessId) });
     },
     onError: (err) => toastApiError(err),
   });
@@ -2851,7 +3680,11 @@ export type SubscriptionAddon = {
   status: "included" | "active" | "available";
 };
 
-export const SMS_ADDON_KEY = "sms";
+/**
+ * Plan feature that bundles texting (Growth). Since ADR 0020 `false` no longer
+ * means "cannot text" — it means texts draw on prepaid credits. Ask
+ * {@link useSmsCredits} for the real picture.
+ */
 export const SMS_FEATURE_KEY = "reminders.sms";
 
 export type SubscriptionView = {
@@ -2874,7 +3707,7 @@ export function useSubscription() {
   });
 }
 
-/** Buy a bolt-on (e.g. SMS on Solo). Server replays on the same Idempotency-Key (RECA-526). */
+/** Buy a bolt-on (e.g. invoicing). Server replays on the same Idempotency-Key (RECA-526). */
 export function useAddSubscriptionAddon() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -3184,10 +4017,151 @@ export function usePlanFeature(featureKey: string): boolean | undefined {
   return subscription.data.features?.[featureKey] === true;
 }
 
-/** The SMS bolt-on row from the subscription view, if the business has a subscription. */
-export function useSmsAddon(): SubscriptionAddon | undefined {
-  const subscription = useSubscription();
-  return subscription.data?.addons?.find((a) => a.key === SMS_ADDON_KEY);
+/* ---------------- Prepaid text credits (ADR 0020) ---------------- */
+
+export type SmsCreditBundle = {
+  key: string;
+  credits: number;
+  unitAmountMinor: number;
+  currency: string;
+};
+
+export type SmsCreditLedgerEntry = {
+  id: string;
+  /** Positive for purchase / grant / release, -1 per text. */
+  delta: number;
+  balanceAfter: number;
+  kind: "purchase" | "consume" | "release" | "grant";
+  reference: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type SmsCredits = {
+  balance: number;
+  purchasedTotal: number;
+  consumedTotal: number;
+  /** Growth: texts included, credits never drawn down. */
+  unlimited: boolean;
+  /** The pack on sale — render this rather than hard-coding "£5 / 100". */
+  bundle: SmsCreditBundle;
+  /** Last 20 ledger entries, newest first. */
+  recent: SmsCreditLedgerEntry[];
+};
+
+/**
+ * Text credit balance for the business. Any active member may read it, so the
+ * UI can say whether a text will actually go out. Credits are consumed by the
+ * server as messages send; the live-updates stream invalidates this the moment
+ * that happens, and while the stream is down it polls every 20s instead.
+ */
+export function useSmsCredits() {
+  const businessId = useBusinessId();
+  const liveConnected = useLiveConnected();
+  return useQuery({
+    queryKey: queryKeys.smsCredits(businessId),
+    enabled: Boolean(businessId),
+    staleTime: 30_000,
+    refetchInterval: liveConnected ? false : 20_000,
+    queryFn: async () => {
+      const res = await api.get<{ smsCredits: SmsCredits }>(
+        `/api/v1/businesses/${businessId}/sms-credits`,
+      );
+      return res.data.smsCredits;
+    },
+  });
+}
+
+/** One-off Stripe Checkout for a credit bundle. Redirect to `checkoutUrl`; nothing is credited until it's paid. */
+export function useStartSmsCreditsCheckout() {
+  const businessId = useBusinessId();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: { bundle?: string } | undefined, idempotencyKey: string) => {
+        const res = await api.post<{ checkoutUrl: string; bundle: SmsCreditBundle }>(
+          `/api/v1/businesses/${businessId}/sms-credits/checkout`,
+          body ?? {},
+          { idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export type SmsCreditsReconcileResult = {
+  /** True exactly once — for whichever of the success page or the webhook saw the paid Session first. */
+  credited: boolean;
+  balance: number;
+  paymentStatus: "paid" | "unpaid" | "no_payment_required" | null;
+  smsCredits: SmsCredits;
+};
+
+/**
+ * Called from the success page with the Checkout Session id. Idempotent on the
+ * Session id (no Idempotency-Key), so it's safe on every load. Errors are left
+ * to the page, which distinguishes "not paid yet" from "not ours".
+ */
+export function useReconcileSmsCreditsCheckout() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { stripeCheckoutSessionId: string }) => {
+      const res = await api.post<SmsCreditsReconcileResult>(
+        `/api/v1/businesses/${businessId}/sms-credits/checkout/reconcile`,
+        body,
+      );
+      return res.data;
+    },
+    onSuccess: (result) => {
+      qc.setQueryData(queryKeys.smsCredits(businessId), result.smsCredits);
+    },
+  });
+}
+
+/* ---------------- Business logo (branding) ---------------- */
+
+/**
+ * Upload the business logo as raw PNG/JPEG bytes (≤ 1 MiB). Synchronous — the API
+ * scans the image before answering, so allow a couple of seconds. Errors are the
+ * caller's: the settings card maps the validation codes to friendly copy.
+ */
+export function useUploadBrandingLogo() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File | Blob) => {
+      const res = await api.put<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/branding/logo`,
+        file,
+        { headers: { "Content-Type": file.type } },
+      );
+      return res.data.configuration;
+    },
+    onSuccess: (configuration) => {
+      qc.setQueryData(queryKeys.configuration(businessId), configuration);
+      void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+    },
+  });
+}
+
+export function useRemoveBrandingLogo() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.delete<{ configuration: BusinessConfiguration }>(
+        `/api/v1/businesses/${businessId}/branding/logo`,
+      );
+      return res.data.configuration;
+    },
+    onSuccess: (configuration) => {
+      qc.setQueryData(queryKeys.configuration(businessId), configuration);
+      void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
 }
 
 /**
@@ -3598,6 +4572,8 @@ export function usePublicAvailability(
     locationId?: string;
     from?: string;
     to?: string;
+    /** Shared link code; lets the search reach a session kept off the public page. */
+    linkCode?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -3609,6 +4585,7 @@ export function usePublicAvailability(
     locationId: filters.locationId!,
     from: filters.from!,
     to: filters.to!,
+    ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
   };
   return useQuery({
     queryKey: queryKeys.publicAvailability(businessId ?? "", query),
@@ -3663,6 +4640,33 @@ export function usePublicPackages(businessId: string | undefined) {
   });
 }
 
+/** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
+export type PublicPackageLink = {
+  link: { code: string; name: string };
+  services: PublicService[];
+  packages: PublicPackage[];
+};
+
+/**
+ * Resolves the `?offer=` code on a booking page. A 404 is an ordinary outcome (the
+ * business revoked the link), so it is not retried and the caller falls back to the
+ * full catalogue.
+ */
+export function usePublicPackageLink(businessId: string | undefined, code: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicPackageLink(businessId ?? "", code ?? ""),
+    enabled: Boolean(businessId && code),
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<PublicPackageLink>(
+        `/api/v1/public/businesses/${businessId}/package-links/${encodeURIComponent(code ?? "")}`,
+        { public: true },
+      );
+      return res.data;
+    },
+  });
+}
+
 export type PublicPackagePayment = PublicBookingPayment & {
   packageName: string;
   creditsIssued: number;
@@ -3696,6 +4700,8 @@ export function useBuyPublicPackage(businessId: string | undefined) {
       async (
         vars: {
           packageId: string;
+          /** Code of the shared link the buyer arrived through, if any. */
+          linkCode?: string | null;
           firstName: string;
           lastName?: string | null;
           email?: string | null;
@@ -3721,6 +4727,8 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
       async (
         body: {
           slotToken: string;
+          /** Shared link code; required to hold a session kept off the public page. */
+          linkCode?: string | null;
           firstName: string;
           lastName?: string | null;
           email?: string | null;
@@ -4065,14 +5073,14 @@ export function useSendPortalMessage(businessId: string | undefined) {
     string,
     { previous: ConversationMessage[] | undefined; optimisticId: string }
   >({
-    mutationFn: async (body: string) => {
+    mutationFn: createIdempotentMutationFn(async (body: string, idempotencyKey: string) => {
       const res = await api.post<{ message: ConversationMessage }>(
         "/api/v1/portal/conversations/messages",
         { body },
-        { query: { businessId } },
+        { query: { businessId }, idempotencyKey },
       );
       return res.data.message;
-    },
+    }),
     onMutate: async (body) => {
       const key = queryKeys.portalMessages(businessId ?? "");
       await qc.cancelQueries({ queryKey: key });
@@ -4133,6 +5141,27 @@ export type PortalCredit = {
   expiresAt: string;
   status: string;
 };
+
+/**
+ * Offer links a studio has handed to this customer, resolved like the public
+ * `?offer=` route so the account can open the booking flow in offer mode. One query
+ * per studio, tagged with the studio, mirroring usePortalAcrossStudios.
+ */
+export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
+  const list = useMemo(() => studios ?? [], [studios]);
+  return useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPackageLinks(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ links: PublicPackageLink[] }>("/api/v1/portal/package-links", {
+          query: { businessId: studio.id },
+        });
+        return res.data.links;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+}
 
 export function usePortalCredits(businessId: string | undefined) {
   return useQuery({

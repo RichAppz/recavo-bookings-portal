@@ -182,7 +182,7 @@ function MessagesPage() {
             </div>
           ) : (
             <>
-              <ul className="flex-1 space-y-3 overflow-y-auto p-5">
+              <ul className="no-scrollbar flex-1 space-y-3 overflow-y-auto p-5">
                 {(messages.data?.messages ?? []).map((m) => {
                   const marker = readMarker(m);
                   return (

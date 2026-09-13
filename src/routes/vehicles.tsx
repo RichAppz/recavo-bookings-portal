@@ -7,8 +7,10 @@ import {
   Camera,
   History,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
@@ -16,6 +18,7 @@ import { AppShell } from "@/components/AppShell";
 import {
   activeSortedFields,
   CustomerSearchPicker,
+  DeleteLinkedRecordDialog,
   LinkedRecordFormDialog,
   OwnershipHistoryDialog,
   TransferLinkedRecordDialog,
@@ -106,9 +109,11 @@ function VehiclesPage() {
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("active");
+  const [editing, setEditing] = useState<LinkedRecord | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
   const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
+  const [deletingFor, setDeletingFor] = useState<LinkedRecord | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   // Unlike the client-profile tab, this page has no implicit owner — the add
   // dialog starts with a client picker.
@@ -128,6 +133,7 @@ function VehiclesPage() {
     (definition.data?.fields ?? []) as unknown as LinkedRecordField[],
   );
   const hasSchema = fields.length > 0;
+  const canEdit = tenant.can(PERMISSIONS.CUSTOMER_UPDATE);
 
   // Resolve the transfer target from the live list so that after a 409 (stale
   // version) the refetched record — with its bumped version — flows into the
@@ -142,11 +148,15 @@ function VehiclesPage() {
       version: r.version,
       body: { status: "archived" },
     });
+    invalidateOwnerRecords(r.customerId);
+    toast.success(`${term} archived`);
+  };
+
+  const invalidateOwnerRecords = (customerId: string) => {
     // The owner's client-profile tab caches its own list; keep it in step.
     void qc.invalidateQueries({
-      queryKey: queryKeys.customerLinkedRecords(tenant.businessId, r.customerId),
+      queryKey: queryKeys.customerLinkedRecords(tenant.businessId, customerId),
     });
-    toast.success(`${term} archived`);
   };
 
   return (
@@ -232,8 +242,33 @@ function VehiclesPage() {
                 <tbody className="divide-y">
                   {rows.map(({ record: r, owner }) => {
                     const summary = valuesSummary(r.values);
+                    const openEdit = canEdit ? () => setEditing(r) : undefined;
                     return (
-                      <tr key={r.id} className="transition-colors hover:bg-secondary/50">
+                      <tr
+                        key={r.id}
+                        role={openEdit ? "button" : undefined}
+                        tabIndex={openEdit ? 0 : undefined}
+                        aria-label={openEdit ? `Edit ${r.displayLabel}` : undefined}
+                        onClick={openEdit}
+                        onKeyDown={
+                          openEdit
+                            ? (e) => {
+                                // Only when the row itself is focused — not when
+                                // Enter lands on the owner link or the menu.
+                                if (e.target !== e.currentTarget) return;
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  openEdit();
+                                }
+                              }
+                            : undefined
+                        }
+                        className={
+                          openEdit
+                            ? "cursor-pointer transition-colors outline-none hover:bg-secondary/50 focus-visible:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
+                            : "transition-colors hover:bg-secondary/50"
+                        }
+                      >
                         <td className="px-4 py-3">
                           <p className="font-medium">{r.displayLabel}</p>
                           {summary && summary !== r.displayLabel ? (
@@ -246,6 +281,7 @@ function VehiclesPage() {
                               to="/clients/$clientId"
                               params={{ clientId: owner.id }}
                               className="font-medium hover:underline"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {ownerName(owner)}
                             </Link>
@@ -259,7 +295,9 @@ function VehiclesPage() {
                         <td className="px-4 py-3">
                           <StatusBadge status={r.status} />
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        {/* Menu clicks (incl. the portaled items, which bubble
+                            through React's tree) must not also open the editor. */}
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -280,6 +318,9 @@ function VehiclesPage() {
                                 </DropdownMenuItem>
                               ) : null}
                               <Can permission={PERMISSIONS.CUSTOMER_UPDATE}>
+                                <DropdownMenuItem onSelect={() => setEditing(r)}>
+                                  <Pencil className="size-4" /> Edit
+                                </DropdownMenuItem>
                                 {r.status === "active" ? (
                                   <DropdownMenuItem onSelect={() => setTransferringId(r.id)}>
                                     <ArrowRightLeft className="size-4" /> Transfer to another client
@@ -303,6 +344,12 @@ function VehiclesPage() {
                                       onSelect={() => void archive(r)}
                                     >
                                       <Archive className="size-4" /> Archive
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() => setDeletingFor(r)}
+                                    >
+                                      <Trash2 className="size-4" /> Delete
                                     </DropdownMenuItem>
                                   </>
                                 ) : null}
@@ -331,6 +378,36 @@ function VehiclesPage() {
         )}
       </div>
 
+      <LinkedRecordFormDialog
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditing(null);
+        }}
+        fields={fields}
+        term={term}
+        initial={
+          editing
+            ? {
+                displayLabel: editing.displayLabel,
+                values: (editing.values ?? {}) as Record<string, unknown>,
+              }
+            : undefined
+        }
+        submitting={patch.isPending}
+        submitError={patch.error}
+        onSubmit={async (data) => {
+          if (!editing) return;
+          await patch.mutateAsync({
+            recordId: editing.id,
+            version: editing.version,
+            body: data,
+          });
+          invalidateOwnerRecords(editing.customerId);
+          setEditing(null);
+          toast.success(`${term} updated`);
+        }}
+      />
+
       <TransferLinkedRecordDialog
         record={transferring?.record ?? null}
         sourceCustomerId={transferring?.record.customerId ?? ""}
@@ -345,6 +422,14 @@ function VehiclesPage() {
         term={term}
         onOpenChange={(o) => {
           if (!o) setHistoryFor(null);
+        }}
+      />
+
+      <DeleteLinkedRecordDialog
+        record={deletingFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setDeletingFor(null);
         }}
       />
 

@@ -5,6 +5,7 @@ import {
   BadgePoundSterling,
   CalendarPlus,
   CalendarX,
+  CarFront,
   Clock,
   Lock,
   MessageSquarePlus,
@@ -62,7 +63,9 @@ import {
 import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
-import { formatInTz, formatMoney, isoDate, pct, ukDate } from "@/lib/format";
+import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
+import { localDay, segmentOn } from "@/lib/working-days";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -146,6 +149,11 @@ function Overview() {
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
+    // A multi-day job that skips today (the weekend between Fri and Mon) isn't today's work.
+    .filter((b) => {
+      const zone = b.timezone || "Europe/London";
+      return segmentOn(b, localDay(new Date().toISOString(), zone), zone) !== null;
+    })
     .sort((a, b) => a.start.localeCompare(b.start));
   // Staff events (dentist, school run) share the diary, so they belong in "Today" too.
   const todaysEvents = useCalendarBlocks({ ...todayRange() });
@@ -528,6 +536,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () => void }) {
   const tenant = useTenant();
   const staff = useStaffList();
+  const soleStaff = useSoleStaff();
   const owner = staff.data?.find((s) => s.id === block.staffId);
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
 
@@ -538,12 +547,18 @@ function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () =
         className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60"
       >
         <div className="w-16 shrink-0">
-          <p className="text-sm font-semibold tabular-nums">
-            {formatInTz(block.start, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {formatInTz(block.end, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
+          {isAllDayEvent(block.start, block.end, timezone) ? (
+            <p className="text-sm font-semibold">All day</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatInTz(block.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatInTz(block.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </>
+          )}
         </div>
         <span
           aria-hidden
@@ -553,7 +568,7 @@ function TodayEventRow({ block, onClick }: { block: CalendarBlock; onClick: () =
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{block.title}</p>
           <p className="truncate text-xs text-muted-foreground">
-            Event · {owner?.displayName ?? "—"}
+            Event{soleStaff ? "" : ` · ${owner?.displayName ?? "—"}`}
             {block.notes ? ` · ${block.notes}` : ""}
           </p>
         </div>
@@ -569,7 +584,18 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
   const customer = useCustomer(booking.leadCustomerId);
   const trainer = staff.data?.find((s) => s.id === booking.staffId);
   const location = locations.data?.find((l) => l.id === booking.locationId);
+  // Who and where go without saying in a one-person, one-place business.
+  const soleStaff = useSoleStaff();
+  const soleLocation = useSoleLocation();
+  const where = [
+    soleStaff ? null : (trainer?.displayName ?? "—"),
+    soleLocation ? null : (location?.name ?? "—"),
+  ].filter(Boolean);
   const timezone = booking.timezone || "Europe/London";
+  // Today's share of the job: a 3-day coating shows its Friday hours on Friday, not
+  // Thursday's start and Monday's finish.
+  const today =
+    segmentOn(booking, localDay(new Date().toISOString(), timezone), timezone) ?? booking;
 
   return (
     <li>
@@ -578,25 +604,44 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
         className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60"
       >
         <div className="w-16 shrink-0">
-          <p className="text-sm font-semibold tabular-nums">
-            {formatInTz(booking.start, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {formatInTz(booking.end, timezone, { hour: "2-digit", minute: "2-digit" })}
-          </p>
+          {booking.allDay ? (
+            <p className="text-sm font-semibold">All day</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatInTz(today.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatInTz(today.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </>
+          )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
-            {booking.serviceSnapshot.name}
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+            <span className="truncate">{booking.serviceSnapshot.name}</span>
             {booking.attendees.length > 1 ? (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
+              <span className="text-xs font-normal text-muted-foreground">
                 {booking.seatCount} of {booking.attendees.length} booked
+              </span>
+            ) : null}
+            {/* The client needs running somewhere once the car is in. */}
+            {booking.clientLift ? (
+              <span
+                title={
+                  booking.clientLift.destination
+                    ? `Drop client at ${booking.clientLift.destination}`
+                    : "Lift needed"
+                }
+                className="inline-flex shrink-0"
+              >
+                <CarFront role="img" aria-label="Lift needed" className="size-3.5 text-primary" />
               </span>
             ) : null}
           </p>
           <p className="truncate text-xs text-muted-foreground">
-            {customer.data ? customerDisplayName(customer.data) : "…"} ·{" "}
-            {trainer?.displayName ?? "—"} · {location?.name ?? "—"}
+            {customer.data ? customerDisplayName(customer.data) : "…"}
+            {where.length > 0 ? ` · ${where.join(" · ")}` : ""}
           </p>
         </div>
         <div className="hidden shrink-0 items-center gap-2 sm:flex">

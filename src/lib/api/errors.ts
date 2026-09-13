@@ -7,6 +7,23 @@ export type ProblemFieldError = {
   message?: string;
 };
 
+/**
+ * One diary entry a booking clashed with, carried on a `409 BOOKING_CONFLICT`. When
+ * every conflict is an all-day job (for a timed booking) or a timed job (for an
+ * all-day one) the API marks the problem `overridable`: staff may re-send the same
+ * request with `dropIn: true` and the two will share the day.
+ */
+export type BookingConflict = {
+  bookingId: string;
+  kind: "booking" | "block";
+  reference: string | null;
+  allDay: boolean;
+  start: string;
+  end: string;
+  serviceName: string | null;
+  customerName: string | null;
+};
+
 export type ProblemDetails = {
   type?: string;
   title?: string;
@@ -15,6 +32,8 @@ export type ProblemDetails = {
   detail?: string;
   requestId?: string;
   errors?: ProblemFieldError[];
+  conflicts?: BookingConflict[];
+  overridable?: boolean;
 };
 
 export class ApiError extends Error {
@@ -25,6 +44,10 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly fieldErrors: ProblemFieldError[];
   readonly type?: string;
+  /** Diary entries a `BOOKING_CONFLICT` clashed with (empty when the API gave none). */
+  readonly conflicts: BookingConflict[];
+  /** True when re-sending with `dropIn: true` would be accepted (all-day ↔ timed clash). */
+  readonly overridable: boolean;
 
   constructor(input: {
     status: number;
@@ -34,6 +57,8 @@ export class ApiError extends Error {
     requestId?: string;
     fieldErrors?: ProblemFieldError[];
     type?: string;
+    conflicts?: BookingConflict[];
+    overridable?: boolean;
   }) {
     const title = input.title ?? "Something went wrong";
     super(input.detail ? `${title}: ${input.detail}` : title);
@@ -45,6 +70,13 @@ export class ApiError extends Error {
     this.requestId = input.requestId;
     this.fieldErrors = input.fieldErrors ?? [];
     this.type = input.type;
+    this.conflicts = input.conflicts ?? [];
+    this.overridable = input.overridable === true;
+  }
+
+  /** A clash staff may override by booking as a drop-in (or sharing the day). */
+  get isOverridableConflict() {
+    return this.code === "BOOKING_CONFLICT" && this.overridable;
   }
 
   get isMfaRequired() {
@@ -79,6 +111,8 @@ export function parseProblemDetails(body: unknown, status: number, requestId?: s
       requestId: (typeof p.requestId === "string" ? p.requestId : undefined) ?? requestId,
       fieldErrors: Array.isArray(p.errors) ? p.errors : [],
       type: typeof p.type === "string" ? p.type : undefined,
+      conflicts: Array.isArray(p.conflicts) ? p.conflicts : [],
+      overridable: p.overridable === true,
     });
   }
 

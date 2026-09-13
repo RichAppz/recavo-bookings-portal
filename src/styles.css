@@ -174,12 +174,48 @@
   h4 {
     letter-spacing: -0.02em;
   }
+
+  /* iOS Safari gives date/time inputs an intrinsic width that ignores `width: 100%`
+     and their grid cell, so two side by side ran past the edge of the card. Drop the
+     native chrome and let them fill whatever box they're given. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    /* WebKit centres the value and collapses the height when empty. */
+    text-align: left;
+    min-height: 1.5em;
+  }
 }
 
 @utility surface-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
+}
+
+/* Calendar bars slide their label back and forth when it is wider than the bar
+   (see components/Marquee.tsx, which sets the two custom properties). Pausing at
+   each end gives the eye time to read the start and the finish. */
+@keyframes marquee {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  82%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee var(--marquee-duration, 6s) ease-in-out infinite alternate;
 }
 
 @utility no-scrollbar {

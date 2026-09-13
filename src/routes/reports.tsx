@@ -235,22 +235,24 @@ function ReportsPage() {
             className="w-40"
           />
         </div>
-        <div className="grid gap-2">
-          <Label>Location</Label>
-          <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All locations</SelectItem>
-              {tenant.locations.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {tenant.locations.length > 1 ? (
+          <div className="grid gap-2">
+            <Label>Location</Label>
+            <Select value={locationId} onValueChange={setLocationId}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
+                {tenant.locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       <Can

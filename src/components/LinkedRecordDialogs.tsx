@@ -3,6 +3,16 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
 import { TableGhost } from "@/components/ghost";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -37,8 +47,10 @@ import {
   useCreateCustomerLinkedRecord,
   useCustomer,
   useCustomers,
+  useDeleteLinkedRecord,
   useLinkedRecordOwnership,
   useMemberships,
+  usePatchLinkedRecord,
   useTransferLinkedRecord,
 } from "@/lib/api/hooks";
 import {
@@ -49,6 +61,14 @@ import {
   type LinkedRecordOwnership,
 } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
+import {
+  UNSUPPORTED_FIELD_TYPES,
+  buildQuickAddRecord,
+  coerceFieldValue,
+  hasQuickAddInput,
+  quickAddFields,
+  type LinkedRecordField,
+} from "@/lib/quick-add-record";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -103,20 +123,29 @@ export function CustomerSearchPicker({
           aria-expanded={pickerOpen}
           className="w-full justify-between font-normal"
         >
-          <span className={cn(!value && "text-muted-foreground")}>
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
             {value ? customerDisplayName(value) : placeholder}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command shouldFilter={false}>
+      {/* Capped at the room Radix has on whichever side it opens, so a list that flips
+          above a low trigger stays fully on screen and scrolls inside, rather than
+          running off the top the way the services picker did on phones. */}
+      <PopoverContent
+        className="flex max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) flex-col p-0"
+        align="start"
+        side="bottom"
+        sticky="always"
+        collisionPadding={12}
+      >
+        <Command shouldFilter={false} className="min-h-0 flex-1">
           <CommandInput
             placeholder="Search clients by name, email or phone…"
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList>
+          <CommandList className="min-h-0 flex-1">
             {!searching && !hasSuggestions ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">
                 Type at least 2 characters to search.
@@ -330,6 +359,100 @@ function OwnershipOwnerName({ customerId }: { customerId: string }) {
   );
 }
 
+/**
+ * Remove a linked record. Deletes outright when nothing has ever been booked
+ * against it (the "added by mistake" case); when the API says it has booking
+ * history (409) the dialog switches to offering an archive instead, since the
+ * record has to stay resolvable from those bookings (RECA-90).
+ */
+export function DeleteLinkedRecordDialog({
+  record,
+  term,
+  onOpenChange,
+  onDone,
+}: {
+  record: LinkedRecord | null;
+  term: string;
+  onOpenChange: (o: boolean) => void;
+  /** Called after a successful delete or archive. */
+  onDone?: (outcome: "deleted" | "archived") => void;
+}) {
+  const open = record !== null;
+  const lower = term.toLowerCase();
+  const remove = useDeleteLinkedRecord();
+  const patch = usePatchLinkedRecord(record?.customerId);
+  const [inUse, setInUse] = useState(false);
+  const busy = remove.isPending || patch.isPending;
+
+  useEffect(() => {
+    if (!open) setInUse(false);
+  }, [open]);
+
+  const confirm = async () => {
+    if (!record) return;
+    if (inUse) {
+      try {
+        await patch.mutateAsync({
+          recordId: record.id,
+          version: record.version,
+          body: { status: "archived" },
+        });
+        toast.success(`${term} archived`);
+        onDone?.("archived");
+        onOpenChange(false);
+      } catch {
+        // usePatchLinkedRecord toasts the error.
+      }
+      return;
+    }
+    try {
+      await remove.mutateAsync({ recordId: record.id, customerId: record.customerId });
+      toast.success(`${term} deleted`);
+      onDone?.("deleted");
+      onOpenChange(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setInUse(true);
+        return;
+      }
+      toastApiError(err);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {inUse ? `Archive this ${lower} instead?` : `Delete ${record?.displayLabel ?? lower}?`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {inUse
+              ? `This ${lower} has bookings against it, so it can't be deleted without losing that history. Archiving hides it from pickers and lists while past bookings keep their record.`
+              : `This permanently removes the ${lower} and its ownership history. It can't be undone.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={busy}
+            onClick={(e) => {
+              // Keep the dialog open until the request settles (or the 409 flips the copy).
+              e.preventDefault();
+              void confirm();
+            }}
+            className={cn(
+              !inUse && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            )}
+          >
+            {busy ? "Working…" : inUse ? "Archive" : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 /** Ownership timeline for a linked record (RECA-521), newest interval first. */
 export function OwnershipHistoryDialog({
   record,
@@ -373,7 +496,7 @@ export function OwnershipHistoryDialog({
             Every client {record?.displayLabel ?? `this ${lower}`} has belonged to, newest first.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
           {ownership.isLoading ? (
             <TableGhost rows={2} />
           ) : ownership.isError ? (
@@ -408,48 +531,14 @@ export function OwnershipHistoryDialog({
   );
 }
 
-export type LinkedRecordField = {
-  fieldKey: string;
-  label: string;
-  helpText?: string | null;
-  dataType: string;
-  required: boolean;
-  constraints?: {
-    minLength?: number;
-    maxLength?: number;
-    min?: number;
-    max?: number;
-    pattern?: string;
-    options?: { value: string; label: string }[];
-    maxItems?: number;
-  };
-  displayOrder?: number;
-  status?: string;
-};
-
-/** Field types we can't yet edit from this dynamic form (uploads, cross-record refs, multi-select). */
-const UNSUPPORTED_FIELD_TYPES = new Set(["image", "file", "reference", "multi_select"]);
+export type { LinkedRecordField };
+export { quickAddFields };
 
 export function activeSortedFields(fields: LinkedRecordField[]): LinkedRecordField[] {
   return fields
     .filter((f) => (f.status ?? "active") === "active")
     .slice()
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-}
-
-/** Turns a raw string/boolean input into the typed value the API expects, or undefined when blank. */
-function coerceFieldValue(field: LinkedRecordField, raw: unknown): unknown {
-  if (field.dataType === "boolean") return Boolean(raw);
-  if (raw === "" || raw === undefined || raw === null) return undefined;
-  if (field.dataType === "integer") {
-    const n = parseInt(String(raw), 10);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  if (field.dataType === "decimal") {
-    const n = Number(raw);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  return String(raw);
 }
 
 /** Maps a server field error (which may be keyed `values.<fieldKey>`) back to a field. */
@@ -651,7 +740,7 @@ export function LinkedRecordFormDialog({
           <DialogTitle>{initial ? `Edit ${lower}` : `Add ${lower}`}</DialogTitle>
           <DialogDescription>Fields come from your {lower} schema.</DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
+        <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
           {ownerSlot}
           <div className="grid gap-2">
             <Label htmlFor="lr-display-label">Display label</Label>
@@ -686,16 +775,21 @@ export function LinkedRecordFormDialog({
 }
 
 /**
- * The handful of fields worth asking for when the customer is standing at the
- * counter: everything required, then the first optional short-text fields, three
- * at most. For the vehicle template that's Registration, Make, Model.
+ * What the hosting form can do with the quick-add row besides render it. Add
+ * booking uses it so details typed but never "Added" are saved when the booking is
+ * created, instead of being dropped on the floor (a car typed into the row and
+ * then "Create booking" pressed used to reach the API as no car at all).
  */
-export function quickAddFields(fields: LinkedRecordField[]): LinkedRecordField[] {
-  const usable = fields.filter((f) => !UNSUPPORTED_FIELD_TYPES.has(f.dataType));
-  const required = usable.filter((f) => f.required);
-  const optional = usable.filter((f) => !f.required && f.dataType === "short_text");
-  return [...required, ...optional].slice(0, Math.max(3, required.length));
-}
+export type QuickAddLinkedRecordHandle = {
+  /** True when something has been typed and not yet added. */
+  hasInput: () => boolean;
+  /**
+   * Creates the record from what's typed (also firing `onAdded`). Resolves null when
+   * the row is empty or a required field is missing — the error shows inline, so
+   * the caller just stops. Rejects when the API call fails (already toasted).
+   */
+  submit: () => Promise<LinkedRecord | null>;
+};
 
 /**
  * Compact inline form for adding a linked record without leaving the current
@@ -709,6 +803,9 @@ export function QuickAddLinkedRecord({
   term,
   onAdded,
   onCancel,
+  onInputChange,
+  handleRef,
+  inputHint,
   autoFocus,
 }: {
   customerId: string;
@@ -717,12 +814,19 @@ export function QuickAddLinkedRecord({
   onAdded: (record: LinkedRecord) => void;
   /** Present when the form can be dismissed (the client already has records). */
   onCancel?: () => void;
+  /** Fires as the row goes between blank and typed-into (and false on unmount). */
+  onInputChange?: (hasInput: boolean) => void;
+  /** Lets the host save whatever's typed as part of its own submit. */
+  handleRef?: React.MutableRefObject<QuickAddLinkedRecordHandle | null>;
+  /** Replaces the status line once something's typed — e.g. "saved with the booking". */
+  inputHint?: string;
   autoFocus?: boolean;
 }) {
   const create = useCreateCustomerLinkedRecord(customerId);
   const quick = useMemo(() => quickAddFields(fields), [fields]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [emptyError, setEmptyError] = useState(false);
   // Snapshot of the quick values taken when "More details" opens, so the full form
   // starts pre-filled without resetting on every re-render while it's open.
   const [fullInitial, setFullInitial] = useState<{
@@ -730,39 +834,43 @@ export function QuickAddLinkedRecord({
     values: Record<string, unknown>;
   } | null>(null);
   const lower = term.toLowerCase();
+  const hasInput = hasQuickAddInput(values);
 
-  const submit = async () => {
-    const nextErrors: Record<string, string> = {};
-    const payload: Record<string, unknown> = {};
-    for (const f of quick) {
-      const coerced = coerceFieldValue(f, values[f.fieldKey]?.trim());
-      if (f.required && (coerced === undefined || coerced === "")) {
-        nextErrors[f.fieldKey] = "Required";
-        continue;
-      }
-      if (coerced !== undefined) payload[f.fieldKey] = coerced;
+  useEffect(() => {
+    onInputChange?.(hasInput);
+  }, [hasInput, onInputChange]);
+  useEffect(() => () => onInputChange?.(false), [onInputChange]);
+
+  const submit = async (): Promise<LinkedRecord | null> => {
+    const built = buildQuickAddRecord(quick, values, term);
+    if (built.kind === "invalid") {
+      setErrors(built.errors);
+      return null;
     }
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      return;
+    if (built.kind === "empty") {
+      setEmptyError(true);
+      return null;
     }
     setErrors({});
-    // "Ford Focus · AB12 CDE" reads better than the field order would give.
-    const descriptive = quick
-      .filter((f) => !f.required)
-      .map((f) => payload[f.fieldKey])
-      .filter((v) => v !== undefined && v !== "")
-      .join(" ");
-    const identifying = quick
-      .filter((f) => f.required)
-      .map((f) => payload[f.fieldKey])
-      .filter((v) => v !== undefined && v !== "")
-      .join(" ");
-    const displayLabel = [descriptive, identifying].filter(Boolean).join(" · ") || term;
-    const record = await create.mutateAsync({ displayLabel, values: payload });
+    setEmptyError(false);
+    const record = await create.mutateAsync({
+      displayLabel: built.displayLabel,
+      values: built.values,
+    });
     setValues({});
     onAdded(record);
+    return record;
   };
+
+  // Re-pointed every render so the host always calls into the current closure;
+  // cleared on unmount so a stale row can't be submitted after a client change.
+  useEffect(() => {
+    if (!handleRef) return;
+    handleRef.current = { hasInput: () => hasInput, submit };
+    return () => {
+      handleRef.current = null;
+    };
+  });
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -774,6 +882,7 @@ export function QuickAddLinkedRecord({
   // One message for the whole row: "Registration is required", or the server's
   // complaint about a specific field.
   const firstError = (() => {
+    if (emptyError) return "Add at least one detail.";
     for (const f of quick) {
       const local = errors[f.fieldKey];
       if (local) return local === "Required" ? `${f.label} is required.` : `${f.label}: ${local}`;
@@ -784,21 +893,31 @@ export function QuickAddLinkedRecord({
   })();
 
   const requiredLabels = quick.filter((f) => f.required).map((f) => f.label.toLowerCase());
+  // Once something's typed, say what happens to it: the host saves it with its own
+  // submit, so nobody has to know the small "Add" button is optional.
   const requiredHint =
-    requiredLabels.length === 0
-      ? "All optional — add more later."
-      : `Only the ${requiredLabels.join(" and ")} is needed now.`;
+    hasInput && inputHint
+      ? inputHint
+      : requiredLabels.length === 0
+        ? "Nothing's required — add what you know, the rest later."
+        : `Only the ${requiredLabels.join(" and ")} is needed now.`;
 
   return (
     <div className="rounded-lg border border-dashed p-3">
       {/* Fields in one row (labels as placeholders), then a single status line with
           the actions. Errors are reported in the status line, not under each field,
-          so the row never shifts. */}
+          so the row never shifts. Stacked on a phone: three text inputs side by side
+          can't shrink below their intrinsic width and used to push the whole
+          booking sheet wider than the screen. `minmax(0, …)` for the same reason. */}
       <div
-        className="grid gap-2"
-        style={{
-          gridTemplateColumns: quick.map((f) => (f.required ? "1.25fr" : "1fr")).join(" "),
-        }}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-(--quick-add-cols)"
+        style={
+          {
+            "--quick-add-cols": quick
+              .map((f) => (f.required ? "minmax(0, 1.25fr)" : "minmax(0, 1fr)"))
+              .join(" "),
+          } as React.CSSProperties
+        }
       >
         {quick.map((f, i) => {
           const id = `quick-lr-${f.fieldKey}`;
@@ -843,6 +962,7 @@ export function QuickAddLinkedRecord({
               onChange={(e) => {
                 setValues((p) => ({ ...p, [f.fieldKey]: e.target.value }));
                 if (errors[f.fieldKey]) setErrors((p) => ({ ...p, [f.fieldKey]: "" }));
+                if (emptyError) setEmptyError(false);
               }}
               onKeyDown={onKeyDown}
               disabled={create.isPending}
@@ -851,16 +971,19 @@ export function QuickAddLinkedRecord({
         })}
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-3">
+      {/* Phone: the hint gets its own line above the actions — squeezed next to them
+          it truncated to a few letters, and as `nowrap` text it set the row's minimum
+          width to the whole sentence, widening the sheet. */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <p
           className={cn(
-            "min-w-0 truncate text-xs",
+            "min-w-0 basis-full text-xs sm:flex-1 sm:basis-0 sm:truncate",
             firstError ? "text-destructive" : "text-muted-foreground",
           )}
         >
           {firstError ?? requiredHint}
         </p>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-3">
           {onCancel ? (
             <button
               type="button"

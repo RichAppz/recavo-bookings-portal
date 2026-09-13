@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarDays,
   FileText,
+  Gift,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -19,11 +20,12 @@ import { userDisplayName } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export type AccountView =
-  "overview" | "calendar" | "credits" | "purchases" | "invoices" | "profile";
+  "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile";
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "calendar", label: "Calendar", icon: CalendarDays },
+  { view: "offers", label: "Offers", icon: Gift },
   { view: "credits", label: "Credits", icon: Ticket },
   { view: "purchases", label: "Purchases", icon: Receipt },
   { view: "invoices", label: "Invoices", icon: FileText },
@@ -59,7 +61,10 @@ export function AccountShell({
   useEffect(() => setMobileNav(false), [pathname, view]);
 
   return (
-    <div className="min-h-screen bg-background">
+    // `overflow-x-clip` is the backstop: whatever a card gets wrong, the page itself
+    // can never grow wider than the phone. `clip` rather than `hidden`, because
+    // `overflow-x: hidden` makes this the scroll container and unsticks the header.
+    <div className="min-h-screen overflow-x-clip bg-background">
       {mobileNav ? (
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"
@@ -146,7 +151,7 @@ export function AccountShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+        <main className="mx-auto w-full min-w-0 max-w-[1440px] space-y-6 p-4 sm:p-6">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
             {description ? (

@@ -86,14 +86,31 @@ export function useApiMutation<TData = unknown, TVariables = void>(
   });
 }
 
-/** Wrap a mutationFn so the same Idempotency-Key is reused until success. */
+/**
+ * Statuses that mean "the server read this request and said no". A retry with the
+ * same body would get the same answer, and a retry with a *changed* body (e.g. the
+ * same booking re-sent as a drop-in after a 409) is a new intent that must not
+ * travel under the old key — the API refuses a reused key with a different body.
+ */
+const REJECTED_STATUSES = new Set([400, 404, 409, 422]);
+
+/**
+ * Wrap a mutationFn so the same Idempotency-Key is reused until success. The key
+ * also rotates after a definitive rejection (see {@link REJECTED_STATUSES}); it is
+ * kept across network failures, timeouts and 5xx so a blind retry stays safe.
+ */
 export function createIdempotentMutationFn<TData, TVariables>(
   fn: (variables: TVariables, idempotencyKey: string) => Promise<TData>,
 ) {
   let key = newIdempotencyKey();
   return async (variables: TVariables) => {
-    const data = await fn(variables, key);
-    key = newIdempotencyKey();
-    return data;
+    try {
+      const data = await fn(variables, key);
+      key = newIdempotencyKey();
+      return data;
+    } catch (err) {
+      if (err instanceof ApiError && REJECTED_STATUSES.has(err.status)) key = newIdempotencyKey();
+      throw err;
+    }
   };
 }

@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useRouterState } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
   Bell,
+  BellRing,
   Building2,
   CalendarDays,
   Car,
@@ -16,10 +17,12 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Layers,
+  Link2,
   LogOut,
   MapPin,
   MessageSquare,
   Menu,
+  Package,
   Plus,
   Search,
   Settings,
@@ -47,11 +50,13 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { BillingBanner } from "@/components/BillingBanner";
+import { BillingBanner, TrialPill } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
+import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
@@ -70,6 +75,7 @@ import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
+import { useLiveUpdates } from "@/lib/live/use-live-updates";
 import { cn } from "@/lib/utils";
 
 function pluralizeTerm(term: string) {
@@ -115,6 +121,9 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/** Flip to true once the Help centre points at real help content. */
+const SHOW_HELP_CENTRE = false;
+
 const NAV: NavGroup[] = [
   {
     heading: "Schedule",
@@ -138,13 +147,35 @@ const NAV: NavGroup[] = [
     heading: "Studio",
     items: [
       { to: "/services", label: "Sessions", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
+      // Materials a job uses up (ceramic, pads). Automotive only — hidden for other
+      // verticals below — and gated like the catalogue it hangs off.
+      {
+        to: "/consumables",
+        label: "Consumables",
+        icon: Package,
+        anyOf: [PERMISSIONS.BUSINESS_READ],
+      },
       {
         to: "/packages",
         label: "Packages",
         icon: Banknote,
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },
+      {
+        to: "/offer-links",
+        label: "Offer links",
+        icon: Link2,
+        anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
+      },
       { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+      // Clients due a repeat (ceramic top-up every 2 years). All verticals: a PT can
+      // use it for re-assessments just as well.
+      {
+        to: "/follow-ups",
+        label: "Follow-ups",
+        icon: BellRing,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
+      },
       // Label follows the record schema's terminology ("Vehicles" for detailing);
       // hidden entirely when the business has no linked-record schema.
       { to: "/vehicles", label: "Vehicles", icon: Car, anyOf: [PERMISSIONS.CUSTOMER_READ] },
@@ -183,11 +214,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [addBusinessOpen, setAddBusinessOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
   const [search, setSearch] = useState("");
   const subscription = useSubscription();
+  // Staff-only push channel: credits, message history, bookings refresh as the API records them.
+  useLiveUpdates();
 
   useEffect(() => setMobileNav(false), [pathname]);
 
@@ -196,6 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const navigate = useNavigate();
   // Gates the Vehicles nav item: only businesses with a linked-record schema get it.
   const recordDefinition = useLinkedRecordDefinition();
   const hasLinkedRecords = Boolean(recordDefinition.data?.definition);
@@ -308,7 +343,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     item.anyOf.some((p) => tenant.can(p)) &&
                     // The record list only exists for businesses with a schema
                     // (vehicles for detailing); everyone else never sees the item.
-                    (item.to !== "/vehicles" || hasLinkedRecords),
+                    (item.to !== "/vehicles" || hasLinkedRecords) &&
+                    // Consumables are a detailing concept (coatings, pads, chemicals).
+                    (item.to !== "/consumables" || isCarDetailing),
                 );
                 if (items.length === 0) return null;
                 return (
@@ -365,16 +402,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               setSetupOpenRequest((n) => n + 1);
             }}
           />
-          <button
-            onClick={() => {
-              setMobileNav(false);
-              setSetupOpenRequest((n) => n + 1);
-              setTourOpen(true);
-            }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-          >
-            <LifeBuoy className="size-4.5" /> Help centre
-          </button>
+          <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
+          {/* Help centre is hidden until it's hooked up to real help content. The
+              demo tour it opened is still reachable from the setup checklist. */}
+          {SHOW_HELP_CENTRE ? (
+            <button
+              onClick={() => {
+                setMobileNav(false);
+                setSetupOpenRequest((n) => n + 1);
+                setTourOpen(true);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            >
+              <LifeBuoy className="size-4.5" /> Help centre
+            </button>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -400,6 +442,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {b.tradingName}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  setMobileNav(false);
+                  setAddBusinessOpen(true);
+                }}
+              >
+                <Plus className="size-4" /> Add a business
+              </DropdownMenuItem>
               {canViewPlatform ? (
                 <>
                   <DropdownMenuSeparator />
@@ -496,19 +547,27 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <Select value={tenant.currentLocationId} onValueChange={tenant.setCurrentLocationId}>
-                <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All locations</SelectItem>
-                  {tenant.locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* A location filter only means something once there is more than one. */}
+              {tenant.locations.length > 1 ? (
+                <Select
+                  value={tenant.currentLocationId}
+                  onValueChange={tenant.setCurrentLocationId}
+                >
+                  <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All locations</SelectItem>
+                    {tenant.locations.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+
+              {accessPending ? null : <TrialPill />}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -526,18 +585,26 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => (
-                    <DropdownMenuItem
-                      key={n.id}
-                      className="flex-col items-start gap-0.5"
-                      onClick={() => {
-                        if (!n.readAt) markNotificationRead.mutate(n.id);
-                      }}
-                    >
-                      <span className="text-sm font-medium">{n.subject}</span>
-                      <span className="text-xs text-muted-foreground">{n.body}</span>
-                    </DropdownMenuItem>
-                  ))}
+                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
+                    // A follow-up coming due opens the follow-ups list; other items just mark read.
+                    const followUp = n.templateKey === "service_follow_up_staff";
+                    return (
+                      <DropdownMenuItem
+                        key={n.id}
+                        className="flex-col items-start gap-0.5"
+                        onClick={() => {
+                          if (!n.readAt) markNotificationRead.mutate(n.id);
+                          if (followUp) void navigate({ to: "/follow-ups" });
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5 text-sm font-medium">
+                          {followUp ? <BellRing className="size-3.5 text-primary" /> : null}
+                          {n.subject}
+                        </span>
+                        <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
                   {(notifications.data?.notifications ?? []).length === 0 ? (
                     <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
                   ) : null}
@@ -593,6 +660,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <AddBusinessDialog open={addBusinessOpen} onOpenChange={setAddBusinessOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
       <OnboardingChecklist openRequest={setupOpenRequest} onOpenTour={() => setTourOpen(true)} />

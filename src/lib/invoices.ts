@@ -59,6 +59,16 @@ export type InvoicePaymentInstructions = {
   bic: string | null;
 };
 
+/**
+ * The record the work was done on — a vehicle, a pet — snapshotted from the booking's
+ * linked record when the draft was created and printed on the PDF and email. `label`
+ * is the business's singular term for the record type ("Vehicle").
+ */
+export type InvoiceLinkedRecord = {
+  label: string;
+  value: string;
+};
+
 export type Invoice = {
   id: string;
   businessId: string;
@@ -68,6 +78,11 @@ export type Invoice = {
   origin: InvoiceOrigin;
   bookingId: string | null;
   bookingReference: string | null;
+  /**
+   * Null when the invoice is not about a record. Absent (`undefined`) from an API
+   * build that predates the field — treat as "no record" and hide the editor.
+   */
+  linkedRecord?: InvoiceLinkedRecord | null;
   customerId: string;
   currency: string;
   /** YYYY-MM-DD in the business timezone. */
@@ -117,7 +132,41 @@ export type UpdateInvoiceBody = {
   dueDate?: string | null;
   notes?: string | null;
   customerId?: string;
+  /** Correct or clear (null / blank value) the record the invoice is about. */
+  linkedRecord?: InvoiceLinkedRecord | null;
 };
+
+/** Mirrors the API's limits for the linked-record snapshot text. */
+export const INVOICE_LINKED_RECORD_LIMITS = {
+  labelMax: 60,
+  valueMax: 200,
+} as const;
+
+/** The record the invoice is about, or null — also null on an API that predates the field. */
+export function invoiceLinkedRecord(
+  invoice: Pick<Invoice, "linkedRecord">,
+): InvoiceLinkedRecord | null {
+  return invoice.linkedRecord ?? null;
+}
+
+/**
+ * Whether the API this invoice came from knows about linked records at all. Older
+ * builds omit the key entirely; new ones always send it (null when there is none).
+ * Used to hide the editor field rather than offer an edit that would silently drop.
+ */
+export function supportsLinkedRecord(invoice: Pick<Invoice, "linkedRecord">): boolean {
+  return invoice.linkedRecord !== undefined;
+}
+
+/**
+ * Turn the editor's typed value into the PATCH body: trimmed, or null to clear when
+ * blank. The label is the business's own term for the record type.
+ */
+export function linkedRecordInput(label: string, value: string): InvoiceLinkedRecord | null {
+  const trimmedValue = value.trim();
+  if (trimmedValue === "") return null;
+  return { label: label.trim() || "Reference", value: trimmedValue };
+}
 
 /** Plan feature key and the bolt-on key that grants it (Growth includes it). */
 export const INVOICING_FEATURE_KEY = "invoicing";
@@ -150,16 +199,19 @@ export type TaxConfig = {
   pricesIncludeVat?: boolean;
 };
 
-export type InvoiceAction = "edit" | "issue" | "send" | "markPaid" | "void" | "pdf";
+export type InvoiceAction =
+  "edit" | "issue" | "send" | "markPaid" | "void" | "redo" | "delete" | "pdf";
 
 /**
  * What each status allows (guide §5). Anything else is a 409 from the API, so
  * buttons are driven from here rather than letting users find out the hard way.
+ * A draft has no number, so it is deleted rather than voided; a numbered document
+ * is voided (and optionally redone as a fresh draft), never deleted.
  */
 const ACTIONS_BY_STATUS: Record<InvoiceStatus, ReadonlySet<InvoiceAction>> = {
-  draft: new Set(["edit", "issue", "void", "pdf"]),
-  issued: new Set(["send", "markPaid", "void", "pdf"]),
-  paid: new Set(["send", "void", "pdf"]),
+  draft: new Set(["edit", "issue", "delete", "pdf"]),
+  issued: new Set(["send", "markPaid", "void", "redo", "pdf"]),
+  paid: new Set(["send", "void", "redo", "pdf"]),
   void: new Set(["pdf"]),
 };
 
@@ -167,9 +219,27 @@ export function invoiceAllows(status: InvoiceStatus, action: InvoiceAction): boo
   return ACTIONS_BY_STATUS[status]?.has(action) ?? false;
 }
 
-/** Statuses a customer can see in their account; drafts and voids are 404 to them. */
+/**
+ * Statuses a customer can see in their account. Drafts are 404 to them; a voided
+ * invoice stays visible (stamped VOID) so a number they already hold is accounted for.
+ */
 export function isCustomerVisible(status: InvoiceStatus): boolean {
-  return status === "issued" || status === "paid";
+  return status === "issued" || status === "paid" || status === "void";
+}
+
+export type InvoiceStatusFilter = "all" | InvoiceStatus;
+
+/**
+ * Day-to-day list view: "All statuses" leaves voided invoices out, so a wrong one that
+ * has been voided (and redone) disappears from view. Choosing the explicit "Void"
+ * filter — or any other single status — shows exactly that status.
+ */
+export function visibleInvoices<T extends Pick<Invoice, "status">>(
+  list: readonly T[],
+  filter: InvoiceStatusFilter,
+): T[] {
+  if (filter === "all") return list.filter((inv) => inv.status !== "void");
+  return list.filter((inv) => inv.status === filter);
 }
 
 /** Balance due, clamped at zero (a fully-paid booking can pre-fill paidMinor above total). */
@@ -297,11 +367,13 @@ export function validateLineDrafts(
     ) {
       rowErrors.quantity = `Whole number 1–${INVOICE_LINE_LIMITS.quantityMax.toLocaleString("en-GB")}`;
     }
+    // Negative is a discount line (the API generates one for a staff-priced booking);
+    // the API refuses a document that totals below zero.
     const priceText = draft.unitPrice.replace(/[^0-9.-]/g, "").trim();
     const price = priceText === "" ? NaN : Number(priceText);
     const unitPriceMinor = Math.round(price * 100);
-    if (!Number.isFinite(price) || price < 0 || !Number.isInteger(unitPriceMinor)) {
-      rowErrors.unitPrice = "Amount of 0.00 or more";
+    if (!Number.isFinite(price) || !Number.isInteger(unitPriceMinor)) {
+      rowErrors.unitPrice = "Enter an amount (negative for a discount)";
     }
     if (Object.keys(rowErrors).length > 0) failed = true;
     errors.push(rowErrors);

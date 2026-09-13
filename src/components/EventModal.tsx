@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { CalendarDays, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,17 @@ import {
   useUpdateCalendarBlock,
 } from "@/lib/api/hooks";
 import type { CalendarBlock } from "@/lib/api/types";
-import { isoDate } from "@/lib/format";
+import {
+  eventDatesFromInterval,
+  eventInterval,
+  eventSpanDays,
+  formatEventDateRange,
+  isMultiDay,
+  MAX_EVENT_DAYS,
+  rangeFromTaps,
+} from "@/lib/event-dates";
+import { addDays, isoDate, parseIso } from "@/lib/format";
+import { useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -46,12 +57,6 @@ const EVENT_COLOURS: { value: string; label: string }[] = [
 ];
 
 const pad = (n: number) => `${n}`.padStart(2, "0");
-
-/** Local wall-clock parts for an instant, matching what `<input type=time>` shows. */
-function localParts(iso: string): { date: string; time: string } {
-  const d = new Date(iso);
-  return { date: isoDate(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
-}
 
 function addMinutesToTime(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -91,7 +96,10 @@ export function EventModal({
 
   const [title, setTitle] = useState("");
   const [staffId, setStaffId] = useState("");
-  const [date, setDate] = useState(isoDate(new Date()));
+  // First and last day the event covers (local YYYY-MM-DD, inclusive). A one-day
+  // event has both the same; "Holiday Mon–Fri" has Friday as its endDate.
+  const [startDate, setStartDate] = useState(isoDate(new Date()));
+  const [endDate, setEndDate] = useState(isoDate(new Date()));
   const [from, setFrom] = useState("09:00");
   const [to, setTo] = useState("10:00");
   const [allDay, setAllDay] = useState(false);
@@ -99,29 +107,37 @@ export function EventModal({
   const [notes, setNotes] = useState("");
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The inline range picker: closed until "Dates" is tapped; the first tap on it
+  // sets the start day, the second the last day (the same day twice = one day).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // start → end → review: the range stays lit until "Confirm", so the dates can be
+  // double-checked before the picker folds away.
+  const [picking, setPicking] = useState<"start" | "end" | "review">("start");
 
   useEffect(() => {
     if (!open) return;
     setConflict(false);
     setConfirmDelete(false);
+    setPickerOpen(false);
+    setPicking("start");
     if (block) {
-      const s = localParts(block.start);
-      const e = localParts(block.end);
+      const dates = eventDatesFromInterval(block.start, block.end);
       setTitle(block.title);
       setStaffId(block.staffId);
-      setDate(s.date);
-      setFrom(s.time);
-      // An event ending at midnight the next day is "all day" on its start date.
-      const wholeDay = s.time === "00:00" && e.time === "00:00" && e.date !== s.date;
-      setAllDay(wholeDay);
-      setTo(wholeDay ? "23:59" : e.time);
+      setStartDate(dates.startDate);
+      setEndDate(dates.endDate);
+      setFrom(dates.from);
+      setTo(dates.to);
+      setAllDay(dates.allDay);
       setColour(block.colour);
       setNotes(block.notes ?? "");
       return;
     }
     setTitle("");
     setStaffId(defaultStaffId ?? "");
-    setDate(defaultDate ?? isoDate(new Date()));
+    const day = defaultDate ?? isoDate(new Date());
+    setStartDate(day);
+    setEndDate(day);
     const start = defaultTime ?? "09:00";
     setFrom(start);
     setTo(addMinutesToTime(start, 60));
@@ -130,32 +146,68 @@ export function EventModal({
     setNotes("");
   }, [open, block, defaultDate, defaultTime, defaultStaffId]);
 
-  // Only one staff member? Save the click.
+  // A one-person business: pick them silently and drop the field.
+  const soleStaff = useSoleStaff();
   useEffect(() => {
-    if (!open || editing || staffId) return;
-    const list = staff.data ?? [];
-    if (list.length === 1 && list[0]) setStaffId(list[0].id);
-  }, [open, editing, staffId, staff.data]);
+    if (!open || editing || staffId || !soleStaff) return;
+    setStaffId(soleStaff.id);
+  }, [open, editing, staffId, soleStaff]);
 
   const saving = create.isPending || update.isPending || cancel.isPending;
   const staffLabel = tenant.terminology.staff || "Staff member";
   const bookingLabel = (tenant.terminology.booking || "Booking").toLowerCase();
 
-  const interval = (): { start: string; end: string } | null => {
-    if (allDay) {
-      const start = new Date(`${date}T00:00:00`);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      return { start: start.toISOString(), end: end.toISOString() };
-    }
-    const start = new Date(`${date}T${from}:00`);
-    const end = new Date(`${date}T${to}:00`);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-    if (end.getTime() <= start.getTime()) return null;
-    return { start: start.toISOString(), end: end.toISOString() };
-  };
+  // More than one day is always whole days: the primary case is "Holiday Mon–Fri",
+  // and a Mon 09:00 – Fri 10:00 block is never what someone meant by that.
+  const multiDay = isMultiDay(startDate, endDate);
+  const wholeDays = allDay || multiDay;
+  const spanDays = eventSpanDays(startDate, endDate);
+  const interval = () => eventInterval({ startDate, endDate, allDay: wholeDays, from, to });
 
   const valid = title.trim().length > 0 && staffId.length > 0 && interval() !== null;
+
+  const openPicker = () => {
+    setPicking("start");
+    setPickerOpen((o) => !o);
+  };
+  const tapDay = (day: Date) => {
+    const iso = isoDate(day);
+    if (picking === "start") {
+      setStartDate(iso);
+      setEndDate(iso);
+      setPicking("end");
+      return;
+    }
+    if (picking === "review") {
+      // A tap while reviewing starts a fresh pick from that day.
+      setStartDate(iso);
+      setEndDate(iso);
+      setPicking("end");
+      return;
+    }
+    const range = rangeFromTaps(startDate, iso);
+    setStartDate(range.startDate);
+    setEndDate(range.endDate);
+    setPicking("review");
+  };
+  const confirmDates = () => {
+    setPicking("start");
+    setPickerOpen(false);
+  };
+  const pickerStart = parseIso(startDate);
+  // While the last day is being chosen, only the first is lit; keep the second tap
+  // within the API's 31-day limit either side of it.
+  const pickerSelected =
+    picking === "end"
+      ? { from: pickerStart, to: undefined }
+      : { from: pickerStart, to: parseIso(endDate) };
+  const pickerDisabled =
+    picking === "end"
+      ? [
+          { before: addDays(pickerStart, -(MAX_EVENT_DAYS - 1)) },
+          { after: addDays(pickerStart, MAX_EVENT_DAYS - 1) },
+        ]
+      : undefined;
 
   const submit = async () => {
     const range = interval();
@@ -231,61 +283,119 @@ export function EventModal({
             />
           </div>
 
+          {soleStaff ? null : (
+            <div className="grid gap-2">
+              <Label>{staffLabel}</Label>
+              <Select value={staffId} onValueChange={setStaffId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={`Choose ${staffLabel.toLowerCase()}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(staff.data ?? []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid gap-2">
-            <Label>{staffLabel}</Label>
-            <Select value={staffId} onValueChange={setStaffId}>
-              <SelectTrigger>
-                <SelectValue placeholder={`Choose ${staffLabel.toLowerCase()}`} />
-              </SelectTrigger>
-              <SelectContent>
-                {(staff.data ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="ev-dates">Dates</Label>
+            <Button
+              id="ev-dates"
+              type="button"
+              variant="outline"
+              aria-expanded={pickerOpen}
+              aria-controls="ev-dates-picker"
+              onClick={openPicker}
+              className="h-auto min-h-10 w-full justify-start gap-2 px-3 py-2 text-left font-normal"
+            >
+              <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate">
+                {formatEventDateRange(startDate, endDate)}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {spanDays === 1 ? "1 day" : `${spanDays} days`}
+              </span>
+            </Button>
+            {pickerOpen ? (
+              <div id="ev-dates-picker" className="rounded-lg border bg-card">
+                <p className="px-3 pt-3 text-xs text-muted-foreground" aria-live="polite">
+                  {picking === "start"
+                    ? "Tap the first day."
+                    : picking === "end"
+                      ? "Now tap the last day (the same day again for one day)."
+                      : `${formatEventDateRange(startDate, endDate)} · ${
+                          spanDays === 1 ? "1 day" : `${spanDays} days`
+                        } — happy with that? Tap a day to start again.`}
+                </p>
+                <Calendar
+                  mode="range"
+                  weekStartsOn={1}
+                  defaultMonth={pickerStart}
+                  selected={pickerSelected}
+                  onSelect={(_range, day) => tapDay(day)}
+                  disabled={pickerDisabled}
+                  fixedWeeks
+                  className="bg-transparent [--cell-size:2.5rem]"
+                  classNames={{ root: "w-full" }}
+                />
+                {picking === "review" ? (
+                  <div className="flex justify-end gap-2 border-t px-3 py-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPicking("start")}
+                    >
+                      Change
+                    </Button>
+                    <Button type="button" size="sm" onClick={confirmDates}>
+                      Confirm dates
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="ev-date">Date</Label>
-              <Input
-                id="ev-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+          {wholeDays ? null : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="ev-from">From</Label>
+                <Input
+                  id="ev-from"
+                  type="time"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ev-to">To</Label>
+                <Input id="ev-to" type="time" value={to} onChange={(e) => setTo(e.target.value)} />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ev-from">From</Label>
-              <Input
-                id="ev-from"
-                type="time"
-                value={from}
-                disabled={allDay}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ev-to">To</Label>
-              <Input
-                id="ev-to"
-                type="time"
-                value={to}
-                disabled={allDay}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
+          )}
+          <label
+            className={cn("flex items-start gap-2 text-sm", multiDay && "text-muted-foreground")}
+          >
             <input
               type="checkbox"
-              className="size-4 accent-primary"
-              checked={allDay}
+              className="mt-0.5 size-4 accent-primary"
+              checked={wholeDays}
+              disabled={multiDay}
               onChange={(e) => setAllDay(e.target.checked)}
             />
-            All day
+            <span>
+              All day
+              {multiDay ? (
+                <span className="block text-xs">
+                  An event over several days holds each of them whole.
+                </span>
+              ) : null}
+            </span>
           </label>
 
           <div className="grid gap-2">
@@ -333,8 +443,13 @@ export function EventModal({
               time.
             </p>
           ) : null}
-          {!allDay && interval() === null && from && to ? (
+          {!wholeDays && interval() === null && from && to ? (
             <p className="text-xs text-muted-foreground">End time must be after the start.</p>
+          ) : null}
+          {wholeDays && interval() === null ? (
+            <p className="text-xs text-muted-foreground">
+              An event can cover up to {MAX_EVENT_DAYS} days.
+            </p>
           ) : null}
         </div>
 

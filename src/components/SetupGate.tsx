@@ -19,6 +19,7 @@ export function SetupGate({
   search,
   cta,
   onNavigate,
+  onAction,
 }: {
   icon: ReactNode;
   title: string;
@@ -30,6 +31,11 @@ export function SetupGate({
   cta: string;
   /** Called when the link is followed — typically closes the hosting dialog. */
   onNavigate: () => void;
+  /**
+   * When the missing thing can be added in place (a drawer over the top), run this
+   * instead of navigating away from the form.
+   */
+  onAction?: () => void;
 }) {
   return (
     <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-10 text-center">
@@ -39,19 +45,26 @@ export function SetupGate({
       <p className="text-sm font-medium">{title}</p>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
       <div className="mt-4">
-        <Button asChild>
-          <Link
-            to={to}
-            search={search}
-            onClick={() => {
-              onNavigate();
-              requestSetup(step);
-            }}
-          >
+        {onAction ? (
+          <Button type="button" onClick={onAction}>
             <Plus className="size-4" />
             {cta}
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild>
+            <Link
+              to={to}
+              search={search}
+              onClick={() => {
+                onNavigate();
+                requestSetup(step);
+              }}
+            >
+              <Plus className="size-4" />
+              {cta}
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   );
