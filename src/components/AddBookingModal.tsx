@@ -598,7 +598,15 @@ export function AddBookingModal({
   const timedNote = timedClashNote(timedOnDay, timezone);
   // A "yes" to sharing the day is about *this* day, this person and this kind of
   // booking; change any of them and it is asked again.
+  // …except when the switch itself was "book it as a drop-in instead", which
+  // arms the next reset to land on yes.
+  const armDropIn = useRef(false);
   useEffect(() => {
+    if (armDropIn.current) {
+      armDropIn.current = false;
+      setDropIn(true);
+      return;
+    }
     setDropIn(false);
   }, [date, endDate, staffId, scheduling, allDay]);
   // Sent when staff have said the two kinds of work may share the day. A slot picked
@@ -667,10 +675,25 @@ export function AddBookingModal({
 
   const handleConflict = () => {
     if (scheduling === "custom") {
-      toast.error(
-        `Clashes with another booking${customStaff ? ` for ${customStaff.displayName}` : ""}`,
-        { description: "Pick a different time, or someone else." },
-      );
+      const who = customStaff?.displayName ?? `the ${staffLower}`;
+      if (allDay) {
+        // Two all-day jobs can't share a day, but a timed drop-in alongside one can.
+        toast.error(`${who} already has an all-day job then`, {
+          description: "Book this one at a set time alongside it instead?",
+          action: {
+            label: "Pick a time",
+            onClick: () => {
+              armDropIn.current = true;
+              setAllDay(false);
+              setEndTouched(false);
+            },
+          },
+        });
+        return;
+      }
+      toast.error(`Clashes with another booking for ${who}`, {
+        description: "Pick a different time, or someone else.",
+      });
       return;
     }
     toast.error("That slot was just taken", {
@@ -1313,6 +1336,56 @@ export function AddBookingModal({
 
                 {scheduling === "custom" ? (
                   <div className="grid gap-3">
+                    {/* Whole day or a specific time is the first choice, not a checkbox
+                        tucked under the dates: people didn't spot that unticking
+                        "All day" is how you get a start time. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div
+                        role="radiogroup"
+                        aria-label="Whole day or a specific time"
+                        className="inline-flex rounded-lg border p-0.5 text-xs font-medium"
+                      >
+                        {(
+                          [
+                            [true, "All day"],
+                            [false, "Pick a time"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            role="radio"
+                            aria-checked={allDay === value}
+                            onClick={() => {
+                              setAllDay(value);
+                              setEndTouched(false);
+                            }}
+                            className={cn(
+                              "rounded-md px-3 py-1.5 transition-colors",
+                              allDay === value
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs tabular-nums",
+                          customWindow ? "text-muted-foreground" : "text-destructive",
+                        )}
+                      >
+                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
+                            coating booked all day is "All day · 2 hrs", never "1 day". */}
+                        {customWindow
+                          ? allDay
+                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
+                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
+                          : "The end must come after the start."}
+                      </span>
+                    </div>
                     <div className="grid gap-3">
                       <div className="grid gap-2">
                         <Label htmlFor="booking-start-date">Start</Label>
@@ -1363,34 +1436,6 @@ export function AddBookingModal({
                           )}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-primary"
-                          checked={allDay}
-                          onChange={(e) => {
-                            setAllDay(e.target.checked);
-                            setEndTouched(false);
-                          }}
-                        />
-                        All day
-                      </label>
-                      <span
-                        className={cn(
-                          "text-xs tabular-nums",
-                          customWindow ? "text-muted-foreground" : "text-destructive",
-                        )}
-                      >
-                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
-                            coating booked all day is "All day · 2 hrs", never "1 day". */}
-                        {customWindow
-                          ? allDay
-                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
-                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
-                          : "The end must come after the start."}
-                      </span>
                     </div>
                     {customSpan ? (
                       <p className="text-xs text-muted-foreground">
