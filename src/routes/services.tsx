@@ -826,7 +826,9 @@ function ServiceDialog({
               this is the dot.
             </p>
           </div>
-          <div className={cn("grid gap-4", isDetailing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+          {/* Detailing stacks duration over price: the long label wraps and would
+              leave the price field floating half a line lower beside it. */}
+          <div className={cn("grid gap-4", isDetailing ? "" : "sm:grid-cols-3")}>
             <div className="grid gap-2">
               <Label htmlFor="s-dur">
                 {isDetailing ? "How long you'll have the vehicle" : "Duration"}
