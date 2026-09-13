@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import {
   Ban,
   BellRing,
-  CalendarClock,
   Pencil,
   CheckCircle2,
   ChevronRight,
@@ -568,15 +567,11 @@ export function BookingPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  {/* Edit (what: services, price, who, where, vehicle, notes) and
-                      Reschedule (when). The edit dialog only shows the time and hands
-                      off to Reschedule, so the diary move gets its own entry too.
-                      Final bookings are a record, so both lock. */}
+                  {/* Edit covers what (services, price, who, where, vehicle, notes)
+                      and, via its "Reschedule" hand-off, when — so it's the single
+                      entry point. Final bookings are a record, so it locks. */}
                   <DropdownMenuItem disabled={isFinal} onSelect={() => setEditOpen(true)}>
                     <Pencil className="size-4" /> Edit booking
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={isFinal} onSelect={() => setRescheduleOpen(true)}>
-                    <CalendarClock className="size-4" /> Reschedule
                   </DropdownMenuItem>
                   {isFinal ? (
                     <p className="px-2 pb-1.5 text-xs text-muted-foreground">
