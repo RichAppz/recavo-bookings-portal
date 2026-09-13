@@ -9,6 +9,8 @@
  * bundle never touch them.
  */
 
+import type { SignInWithApplePlugin } from "@capacitor-community/apple-sign-in";
+
 /** Custom URL scheme registered in ios/App/App/Info.plist and AndroidManifest.xml. */
 export const NATIVE_URL_SCHEME = "app.recavo.portal";
 
@@ -158,7 +160,12 @@ export type NativeAppleSignInResult =
  * for the caller to persist.
  */
 export async function runNativeAppleSignIn(): Promise<NativeAppleSignInResult> {
-  const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+  // Bind to the native plugin by name rather than importing
+  // @capacitor-community/apple-sign-in's JS: its web fallback touches
+  // `document` at module scope, which crashes the SSR worker once the bundler
+  // inlines the import. We only ever call it on iOS, so no web fallback needed.
+  const { registerPlugin } = await import("@capacitor/core");
+  const SignInWithApple = registerPlugin<SignInWithApplePlugin>("SignInWithApple");
   const nonce = randomNonce();
   try {
     const { response } = await SignInWithApple.authorize({
