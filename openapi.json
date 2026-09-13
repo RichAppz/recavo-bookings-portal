@@ -486,6 +486,7 @@
           "attendees",
           "seatCount",
           "priceMinor",
+          "adjustmentMinor",
           "currency",
           "status",
           "paymentMethod",
@@ -518,7 +519,7 @@
           },
           "lineItems": {
             "type": "array",
-            "description": "Every service on this booking, `position`-ordered (RECA-516). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `priceMinor` and `end` are the roll-up across all items — render this list as the job checklist and do not recompute totals from the primary service alone.",
+            "description": "Every service on this booking, `position`-ordered (RECA-516), each at its catalogue price. Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `priceMinor` is the sum of these lines plus `adjustmentMinor` — render the lines, then a Discount row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone.",
             "items": {
               "type": "object",
               "required": [
@@ -666,7 +667,12 @@
             "type": "integer"
           },
           "priceMinor": {
-            "type": "integer"
+            "type": "integer",
+            "description": "What the client pays for the whole job — the authoritative total that payments, deposits and the outstanding balance work from. Σ lineItems[].priceMinor + adjustmentMinor."
+          },
+          "adjustmentMinor": {
+            "type": "integer",
+            "description": "Staff price adjustment on top of the catalogue lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a \"Discount −£x\" row), positive = surcharge, 0 = priced at list. Bookings priced before this field existed carry the difference inside the primary line item instead (its priceMinor differs from serviceSnapshot.priceMinor) and read as 0 here."
           },
           "depositMinor": {
             "type": [
@@ -5047,8 +5053,7 @@
                 },
                 "unitPriceMinor": {
                   "type": "integer",
-                  "minimum": 0,
-                  "description": "Per unit as entered — gross when pricesIncludeVat, net otherwise."
+                  "description": "Per unit as entered — gross when pricesIncludeVat, net otherwise. Negative for a discount line (e.g. the \"Discount\" line generated from a staff-priced booking)."
                 },
                 "taxable": {
                   "type": "boolean"
@@ -33859,7 +33864,7 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot."
+                    "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up."
                   },
                   "notifyCustomer": {
                     "type": "boolean",
@@ -35994,7 +35999,7 @@
                       "null"
                     ],
                     "minimum": 0,
-                    "description": "Staff total for the job. A number overrides the catalogue total (applied to the primary line item); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change)."
+                    "description": "Staff total for the job. A number overrides the catalogue total (the line items stay at list and the difference becomes `adjustmentMinor`); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change)."
                   },
                   "paymentMethod": {
                     "type": "string",
@@ -44765,7 +44770,7 @@
                         },
                         "unitPriceMinor": {
                           "type": "integer",
-                          "minimum": 0
+                          "description": "Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL."
                         },
                         "taxable": {
                           "type": "boolean",
@@ -45477,7 +45482,7 @@
                         },
                         "unitPriceMinor": {
                           "type": "integer",
-                          "minimum": 0
+                          "description": "Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL."
                         },
                         "taxable": {
                           "type": "boolean",

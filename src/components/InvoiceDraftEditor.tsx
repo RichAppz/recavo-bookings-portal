@@ -102,7 +102,7 @@ export function InvoiceDraftEditor({
     let total = 0;
     for (const line of lines) {
       const qty = Number(line.quantity);
-      const price = Number(line.unitPrice.replace(/[^0-9.]/g, ""));
+      const price = Number(line.unitPrice.replace(/[^0-9.-]/g, ""));
       if (Number.isFinite(qty) && Number.isFinite(price)) total += Math.round(price * 100) * qty;
     }
     return total;
@@ -255,7 +255,7 @@ export function InvoiceDraftEditor({
                           className={cn("tabular-nums", errs.unitPrice && "border-destructive")}
                           onChange={(e) => setLine(i, { unitPrice: e.target.value })}
                           onBlur={() => {
-                            const n = Number(line.unitPrice.replace(/[^0-9.]/g, ""));
+                            const n = Number(line.unitPrice.replace(/[^0-9.-]/g, ""));
                             if (Number.isFinite(n) && line.unitPrice.trim() !== "") {
                               setLine(i, { unitPrice: n.toFixed(2) });
                             }

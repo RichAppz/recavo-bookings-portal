@@ -47,6 +47,7 @@ import type { AmendBookingBody, Booking } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { paymentMethodLabel } from "@/lib/booking-changes";
+import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
   formatBookingWhen,
@@ -149,9 +150,6 @@ export function EditBookingDialog({
   const snapshotListMinor =
     booking.serviceSnapshot.priceMinor +
     (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0);
-  const snapshotAdditionalMinor = (booking.lineItems ?? [])
-    .slice(1)
-    .reduce((sum, li) => sum + li.priceMinor, 0);
   const originallyOverridden = booking.priceMinor !== snapshotListMinor;
   const paidMinor = booking.paidMinor ?? 0;
   const credit = booking.paymentMethod === "credit";
@@ -281,9 +279,9 @@ export function EditBookingDialog({
   const rolledTotalMinor = servicesChanged
     ? picked.reduce((sum, p) => sum + catalogueMinor(p), 0)
     : snapshotListMinor;
-  const additionalTotalMinor = servicesChanged
-    ? picked.slice(1).reduce((sum, p) => sum + catalogueMinor(p), 0)
-    : snapshotAdditionalMinor;
+  // The services keep their list prices and the API records the difference as a
+  // discount line, so any total from zero up is valid — even below what the
+  // additional services alone come to.
   const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
   const discountInvalid =
     discount !== null && discount.value.trim() !== "" && discountMinor === null;
@@ -292,15 +290,12 @@ export function EditBookingDialog({
     if (priceInput !== null) {
       try {
         const minor = parseMoneyToMinor(priceInput);
-        return minor >= additionalTotalMinor ? minor : null;
+        return minor >= 0 ? minor : null;
       } catch {
         return null;
       }
     }
-    if (discountMinor !== null) {
-      const minor = rolledTotalMinor - discountMinor;
-      return minor >= additionalTotalMinor ? minor : null;
-    }
+    if (discountMinor !== null) return rolledTotalMinor - discountMinor;
     return null;
   })();
   const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
@@ -1022,9 +1017,7 @@ export function EditBookingDialog({
                       ? discount!.mode === "percent"
                         ? "Enter a percentage between 0 and 100."
                         : `Enter an amount up to ${formatMoney(rolledTotalMinor, currency)}.`
-                      : additionalTotalMinor > 0
-                        ? `Enter at least ${formatMoney(additionalTotalMinor, currency)} — the additional services keep their list prices.`
-                        : "Enter an amount, or reset to the list price."}
+                      : "Enter an amount, or reset to the list price."}
                   </p>
                 ) : priceBelowPaid ? (
                   <p className="text-xs text-destructive">
@@ -1039,7 +1032,13 @@ export function EditBookingDialog({
                   </p>
                 ) : effectiveTotalMinor !== rolledTotalMinor ? (
                   <p className="text-xs text-muted-foreground">
-                    Adjusted from the {formatMoney(rolledTotalMinor, currency)} list price.
+                    Adjusted from the {formatMoney(rolledTotalMinor, currency)} list price — the
+                    services stay at list and the{" "}
+                    {formatAdjustment(effectiveTotalMinor - rolledTotalMinor, (m) =>
+                      formatMoney(m, currency),
+                    )}{" "}
+                    shows as a{" "}
+                    {adjustmentLabel(effectiveTotalMinor - rolledTotalMinor).toLowerCase()} line.
                   </p>
                 ) : null}
               </div>
