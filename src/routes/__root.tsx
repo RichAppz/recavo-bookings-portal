@@ -165,7 +165,13 @@ function RootComponent() {
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
-            <Toaster position="top-right" richColors />
+            {/* Keep toasts clear of the notch/Dynamic Island in the mobile app. */}
+            <Toaster
+              position="top-right"
+              richColors
+              offset={{ top: "calc(env(safe-area-inset-top, 0px) + 24px)" }}
+              mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+            />
             <MfaDialog />
           </TenantProvider>
         </AuthProvider>

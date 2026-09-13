@@ -138,6 +138,36 @@ function authLog(...args: unknown[]) {
   if (import.meta.env.DEV) console.debug("[auth]", ...args);
 }
 
+/**
+ * Probes a Supabase OAuth authorize URL before handing the browser to it.
+ * A working provider answers with a redirect to the identity provider, which
+ * `redirect: "manual"` surfaces as an opaque redirect; a disabled or
+ * misconfigured one answers 4xx JSON, which would otherwise be all the user
+ * sees. Network failures are ignored — the real navigation will report them.
+ */
+async function assertOAuthAvailable(url: string, providerName: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(url, { redirect: "manual", credentials: "omit" });
+  } catch {
+    return;
+  }
+  if (res.type === "opaqueredirect" || res.ok || res.status === 0) return;
+  let detail = "";
+  try {
+    const body = (await res.json()) as { msg?: string; error_description?: string };
+    detail = body.msg ?? body.error_description ?? "";
+  } catch {
+    // Not JSON; fall through to the generic message.
+  }
+  authLog(`${providerName} OAuth unavailable`, res.status, detail);
+  throw new Error(
+    /not enabled/i.test(detail)
+      ? `${providerName} sign-in isn't available yet.`
+      : detail || `${providerName} sign-in is unavailable right now.`,
+  );
+}
+
 async function discardUnverifiedTotpFactors(): Promise<void> {
   const supabase = getSupabase();
   const { data } = await supabase.auth.mfa.listFactors();
@@ -675,7 +705,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       redirectTo?: string,
     ): Promise<SocialSignInOutcome> => {
       const supabase = getSupabase();
-      const label = `signInWith${provider === "google" ? "Google" : "Apple"}`;
+      const providerName = provider === "google" ? "Google" : "Apple";
+      const label = `signInWith${providerName}`;
 
       if (isNativeApp()) {
         authLog(`${label}: opening OAuth in native browser sheet`);
@@ -685,6 +716,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (error) throw error;
         if (!data.url) throw new Error("Sign-in did not return an authorisation URL");
+        await assertOAuthAvailable(data.url, providerName);
 
         const result = await runNativeOAuth(data.url);
         if ("cancelled" in result) {
@@ -706,16 +738,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return "signed-in";
       }
 
+      // Build the URL without navigating so a misconfigured provider surfaces
+      // as a toast here rather than stranding the user on Supabase's JSON error.
       authLog(`${label}: starting OAuth redirect`);
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo:
             redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
           queryParams,
+          skipBrowserRedirect: true,
         },
       });
       if (error) throw error;
+      if (!data.url) throw new Error("Sign-in did not return an authorisation URL");
+      await assertOAuthAvailable(data.url, providerName);
+      window.location.assign(data.url);
       return "redirecting";
     },
     [],
