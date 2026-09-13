@@ -67,6 +67,13 @@ import {
   spansDays,
 } from "@/lib/format";
 import { outsideWorkingHours } from "@/lib/working-hours";
+import {
+  formatWorkingSpan,
+  layoutExplicitWindow,
+  layoutWorkingDuration,
+  scheduleFor,
+  type WorkingLayout,
+} from "@/lib/working-days";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
@@ -433,24 +440,65 @@ export function AddBookingModal({
     );
   })();
 
-  // End follows start + service length until someone edits it.
+  // A set time needs someone to do it — "any staff" only makes sense for a quote.
+  const customStaffId = staffId !== "all" ? staffId : (soleStaff?.id ?? null);
+  const customStaff = customStaffId
+    ? ((staff.data ?? []).find((s) => s.id === customStaffId) ?? null)
+    : null;
+  // The days this person works here: a job of a day or more is laid over these only,
+  // the same way the API will save it, so the end we suggest is the end it gets.
+  const customLocation = locationList.find((l) => l.id === locationId) ?? null;
+  const workingSchedule = useMemo(
+    () => scheduleFor(customStaff, customLocation, timezone),
+    [customStaff, customLocation, timezone],
+  );
+
+  // End follows start + service length until someone edits it. A job of a day or more
+  // skips the days that aren't worked: a 3-day job from Thursday ends on Monday.
   useEffect(() => {
     if (scheduling !== "custom" || endTouched || !validDate) return;
+    const startIso = allDay
+      ? localDateTimeToIso(date, "00:00")
+      : localDateTimeToIso(date, startTime);
+    if (!startIso) return;
+    const layout = layoutWorkingDuration(
+      startIso,
+      catalogueDurationMinutes,
+      workingSchedule,
+      timezone,
+      {
+        allDay,
+      },
+    );
     if (allDay) {
-      const days = Math.max(1, Math.ceil(catalogueDurationMinutes / 1440));
-      setEndDate(isoDate(addDays(parseIso(date), days - 1)));
+      setEndDate(layout.occupiedDays[layout.occupiedDays.length - 1] ?? date);
       return;
     }
-    const startIso = localDateTimeToIso(date, startTime);
-    if (!startIso) return;
-    const end = new Date(new Date(startIso).getTime() + catalogueDurationMinutes * 60_000);
+    const end = new Date(layout.end);
     setEndDate(isoDate(end));
     setEndTime(`${`${end.getHours()}`.padStart(2, "0")}:${`${end.getMinutes()}`.padStart(2, "0")}`);
-  }, [scheduling, endTouched, validDate, allDay, date, startTime, catalogueDurationMinutes]);
+  }, [
+    scheduling,
+    endTouched,
+    validDate,
+    allDay,
+    date,
+    startTime,
+    catalogueDurationMinutes,
+    workingSchedule,
+    timezone,
+  ]);
 
   // The staff-set window as ISO instants (browser-local wall clock, like events). For
   // all-day the server snaps to local midnights at the location; we send day bounds.
-  const customWindow = useMemo<{ start: string; end: string; minutes: number } | null>(() => {
+  // `minutes` is what the API will store as the job's length: the days between start
+  // and end that aren't worked stay free and don't count.
+  const customWindow = useMemo<{
+    start: string;
+    end: string;
+    minutes: number;
+    layout: WorkingLayout;
+  } | null>(() => {
     if (scheduling !== "custom") return null;
     const start = allDay ? localDateTimeToIso(date, "00:00") : localDateTimeToIso(date, startTime);
     const end = allDay
@@ -459,9 +507,11 @@ export function AddBookingModal({
         : null
       : localDateTimeToIso(endDate, endTime);
     if (!start || !end) return null;
-    const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000);
-    return minutes > 0 ? { start, end, minutes } : null;
-  }, [scheduling, allDay, date, startTime, endDate, endTime]);
+    if (new Date(end).getTime() <= new Date(start).getTime()) return null;
+    const layout = layoutExplicitWindow(start, end, workingSchedule, timezone, { allDay });
+    return { start, end, minutes: layout.minutes, layout };
+  }, [scheduling, allDay, date, startTime, endDate, endTime, workingSchedule, timezone]);
+  const customSpan = customWindow ? formatWorkingSpan(customWindow.layout, timezone) : null;
 
   // "All day" from the slot grid: one tap instead of switching tabs and ticking
   // the box. The end-date effect above fills in the last day from the job length.
@@ -471,12 +521,6 @@ export function AddBookingModal({
     setSlotKey(null);
     setEndTouched(false);
   };
-
-  // A set time needs someone to do it — "any staff" only makes sense for a quote.
-  const customStaffId = staffId !== "all" ? staffId : (soleStaff?.id ?? null);
-  const customStaff = customStaffId
-    ? ((staff.data ?? []).find((s) => s.id === customStaffId) ?? null)
-    : null;
   const hoursWarning = useMemo(() => {
     if (scheduling !== "custom" || allDay || !customWindow || !customStaff) return null;
     return outsideWorkingHours(customStaff, customWindow, locationId || null, timezone);
@@ -1238,6 +1282,17 @@ export function AddBookingModal({
                           : "The end must come after the start."}
                       </span>
                     </div>
+                    {customSpan ? (
+                      <p className="text-xs text-muted-foreground">
+                        {/* "Thu 24 – Mon 28 Sept · 3 working days": the days the job runs
+                            on; the weekend in between stays free. */}
+                        {`Runs ${customSpan}${
+                          customWindow && customWindow.layout.segments.length > 1
+                            ? `; the ${customStaff?.displayName ?? staffLower} is free on the days between.`
+                            : "."
+                        }`}
+                      </p>
+                    ) : null}
                     {allDay ? (
                       <p className="text-xs text-muted-foreground">
                         {`Blocks ${customStaff?.displayName ?? `the ${staffLower}`} for the whole ${

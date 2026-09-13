@@ -39,7 +39,8 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
-import { formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { formatAllDaySpan, formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
+import { isMultiDay } from "@/lib/working-days";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -500,13 +501,26 @@ function Overview({
                         <StatusBadge status={b.status} className="sm:hidden" />
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
-                        {formatInTz(b.start, b.timezone, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {b.allDay
+                          ? `${formatAllDaySpan(b.start, b.end, b.timezone)} · All day`
+                          : formatInTz(b.start, b.timezone, {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                        {/* A job over several days says when it is ready — its real end,
+                            after any days the business does not work. */}
+                        {!b.allDay && isMultiDay(b, b.timezone)
+                          ? ` → ready ${formatInTz(b.end, b.timezone, {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
                         {solo ? "" : ` · ${b.studio.tradingName}`}
                       </p>
                       {hint ? (

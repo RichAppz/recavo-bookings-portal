@@ -131,6 +131,7 @@ import {
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { isMessageHistoryEntry } from "@/lib/message-history";
+import { formatWorkingSpan } from "@/lib/working-days";
 import {
   channelsLabel,
   channelsPhrase,
@@ -234,6 +235,7 @@ export function BookingPanel({
   // line item, so read the catalogue length back from the snapshot).
   const totalMinutes = booking ? bookingJobMinutes(booking) : 0;
   const blockMinutes = booking ? bookingWindowMinutes(booking) : 0;
+  const workingSpan = booking ? formatWorkingSpan(booking, timezone) : null;
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
@@ -985,7 +987,14 @@ export function BookingPanel({
                           : formatDurationLong(totalMinutes)
                       }
                       hint={
-                        booking.allDay ? describeAllDayBlock(totalMinutes, blockMinutes) : undefined
+                        // A job over several days names the days it actually runs on —
+                        // "Thu 24 – Mon 28 Sept · 3 working days" when it skips a weekend.
+                        [
+                          workingSpan,
+                          booking.allDay ? describeAllDayBlock(totalMinutes, blockMinutes) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || undefined
                       }
                     />
                   </dl>
@@ -1891,9 +1900,9 @@ function RescheduleDialog({
   // A job whose window staff set by hand (all-day, or a length that isn't the
   // catalogue's) won't appear in the slot quote, so it moves by date/time instead
   // and keeps its length (RECA-532).
-  const lengthMinutes = Math.round(
-    (new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000,
-  );
+  // The job's own length (its line items), not start → end: a 3-day job that skips a
+  // weekend is still 3 days, and the API lays it over working days from the new start.
+  const lengthMinutes = booking.allDay ? bookingWindowMinutes(booking) : bookingJobMinutes(booking);
   const customLength =
     booking.allDay ||
     (booking.lineItems?.[0]?.durationMinutes ?? booking.serviceSnapshot.durationMinutes) !==
@@ -2060,10 +2069,12 @@ function RescheduleDialog({
               {booking.allDay
                 ? `Stays an all-day job${
                     allDayBlockDays(lengthMinutes) > 1
-                      ? ` across ${allDayBlockDays(lengthMinutes)} days`
+                      ? ` across ${allDayBlockDays(lengthMinutes)} working days`
                       : ""
                   }, starting on the new date.`
-                : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start.`}
+                : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start${
+                    lengthMinutes >= 1440 ? ", over working days only" : ""
+                  }.`}
               {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
             </p>
           ) : (

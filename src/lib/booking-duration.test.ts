@@ -51,6 +51,46 @@ describe("bookingJobMinutes — a 2-hour service booked all day is still 2 hours
     assert.equal(bookingJobMinutes({ ...timed, allDay: undefined }), 150);
   });
 
+  it("counts only the days a working-day job actually holds, not the weekend it skips", () => {
+    // Thu, Fri, Mon (all day) for a Mon–Fri detailer: start → end is five days.
+    const weekend = {
+      start: "2026-09-23T23:00:00.000Z",
+      end: "2026-09-28T23:00:00.000Z",
+      allDay: true,
+      segments: [
+        { start: "2026-09-23T23:00:00.000Z", end: "2026-09-24T23:00:00.000Z" },
+        { start: "2026-09-24T23:00:00.000Z", end: "2026-09-25T23:00:00.000Z" },
+        { start: "2026-09-27T23:00:00.000Z", end: "2026-09-28T23:00:00.000Z" },
+      ],
+      serviceSnapshot: { durationMinutes: 3 * 1440 },
+      lineItems: [{ position: 0, durationMinutes: 3 * 1440 }],
+    };
+    assert.equal(bookingWindowMinutes(weekend), 3 * 1440);
+    assert.equal(allDayBlockDays(bookingWindowMinutes(weekend)), 3);
+    assert.equal(bookingJobMinutes(weekend), 3 * 1440);
+
+    // The timed version: the line items carry the 3-day length, start → end does not.
+    const timed = {
+      start: "2026-09-24T08:00:00.000Z",
+      end: "2026-09-28T16:00:00.000Z",
+      allDay: false,
+      segments: [
+        { start: "2026-09-24T08:00:00.000Z", end: "2026-09-24T16:00:00.000Z" },
+        { start: "2026-09-25T07:00:00.000Z", end: "2026-09-25T16:00:00.000Z" },
+        { start: "2026-09-28T07:00:00.000Z", end: "2026-09-28T16:00:00.000Z" },
+      ],
+      serviceSnapshot: { durationMinutes: 3 * 1440 },
+      lineItems: [{ position: 0, durationMinutes: 3 * 1440 }],
+    };
+    assert.equal(bookingJobMinutes(timed), 3 * 1440);
+    // An older booking with a single stored span still reads start → end.
+    assert.equal(bookingWindowMinutes({ ...timed, segments: undefined }), 4 * 1440 + 8 * 60);
+    assert.equal(
+      bookingJobMinutes({ ...timed, segments: undefined, lineItems: [] }),
+      4 * 1440 + 8 * 60,
+    );
+  });
+
   it("copes with a booking that has no line items yet", () => {
     assert.equal(bookingJobMinutes({ ...allDayCoating, lineItems: null }), 120);
     assert.equal(bookingJobMinutes({ ...allDayCoating, lineItems: undefined }), 120);
