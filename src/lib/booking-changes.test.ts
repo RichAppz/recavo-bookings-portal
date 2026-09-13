@@ -72,6 +72,37 @@ describe("describeBookingChange", () => {
     );
   });
 
+  it("reads a quiet date correction in the booking's time zone", () => {
+    assert.equal(
+      describeBookingChange(
+        {
+          field: "when",
+          from: "2026-09-29T08:00:00Z",
+          to: "2026-09-30T09:30:00Z",
+          end: "2026-09-30T11:30:00Z",
+          allDay: false,
+        },
+        terms,
+        "Europe/London",
+      ),
+      "When: Tue 29 Sept, 09:00 → Wed 30 Sept, 10:30",
+    );
+    assert.equal(
+      describeBookingChange(
+        {
+          field: "when",
+          from: "2026-09-28T23:00:00Z",
+          to: "2026-09-27T23:00:00Z",
+          end: "2026-09-30T23:00:00Z",
+          allDay: true,
+        },
+        terms,
+        "Europe/London",
+      ),
+      "When: Tue 29 Sept → Mon 28 – Wed 30 Sept 2026",
+    );
+  });
+
   it("still says something for a field it has never seen", () => {
     assert.equal(
       describeBookingChange({ field: "seatCount", from: 1, to: 2 }, terms),
@@ -99,6 +130,14 @@ describe("summariseBookingChanges", () => {
         terms,
       ),
       "Booking edited — detailer and vehicle",
+    );
+  });
+
+  it("headlines a date correction as a fix, not a reschedule", () => {
+    assert.equal(summariseBookingChanges([{ field: "when" }], terms), "Date corrected by staff");
+    assert.equal(
+      summariseBookingChanges([{ field: "when" }, { field: "staff" }], terms),
+      "Date corrected by staff",
     );
   });
 });

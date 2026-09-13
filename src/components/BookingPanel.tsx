@@ -108,7 +108,16 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { emptySlotsMessage } from "@/lib/availability-windows";
+import {
+  allDayBlockDays,
+  bookingJobMinutes,
+  bookingWindowMinutes,
+  describeAllDayBlock,
+  formatAllDayDuration,
+  lineItemJobMinutes,
+} from "@/lib/booking-duration";
 import {
   formatBookingWhen,
   formatDuration,
@@ -216,19 +225,15 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
-  // Catalogue total the job was priced from (RECA-532): the primary's snapshot price
-  // plus the additional services, which never carry an override. Differs from
-  // priceMinor only when staff adjusted it at create.
-  const listPriceMinor = booking
-    ? booking.serviceSnapshot.priceMinor +
-      (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0)
-    : null;
-  const totalMinutes = booking
-    ? Math.max(
-        0,
-        Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
-      )
-    : 0;
+  // Services at list, the staff discount (if any) and the total (RECA-532). The list
+  // price differs from priceMinor only when staff adjusted it.
+  const breakdown = booking ? bookingPriceBreakdown(booking) : null;
+  const listPriceMinor = breakdown?.listPriceMinor ?? null;
+  // The work itself, not the diary it blocks: an all-day booking of a 2-hour coating
+  // is still a 2-hour job (the API writes the whole day onto start/end and the primary
+  // line item, so read the catalogue length back from the snapshot).
+  const totalMinutes = booking ? bookingJobMinutes(booking) : 0;
+  const blockMinutes = booking ? bookingWindowMinutes(booking) : 0;
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
@@ -921,7 +926,9 @@ export function BookingPanel({
                       value={formatMoney(booking.priceMinor, booking.currency)}
                       hint={
                         listPriceMinor !== null && listPriceMinor !== booking.priceMinor
-                          ? `Adjusted from ${formatMoney(listPriceMinor, booking.currency)}`
+                          ? listPriceMinor > booking.priceMinor
+                            ? `${formatMoney(listPriceMinor - booking.priceMinor, booking.currency)} discount`
+                            : `${formatMoney(booking.priceMinor - listPriceMinor, booking.currency)} added to the list price`
                           : undefined
                       }
                     />
@@ -974,13 +981,16 @@ export function BookingPanel({
                       label="Duration"
                       value={
                         booking.allDay
-                          ? `All day · ${formatDurationLong(totalMinutes)}`
+                          ? formatAllDayDuration(totalMinutes, blockMinutes)
                           : formatDurationLong(totalMinutes)
+                      }
+                      hint={
+                        booking.allDay ? describeAllDayBlock(totalMinutes, blockMinutes) : undefined
                       }
                     />
                   </dl>
 
-                  {(booking.lineItems?.length ?? 0) > 1 ? (
+                  {breakdown?.hasBreakdown ? (
                     <>
                       <Separator />
                       <div>
@@ -988,7 +998,7 @@ export function BookingPanel({
                           Services on this job
                         </p>
                         <ul className="divide-y rounded-xl border">
-                          {booking.lineItems.map((li) => (
+                          {breakdown.lines.map((li) => (
                             <li
                               key={`${li.serviceId}-${li.position}`}
                               className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
@@ -1000,7 +1010,7 @@ export function BookingPanel({
                                 ) : null}
                                 <span className="text-xs text-muted-foreground">
                                   {" "}
-                                  · {formatDuration(li.durationMinutes)}
+                                  · {formatDuration(lineItemJobMinutes(booking, li))}
                                 </span>
                               </span>
                               <span className="tabular-nums">
@@ -1008,6 +1018,22 @@ export function BookingPanel({
                               </span>
                             </li>
                           ))}
+                          {breakdown.adjustmentMinor !== 0 ? (
+                            <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                              <span>{adjustmentLabel(breakdown.adjustmentMinor)}</span>
+                              <span className="tabular-nums">
+                                {formatAdjustment(breakdown.adjustmentMinor, (m) =>
+                                  formatMoney(m, booking.currency),
+                                )}
+                              </span>
+                            </li>
+                          ) : null}
+                          <li className="flex items-center justify-between gap-2 bg-secondary/40 px-3 py-2 text-sm font-medium">
+                            <span>Total</span>
+                            <span className="tabular-nums">
+                              {formatMoney(breakdown.totalMinor, booking.currency)}
+                            </span>
+                          </li>
                         </ul>
                       </div>
                     </>
@@ -1700,7 +1726,7 @@ function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; ti
         {changes.length > 0 ? (
           <ul className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
             {changes.map((c, i) => (
-              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms)}</li>
+              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms, timezone)}</li>
             ))}
           </ul>
         ) : null}
@@ -2032,7 +2058,11 @@ function RescheduleDialog({
           {mode === "custom" ? (
             <p className="text-xs text-muted-foreground">
               {booking.allDay
-                ? `Stays an all-day job of ${formatDurationLong(lengthMinutes)}, starting on the new date.`
+                ? `Stays an all-day job${
+                    allDayBlockDays(lengthMinutes) > 1
+                      ? ` across ${allDayBlockDays(lengthMinutes)} days`
+                      : ""
+                  }, starting on the new date.`
                 : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start.`}
               {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
             </p>

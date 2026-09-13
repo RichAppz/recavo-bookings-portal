@@ -52,6 +52,7 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
+import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
 import {
   addDays,
@@ -69,6 +70,7 @@ import { outsideWorkingHours } from "@/lib/working-hours";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
@@ -393,8 +395,8 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
-  // Price override (RECA-532): the API puts the difference on the primary service, so
-  // the total can never drop below what the additional services alone come to.
+  // Price override (RECA-532): every service keeps its list price and the API records
+  // the difference as a discount line, so any total from zero up is valid.
   const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
   const discountInvalid =
     discount !== null && discount.value.trim() !== "" && discountMinor === null;
@@ -403,15 +405,12 @@ export function AddBookingModal({
     if (priceInput !== null) {
       try {
         const minor = parseMoneyToMinor(priceInput);
-        return minor >= additionalTotalMinor ? minor : null;
+        return minor >= 0 ? minor : null;
       } catch {
         return null;
       }
     }
-    if (discountMinor !== null) {
-      const minor = rolledTotalMinor - discountMinor;
-      return minor >= additionalTotalMinor ? minor : null;
-    }
+    if (discountMinor !== null) return rolledTotalMinor - discountMinor;
     return null;
   })();
   const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
@@ -612,10 +611,7 @@ export function AddBookingModal({
     }
     if (priceInvalid) {
       toast.error("Check the price", {
-        description:
-          additionalTotalMinor > 0
-            ? `It can't be less than the ${formatMoney(additionalTotalMinor, service.currency)} of additional services.`
-            : "Enter an amount, or reset to the list price.",
+        description: "Enter an amount, or reset to the list price.",
       });
       return;
     }
@@ -1125,15 +1121,17 @@ export function AddBookingModal({
                         ? discount!.mode === "percent"
                           ? "Enter a percentage between 0 and 100."
                           : `Enter an amount up to ${formatMoney(rolledTotalMinor, service.currency)}.`
-                        : additionalTotalMinor > 0
-                          ? `Enter at least ${formatMoney(additionalTotalMinor, service.currency)} — the additional services keep their list prices.`
-                          : "Enter an amount, or reset to the list price."}
+                        : "Enter an amount, or reset to the list price."}
                     </p>
                   ) : priceChanged ? (
                     <p className="text-xs text-muted-foreground">
-                      {additionalTotalMinor > 0
-                        ? `${formatMoney(effectiveTotalMinor - additionalTotalMinor, service.currency)} for ${service.name}; additional services stay at list price.`
-                        : `Adjusted from the ${formatMoney(rolledTotalMinor, service.currency)} list price.`}
+                      Adjusted from the {formatMoney(rolledTotalMinor, service.currency)} list price
+                      — the services stay at list and the{" "}
+                      {formatAdjustment(effectiveTotalMinor - rolledTotalMinor, (m) =>
+                        formatMoney(m, service.currency),
+                      )}{" "}
+                      shows as a{" "}
+                      {adjustmentLabel(effectiveTotalMinor - rolledTotalMinor).toLowerCase()} line.
                     </p>
                   ) : null}
                 </div>
@@ -1231,8 +1229,12 @@ export function AddBookingModal({
                           customWindow ? "text-muted-foreground" : "text-destructive",
                         )}
                       >
+                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
+                            coating booked all day is "All day · 2 hrs", never "1 day". */}
                         {customWindow
-                          ? `Duration: ${formatDurationLong(customWindow.minutes)}`
+                          ? allDay
+                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
+                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
                           : "The end must come after the start."}
                       </span>
                     </div>

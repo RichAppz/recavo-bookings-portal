@@ -19372,7 +19372,7 @@ export interface paths {
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
                         allDay?: boolean;
-                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
+                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up. */
                         priceMinor?: number;
                         /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
@@ -20355,7 +20355,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reschedule a booking */
+        /**
+         * Reschedule a booking, or quietly correct its time
+         * @description Moves a live booking to `start` (optionally with another staff member), re-reserving the diary: a clash is 409 BOOKING_CONFLICT and nothing changes. An all-day booking snaps to whole local days and keeps its day count unless `end` gives a new last day. `end` is refused (400 NOT_ALL_DAY) for timed bookings — their length comes from the services.
+         *
+         *     By default this is a reschedule: the client is sent the "your booking has moved" message, the history reads "rescheduled" and `booking.rescheduled` is emitted. With `correction: true` the same move is treated as staff fixing a typo in the diary: nothing is sent to the client, the history gets a `kind: "amended"` entry whose `changes` carry a `when` change (the console shows "Date corrected"), `booking.time_corrected` is emitted and the notice/horizon window is not applied. Scheduled reminders re-anchor to the new time either way. Requires `Idempotency-Key`.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -20373,8 +20378,18 @@ export interface paths {
                     "application/json": {
                         /** Format: date-time */
                         start: string;
+                        /**
+                         * Format: date-time
+                         * @description All-day bookings only: the new last day (any instant on it; exclusive-midnight also accepted).
+                         */
+                        end?: string;
                         /** Format: uuid */
                         staffId?: string;
+                        /**
+                         * @description true = a quiet correction: no client message, "date corrected" in the history.
+                         * @default false
+                         */
+                        correction?: boolean;
                     };
                 };
             };
@@ -20786,7 +20801,7 @@ export interface paths {
          * Edit a booking
          * @description Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.
          *
-         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule. Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
+         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
          *
          *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
          *
@@ -20831,7 +20846,7 @@ export interface paths {
                          * @description Only while nothing has been paid. The vehicle must belong to the new client.
                          */
                         leadCustomerId?: string;
-                        /** @description Staff total for the job. A number overrides the catalogue total (applied to the primary line item); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
+                        /** @description Staff total for the job. A number overrides the catalogue total (the line items stay at list and the difference becomes `adjustmentMinor`); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
                         priceMinor?: number | null;
                         /**
                          * @description Confirmed bookings only; to or from `credit` is not allowed.
@@ -26623,6 +26638,7 @@ export interface paths {
                         lines?: {
                             description: string;
                             quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
                             unitPriceMinor: number;
                             /** @description Default true; false marks the line VAT-exempt. */
                             taxable?: boolean;
@@ -27058,6 +27074,7 @@ export interface paths {
                         lines?: {
                             description: string;
                             quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
                             unitPriceMinor: number;
                             /** @description Default true; false marks the line VAT-exempt. */
                             taxable?: boolean;
@@ -38736,7 +38753,7 @@ export interface components {
             businessId: string;
             reference: string;
             serviceSnapshot: components["schemas"]["ServiceSnapshot"];
-            /** @description Every service on this booking, `position`-ordered (RECA-516). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `priceMinor` and `end` are the roll-up across all items — render this list as the job checklist and do not recompute totals from the primary service alone. */
+            /** @description Every service on this booking, `position`-ordered (RECA-516), each at its catalogue price. Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `priceMinor` is the sum of these lines plus `adjustmentMinor` — render the lines, then a Discount row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone. */
             lineItems: {
                 /** Format: uuid */
                 serviceId: string;
@@ -38788,7 +38805,10 @@ export interface components {
                 customerId: string | null;
             }[];
             seatCount: number;
+            /** @description What the client pays for the whole job — the authoritative total that payments, deposits and the outstanding balance work from. Σ lineItems[].priceMinor + adjustmentMinor. */
             priceMinor: number;
+            /** @description Staff price adjustment on top of the catalogue lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a "Discount −£x" row), positive = surcharge, 0 = priced at list. Bookings priced before this field existed carry the difference inside the primary line item instead (its priceMinor differs from serviceSnapshot.priceMinor) and read as 0 here. */
+            adjustmentMinor: number;
             /** @description Deposit securing the booking (RECA-523), snapshotted at create from the services’ configured deposits or a staff override. Null = no deposit: the booking is paid in full up front. Only ever set strictly between 0 and priceMinor. */
             depositMinor?: number | null;
             /** @description Money received to date across every channel — card, bank transfer, cash recorded by staff (RECA-523). Outstanding balance = priceMinor - paidMinor. */
@@ -39475,6 +39495,25 @@ export interface components {
             end: string;
         } | {
             /** @enum {string} */
+            field: "when";
+            /**
+             * Format: date-time
+             * @description Previous start.
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Corrected start.
+             */
+            to: string;
+            /**
+             * Format: date-time
+             * @description Corrected end.
+             */
+            end: string;
+            allDay: boolean;
+        } | {
+            /** @enum {string} */
             field: "staff" | "location" | "leadCustomer";
             from: {
                 /** Format: uuid */
@@ -40038,7 +40077,7 @@ export interface components {
                 serviceId?: string | null;
                 description: string;
                 quantity: number;
-                /** @description Per unit as entered — gross when pricesIncludeVat, net otherwise. */
+                /** @description Per unit as entered — gross when pricesIncludeVat, net otherwise. Negative for a discount line (e.g. the "Discount" line generated from a staff-priced booking). */
                 unitPriceMinor: number;
                 taxable: boolean;
                 /** @description Computed server-side; never client input. */
