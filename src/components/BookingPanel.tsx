@@ -538,7 +538,7 @@ export function BookingPanel({
     booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
   // Detailers don't tick people in — the car either turned up or it didn't — so
   // their row is just "No-show", and it goes once the job is marked attended.
-  const noShowOnly = isCarDetailing;
+  const noShowOnly = tenant.business?.industryTemplateKey === "car_detailing";
   const showAttendance =
     (booking?.status === "confirmed" || attendanceMarked) &&
     !(noShowOnly && booking?.attendanceStatus === "attended");
