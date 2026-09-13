@@ -86,6 +86,9 @@ export function describeBookingChange(
     }
     case "duration":
       return `Duration: ${formatDuration(Number(change.from ?? 0))} → ${formatDuration(Number(change.to ?? 0))}`;
+    // Materials recorded against the job (automotive). Staff-only; the client was not told.
+    case "consumables":
+      return `Consumables: ${list(change.from)} → ${list(change.to)}`;
     default: {
       const word = change.field.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
       return `${word.charAt(0).toUpperCase()}${word.slice(1)} changed`;
@@ -142,6 +145,7 @@ export function summariseBookingChanges(
   const fields = new Set(changes.map((c) => c.field));
   if (fields.size === 0) return "Booking edited";
   if (fields.size === 1 && fields.has("notesInternal")) return "Internal note edited";
+  if (fields.size === 1 && fields.has("consumables")) return "Consumables updated";
   // A quiet fix to the diary (reschedule with `correction: true`): the client was not
   // told, unlike a reschedule, so the headline says so rather than "moved".
   if (fields.has("when")) return "Date corrected by staff";
@@ -153,6 +157,7 @@ export function summariseBookingChanges(
   if (fields.has("leadCustomer")) parts.push("client");
   if (fields.has("linkedRecord")) parts.push(terms.linkedRecord.toLowerCase());
   if (fields.has("paymentMethod")) parts.push("payment");
+  if (fields.has("consumables")) parts.push("consumables");
   if (parts.length === 0) return "Booking edited";
   const joined =
     parts.length === 1

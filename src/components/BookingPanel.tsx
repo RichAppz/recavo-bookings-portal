@@ -62,6 +62,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
+import { BookingConsumablesSection } from "@/components/BookingConsumables";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
 import { useBookingInvoices } from "@/lib/api/invoices";
@@ -1115,6 +1116,9 @@ export function BookingPanel({
                       <p className="mt-2 text-sm text-muted-foreground">{booking.notesInternal}</p>
                     </div>
                   ) : null}
+
+                  {/* Materials the job used (automotive only; renders nothing elsewhere). Staff eyes only. */}
+                  <BookingConsumablesSection bookingId={booking.id} />
                 </TabsContent>
 
                 <TabsContent value="history">

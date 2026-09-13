@@ -133,6 +133,29 @@ describe("summariseBookingChanges", () => {
     );
   });
 
+  it("reads a consumables change as materials, staff-only", () => {
+    assert.equal(
+      describeBookingChange(
+        {
+          field: "consumables",
+          from: ["1 bottle Ceramic coat"],
+          to: ["1 bottle Ceramic coat", "2 pad Foam pad"],
+        },
+        terms,
+      ),
+      "Consumables: 1 bottle Ceramic coat → 1 bottle Ceramic coat + 2 pad Foam pad",
+    );
+    assert.equal(
+      describeBookingChange({ field: "consumables", from: [], to: ["2 pad Foam pad"] }, terms),
+      "Consumables: none → 2 pad Foam pad",
+    );
+    assert.equal(summariseBookingChanges([{ field: "consumables" }], terms), "Consumables updated");
+    assert.equal(
+      summariseBookingChanges([{ field: "price" }, { field: "consumables" }], terms),
+      "Booking edited — price and consumables",
+    );
+  });
+
   it("headlines a date correction as a fix, not a reschedule", () => {
     assert.equal(summariseBookingChanges([{ field: "when" }], terms), "Date corrected by staff");
     assert.equal(

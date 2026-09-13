@@ -14,6 +14,17 @@ export type Membership = schemas["Membership"];
 export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
+/**
+ * A material a job uses up (ceramic bottle, pads, chemicals) — automotive only.
+ * Staff-only bookkeeping: never priced into a booking, never shown to a client.
+ */
+export type Consumable = schemas["Consumable"];
+/** One consumable on a service (default usage) or a booking (actual usage). */
+export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
+/** A booking's usage plus the staff-only estimated materials cost. */
+export type BookingConsumablesUsage = schemas["BookingConsumablesUsage"];
+/** Body of `PUT …/consumables` on a service or booking — replaces the list. */
+export type ConsumableUsageInput = { consumableId: string; quantity: number; note?: string | null };
 export type Booking = schemas["Booking"];
 /** Staff-side "event" on the diary (dentist, school run) that keeps jobs off the slot (RECA-531). */
 export type CalendarBlock = schemas["CalendarBlock"];
