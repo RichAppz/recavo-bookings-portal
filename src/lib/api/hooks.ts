@@ -175,6 +175,12 @@ export function useAvailability(filters: {
   to?: string;
   variantId?: string;
   staffId?: string;
+  /**
+   * Staff-only: quote times as if all-day jobs were not there, so a short job can be
+   * squeezed in beside a day-long one (a "drop-in"). Timed bookings and events still
+   * block. The booking must then be created with `dropIn: true`.
+   */
+  dropIn?: boolean;
   enabled?: boolean;
 }) {
   const businessId = useBusinessId();
@@ -189,6 +195,7 @@ export function useAvailability(filters: {
     to: filters.to!,
     ...(filters.variantId ? { variantId: filters.variantId } : {}),
     ...(filters.staffId ? { staffId: filters.staffId } : {}),
+    ...(filters.dropIn ? { dropIn: "true" } : {}),
   };
 
   return useQuery({
@@ -387,7 +394,11 @@ export function useBookingAction(action: "confirm" | "cancel" | "reschedule" | "
         queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
       });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      // A reschedule clash is the dialog's to explain (it may offer a drop-in).
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") return;
+      toastApiError(err);
+    },
   });
 }
 
