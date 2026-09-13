@@ -237,6 +237,13 @@ function CalendarPage() {
   ]);
   const [anchor, setAnchor] = useState(() => new Date());
   const [staffFilter, setStaffFilter] = useStoredState<string>(prefKey("staff"), "all");
+  // The "click any job…" hint is for first visits; once dismissed it stays gone
+  // on this device.
+  const [introHidden, setIntroHidden] = useStoredState<"yes" | "no">(
+    "recavo.calendar.intro.hidden",
+    "no",
+    ["yes", "no"],
+  );
   const [serviceFilter, setServiceFilter] = useStoredState<string>(prefKey("service"), "all");
   const [monthBarRaw, setMonthBarRaw] = useStoredState<string>(
     prefKey("monthBar"),
@@ -583,7 +590,12 @@ function CalendarPage() {
     <>
       <PageHeader
         title="Calendar"
-        description={`Click any ${bookingLabel.toLowerCase()} or event to open it; click an empty slot to add one. Use the top bar to filter by location.`}
+        description={
+          introHidden === "yes"
+            ? undefined
+            : `Click any ${bookingLabel.toLowerCase()} or event to open it; click an empty slot to add one. Use the top bar to filter by location.`
+        }
+        onDismissDescription={() => setIntroHidden("yes")}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
