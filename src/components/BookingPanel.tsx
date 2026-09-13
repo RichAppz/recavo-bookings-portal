@@ -536,7 +536,12 @@ export function BookingPanel({
   // back, so the checkboxes are live on a confirmed job and locked once one is ticked.
   const attendanceMarked =
     booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
-  const showAttendance = booking?.status === "confirmed" || attendanceMarked;
+  // Detailers don't tick people in — the car either turned up or it didn't — so
+  // their row is just "No-show", and it goes once the job is marked attended.
+  const noShowOnly = tenant.business?.industryTemplateKey === "car_detailing";
+  const showAttendance =
+    (booking?.status === "confirmed" || attendanceMarked) &&
+    !(noShowOnly && booking?.attendanceStatus === "attended");
   const attendanceLocked = attendanceMarked || booking?.status !== "confirmed";
   // Footer actions: a pending bank transfer is "confirmed" by marking the money
   // received; anything else not yet live gets a plain Confirm.
@@ -1293,22 +1298,24 @@ export function BookingPanel({
                       Attendance
                     </span>
                     <div className="flex flex-1 items-center justify-end gap-4">
-                      <label
-                        className={cn(
-                          "flex items-center gap-2 text-sm",
-                          attendanceLocked ? "cursor-default" : "cursor-pointer",
-                        )}
-                      >
-                        <Checkbox
-                          checked={booking.attendanceStatus === "attended"}
-                          disabled={attendanceLocked || attendanceAction.isPending}
-                          aria-label="Attended"
-                          onCheckedChange={(v) => {
-                            if (v === true) void run(attendanceAction, { attended: true });
-                          }}
-                        />
-                        Attended
-                      </label>
+                      {noShowOnly ? null : (
+                        <label
+                          className={cn(
+                            "flex items-center gap-2 text-sm",
+                            attendanceLocked ? "cursor-default" : "cursor-pointer",
+                          )}
+                        >
+                          <Checkbox
+                            checked={booking.attendanceStatus === "attended"}
+                            disabled={attendanceLocked || attendanceAction.isPending}
+                            aria-label="Attended"
+                            onCheckedChange={(v) => {
+                              if (v === true) void run(attendanceAction, { attended: true });
+                            }}
+                          />
+                          Attended
+                        </label>
+                      )}
                       <label
                         className={cn(
                           "flex items-center gap-2 text-sm",
@@ -1328,7 +1335,9 @@ export function BookingPanel({
                     </div>
                     {attendanceMarked ? (
                       <p className="basis-full text-xs text-muted-foreground">
-                        Attendance is final once marked.
+                        {noShowOnly
+                          ? "A no-show is final once marked."
+                          : "Attendance is final once marked."}
                       </p>
                     ) : null}
                   </div>
