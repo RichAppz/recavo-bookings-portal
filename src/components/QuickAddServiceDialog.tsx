@@ -199,7 +199,9 @@ export function QuickAddServiceDialog({
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Stacked, not side by side: the long detailing label wraps and leaves
+              the price field floating half a line lower. */}
+          <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="qas-duration">
                 {isDetailing ? "How long you'll have the vehicle" : "Duration"}
@@ -238,6 +240,7 @@ export function QuickAddServiceDialog({
               <Label htmlFor="qas-price">Price (£)</Label>
               <Input
                 id="qas-price"
+                className="sm:max-w-xs"
                 inputMode="decimal"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
