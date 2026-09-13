@@ -442,10 +442,13 @@ export function useResendBookingMessage() {
       );
       return res.data;
     },
-    onSuccess: (data) => {
-      // The customer's notification log shows the new entry.
+    onSuccess: (data, vars) => {
+      // The customer's notification log and the booking's history show the new entry.
       void qc.invalidateQueries({
         queryKey: queryKeys.customerNotifications(businessId, data.notification.recipientId),
+      });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
       });
     },
   });
@@ -459,8 +462,9 @@ export type PaymentReminderResult = {
 
 /**
  * Nudge the customer about a balance still owed — the follow-up for "pay after the
- * job" bookings. The API emails, and texts too when the customer can receive one; the
- * result says which channels actually carried it. Errors surface to the caller.
+ * job" bookings. The API emails when the customer has an address and texts when they
+ * can receive one (so a phone-only client is texted alone); the result says which
+ * channels actually carried it. Errors surface to the caller.
  */
 export function useSendPaymentReminder() {
   const businessId = useBusinessId();
@@ -476,13 +480,16 @@ export function useSendPaymentReminder() {
         return res.data;
       },
     ),
-    onSuccess: (data) => {
+    onSuccess: (data, vars) => {
       const recipientId = data.notifications[0]?.recipientId;
       if (recipientId) {
         void qc.invalidateQueries({
           queryKey: queryKeys.customerNotifications(businessId, recipientId),
         });
       }
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
     },
   });
 }
@@ -494,8 +501,9 @@ export type BookingReminderResult = {
 
 /**
  * Send the "your booking is coming up" reminder by hand — the same message the
- * scheduled reminder rules send. The API emails, and texts too when the customer can
- * receive one; the result says which channels actually carried it. 409 when the
+ * scheduled reminder rules send. The API emails when the customer has an address and
+ * texts when they can receive one (so a phone-only client is texted alone); the
+ * result says which channels actually carried it. 409 when the
  * booking is not live, has already started, or a reminder went out minutes ago.
  */
 export function useSendBookingReminder() {
@@ -512,13 +520,16 @@ export function useSendBookingReminder() {
         return res.data;
       },
     ),
-    onSuccess: (data) => {
+    onSuccess: (data, vars) => {
       const recipientId = data.notifications[0]?.recipientId;
       if (recipientId) {
         void qc.invalidateQueries({
           queryKey: queryKeys.customerNotifications(businessId, recipientId),
         });
       }
+      void qc.invalidateQueries({
+        queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),
+      });
     },
   });
 }

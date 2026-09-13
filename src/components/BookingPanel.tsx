@@ -13,6 +13,7 @@ import {
   MessageSquareText,
   MoreHorizontal,
   Phone,
+  Repeat,
   Send,
   Trash2,
   X,
@@ -23,7 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -63,6 +63,7 @@ import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
+import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
 import { useBookingInvoices } from "@/lib/api/invoices";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
@@ -121,6 +122,15 @@ import {
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { isMessageHistoryEntry } from "@/lib/message-history";
+import {
+  channelsLabel,
+  channelsPhrase,
+  lastSentFromHistory,
+  lastSentLabel,
+  reminderChannels,
+  resendTemplateKeys,
+  smsBlockedReason,
+} from "@/lib/booking-reminders";
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +161,7 @@ export function BookingPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   // "Deposit taken" opens the same record-payment dialog preset to the deposit
@@ -256,13 +267,12 @@ export function BookingPanel({
   })();
   const customerPhone = customer.data?.phoneNormalised ?? null;
   const customerEmail = customer.data?.emailNormalised ?? null;
+  const customerName = customer.data ? customerDisplayName(customer.data) : "the client";
   const smsOptedOut = customer.data?.contactPreferences?.operationalNotifications === false;
-  const smsBlocked = !customerPhone
-    ? "No mobile number on file"
-    : smsOptedOut
-      ? "Customer has opted out of texts"
-      : null;
-  // What the text will cost, shown as the menu subtitle when it isn't blocked.
+  const contact = { email: customerEmail, phone: customerPhone, smsOptedOut };
+  // Customer-side reason a text can't go (no number / opted out); null when it can.
+  const smsBlocked = smsBlockedReason(contact);
+  // What the text will cost, shown under "By text" when it isn't blocked.
   const smsHint =
     smsCredits.level === "unlimited"
       ? customerPhone
@@ -272,11 +282,13 @@ export function BookingPanel({
           ? `${customerPhone} · ${smsCredits.credits.balance} left`
           : customerPhone;
 
-  // Reminders group in the ⋯ menu. Both items always show under the heading; when one
-  // cannot go, the reason sits as its sub-text, mirroring the API's 409/422s so staff
-  // see why before the tap. Sub-text otherwise says which channels will carry it.
-  const reminderChannelsHint =
-    smsBlocked || smsCredits.level === "empty" ? "By email" : "By email and text";
+  // Reminders drawer. Each row always shows; when one cannot go, the reason sits as
+  // its sub-text, mirroring the API's 409/422s so staff see why before the tap. The
+  // channels follow the API: email when there's an address, text when the client can
+  // receive one — so a phone-only client is texted alone, and a row is only off for
+  // contact reasons when neither channel works.
+  const reminderRoute = reminderChannels(contact, smsCredits.level);
+  const reminderChannelsHint = channelsLabel(reminderRoute.channels);
   const bookingStarted = booking ? new Date(booking.start).getTime() <= Date.now() : false;
   // The API only reminds confirmed / awaiting-payment bookings that have not started.
   const bookingReminderBlocked: string | null = !booking
@@ -287,9 +299,7 @@ export function BookingPanel({
         ? closedReminderReason(booking.status)
         : bookingStarted
           ? "Job already started"
-          : !customerEmail
-            ? "No email on file"
-            : null;
+          : reminderRoute.blocked;
   const paymentReminderBlocked: string | null = !booking
     ? null
     : settlement?.state === "credit"
@@ -300,15 +310,13 @@ export function BookingPanel({
           ? "Awaiting bank transfer"
           : !canRemindPayment
             ? closedReminderReason(booking.status)
-            : !customerEmail
-              ? "No email on file"
-              : null;
+            : reminderRoute.blocked;
 
   const remindBooking = async () => {
     if (!booking) return;
     try {
       const result = await bookingReminder.mutateAsync({ bookingId: booking.id });
-      const by = result.channels.includes("sms") ? "email and text" : "email";
+      const by = channelsPhrase(result.channels);
       toast.success(`Booking reminder sent by ${by}`, {
         description: `${customer.data ? customerDisplayName(customer.data) : "The client"} was reminded about ${formatBookingWhen(booking, timezone)}.`,
       });
@@ -347,7 +355,7 @@ export function BookingPanel({
     if (!booking || !settlement) return;
     try {
       const result = await paymentReminder.mutateAsync({ bookingId: booking.id });
-      const by = result.channels.includes("sms") ? "email and text" : "email";
+      const by = channelsPhrase(result.channels);
       toast.success(`Payment reminder sent by ${by}`, {
         description: `${customer.data ? customerDisplayName(customer.data) : "The client"} was asked for the ${formatMoney(result.outstandingMinor, booking.currency)} outstanding.`,
       });
@@ -376,6 +384,136 @@ export function BookingPanel({
           isMessageHistoryEntry(entry) && (entry.status === "sent" || entry.status === "fallback"),
       )
     : true;
+
+  // Rows of the Reminders drawer: every message staff can send about this booking, with
+  // when it last went (from the History tab's message entries) and why it's off, if it is.
+  const resendTitle = resendLabel
+    ? `Resend ${resendLabel}`
+    : booking?.status === "completed"
+      ? "Resend confirmation"
+      : "Resend message";
+  const resendDescription: string = (() => {
+    if (!booking || !settlement) return "";
+    switch (resendLabel) {
+      case "payment instructions":
+        return `Bank transfer details for ${formatMoney(settlement.dueNowMinor, booking.currency)}`;
+      case "payment request":
+        return `Asks for ${formatMoney(settlement.dueNowMinor, booking.currency)} with a pay link`;
+      case "confirmation":
+        return `The booking confirmation for ${formatBookingWhen(booking, timezone)}`;
+      case "cancellation notice":
+        return "That the booking was cancelled";
+      default:
+        return booking.status === "completed"
+          ? "Nothing to resend once the job is done"
+          : `Nothing to resend while the booking is ${booking.status.replace(/_/g, " ")}`;
+    }
+  })();
+  const reminderRows: ReminderRow[] = booking
+    ? [
+        {
+          key: "booking",
+          icon: BellRing,
+          title: "Booking reminder",
+          description: `That the job is coming up · ${formatBookingWhen(booking, timezone)}`,
+          blocked: bookingReminderBlocked,
+          meta: [
+            ...(bookingReminderBlocked ? [] : [reminderChannelsHint]),
+            lastSentLabel(lastSentFromHistory(history.data, ["reminder"])),
+          ],
+          actions: [
+            {
+              key: "send",
+              label: "Send",
+              icon: Send,
+              disabled: Boolean(bookingReminderBlocked),
+              pending: bookingReminder.isPending,
+              onClick: () => void remindBooking(),
+            },
+          ],
+        },
+        {
+          key: "payment",
+          icon: CreditCard,
+          title: "Payment reminder",
+          description:
+            settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit"
+              ? `${formatMoney(settlement.outstandingMinor, booking.currency)} outstanding${
+                  jobOver ? "" : " · job not done yet"
+                }`
+              : "What's still owed and how to pay it",
+          blocked: paymentReminderBlocked,
+          meta: [
+            ...(paymentReminderBlocked ? [] : [reminderChannelsHint]),
+            lastSentLabel(lastSentFromHistory(history.data, ["payment_reminder"])),
+          ],
+          actions: [
+            {
+              key: "send",
+              label: "Send",
+              icon: Send,
+              disabled: Boolean(paymentReminderBlocked),
+              pending: paymentReminder.isPending,
+              onClick: () => void remindPayment(),
+            },
+          ],
+        },
+        {
+          key: "resend",
+          icon: Repeat,
+          title: resendTitle,
+          description: resendDescription,
+          blocked: !resendLabel
+            ? "Nothing to resend"
+            : !customerEmail && smsBlocked
+              ? `${smsBlocked} · no email on file`
+              : null,
+          meta: [
+            ...(resendLabel
+              ? [
+                  `Email: ${customerEmail ?? "no email on file"}`,
+                  `Text: ${smsBlocked ? smsBlocked.toLowerCase() : smsHint}`,
+                ]
+              : []),
+            lastSentLabel(
+              lastSentFromHistory(history.data, resendTemplateKeys(booking.status, bankPending)),
+            ),
+          ],
+          actions: resendLabel
+            ? [
+                {
+                  key: "email",
+                  label: "By email",
+                  icon: Mail,
+                  disabled: !customerEmail,
+                  pending: resend.isPending && resend.variables?.channel === "email",
+                  onClick: () => void sendAgain("email"),
+                },
+                {
+                  key: "sms",
+                  label: "By text",
+                  icon: MessageSquareText,
+                  disabled: Boolean(smsBlocked),
+                  pending: resend.isPending && resend.variables?.channel === "sms",
+                  onClick: () => void sendAgain("sms"),
+                },
+              ]
+            : [],
+          error: resendError ? (
+            <>
+              {resendError}{" "}
+              <Link
+                to="/billing/sms-credits"
+                onClick={onClose}
+                className="font-medium underline underline-offset-2"
+              >
+                Buy texts
+              </Link>
+            </>
+          ) : null,
+        },
+      ]
+    : [];
 
   // Attendance: the API only moves a confirmed booking to completed / no-show, and never
   // back, so the checkboxes are live on a confirmed job and locked once one is ticked.
@@ -579,78 +717,12 @@ export function BookingPanel({
                     </p>
                   ) : null}
                   <DropdownMenuSeparator />
-                  {/* Reminders: a flat group rather than a submenu. At phone widths a
-                      side-opening Radix submenu cannot sit beside a 16rem menu and
-                      gets clipped off the left edge, so the options are indented
-                      beneath a heading instead. Both always show; the sub-text says
-                      why one is off, or which channels will carry it. */}
-                  <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
-                    <BellRing className="size-4" /> Reminders
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="pl-8"
-                    disabled={Boolean(bookingReminderBlocked) || bookingReminder.isPending}
-                    onSelect={() => void remindBooking()}
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate">
-                        {bookingReminder.isPending ? "Sending…" : "Send booking reminder"}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {bookingReminderBlocked ?? reminderChannelsHint}
-                      </span>
-                    </span>
+                  {/* Every message staff can send — booking reminder, payment reminder,
+                      resend by email / text — lives in one drawer beside the panel, so
+                      the menu stays short and nothing clips at phone widths. */}
+                  <DropdownMenuItem onSelect={() => setRemindersOpen(true)}>
+                    <BellRing className="size-4" /> Reminders…
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="pl-8"
-                    disabled={Boolean(paymentReminderBlocked) || paymentReminder.isPending}
-                    onSelect={() => void remindPayment()}
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate">
-                        {paymentReminder.isPending ? "Sending…" : "Send payment reminder"}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {paymentReminderBlocked ??
-                          (!jobOver ? "Job not done yet" : reminderChannelsHint)}
-                      </span>
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {resendLabel ? (
-                    // Flat rather than a submenu: side-opening submenus collide with
-                    // the edge of a phone screen.
-                    <>
-                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                        Resend {resendLabel} to{" "}
-                        {customer.data ? customerDisplayName(customer.data) : "the client"}
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        disabled={!customerEmail || resend.isPending}
-                        onSelect={() => void sendAgain("email")}
-                      >
-                        <Mail className="size-4" />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span>By email</span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {customerEmail ?? "No email on file"}
-                          </span>
-                        </span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={Boolean(smsBlocked) || resend.isPending}
-                        onSelect={() => void sendAgain("sms")}
-                      >
-                        <Send className="size-4" />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span>By text</span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {smsBlocked ?? smsHint}
-                          </span>
-                        </span>
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
                   <DropdownMenuItem asChild>
                     <Link to="/messages" onClick={onClose}>
                       <MessageSquare className="size-4" /> Message
@@ -1079,7 +1151,7 @@ export function BookingPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={paymentReminder.isPending}
+                            disabled={Boolean(paymentReminderBlocked) || paymentReminder.isPending}
                             onClick={() => void remindPayment()}
                           >
                             <BellRing className="size-4" />
@@ -1089,10 +1161,9 @@ export function BookingPanel({
                       </div>
                       {canRemindPayment ? (
                         <p className="text-xs text-muted-foreground">
-                          The reminder emails {customerEmail ?? "the client"} the{" "}
-                          {formatMoney(settlement.outstandingMinor, booking.currency)} outstanding
-                          and how to pay
-                          {customerPhone && !smsOptedOut ? ", and texts them too" : ""}.
+                          {paymentReminderBlocked
+                            ? `Can't send a payment reminder: ${paymentReminderBlocked.toLowerCase()}.`
+                            : `The reminder ${describeReminderRoute(reminderRoute.channels, customerName)} the ${formatMoney(settlement.outstandingMinor, booking.currency)} outstanding and how to pay.`}
                         </p>
                       ) : null}
                     </div>
@@ -1154,7 +1225,7 @@ export function BookingPanel({
                 taking the money. Everything else — edit, reschedule, reminders, resend,
                 message, cancel, delete — lives in the header's ⋯ menu. No footer at all
                 when none of those apply (a cancelled or expired booking, say). */}
-            {showAttendance || showConfirm || showRecordPayment || resendError ? (
+            {showAttendance || showConfirm || showRecordPayment ? (
               <footer className="flex min-w-0 flex-col gap-2 border-t p-4">
                 {showAttendance ? (
                   <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
@@ -1223,18 +1294,6 @@ export function BookingPanel({
                     <Landmark className="size-4" /> Record payment ·{" "}
                     {formatMoney(settlement!.outstandingMinor, booking.currency)} outstanding
                   </Button>
-                ) : null}
-                {resendError ? (
-                  <p className="text-xs text-destructive">
-                    {resendError}{" "}
-                    <Link
-                      to="/billing/sms-credits"
-                      onClick={onClose}
-                      className="font-medium underline underline-offset-2"
-                    >
-                      Buy texts
-                    </Link>
-                  </p>
                 ) : null}
               </footer>
             ) : null}
@@ -1434,6 +1493,20 @@ export function BookingPanel({
       ) : null}
 
       {booking ? (
+        <BookingRemindersDrawer
+          open={remindersOpen}
+          onOpenChange={(open) => {
+            setRemindersOpen(open);
+            if (!open) setResendError(null);
+          }}
+          customerName={customerName}
+          rows={reminderRows}
+          smsCredits={smsCredits}
+          onNavigate={onClose}
+        />
+      ) : null}
+
+      {booking ? (
         <RescheduleDialog
           open={rescheduleOpen}
           onOpenChange={setRescheduleOpen}
@@ -1541,7 +1614,15 @@ function historyActionLabel(entry: BookingHistoryEntry): string {
   return humanize(String(raw));
 }
 
-/** Why a reminder is off for a booking that is not live (menu sub-text). */
+/** "texts Ahmed" / "emails Ahmed" / "emails and texts Ahmed" — for the Payments tab note. */
+function describeReminderRoute(channels: readonly string[], name: string): string {
+  const hasEmail = channels.includes("email");
+  const hasSms = channels.includes("sms");
+  const verb = hasEmail && hasSms ? "emails and texts" : hasSms ? "texts" : "emails";
+  return `${verb} ${name}`;
+}
+
+/** Why a reminder is off for a booking that is not live (drawer sub-text). */
 function closedReminderReason(status: string): string {
   switch (status) {
     case "no_show":
