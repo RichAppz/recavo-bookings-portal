@@ -78,6 +78,9 @@ import type {
   PublicCataloguePlan,
   Refund,
   Resource,
+  ServiceFollowUp,
+  ServiceFollowUpAction,
+  ServiceFollowUpStatus,
   SaasInterval,
   SaasPlanCode,
   Staff,
@@ -1100,6 +1103,108 @@ export function useReplaceBookingConsumables() {
       qc.setQueryData(queryKeys.bookingConsumables(businessId, vars.bookingId), usage);
       // The change lands in the booking's history as an amended diff.
       void qc.invalidateQueries({ queryKey: queryKeys.bookingHistory(businessId, vars.bookingId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/* ---------------- Service follow-ups (top-up reminders) ---------------- */
+
+export type FollowUpListFilters = {
+  /** One or more statuses; the API takes them comma-separated. */
+  status?: ServiceFollowUpStatus[];
+  /** Window on `dueAt`. */
+  from?: string;
+  to?: string;
+  customerId?: string;
+  bookingId?: string;
+  enabled?: boolean;
+};
+
+function followUpQuery(filters: FollowUpListFilters) {
+  return {
+    ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+    ...(filters.customerId ? { customerId: filters.customerId } : {}),
+    ...(filters.bookingId ? { bookingId: filters.bookingId } : {}),
+  };
+}
+
+/**
+ * Follow-ups due, ordered by due date, cursor-paged. Staff-only: created by the
+ * API when a job whose service carries a follow-up rule is done.
+ */
+export function useFollowUps(filters: FollowUpListFilters = {}) {
+  const businessId = useBusinessId();
+  const query = followUpQuery(filters);
+  const q = usePaginatedQuery<ServiceFollowUp, "followUps">({
+    queryKey: queryKeys.followUps(businessId, query),
+    path: `/api/v1/businesses/${businessId}/follow-ups`,
+    listKey: "followUps",
+    query,
+    limit: 50,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+  return { ...q, items: flattenPages(q.data, "followUps") };
+}
+
+/** The follow-ups one job left behind (BookingPanel's "Next top-up due" row). */
+export function useBookingFollowUps(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  const query = { bookingId: bookingId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, query),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ followUps: ServiceFollowUp[] }>(
+        `/api/v1/businesses/${businessId}/follow-ups`,
+        { query },
+      );
+      return res.data.followUps;
+    },
+  });
+}
+
+/** A client's follow-ups, open ones first (client profile card). */
+export function useCustomerFollowUps(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const query = { customerId: customerId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, query),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ followUps: ServiceFollowUp[] }>(
+        `/api/v1/businesses/${businessId}/follow-ups`,
+        { query },
+      );
+      return res.data.followUps;
+    },
+  });
+}
+
+/**
+ * Act on one follow-up: dismiss, snooze (`until`), send now, reopen. The API answers
+ * 409 when the action does not fit the current status and 422 when nobody could be
+ * reached by `send_now`; both are toasted and the list is refreshed either way.
+ */
+export function useFollowUpAction() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      followUpId: string;
+      action: ServiceFollowUpAction;
+      until?: string;
+    }) => {
+      const res = await api.patch<{ followUp: ServiceFollowUp }>(
+        `/api/v1/businesses/${businessId}/follow-ups/${vars.followUpId}`,
+        { action: vars.action, ...(vars.until ? { until: vars.until } : {}) },
+      );
+      return res.data.followUp;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
     },
     onError: (err) => toastApiError(err),
   });

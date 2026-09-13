@@ -123,5 +123,18 @@ describe("queryKeysForLiveEvent", () => {
     assert.ok(keys.some((k) => k[2] === "bookings" && k.length === 3));
     assert.ok(keys.some((k) => k[2] === "calendar-blocks"));
     assert.ok(keys.some((k) => k[2] === "invoices" && k.length === 3));
+    assert.ok(keys.some((k) => k[2] === "follow-ups" && k.length === 3));
+  });
+
+  it("refreshes every follow-up list (any filter) on follow_up.changed", () => {
+    const keys = queryKeysForLiveEvent({ type: "follow_up.changed", businessId: BIZ });
+    assert.deepEqual(keys, [["biz", BIZ, "follow-ups"]]);
+    assert.ok(
+      parseLiveEvent({
+        event: "follow_up.changed",
+        data: JSON.stringify({ businessId: BIZ }),
+        id: null,
+      }),
+    );
   });
 });

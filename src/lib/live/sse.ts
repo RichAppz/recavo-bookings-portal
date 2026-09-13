@@ -75,7 +75,12 @@ export function createSseParser() {
 }
 
 export type LiveEventType =
-  "hello" | "sms_credits.changed" | "notification.recorded" | "booking.changed" | "invoice.changed";
+  | "hello"
+  | "sms_credits.changed"
+  | "notification.recorded"
+  | "booking.changed"
+  | "invoice.changed"
+  | "follow_up.changed";
 
 export type LiveEvent = {
   type: LiveEventType;
@@ -91,6 +96,7 @@ const LIVE_EVENT_TYPES = new Set<string>([
   "notification.recorded",
   "booking.changed",
   "invoice.changed",
+  "follow_up.changed",
 ]);
 
 /** Turns a raw SSE frame into a typed hint, or null for anything we do not recognise. */
@@ -142,6 +148,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
   const notificationsPrefix = queryKeys.notifications(biz).slice(0, 3);
   const invoicesPrefix = queryKeys.invoice(biz, "").slice(0, 3);
   const dashboardPrefix = queryKeys.dashboard(biz).slice(0, 4);
+  const followUpsPrefix = queryKeys.followUps(biz);
   switch (event.type) {
     case "hello":
       return [
@@ -151,6 +158,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
         invoicesPrefix,
         notificationsPrefix,
         dashboardPrefix,
+        followUpsPrefix,
       ];
     case "sms_credits.changed":
       return [queryKeys.smsCredits(biz)];
@@ -169,6 +177,8 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
       if (event.bookingId) keys.push(queryKeys.booking(biz, event.bookingId));
       return keys;
     }
+    case "follow_up.changed":
+      return [followUpsPrefix];
     default:
       return [];
   }
