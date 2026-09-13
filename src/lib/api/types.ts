@@ -14,6 +14,12 @@ export type Membership = schemas["Membership"];
 export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
+/** "Remind the client (and me) when this is due again" — e.g. a ceramic top-up every 2 years. */
+export type ServiceFollowUpRule = schemas["ServiceFollowUpRule"];
+/** A scheduled follow-up: one client, one service, one finished job, and when it is due again. */
+export type ServiceFollowUp = schemas["ServiceFollowUp"];
+export type ServiceFollowUpStatus = ServiceFollowUp["status"];
+export type ServiceFollowUpAction = "dismiss" | "snooze" | "send_now" | "reopen";
 /**
  * A material a job uses up (ceramic bottle, pads, chemicals) — automotive only.
  * Staff-only bookkeeping: never priced into a booking, never shown to a client.

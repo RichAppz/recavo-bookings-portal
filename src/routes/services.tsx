@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { Check, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
+import { BellRing, Check, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,13 @@ import {
 } from "@/lib/api/hooks";
 import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
 import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
+import {
+  draftFromRule,
+  followUpRuleSummary,
+  ruleFromDraft,
+  type FollowUpRuleDraft,
+} from "@/lib/follow-ups";
 import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
 import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { ApiError } from "@/lib/api";
@@ -280,6 +287,15 @@ function ServicesPage() {
                           <Package className="size-4" />
                           {consumableCountByService.get(s.id)}{" "}
                           {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
+                        </span>
+                      ) : null}
+                      {s.followUp ? (
+                        <span
+                          className="flex items-center gap-1.5 text-muted-foreground"
+                          title={`Clients (and you) are reminded ${s.followUp.leadDays} days before it is due again`}
+                        >
+                          <BellRing className="size-4" />
+                          {followUpRuleSummary(s.followUp)}
                         </span>
                       ) : null}
                     </div>
@@ -539,6 +555,15 @@ function ServiceDialog({
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageDirty, setUsageDirty] = useState(false);
   const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
+  // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
+  // so it saves with the service itself. All verticals.
+  const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
+    draftFromRule(service?.followUp),
+  );
+  const [followUpError, setFollowUpError] = useState<{
+    field: "intervalMonths" | "leadDays" | "label";
+    message: string;
+  } | null>(null);
   // The defaults arrive after the dialog opens; adopt them until staff start editing.
   useEffect(() => {
     if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
@@ -568,6 +593,8 @@ function ServiceDialog({
     setUsageRows([]);
     setUsageDirty(false);
     setUsageInvalid(null);
+    setFollowUpDraft(draftFromRule(s?.followUp));
+    setFollowUpError(null);
   };
 
   // Radix only reports open changes it initiates itself, so a dialog opened by the
@@ -668,6 +695,14 @@ function ServiceDialog({
     }
     setUsageInvalid(null);
 
+    const followUp = ruleFromDraft(followUpDraft);
+    if (!followUp.ok) {
+      setFollowUpError({ field: followUp.field, message: followUp.message });
+      toast.error("Check the follow-up reminder");
+      throw new Error("validation");
+    }
+    setFollowUpError(null);
+
     const body: Record<string, unknown> = {
       name,
       eligibleStaffIds,
@@ -682,6 +717,7 @@ function ServiceDialog({
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: windows,
+      followUp: followUp.rule,
     };
 
     setFieldErrors({});
@@ -1087,6 +1123,18 @@ function ServiceDialog({
               )}
             </div>
           ) : null}
+
+          {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
+          <FollowUpRuleEditor
+            draft={followUpDraft}
+            onChange={(next) => {
+              setFollowUpDraft(next);
+              setFollowUpError(null);
+            }}
+            error={followUpError}
+            serviceNoun={lower}
+            idPrefix="sfu"
+          />
 
           {/* With one person on the books "everyone" and "them" are the same answer. */}
           {soleStaff ? null : (

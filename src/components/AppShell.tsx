@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useRouterState } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
   Bell,
+  BellRing,
   Building2,
   CalendarDays,
   Car,
@@ -167,6 +168,14 @@ const NAV: NavGroup[] = [
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },
       { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+      // Clients due a repeat (ceramic top-up every 2 years). All verticals: a PT can
+      // use it for re-assessments just as well.
+      {
+        to: "/follow-ups",
+        label: "Follow-ups",
+        icon: BellRing,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
+      },
       // Label follows the record schema's terminology ("Vehicles" for detailing);
       // hidden entirely when the business has no linked-record schema.
       { to: "/vehicles", label: "Vehicles", icon: Car, anyOf: [PERMISSIONS.CUSTOMER_READ] },
@@ -221,6 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const navigate = useNavigate();
   // Gates the Vehicles nav item: only businesses with a linked-record schema get it.
   const recordDefinition = useLinkedRecordDefinition();
   const hasLinkedRecords = Boolean(recordDefinition.data?.definition);
@@ -575,18 +585,26 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => (
-                    <DropdownMenuItem
-                      key={n.id}
-                      className="flex-col items-start gap-0.5"
-                      onClick={() => {
-                        if (!n.readAt) markNotificationRead.mutate(n.id);
-                      }}
-                    >
-                      <span className="text-sm font-medium">{n.subject}</span>
-                      <span className="text-xs text-muted-foreground">{n.body}</span>
-                    </DropdownMenuItem>
-                  ))}
+                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
+                    // A follow-up coming due opens the follow-ups list; other items just mark read.
+                    const followUp = n.templateKey === "service_follow_up_staff";
+                    return (
+                      <DropdownMenuItem
+                        key={n.id}
+                        className="flex-col items-start gap-0.5"
+                        onClick={() => {
+                          if (!n.readAt) markNotificationRead.mutate(n.id);
+                          if (followUp) void navigate({ to: "/follow-ups" });
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5 text-sm font-medium">
+                          {followUp ? <BellRing className="size-3.5 text-primary" /> : null}
+                          {n.subject}
+                        </span>
+                        <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
                   {(notifications.data?.notifications ?? []).length === 0 ? (
                     <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
                   ) : null}
