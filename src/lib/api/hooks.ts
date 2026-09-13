@@ -182,6 +182,12 @@ export function useAvailability(filters: {
    * block. The booking must then be created with `dropIn: true`.
    */
   dropIn?: boolean;
+  /**
+   * Minutes between offered start times. The API defaults to the service length
+   * (back-to-back, right for the public page); staff pass a finer grid so any time
+   * the diary has room for is on offer.
+   */
+  granularityMinutes?: number;
   enabled?: boolean;
 }) {
   const businessId = useBusinessId();
@@ -197,6 +203,7 @@ export function useAvailability(filters: {
     ...(filters.variantId ? { variantId: filters.variantId } : {}),
     ...(filters.staffId ? { staffId: filters.staffId } : {}),
     ...(filters.dropIn ? { dropIn: "true" } : {}),
+    ...(filters.granularityMinutes ? { granularityMinutes: filters.granularityMinutes } : {}),
   };
 
   return useQuery({

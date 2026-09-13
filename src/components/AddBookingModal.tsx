@@ -124,6 +124,9 @@ function AllDayTile({ onPick }: { onPick: () => void }) {
   );
 }
 
+/** Start-time grid for staff-made bookings; the public page stays back-to-back. */
+const STAFF_SLOT_STEP_MINUTES = 30;
+
 export function AddBookingModal({
   open,
   onOpenChange,
@@ -403,6 +406,9 @@ export function AddBookingModal({
     // Once staff opt for a drop-in the quote ignores all-day holds, so the times
     // the day actually has room for (around timed work and events) show up.
     dropIn: dropIn && scheduling === "slot",
+    // Every half hour the day has room for, not just back-to-back from opening: a
+    // 2-hour job should be bookable at 09:00, and a drop-in at any free time.
+    granularityMinutes: STAFF_SLOT_STEP_MINUTES,
     enabled: open && validDate && scheduling === "slot",
   });
 
