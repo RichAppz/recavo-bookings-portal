@@ -47,6 +47,7 @@ import type { AmendBookingBody, Booking } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { paymentMethodLabel } from "@/lib/booking-changes";
+import { bookingJobMinutes } from "@/lib/booking-duration";
 import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
@@ -62,6 +63,7 @@ import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { cn } from "@/lib/utils";
+import { layoutWorkingDuration, scheduleFor } from "@/lib/working-days";
 
 /** Same remembered channel choice the Add booking form keeps per business. */
 const NOTIFY_PREFS = ["email", "sms", "both", "none", "on", "off"] as const;
@@ -156,10 +158,9 @@ export function EditBookingDialog({
   // Once money has changed hands the booking belongs to whoever paid (the API 409s).
   const clientLocked = credit || paidMinor > 0;
   const paymentEditable = booking.status === "confirmed" && !credit;
-  const currentMinutes = Math.max(
-    0,
-    Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
-  );
+  // The job's length is its line items, not start → end: a 3-day job that skips a
+  // weekend is 3 days, and the API lays it over working days again after an edit.
+  const currentMinutes = bookingJobMinutes(booking);
   // Mirrors the API: an all-day or hand-set window survives a service change, a
   // catalogue-length job grows or shrinks from its start.
   const customWindow =
@@ -323,8 +324,15 @@ export function EditBookingDialog({
     return sum + (v?.durationMinutes ?? s.durationMinutes);
   }, 0);
   const durationChanges = servicesChanged && !customWindow && newMinutes !== currentMinutes;
+  // Previews follow the working days of whoever will do the job, as the API will.
+  const workingSchedule = scheduleFor(
+    (staff.data ?? []).find((s) => s.id === staffId) ?? null,
+    (locations.data ?? []).find((l) => l.id === locationId) ?? null,
+    timezone,
+  );
   const newEnd = durationChanges
-    ? new Date(new Date(booking.start).getTime() + newMinutes * 60_000).toISOString()
+    ? layoutWorkingDuration(booking.start, newMinutes, workingSchedule, timezone, { allDay: false })
+        .end
     : null;
 
   // ---- The diff, for the summary and the notify default -----------------------------
@@ -351,7 +359,9 @@ export function EditBookingDialog({
   const whenEndIso = (() => {
     if (!whenStartIso) return null;
     if (!booking.allDay) {
-      return new Date(new Date(whenStartIso).getTime() + currentMinutes * 60_000).toISOString();
+      return layoutWorkingDuration(whenStartIso, currentMinutes, workingSchedule, timezone, {
+        allDay: false,
+      }).end;
     }
     const lastMidnight = localDateTimeToIso(whenLastDay, "00:00");
     if (!lastMidnight) return null;

@@ -7,16 +7,28 @@ type DurationSource = {
   start: string;
   end: string;
   allDay?: boolean;
+  /** Per-working-day intervals from the API; a job that skips a weekend has several. */
+  segments?: ReadonlyArray<{ start: string; end: string }> | null;
   serviceSnapshot: { durationMinutes: number };
   lineItems?: ReadonlyArray<{ position?: number; durationMinutes: number }> | null;
 };
 
-/** Whole minutes between a booking's start and end — the diary it occupies. */
-export function bookingWindowMinutes(booking: Pick<DurationSource, "start" | "end">): number {
-  return Math.max(
-    0,
-    Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
-  );
+const minutesBetween = (start: string, end: string) =>
+  Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000));
+
+/**
+ * The diary a booking occupies, in minutes. A job laid over working days holds one
+ * segment per day it works, so its window is the sum of those — a three-day all-day
+ * job over Thu, Fri, Mon is three days, not the five from start to end.
+ */
+export function bookingWindowMinutes(
+  booking: Pick<DurationSource, "start" | "end" | "segments">,
+): number {
+  const segments = booking.segments ?? [];
+  if (segments.length > 1) {
+    return segments.reduce((sum, s) => sum + minutesBetween(s.start, s.end), 0);
+  }
+  return minutesBetween(booking.start, booking.end);
 }
 
 /**
@@ -27,10 +39,16 @@ export function bookingWindowMinutes(booking: Pick<DurationSource, "start" | "en
  * as 1440 minutes — which read as "1 day" everywhere, as if the service had been changed.
  * The catalogue length survives in `serviceSnapshot.durationMinutes`, and additional
  * services are never overridden, so the job is the snapshot plus the rest. For a timed
- * booking the window *is* the job, including any length staff set by hand.
+ * booking the line items *are* the job, including any length staff set by hand — and
+ * unlike start → end they don't count a weekend the job skips.
  */
 export function bookingJobMinutes(booking: DurationSource): number {
-  if (!booking.allDay) return bookingWindowMinutes(booking);
+  if (!booking.allDay) {
+    const items = booking.lineItems ?? [];
+    return items.length > 0
+      ? items.reduce((sum, item) => sum + item.durationMinutes, 0)
+      : bookingWindowMinutes(booking);
+  }
   const additional = (booking.lineItems ?? [])
     .slice(1)
     .reduce((sum, item) => sum + item.durationMinutes, 0);

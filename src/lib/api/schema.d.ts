@@ -19367,7 +19367,7 @@ export interface paths {
                         depositMinor?: number | null;
                         /**
                          * Format: date-time
-                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. Public and portal routes never accept it.
+                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. A window of a day or more is read as working days: the days between start and end that are not worked stay free and the stored duration counts only the occupied days (see Booking.segments). Public and portal routes never accept it.
                          */
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
@@ -19574,7 +19574,7 @@ export interface paths {
                         depositMinor?: number | null;
                         /**
                          * Format: date-time
-                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. Public and portal routes never accept it.
+                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. A window of a day or more is read as working days: the days between start and end that are not worked stay free and the stored duration counts only the occupied days (see Booking.segments). Public and portal routes never accept it.
                          */
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
@@ -38784,6 +38784,15 @@ export interface components {
             end: string;
             /** @description Staff marked this an all-day job (RECA-532): start/end are local midnights at the location (end exclusive). Show the date(s) and "All day" rather than times. */
             allDay: boolean;
+            /** @description The time the job actually holds, one UTC interval per working day it occupies, in order. Jobs of a day or more follow the staff member’s working days (else the location’s opening hours): a three-day job started on a Thursday is Thu, Fri and Mon, so the weekend stays free for other work. `start` is the first segment’s start and `end` the last one’s end. Draw the job on these days only — never as one bar from start to end. A job under a day, or a booking made before segments existed, is a single `[start, end)` segment. */
+            segments: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            }[];
+            /** @description Local calendar days (YYYY-MM-DD in `timezone`) covered by `segments`, in order — the days a calendar should show this job on. */
+            occupiedDays: string[];
             /** Format: date-time */
             occupiedStart: string;
             /** Format: date-time */

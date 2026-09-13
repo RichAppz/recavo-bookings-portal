@@ -48,6 +48,7 @@ import {
   startOfWeek,
   ukDateLong,
 } from "@/lib/format";
+import { contiguousRuns, occupiedDaysOf, segmentOn } from "@/lib/working-days";
 import {
   customerDisplayName,
   type Booking,
@@ -169,7 +170,17 @@ function chipPayment(b: Booking) {
 }
 
 /** Anything with a `[start, end)` window that can be laid onto the grid. */
-type Spanning = { start: string; end: string };
+/**
+ * Anything drawn on the grid. Bookings carry the API's `segments` / `occupiedDays`
+ * (a multi-day job on its working days only); events and older bookings have just
+ * start → end and are read as one continuous span.
+ */
+type Spanning = {
+  start: string;
+  end: string;
+  segments?: { start: string; end: string }[] | undefined;
+  occupiedDays?: string[] | undefined;
+};
 
 /**
  * Event chips are painted in the event's own colour, tinted and hatched so they read
@@ -450,22 +461,19 @@ function CalendarPage() {
   };
 
   /**
-   * Which calendar days a booking touches. Multi-day jobs (a two-day ceramic
-   * coating) show on every day they cover, not just the drop-off day. An end
-   * exactly on midnight belongs to the previous day, hence the minute shaved off.
+   * Which calendar days an item is drawn on. A multi-day job (a three-day ceramic
+   * coating) shows on the working days the API laid it over — Thu, Fri, Mon — and
+   * not on the weekend it skips; events and older bookings cover every day from
+   * start to end. An end exactly on midnight belongs to the previous day.
    */
-  const coversDay = (b: Spanning, iso: string) => {
-    const first = isoDateInTz(b.start, timezone);
-    const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
-    const last = isoDateInTz(lastInstant, timezone);
-    return first <= iso && iso <= last;
+  const daysOf = (b: Spanning) => occupiedDaysOf(b, timezone);
+  const coversDay = (b: Spanning, iso: string) => daysOf(b).includes(iso);
+  const firstDay = (b: Spanning) => daysOf(b)[0]!;
+  const lastDay = (b: Spanning) => {
+    const days = daysOf(b);
+    return days[days.length - 1]!;
   };
-  const startsOn = (b: Spanning, iso: string) => isoDateInTz(b.start, timezone) === iso;
-  const endsOn = (b: Spanning, iso: string) => {
-    const lastInstant = new Date(new Date(b.end).getTime() - 60_000).toISOString();
-    return isoDateInTz(lastInstant, timezone) === iso;
-  };
-  const isMultiDay = (b: Spanning) => !endsOn(b, isoDateInTz(b.start, timezone));
+  const isMultiDay = (b: Spanning) => daysOf(b).length > 1;
   const endLabel = (b: Spanning) =>
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
   const timeLabel = (iso: string) =>
@@ -475,15 +483,23 @@ function CalendarPage() {
   const isAllDay = (ev: CalendarBlock) => isAllDayEvent(ev.start, ev.end, timezone);
 
   /**
-   * Clip an item to today's column: one that began yesterday runs from the top of the
-   * grid, one that ends tomorrow runs off the bottom.
+   * Clip an item to today's column. A multi-day job draws the segment it holds on
+   * this day (Friday 08:00–17:00 of a Thu–Mon job); an item with no segment on the
+   * day — one that began yesterday and runs on — fills the column top to bottom.
+   * `startsToday` / `endsToday` say whether this is the job's first / last day, which
+   * drives the "↳" and "Until …" cues.
    */
   const columnBox = (b: Spanning, iso: string) => {
-    const startsToday = startsOn(b, iso);
-    const endsToday = endsOn(b, iso);
-    const topMin = startsToday ? minutesOf(b.start, timezone) : START_HOUR * 60;
-    const bottomMin = endsToday
-      ? Math.min(minutesOf(b.end, timezone) || END_HOUR * 60, END_HOUR * 60)
+    const startsToday = firstDay(b) === iso;
+    const endsToday = lastDay(b) === iso;
+    const segment = segmentOn(b, iso, timezone) ?? { start: b.start, end: b.end };
+    const segStartsToday = isoDateInTz(segment.start, timezone) === iso;
+    const segEndsToday =
+      isoDateInTz(new Date(new Date(segment.end).getTime() - 60_000).toISOString(), timezone) ===
+      iso;
+    const topMin = segStartsToday ? minutesOf(segment.start, timezone) : START_HOUR * 60;
+    const bottomMin = segEndsToday
+      ? Math.min(minutesOf(segment.end, timezone) || END_HOUR * 60, END_HOUR * 60)
       : END_HOUR * 60;
     const heightMin = Math.max(bottomMin - topMin, 30);
     return {
@@ -534,26 +550,26 @@ function CalendarPage() {
   /**
    * Lay one week's bookings and events into lanes. Longer spans go first and each
    * item takes the topmost lane that's free across every column it covers, so a
-   * two-day job is one uninterrupted bar and the day items pack in around it.
+   * two-day job is one uninterrupted bar and the day items pack in around it. A job
+   * that skips days (Thu–Fri, then Mon) becomes one bar per run of days it holds,
+   * each carrying a "continues" cue towards the rest of the job — the same cue a bar
+   * shows when the job carries on past the edge of the week.
    */
   const placeItems = (isos: string[], entries: MonthEntry[]): PlacedItem[] => {
-    const lastCol = isos.length - 1;
     const spans = entries.flatMap((entry) => {
       const cols = isos
         .map((iso, i) => (coversDay(entry.item, iso) ? i : -1))
         .filter((i) => i >= 0);
       if (cols.length === 0) return [];
-      const startCol = cols[0]!;
-      const endCol = cols[cols.length - 1]!;
-      return [
-        {
-          entry,
-          startCol,
-          endCol,
-          continuesBefore: startCol === 0 && !startsOn(entry.item, isos[0]!),
-          continuesAfter: endCol === lastCol && !endsOn(entry.item, isos[lastCol]!),
-        },
-      ];
+      const first = firstDay(entry.item);
+      const last = lastDay(entry.item);
+      return contiguousRuns(cols).map((run) => ({
+        entry,
+        startCol: run.startCol,
+        endCol: run.endCol,
+        continuesBefore: first < isos[run.startCol]!,
+        continuesAfter: last > isos[run.endCol]!,
+      }));
     });
     spans.sort(
       (a, b) =>
@@ -873,7 +889,7 @@ function CalendarPage() {
                         const allDay = isAllDay(ev);
                         return (
                           <button
-                            key={ev.id}
+                            key={`${ev.id}-${startCol}`}
                             type="button"
                             onClick={() => openEvent(ev)}
                             style={{ ...style, ...eventChipStyle(ev.colour) }}
@@ -924,7 +940,7 @@ function CalendarPage() {
                         (!showCategory && !showTime && !showClient && !showTag);
                       return (
                         <button
-                          key={b.id}
+                          key={`${b.id}-${startCol}`}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
@@ -1028,7 +1044,7 @@ function CalendarPage() {
                         const owner = staff.data?.find((s) => s.id === ev.staffId);
                         return (
                           <button
-                            key={ev.id}
+                            key={`${ev.id}-${startCol}`}
                             type="button"
                             onClick={() => openEvent(ev)}
                             title={owner ? `Event · ${owner.displayName}` : "Event"}
@@ -1071,7 +1087,7 @@ function CalendarPage() {
                       const category = categoryFor(b);
                       return (
                         <button
-                          key={b.id}
+                          key={`${b.id}-${startCol}`}
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
