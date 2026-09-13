@@ -1,4 +1,4 @@
-import { formatDuration, formatMoney } from "./format.ts";
+import { formatAllDaySpan, formatDuration, formatInTz, formatMoney } from "./format.ts";
 
 /**
  * One field of the structured diff the API records when staff edit a booking
@@ -12,6 +12,7 @@ export type BookingChangeLike = {
   to?: unknown;
   currency?: string;
   end?: string;
+  allDay?: boolean;
 };
 
 type Ref = { id?: string; label?: string | null } | null | undefined;
@@ -35,11 +36,18 @@ export type ChangeTerms = { staff: string; linkedRecord: string };
 
 /**
  * Plain-English line for one change, e.g. "Service: Level 1 → Level 2" or
- * "Price: £350.00 → £750.00". `terms` supplies the vertical's nouns.
+ * "Price: £350.00 → £750.00". `terms` supplies the vertical's nouns; `timeZone`
+ * is where the booking happens, for the `when` change a date correction records.
  */
-export function describeBookingChange(change: BookingChangeLike, terms: ChangeTerms): string {
+export function describeBookingChange(
+  change: BookingChangeLike,
+  terms: ChangeTerms,
+  timeZone = "Europe/London",
+): string {
   const currency = change.currency ?? "GBP";
   switch (change.field) {
+    case "when":
+      return `When: ${describeWhenChange(change, timeZone)}`;
     case "services": {
       const from = Array.isArray(change.from) ? change.from : [];
       const to = Array.isArray(change.to) ? change.to : [];
@@ -85,6 +93,32 @@ export function describeBookingChange(change: BookingChangeLike, terms: ChangeTe
   }
 }
 
+/**
+ * "Tue 29 Sept → Mon 28 – Wed 30 Sept 2026" for an all-day fix, "Tue 29 Sept, 09:00 →
+ * Wed 30 Sept, 10:00" for a timed one. Only the new side knows its end, so the old
+ * side is its start alone.
+ */
+function describeWhenChange(change: BookingChangeLike, timeZone: string): string {
+  const from = typeof change.from === "string" ? change.from : null;
+  const to = typeof change.to === "string" ? change.to : null;
+  if (!from || !to) return "changed";
+  if (change.allDay === true) {
+    const day = (iso: string) =>
+      formatInTz(iso, timeZone, { weekday: "short", day: "numeric", month: "short" });
+    const toLabel = change.end ? formatAllDaySpan(to, change.end, timeZone) : day(to);
+    return `${day(from)} → ${toLabel}`;
+  }
+  const moment = (iso: string) =>
+    formatInTz(iso, timeZone, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  return `${moment(from)} → ${moment(to)}`;
+}
+
 export function paymentMethodLabel(method: unknown): string {
   switch (method) {
     case "none":
@@ -108,6 +142,9 @@ export function summariseBookingChanges(
   const fields = new Set(changes.map((c) => c.field));
   if (fields.size === 0) return "Booking edited";
   if (fields.size === 1 && fields.has("notesInternal")) return "Internal note edited";
+  // A quiet fix to the diary (reschedule with `correction: true`): the client was not
+  // told, unlike a reschedule, so the headline says so rather than "moved".
+  if (fields.has("when")) return "Date corrected by staff";
   const parts: string[] = [];
   if (fields.has("services")) parts.push("services");
   if (fields.has("price") || fields.has("deposit")) parts.push("price");

@@ -111,6 +111,14 @@ import {
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
+  allDayBlockDays,
+  bookingJobMinutes,
+  bookingWindowMinutes,
+  describeAllDayBlock,
+  formatAllDayDuration,
+  lineItemJobMinutes,
+} from "@/lib/booking-duration";
+import {
   formatBookingWhen,
   formatDuration,
   formatDurationLong,
@@ -221,12 +229,11 @@ export function BookingPanel({
   // price differs from priceMinor only when staff adjusted it.
   const breakdown = booking ? bookingPriceBreakdown(booking) : null;
   const listPriceMinor = breakdown?.listPriceMinor ?? null;
-  const totalMinutes = booking
-    ? Math.max(
-        0,
-        Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
-      )
-    : 0;
+  // The work itself, not the diary it blocks: an all-day booking of a 2-hour coating
+  // is still a 2-hour job (the API writes the whole day onto start/end and the primary
+  // line item, so read the catalogue length back from the snapshot).
+  const totalMinutes = booking ? bookingJobMinutes(booking) : 0;
+  const blockMinutes = booking ? bookingWindowMinutes(booking) : 0;
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
@@ -972,8 +979,11 @@ export function BookingPanel({
                       label="Duration"
                       value={
                         booking.allDay
-                          ? `All day · ${formatDurationLong(totalMinutes)}`
+                          ? formatAllDayDuration(totalMinutes, blockMinutes)
                           : formatDurationLong(totalMinutes)
+                      }
+                      hint={
+                        booking.allDay ? describeAllDayBlock(totalMinutes, blockMinutes) : undefined
                       }
                     />
                   </dl>
@@ -998,7 +1008,7 @@ export function BookingPanel({
                                 ) : null}
                                 <span className="text-xs text-muted-foreground">
                                   {" "}
-                                  · {formatDuration(li.durationMinutes)}
+                                  · {formatDuration(lineItemJobMinutes(booking, li))}
                                 </span>
                               </span>
                               <span className="tabular-nums">
@@ -1714,7 +1724,7 @@ function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; ti
         {changes.length > 0 ? (
           <ul className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
             {changes.map((c, i) => (
-              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms)}</li>
+              <li key={`${c.field}-${i}`}>{describeBookingChange(c, terms, timezone)}</li>
             ))}
           </ul>
         ) : null}
@@ -2046,7 +2056,11 @@ function RescheduleDialog({
           {mode === "custom" ? (
             <p className="text-xs text-muted-foreground">
               {booking.allDay
-                ? `Stays an all-day job of ${formatDurationLong(lengthMinutes)}, starting on the new date.`
+                ? `Stays an all-day job${
+                    allDayBlockDays(lengthMinutes) > 1
+                      ? ` across ${allDayBlockDays(lengthMinutes)} days`
+                      : ""
+                  }, starting on the new date.`
                 : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start.`}
               {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
             </p>

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { CalendarClock, Lock, Plus } from "lucide-react";
+import { CalendarClock, Lock, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   CustomerSearchPicker,
@@ -33,6 +33,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useAmendBooking,
+  useCorrectBookingTime,
   useCustomer,
   useCustomerLinkedRecords,
   useCustomers,
@@ -53,6 +54,8 @@ import {
   formatDurationLong,
   formatInTz,
   formatMoney,
+  isoDate,
+  localDateTimeToIso,
   parseMoneyToMinor,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
@@ -71,6 +74,20 @@ type Change = { label: string; from: string; to: string; clientVisible: boolean 
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** Date/time inputs for a booking's current window (browser-local, like RescheduleDialog). */
+function whenFields(booking: { start: string; end: string }) {
+  const start = new Date(booking.start);
+  // `end` is exclusive: the last day is the one containing the minute before it.
+  const last = new Date(new Date(booking.end).getTime() - 60_000);
+  return {
+    date: isoDate(start),
+    time: `${`${start.getHours()}`.padStart(2, "0")}:${`${start.getMinutes()}`.padStart(2, "0")}`,
+    lastDay: isoDate(last),
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function samePicked(a: PickedService[], b: PickedService[]): boolean {
   return (
@@ -180,6 +197,21 @@ export function EditBookingDialog({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // What to do once the person agrees to drop their edits: close, or open Reschedule.
   const afterDiscard = useRef<() => void>(() => undefined);
+
+  // ---- When: a quiet fix to the diary (not a reschedule) ------------------------------
+  // Browser-local wall clock, like RescheduleDialog. All-day jobs edit first/last day;
+  // timed jobs edit date + start and keep their length.
+  const correctTime = useCorrectBookingTime();
+  const whenOriginal = whenFields(booking);
+  const [whenOpen, setWhenOpen] = useState(false);
+  const [whenDate, setWhenDate] = useState(whenOriginal.date);
+  const [whenTime, setWhenTime] = useState(whenOriginal.time);
+  const [whenLastDay, setWhenLastDay] = useState(whenOriginal.lastDay);
+  const resetWhen = (fields: { date: string; time: string; lastDay: string }) => {
+    setWhenDate(fields.date);
+    setWhenTime(fields.time);
+    setWhenLastDay(fields.lastDay);
+  };
 
   // ---- Lookups ------------------------------------------------------------------
   const serviceList = useMemo(() => services.data ?? [], [services.data]);
@@ -307,7 +339,43 @@ export function EditBookingDialog({
       : `No ${recordTermLower}`;
   const nextRecordId = linkedRecordId !== "none" ? linkedRecordId : null;
 
+  // The corrected window, as the API will see it. For an all-day job the last day is
+  // sent as midday on that day (the API snaps it to the following local midnight).
+  const whenChanged = booking.allDay
+    ? whenDate !== whenOriginal.date || whenLastDay !== whenOriginal.lastDay
+    : whenDate !== whenOriginal.date || whenTime !== whenOriginal.time;
+  const whenStartIso = booking.allDay
+    ? localDateTimeToIso(whenDate, "00:00")
+    : localDateTimeToIso(whenDate, whenTime);
+  const whenLastDayIso = booking.allDay ? localDateTimeToIso(whenLastDay, "12:00") : null;
+  const whenEndIso = (() => {
+    if (!whenStartIso) return null;
+    if (!booking.allDay) {
+      return new Date(new Date(whenStartIso).getTime() + currentMinutes * 60_000).toISOString();
+    }
+    const lastMidnight = localDateTimeToIso(whenLastDay, "00:00");
+    if (!lastMidnight) return null;
+    const end = new Date(lastMidnight).getTime() + DAY_MS;
+    return end > new Date(whenStartIso).getTime() ? new Date(end).toISOString() : null;
+  })();
+  const whenInvalid = whenChanged && (!whenStartIso || !whenEndIso);
+
   const changes: Change[] = [];
+  if (whenChanged) {
+    changes.push({
+      label: "When",
+      from: formatBookingWhen(booking, timezone),
+      to:
+        whenStartIso && whenEndIso
+          ? formatBookingWhen(
+              { start: whenStartIso, end: whenEndIso, allDay: booking.allDay },
+              timezone,
+            )
+          : "—",
+      // A correction is deliberately quiet: only Reschedule tells the client.
+      clientVisible: false,
+    });
+  }
   if (servicesChanged) {
     changes.push({
       label: pickedLabels.length > 1 || originalLabels.length > 1 ? "Services" : "Service",
@@ -382,8 +450,10 @@ export function EditBookingDialog({
     });
   }
   const dirty = changes.length > 0;
+  // Everything but the date fix goes through PATCH; the fix is its own request.
+  const amendDirty = changes.some((c) => c.label !== "When");
   const clientVisible = changes.some((c) => c.clientVisible);
-  const notify = notifyChoice ?? clientVisible;
+  const notify = amendDirty && (notifyChoice ?? clientVisible);
 
   // ---- Who can be told, and how --------------------------------------------------
   const emailBlocked = selectedCustomer
@@ -411,6 +481,8 @@ export function EditBookingDialog({
     notifyChannels = !emailBlocked ? ["email"] : !smsBlocked ? ["sms"] : [];
   }
   const notifyHint = (() => {
+    if (!amendDirty && whenChanged)
+      return "A date fix isn't sent to the client. Use Reschedule if they need to know.";
     if (!notify) return "Nothing is sent. Use Resend on the booking if you change your mind.";
     if (notifyChannels.length === 0) {
       return `Can't reach ${selectedCustomer ? customerDisplayName(selectedCustomer) : "the client"}: ${[emailBlocked, smsBlocked].filter(Boolean).join("; ")}.`;
@@ -430,6 +502,8 @@ export function EditBookingDialog({
   if (recordRequired && nextRecordId === null && !quickAddPending)
     blockers.push(`Choose a ${recordTermLower}`);
   if (priceInvalid) blockers.push("Check the price");
+  if (whenInvalid)
+    blockers.push(booking.allDay ? "The last day can't be before the first" : "Check the date");
   if (priceBelowPaid)
     blockers.push(
       `The price can't be below the ${formatMoney(paidMinor, currency)} already paid — refund first`,
@@ -508,8 +582,38 @@ export function EditBookingDialog({
       ...(notify && notifyChannels.length > 0 ? { notify: { channels: notifyChannels } } : {}),
     };
 
+    // The date fix goes first: it is the request most likely to be refused (a clash),
+    // and if the client is being sent the new details the message then carries the
+    // corrected time. The PATCH follows with the version the fix handed back.
+    let version = booking.version;
+    if (whenChanged && whenStartIso) {
+      try {
+        const fixed = await correctTime.mutateAsync({
+          bookingId: booking.id,
+          body: {
+            start: whenStartIso,
+            ...(booking.allDay && whenLastDayIso ? { end: whenLastDayIso } : {}),
+          },
+        });
+        version = fixed.version;
+        // The fix is saved; don't send it again if the PATCH below fails.
+        resetWhen(whenFields(fixed));
+        setWhenOpen(false);
+        if (!amendDirty) toast.success("Date corrected — the client wasn't told");
+      } catch {
+        // useCorrectBookingTime toasts the failure; the form keeps the edits.
+        setSubmitting(false);
+        return;
+      }
+    }
+    if (!amendDirty) {
+      setSubmitting(false);
+      onClose();
+      return;
+    }
+
     try {
-      await amend.mutateAsync({ bookingId: booking.id, ifMatch: booking.version, body });
+      await amend.mutateAsync({ bookingId: booking.id, ifMatch: version, body });
       onClose();
     } catch {
       // useAmendBooking toasts every failure; a stale version also refetches the
@@ -551,23 +655,107 @@ export function EditBookingDialog({
         ) : (
           // Same guard as Add booking: nothing may grow the sheet sideways on a phone.
           <div className="grid min-w-0 grid-cols-1 gap-4 **:min-w-0">
-            {/* When — read-only here; reschedule owns the diary. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border bg-secondary/40 px-3 py-2">
-              <div className="min-w-0 flex-1 basis-40">
-                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  When
-                </p>
-                <p className="text-sm">{formatBookingWhen(booking, timezone)}</p>
+            {/* When — two doors: "Fix date" quietly corrects a typo in the diary (no
+                message, "Date corrected" in the history); Reschedule moves the job and
+                tells the client. */}
+            <div className="rounded-lg border bg-secondary/40 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <div className="min-w-0 flex-1 basis-40">
+                  <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    When
+                  </p>
+                  <p className="text-sm">{formatBookingWhen(booking, timezone)}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    type="button"
+                    variant={whenOpen ? "secondary" : "ghost"}
+                    size="sm"
+                    aria-expanded={whenOpen}
+                    aria-controls="edit-booking-when"
+                    onClick={() => {
+                      if (whenOpen) resetWhen(whenOriginal);
+                      setWhenOpen((o) => !o);
+                    }}
+                  >
+                    <Pencil className="size-4" /> {whenOpen ? "Undo" : "Fix date"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => guard(onReschedule)}
+                  >
+                    <CalendarClock className="size-4" /> Reschedule
+                  </Button>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => guard(onReschedule)}
-              >
-                <CalendarClock className="size-4" /> Reschedule
-              </Button>
+              {whenOpen ? (
+                <div id="edit-booking-when" className="mt-2 grid gap-2">
+                  {booking.allDay ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="grid gap-1">
+                        <Label htmlFor="edit-when-first" className="text-xs">
+                          First day
+                        </Label>
+                        <input
+                          id="edit-when-first"
+                          type="date"
+                          value={whenDate}
+                          onChange={(e) => {
+                            setWhenDate(e.target.value);
+                            // Keep the span whole when the first day passes the last.
+                            if (e.target.value > whenLastDay) setWhenLastDay(e.target.value);
+                          }}
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label htmlFor="edit-when-last" className="text-xs">
+                          Last day
+                        </Label>
+                        <input
+                          id="edit-when-last"
+                          type="date"
+                          min={whenDate}
+                          value={whenLastDay}
+                          onChange={(e) => setWhenLastDay(e.target.value)}
+                          aria-invalid={whenInvalid}
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        id="edit-when-date"
+                        type="date"
+                        aria-label="Date"
+                        value={whenDate}
+                        onChange={(e) => setWhenDate(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                      />
+                      <input
+                        type="time"
+                        aria-label="Start time"
+                        value={whenTime}
+                        onChange={(e) => setWhenTime(e.target.value)}
+                        className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {booking.allDay
+                      ? "Stays an all-day job. "
+                      : `Keeps its ${formatDurationLong(currentMinutes)} length from the new start. `}
+                    Nothing is sent to the client — this just corrects the diary.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Reschedule tells the client; editing here just corrects the diary.
+                </p>
+              )}
             </div>
 
             <div className="grid gap-2">
@@ -928,6 +1116,9 @@ export function EditBookingDialog({
             >
               <Checkbox
                 checked={notify}
+                // A date fix on its own has nothing to send — Reschedule is the way to
+                // tell the client about a new time.
+                disabled={!amendDirty}
                 onCheckedChange={(checked) => setNotifyChoice(checked === true)}
                 aria-label="Send the client the updated details"
                 className="mt-0.5"
