@@ -926,7 +926,9 @@ export function BookingPanel({
                       value={formatMoney(booking.priceMinor, booking.currency)}
                       hint={
                         listPriceMinor !== null && listPriceMinor !== booking.priceMinor
-                          ? `Adjusted from ${formatMoney(listPriceMinor, booking.currency)}`
+                          ? listPriceMinor > booking.priceMinor
+                            ? `${formatMoney(listPriceMinor - booking.priceMinor, booking.currency)} discount`
+                            : `${formatMoney(booking.priceMinor - listPriceMinor, booking.currency)} added to the list price`
                           : undefined
                       }
                     />
