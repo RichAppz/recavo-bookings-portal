@@ -158,17 +158,21 @@ let signInWithApplePlugin: SignInWithApplePlugin | undefined;
  * at module scope, which crashes the SSR worker once the bundler inlines the
  * import. Only ever called on iOS, so no web fallback is needed. Bound once —
  * Capacitor warns if the same plugin name is registered twice.
+ *
+ * Returned inside a holder, never directly: Capacitor's plugin object is a
+ * Proxy that turns every property access into a native call, so resolving a
+ * promise with it makes the runtime invoke `.then` as a plugin method and hang.
  */
-async function appleSignInPlugin(): Promise<SignInWithApplePlugin> {
+async function appleSignInPlugin(): Promise<{ plugin: SignInWithApplePlugin }> {
   if (!signInWithApplePlugin) {
     const { registerPlugin } = await import("@capacitor/core");
     signInWithApplePlugin = registerPlugin<SignInWithApplePlugin>("SignInWithApple");
   }
-  return signInWithApplePlugin;
+  return { plugin: signInWithApplePlugin };
 }
 
 export async function runNativeAppleSignIn(): Promise<NativeAppleSignInResult> {
-  const SignInWithApple = await appleSignInPlugin();
+  const { plugin: SignInWithApple } = await appleSignInPlugin();
   const nonce = randomNonce();
   try {
     const { response } = await SignInWithApple.authorize({
