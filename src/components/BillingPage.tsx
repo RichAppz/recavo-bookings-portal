@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Check, FileText } from "lucide-react";
+import { ArrowDown, Check, FileText } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import { SmsCreditsCard } from "@/components/SmsCreditsCard";
@@ -367,6 +367,7 @@ export function BillingPage() {
   const apply = useSubscriptionChangeApply();
   const [interval, setInterval] = useState<SaasInterval>("month");
   const [previewResult, setPreviewResult] = useState<SubscriptionChangePreview | null>(null);
+  const plansRef = useRef<HTMLDivElement>(null);
 
   const current = subscription.data?.subscription;
   const plan = subscription.data?.plan;
@@ -396,6 +397,20 @@ export function BillingPage() {
     () => plans.find((p) => p.version === current?.planVersion) ?? null,
     [plans, current?.planVersion],
   );
+
+  // Is there a pricier tier than the one they're on? Drives the "Upgrade" vs
+  // "Change plan" label on the jump button.
+  const hasUpgrade = useMemo(() => {
+    if (!currentPlan) return plans.length > 1;
+    const priceOf = (p: PublicCataloguePlan) =>
+      (p.prices.find((x) => x.interval === interval) ?? p.prices[0])?.amountMinor ?? 0;
+    const currentPrice = priceOf(currentPlan);
+    return plans.some((p) => p.code !== currentPlan.code && priceOf(p) > currentPrice);
+  }, [plans, currentPlan, interval]);
+
+  const jumpToPlans = () => {
+    plansRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const startCheckout = async (p: PublicCataloguePlan) => {
     const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
@@ -463,6 +478,12 @@ export function BillingPage() {
               <p className="text-amber-700 dark:text-amber-400">Cancels at period end</p>
             ) : null}
             <div className="flex flex-wrap gap-2">
+              {plans.length > 0 ? (
+                <Button onClick={jumpToPlans}>
+                  {hasUpgrade ? "Upgrade plan" : "Change plan"}
+                  <ArrowDown className="size-4" />
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 disabled={portal.isPending}
@@ -524,7 +545,11 @@ export function BillingPage() {
 
       {!blocked && current ? <SmsCreditsCard /> : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* scroll-mt clears the sticky header when the "Upgrade plan" button jumps here. */}
+      <div
+        ref={plansRef}
+        className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3"
+      >
         <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
         <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
           <SelectTrigger className="w-[140px]">
