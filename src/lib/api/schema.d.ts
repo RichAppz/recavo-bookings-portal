@@ -19372,7 +19372,7 @@ export interface paths {
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
                         allDay?: boolean;
-                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
+                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up. */
                         priceMinor?: number;
                         /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
@@ -20846,7 +20846,7 @@ export interface paths {
                          * @description Only while nothing has been paid. The vehicle must belong to the new client.
                          */
                         leadCustomerId?: string;
-                        /** @description Staff total for the job. A number overrides the catalogue total (applied to the primary line item); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
+                        /** @description Staff total for the job. A number overrides the catalogue total (the line items stay at list and the difference becomes `adjustmentMinor`); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
                         priceMinor?: number | null;
                         /**
                          * @description Confirmed bookings only; to or from `credit` is not allowed.
@@ -26638,6 +26638,7 @@ export interface paths {
                         lines?: {
                             description: string;
                             quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
                             unitPriceMinor: number;
                             /** @description Default true; false marks the line VAT-exempt. */
                             taxable?: boolean;
@@ -27073,6 +27074,7 @@ export interface paths {
                         lines?: {
                             description: string;
                             quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
                             unitPriceMinor: number;
                             /** @description Default true; false marks the line VAT-exempt. */
                             taxable?: boolean;
@@ -38751,7 +38753,7 @@ export interface components {
             businessId: string;
             reference: string;
             serviceSnapshot: components["schemas"]["ServiceSnapshot"];
-            /** @description Every service on this booking, `position`-ordered (RECA-516). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `priceMinor` and `end` are the roll-up across all items — render this list as the job checklist and do not recompute totals from the primary service alone. */
+            /** @description Every service on this booking, `position`-ordered (RECA-516), each at its catalogue price. Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `priceMinor` is the sum of these lines plus `adjustmentMinor` — render the lines, then a Discount row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone. */
             lineItems: {
                 /** Format: uuid */
                 serviceId: string;
@@ -38803,7 +38805,10 @@ export interface components {
                 customerId: string | null;
             }[];
             seatCount: number;
+            /** @description What the client pays for the whole job — the authoritative total that payments, deposits and the outstanding balance work from. Σ lineItems[].priceMinor + adjustmentMinor. */
             priceMinor: number;
+            /** @description Staff price adjustment on top of the catalogue lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a "Discount −£x" row), positive = surcharge, 0 = priced at list. Bookings priced before this field existed carry the difference inside the primary line item instead (its priceMinor differs from serviceSnapshot.priceMinor) and read as 0 here. */
+            adjustmentMinor: number;
             /** @description Deposit securing the booking (RECA-523), snapshotted at create from the services’ configured deposits or a staff override. Null = no deposit: the booking is paid in full up front. Only ever set strictly between 0 and priceMinor. */
             depositMinor?: number | null;
             /** @description Money received to date across every channel — card, bank transfer, cash recorded by staff (RECA-523). Outstanding balance = priceMinor - paidMinor. */
@@ -40072,7 +40077,7 @@ export interface components {
                 serviceId?: string | null;
                 description: string;
                 quantity: number;
-                /** @description Per unit as entered — gross when pricesIncludeVat, net otherwise. */
+                /** @description Per unit as entered — gross when pricesIncludeVat, net otherwise. Negative for a discount line (e.g. the "Discount" line generated from a staff-priced booking). */
                 unitPriceMinor: number;
                 taxable: boolean;
                 /** @description Computed server-side; never client input. */

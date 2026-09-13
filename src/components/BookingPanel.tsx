@@ -108,6 +108,7 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
   allDayBlockDays,
@@ -224,13 +225,10 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
-  // Catalogue total the job was priced from (RECA-532): the primary's snapshot price
-  // plus the additional services, which never carry an override. Differs from
-  // priceMinor only when staff adjusted it at create.
-  const listPriceMinor = booking
-    ? booking.serviceSnapshot.priceMinor +
-      (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0)
-    : null;
+  // Services at list, the staff discount (if any) and the total (RECA-532). The list
+  // price differs from priceMinor only when staff adjusted it.
+  const breakdown = booking ? bookingPriceBreakdown(booking) : null;
+  const listPriceMinor = breakdown?.listPriceMinor ?? null;
   // The work itself, not the diary it blocks: an all-day booking of a 2-hour coating
   // is still a 2-hour job (the API writes the whole day onto start/end and the primary
   // line item, so read the catalogue length back from the snapshot).
@@ -990,7 +988,7 @@ export function BookingPanel({
                     />
                   </dl>
 
-                  {(booking.lineItems?.length ?? 0) > 1 ? (
+                  {breakdown?.hasBreakdown ? (
                     <>
                       <Separator />
                       <div>
@@ -998,7 +996,7 @@ export function BookingPanel({
                           Services on this job
                         </p>
                         <ul className="divide-y rounded-xl border">
-                          {booking.lineItems.map((li) => (
+                          {breakdown.lines.map((li) => (
                             <li
                               key={`${li.serviceId}-${li.position}`}
                               className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
@@ -1018,6 +1016,22 @@ export function BookingPanel({
                               </span>
                             </li>
                           ))}
+                          {breakdown.adjustmentMinor !== 0 ? (
+                            <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                              <span>{adjustmentLabel(breakdown.adjustmentMinor)}</span>
+                              <span className="tabular-nums">
+                                {formatAdjustment(breakdown.adjustmentMinor, (m) =>
+                                  formatMoney(m, booking.currency),
+                                )}
+                              </span>
+                            </li>
+                          ) : null}
+                          <li className="flex items-center justify-between gap-2 bg-secondary/40 px-3 py-2 text-sm font-medium">
+                            <span>Total</span>
+                            <span className="tabular-nums">
+                              {formatMoney(breakdown.totalMinor, booking.currency)}
+                            </span>
+                          </li>
                         </ul>
                       </div>
                     </>

@@ -367,11 +367,13 @@ export function validateLineDrafts(
     ) {
       rowErrors.quantity = `Whole number 1–${INVOICE_LINE_LIMITS.quantityMax.toLocaleString("en-GB")}`;
     }
+    // Negative is a discount line (the API generates one for a staff-priced booking);
+    // the API refuses a document that totals below zero.
     const priceText = draft.unitPrice.replace(/[^0-9.-]/g, "").trim();
     const price = priceText === "" ? NaN : Number(priceText);
     const unitPriceMinor = Math.round(price * 100);
-    if (!Number.isFinite(price) || price < 0 || !Number.isInteger(unitPriceMinor)) {
-      rowErrors.unitPrice = "Amount of 0.00 or more";
+    if (!Number.isFinite(price) || !Number.isInteger(unitPriceMinor)) {
+      rowErrors.unitPrice = "Enter an amount (negative for a discount)";
     }
     if (Object.keys(rowErrors).length > 0) failed = true;
     errors.push(rowErrors);
