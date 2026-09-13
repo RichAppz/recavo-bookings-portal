@@ -721,7 +721,7 @@ export function BookingPanel({
                       resend by email / text — lives in one drawer beside the panel, so
                       the menu stays short and nothing clips at phone widths. */}
                   <DropdownMenuItem onSelect={() => setRemindersOpen(true)}>
-                    <BellRing className="size-4" /> Reminders…
+                    <BellRing className="size-4" /> Reminders
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/messages" onClick={onClose}>
@@ -730,7 +730,7 @@ export function BookingPanel({
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled={isFinal} onSelect={openCancel}>
-                    <Ban className="size-4" /> Cancel booking…
+                    <Ban className="size-4" /> Cancel booking
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={Boolean(deleteBlocked) || deleteBooking.isPending}
@@ -738,7 +738,7 @@ export function BookingPanel({
                     className="text-destructive focus:text-destructive data-[disabled]:text-muted-foreground"
                   >
                     <Trash2 className="size-4" />
-                    <span className="flex-1">Delete booking…</span>
+                    <span className="flex-1">Delete booking</span>
                   </DropdownMenuItem>
                   {deleteBlocked ? (
                     <p className="px-2 pb-1.5 text-xs text-muted-foreground">{deleteBlocked}</p>
