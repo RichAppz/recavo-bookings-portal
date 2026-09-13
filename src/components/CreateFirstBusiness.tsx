@@ -147,7 +147,7 @@ export function CreateFirstBusiness({
 
   if (autoCreating) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="screen-center bg-background px-4">
         <div className="w-full max-w-md space-y-6">
           <div className="flex justify-center">
             <Wordmark />
@@ -165,7 +165,7 @@ export function CreateFirstBusiness({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="flex justify-center">
           <Wordmark />

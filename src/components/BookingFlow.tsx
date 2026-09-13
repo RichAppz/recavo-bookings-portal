@@ -803,7 +803,7 @@ export function BookingFlow({
     // phone. `clip` rather than `hidden` so this does not become a scroll container.
     <div className={embedded ? undefined : "min-h-screen overflow-x-clip bg-background"}>
       {embedded ? null : (
-        <header className="border-b bg-nav text-nav-foreground">
+        <header className="pt-safe border-b bg-nav text-nav-foreground">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
             <div className="flex min-w-0 items-center gap-3">
               {studio?.branding.logoUrl ? (
