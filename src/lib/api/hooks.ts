@@ -39,6 +39,10 @@ import type {
   CatalogueService,
   ConnectAccount,
   ConsentRecord,
+  Consumable,
+  ConsumableUsageInput,
+  ConsumableUsageLine,
+  BookingConsumablesUsage,
   Conversation,
   ConversationMessage,
   CreditLedgerEntry,
@@ -891,6 +895,213 @@ export function useUpdateService() {
       }
       toastApiError(err);
     },
+  });
+}
+
+/* ---------------- Consumables (automotive, staff-only) ---------------- */
+
+/**
+ * The materials catalogue — active and archived. Automotive only; callers pass
+ * `enabled: false` for other verticals so nothing is fetched for them.
+ */
+export function useConsumables(opts: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.consumables(businessId),
+    enabled: Boolean(businessId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ consumables: Consumable[] }>(
+        `/api/v1/businesses/${businessId}/consumables`,
+      );
+      return res.data.consumables;
+    },
+  });
+}
+
+export function useCreateConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      name: string;
+      unit: string;
+      unitCostMinor?: number | null;
+      sku?: string | null;
+      notes?: string | null;
+    }) => {
+      const res = await api.post<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables`,
+        body,
+        { idempotencyKey: newIdempotencyKey() },
+      );
+      return res.data.consumable;
+    },
+    onSuccess: (created) => {
+      // Seed the list so a picker that opened the "add" dialog can tick it at once.
+      qc.setQueryData<Consumable[]>(queryKeys.consumables(businessId), (old) =>
+        old && !old.some((c) => c.id === created.id) ? [...old, created] : old,
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useUpdateConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      consumableId: string;
+      version: number;
+      body: {
+        name?: string;
+        unit?: string;
+        unitCostMinor?: number | null;
+        sku?: string | null;
+        notes?: string | null;
+        status?: "active" | "archived";
+      };
+    }) => {
+      const res = await api.patch<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables/${vars.consumableId}`,
+        vars.body,
+        { ifMatch: vars.version },
+      );
+      return res.data.consumable;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isConflict) {
+        void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Remove a consumable. The API hard-deletes one nothing refers to and archives one
+ * a service or booking still names (so old jobs keep resolving what they used);
+ * `deleted` tells the caller which happened.
+ */
+export function useDeleteConsumable() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (consumableId: string) => {
+      const res = await api.delete<{ deleted: boolean; consumable: Consumable | null }>(
+        `/api/v1/businesses/${businessId}/consumables/${consumableId}`,
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Default usage for one service ("a ceramic coat uses 1 bottle"). */
+export function useServiceConsumables(
+  serviceId: string | undefined,
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.serviceConsumables(businessId, serviceId ?? ""),
+    enabled: Boolean(businessId && serviceId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ items: ConsumableUsageLine[] }>(
+        `/api/v1/businesses/${businessId}/services/${serviceId}/consumables`,
+      );
+      return res.data.items;
+    },
+  });
+}
+
+/**
+ * Default usage for several services at once — the Add booking form's read-only
+ * "Includes: 1 bottle ceramic, 2 pads" from whatever has been picked so far.
+ */
+export function useServicesConsumables(
+  serviceIds: readonly string[],
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQueries({
+    queries: serviceIds.map((serviceId) => ({
+      queryKey: queryKeys.serviceConsumables(businessId, serviceId),
+      enabled: Boolean(businessId) && opts.enabled !== false,
+      queryFn: async () => {
+        const res = await api.get<{ items: ConsumableUsageLine[] }>(
+          `/api/v1/businesses/${businessId}/services/${serviceId}/consumables`,
+        );
+        return res.data.items;
+      },
+    })),
+  });
+}
+
+/** Replace a service's default usage list. */
+export function useReplaceServiceConsumables() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { serviceId: string; items: ConsumableUsageInput[] }) => {
+      const res = await api.put<{ items: ConsumableUsageLine[] }>(
+        `/api/v1/businesses/${businessId}/services/${vars.serviceId}/consumables`,
+        { items: vars.items },
+      );
+      return res.data.items;
+    },
+    onSuccess: (items, vars) => {
+      qc.setQueryData(queryKeys.serviceConsumables(businessId, vars.serviceId), items);
+      // `serviceIds` on each catalogue row feeds "used by N services".
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** What a job used (seeded from its services' defaults; staff adjust). Staff eyes only. */
+export function useBookingConsumables(
+  bookingId: string | undefined,
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingConsumables(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<BookingConsumablesUsage>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/consumables`,
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Replace a booking's usage list; the API snapshots each line's unit cost as it writes. */
+export function useReplaceBookingConsumables() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; items: ConsumableUsageInput[] }) => {
+      const res = await api.put<BookingConsumablesUsage>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/consumables`,
+        { items: vars.items },
+      );
+      return res.data;
+    },
+    onSuccess: (usage, vars) => {
+      qc.setQueryData(queryKeys.bookingConsumables(businessId, vars.bookingId), usage);
+      // The change lands in the booking's history as an amended diff.
+      void qc.invalidateQueries({ queryKey: queryKeys.bookingHistory(businessId, vars.bookingId) });
+    },
+    onError: (err) => toastApiError(err),
   });
 }
 

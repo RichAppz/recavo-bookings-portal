@@ -21,6 +21,7 @@ import {
   MapPin,
   MessageSquare,
   Menu,
+  Package,
   Plus,
   Search,
   Settings,
@@ -145,6 +146,14 @@ const NAV: NavGroup[] = [
     heading: "Studio",
     items: [
       { to: "/services", label: "Sessions", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
+      // Materials a job uses up (ceramic, pads). Automotive only — hidden for other
+      // verticals below — and gated like the catalogue it hangs off.
+      {
+        to: "/consumables",
+        label: "Consumables",
+        icon: Package,
+        anyOf: [PERMISSIONS.BUSINESS_READ],
+      },
       {
         to: "/packages",
         label: "Packages",
@@ -324,7 +333,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     item.anyOf.some((p) => tenant.can(p)) &&
                     // The record list only exists for businesses with a schema
                     // (vehicles for detailing); everyone else never sees the item.
-                    (item.to !== "/vehicles" || hasLinkedRecords),
+                    (item.to !== "/vehicles" || hasLinkedRecords) &&
+                    // Consumables are a detailing concept (coatings, pads, chemicals).
+                    (item.to !== "/consumables" || isCarDetailing),
                 );
                 if (items.length === 0) return null;
                 return (
