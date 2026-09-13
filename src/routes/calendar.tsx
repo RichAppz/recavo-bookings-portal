@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, Tag } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock, MoreHorizontal } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
@@ -9,7 +9,7 @@ import { summariseBookings } from "@/lib/calendar-stats";
 import { useSoleStaff } from "@/lib/sole";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
-import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
+import { ServiceFilterMenuItems } from "@/components/ServiceFilterSelect";
 import { ServiceKey } from "@/components/ServiceKey";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -238,6 +238,7 @@ function CalendarPage() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [staffFilter, setStaffFilter] = useStoredState<string>(prefKey("staff"), "all");
   const [serviceFilter, setServiceFilter] = useStoredState<string>(prefKey("service"), "all");
+  const serviceFiltered = serviceFilter !== "all";
   const [monthBarRaw, setMonthBarRaw] = useStoredState<string>(
     prefKey("monthBar"),
     DEFAULT_MONTH_BAR_FIELDS,
@@ -624,92 +625,121 @@ function CalendarPage() {
             </span>
           ) : null}
         </p>
-        <Tabs
-          value={view}
-          onValueChange={(v) => setView(v as typeof view)}
-          className="w-full sm:ml-auto sm:w-auto"
-        >
-          <TabsList>
-            <TabsTrigger value="day">Day</TabsTrigger>
-            <TabsTrigger value="week">Week</TabsTrigger>
-            <TabsTrigger value="month">Month</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-          {/* A one-person business has nothing to filter by; the control is noise. */}
-          {soleStaff ? null : (
-            <Select value={staffFilter} onValueChange={setStaffFilter}>
-              <SelectTrigger className="w-full sm:w-[160px]">
-                <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
+        {/* A one-person business has nothing to filter by; the control is noise.
+            On a phone it takes a row of its own below the tabs; on wider screens
+            it sits between the range label and the tabs. */}
+        {soleStaff ? null : (
+          <Select value={staffFilter} onValueChange={setStaffFilter}>
+            <SelectTrigger className="order-last w-full sm:order-none sm:ml-auto sm:w-[160px]">
+              <SelectValue placeholder={tenant.terminology.staff || "Staff member"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                All {(tenant.terminology.staff || "Staff member").toLowerCase()}s
+              </SelectItem>
+              {(staff.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.displayName}
                 </SelectItem>
-                {(staff.data ?? []).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {/* Tabs on the left, the ⋯ options menu on the right of the same row, so the
+            toolbar is two rows on a phone instead of four. The service filter and
+            the month-bar text choices both live behind the ⋯. */}
+        <div
+          className={cn(
+            "flex w-full items-center justify-between gap-2 sm:w-auto",
+            soleStaff && "sm:ml-auto",
           )}
-          <ServiceFilterSelect
-            services={services.data ?? []}
-            value={serviceFilter}
-            onValueChange={setServiceFilter}
-            className="w-full sm:w-[190px]"
-          />
-          {view === "month" ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full sm:w-auto">
-                  <Tag className="size-4" /> Bar text
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Show on month bars</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={monthBar.has("time")}
-                  onCheckedChange={() => toggleMonthBar("time")}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  Time / All day
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={monthBar.has("client")}
-                  onCheckedChange={() => toggleMonthBar("client")}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  Client name
-                </DropdownMenuCheckboxItem>
-                {recordFieldLabel ? (
+        >
+          <Tabs value={view} onValueChange={(v) => setView(v as typeof view)}>
+            <TabsList>
+              <TabsTrigger value="day">Day</TabsTrigger>
+              <TabsTrigger value="week">Week</TabsTrigger>
+              <TabsTrigger value="month">Month</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative shrink-0"
+                aria-label={
+                  serviceFiltered ? "Calendar options (service filter on)" : "Calendar options"
+                }
+              >
+                <MoreHorizontal className="size-4" />
+                {/* A dot on the button when a service filter is applied, so it is
+                    obvious the calendar is showing a subset even with the menu shut. */}
+                {serviceFiltered ? (
+                  <span
+                    aria-hidden
+                    className="absolute -top-1 -right-1 size-2.5 rounded-full bg-primary ring-2 ring-card"
+                  />
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="flex items-center justify-between">
+                <span>Show {(tenant.terminology.service || "service").toLowerCase()}s</span>
+                {serviceFiltered ? (
+                  <span className="text-xs font-normal text-primary">Filtered</span>
+                ) : null}
+              </DropdownMenuLabel>
+              <ServiceFilterMenuItems
+                services={services.data ?? []}
+                value={serviceFilter}
+                onValueChange={setServiceFilter}
+                colourFor={(s) => s.colour ?? SERVICE_FALLBACK_COLOUR}
+              />
+              {view === "month" ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Show on month bars</DropdownMenuLabel>
                   <DropdownMenuCheckboxItem
-                    checked={monthBar.has("record")}
-                    onCheckedChange={() => toggleMonthBar("record")}
+                    checked={monthBar.has("time")}
+                    onCheckedChange={() => toggleMonthBar("time")}
                     onSelect={(e) => e.preventDefault()}
                   >
-                    {recordFieldLabel}
+                    Time / All day
                   </DropdownMenuCheckboxItem>
-                ) : null}
-                <DropdownMenuCheckboxItem
-                  checked={monthBar.has("category")}
-                  onCheckedChange={() => toggleMonthBar("category")}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  Category
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={monthBar.has("service")}
-                  onCheckedChange={() => toggleMonthBar("service")}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {tenant.terminology.service || "Service"}
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+                  <DropdownMenuCheckboxItem
+                    checked={monthBar.has("client")}
+                    onCheckedChange={() => toggleMonthBar("client")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    Client name
+                  </DropdownMenuCheckboxItem>
+                  {recordFieldLabel ? (
+                    <DropdownMenuCheckboxItem
+                      checked={monthBar.has("record")}
+                      onCheckedChange={() => toggleMonthBar("record")}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {recordFieldLabel}
+                    </DropdownMenuCheckboxItem>
+                  ) : null}
+                  <DropdownMenuCheckboxItem
+                    checked={monthBar.has("category")}
+                    onCheckedChange={() => toggleMonthBar("category")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    Category
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={monthBar.has("service")}
+                    onCheckedChange={() => toggleMonthBar("service")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {tenant.terminology.service || "Service"}
+                  </DropdownMenuCheckboxItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
