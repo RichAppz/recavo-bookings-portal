@@ -31,10 +31,28 @@ export function nativeAuthRedirectUrl(): string {
   return `${window.location.origin}/auth/native`;
 }
 
+type CapacitorGlobal = { isNativePlatform?: () => boolean; getPlatform?: () => string };
+
+function capacitor(): CapacitorGlobal | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as { Capacitor?: CapacitorGlobal }).Capacitor;
+}
+
 export function isNativeApp(): boolean {
-  if (typeof window === "undefined") return false;
-  const cap = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-  return Boolean(cap?.isNativePlatform?.());
+  return Boolean(capacitor()?.isNativePlatform?.());
+}
+
+export function isNativeIOS(): boolean {
+  return isNativeApp() && capacitor()?.getPlatform?.() === "ios";
+}
+
+/**
+ * Whether Sign in with Apple should be offered. Required by App Store rules in
+ * the iOS app, where it runs natively; the web/Android OAuth route also needs
+ * an Apple Services ID configured in Supabase, so it stays off there for now.
+ */
+export function offersAppleSignIn(): boolean {
+  return isNativeIOS();
 }
 
 async function closeInAppBrowser(): Promise<void> {
@@ -124,6 +142,50 @@ export async function runNativeOAuth(url: string): Promise<NativeOAuthResult> {
       settle({ error: err instanceof Error ? err.message : "Could not open the sign-in window" });
     });
   });
+}
+
+export type NativeAppleSignInResult =
+  { identityToken: string; nonce: string; name: string | null } | { cancelled: true };
+
+/**
+ * Runs the system Sign in with Apple sheet (ASAuthorizationController) on iOS
+ * and returns Apple's identity token for `supabase.auth.signInWithIdToken`.
+ *
+ * Apple echoes the nonce we hand the request into the identity token, and
+ * Supabase checks that claim against the SHA-256 of the nonce we send it, so
+ * the request gets the hash and the caller gets the raw value. Apple only
+ * reveals the user's name on their very first authorisation, so it is returned
+ * for the caller to persist.
+ */
+export async function runNativeAppleSignIn(): Promise<NativeAppleSignInResult> {
+  const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+  const nonce = randomNonce();
+  try {
+    const { response } = await SignInWithApple.authorize({
+      // clientId/redirectURI only matter for the plugin's web flow; iOS uses the bundle id.
+      clientId: NATIVE_URL_SCHEME,
+      redirectURI: NATIVE_AUTH_REDIRECT,
+      scopes: "email name",
+      nonce: await sha256Hex(nonce),
+    });
+    const name = [response.givenName, response.familyName].filter(Boolean).join(" ").trim();
+    return { identityToken: response.identityToken, nonce, name: name || null };
+  } catch (err) {
+    // ASAuthorizationError.canceled (1001): the user dismissed the sheet.
+    const message = err instanceof Error ? err.message : String(err);
+    if (/1001|cancel/i.test(message)) return { cancelled: true };
+    throw err;
+  }
+}
+
+function randomNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**

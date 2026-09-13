@@ -21,9 +21,19 @@ import {
 } from "@/lib/api";
 import type { User, UserProfileUpdate } from "@/lib/api/types";
 import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
-import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
+import {
+  clearPendingProfile,
+  readPendingProfile,
+  stashPendingProfile,
+} from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
-import { isNativeApp, nativeAuthRedirectUrl, runNativeOAuth } from "@/lib/native";
+import {
+  isNativeApp,
+  isNativeIOS,
+  nativeAuthRedirectUrl,
+  runNativeAppleSignIn,
+  runNativeOAuth,
+} from "@/lib/native";
 import { toast } from "sonner";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
@@ -34,7 +44,7 @@ export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unco
  * - `signed-in`: native — the session was established; auth state follows.
  * - `cancelled`: native — the user closed the sign-in sheet; reset the UI.
  */
-export type GoogleSignInOutcome = "redirecting" | "signed-in" | "cancelled";
+export type SocialSignInOutcome = "redirecting" | "signed-in" | "cancelled";
 
 export type MfaMode = "challenge" | "enroll";
 
@@ -51,7 +61,8 @@ type AuthContextValue = {
   accessToken: string | null;
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: (redirectTo?: string) => Promise<GoogleSignInOutcome>;
+  signInWithGoogle: (redirectTo?: string) => Promise<SocialSignInOutcome>;
+  signInWithApple: (redirectTo?: string) => Promise<SocialSignInOutcome>;
   signUp: (
     email: string,
     password: string,
@@ -646,42 +657,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authLog("signIn: password accepted (awaiting auth-state event)");
   }, []);
 
-  const signInWithGoogle = useCallback(
-    async (redirectTo?: string): Promise<GoogleSignInOutcome> => {
+  /**
+   * Shared Supabase OAuth entry for social providers.
+   *
+   * In a browser this navigates to the provider and resolves "redirecting".
+   * Inside the Capacitor shell the WebView must not navigate off-host (Capacitor
+   * hands such navigations to Safari, where the session would land and never
+   * reach the app), so the OAuth page runs in the in-app browser sheet with
+   * Supabase redirecting to our https bounce page, which relays to the app's URL
+   * scheme. Whatever comes back is installed here: tokens for the implicit flow,
+   * or a PKCE code, whose verifier lives in this WebView.
+   */
+  const signInWithOAuthProvider = useCallback(
+    async (
+      provider: "google" | "apple",
+      queryParams: Record<string, string> | undefined,
+      redirectTo?: string,
+    ): Promise<SocialSignInOutcome> => {
       const supabase = getSupabase();
-      // Without this Google silently reuses whichever account is already
-      // signed in to the browser, so there is no way to pick a different one.
-      const queryParams = { prompt: "select_account" };
+      const label = `signInWith${provider === "google" ? "Google" : "Apple"}`;
 
       if (isNativeApp()) {
-        // Inside the Capacitor shell the WebView must not navigate to Google:
-        // Capacitor hands off-host navigations to Safari, where the session would
-        // land and never reach the app. Run the OAuth page in the in-app browser
-        // sheet instead, with Supabase redirecting to our https bounce page,
-        // which relays to the app's URL scheme. Install whatever comes back here
-        // (tokens for the implicit flow, or a PKCE code — whose verifier lives in
-        // this WebView).
-        authLog("signInWithGoogle: opening OAuth in native browser sheet");
+        authLog(`${label}: opening OAuth in native browser sheet`);
         const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
+          provider,
           options: { redirectTo: nativeAuthRedirectUrl(), skipBrowserRedirect: true, queryParams },
         });
         if (error) throw error;
-        if (!data.url) throw new Error("Google sign-in did not return an authorisation URL");
+        if (!data.url) throw new Error("Sign-in did not return an authorisation URL");
 
         const result = await runNativeOAuth(data.url);
         if ("cancelled" in result) {
-          authLog("signInWithGoogle: browser sheet dismissed before completing");
+          authLog(`${label}: browser sheet dismissed before completing`);
           return "cancelled";
         }
         if ("error" in result) throw new Error(result.error);
 
         if ("tokens" in result) {
-          authLog("signInWithGoogle: installing session from callback tokens");
+          authLog(`${label}: installing session from callback tokens`);
           const { error: sessionError } = await supabase.auth.setSession(result.tokens);
           if (sessionError) throw sessionError;
         } else {
-          authLog("signInWithGoogle: exchanging code for session");
+          authLog(`${label}: exchanging code for session`);
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.code);
           if (exchangeError) throw exchangeError;
         }
@@ -689,9 +706,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return "signed-in";
       }
 
-      authLog("signInWithGoogle: starting OAuth redirect");
+      authLog(`${label}: starting OAuth redirect`);
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: {
           redirectTo:
             redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
@@ -702,6 +719,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return "redirecting";
     },
     [],
+  );
+
+  const signInWithGoogle = useCallback(
+    (redirectTo?: string) =>
+      // Without this Google silently reuses whichever account is already
+      // signed in to the browser, so there is no way to pick a different one.
+      signInWithOAuthProvider("google", { prompt: "select_account" }, redirectTo),
+    [signInWithOAuthProvider],
+  );
+
+  const signInWithApple = useCallback(
+    async (redirectTo?: string): Promise<SocialSignInOutcome> => {
+      if (isNativeIOS()) {
+        // Native Sign in with Apple: the system sheet (Face ID, no web page)
+        // returns an identity token Supabase verifies directly. Requires the
+        // app's bundle id in the Apple provider's client ids in Supabase.
+        authLog("signInWithApple: opening native Apple sheet");
+        const result = await runNativeAppleSignIn();
+        if ("cancelled" in result) {
+          authLog("signInWithApple: native sheet dismissed");
+          return "cancelled";
+        }
+        // Apple only reveals the name on first authorisation and Supabase
+        // doesn't store it, so stash it for applySession to apply to /me —
+        // unless the registration form already captured one.
+        if (result.name && !readPendingProfile()) stashPendingProfile({ name: result.name });
+        const { error } = await getSupabase().auth.signInWithIdToken({
+          provider: "apple",
+          token: result.identityToken,
+          nonce: result.nonce,
+        });
+        if (error) throw error;
+        return "signed-in";
+      }
+      return signInWithOAuthProvider("apple", undefined, redirectTo);
+    },
+    [signInWithOAuthProvider],
   );
 
   /**
@@ -875,6 +929,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       signIn,
       signInWithGoogle,
+      signInWithApple,
       signUp,
       confirmSignUp,
       resendSignUpCode,
@@ -902,6 +957,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       signIn,
       signInWithGoogle,
+      signInWithApple,
       signUp,
       confirmSignUp,
       resendSignUpCode,
