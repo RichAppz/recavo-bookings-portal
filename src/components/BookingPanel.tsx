@@ -2008,6 +2008,9 @@ function RescheduleDialog({
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
     dropIn: dropIn && mode === "slot",
+    // Same half-hour grid as the Add booking form: staff may move a job to any
+    // time the day has room for, not just back-to-back from opening.
+    granularityMinutes: 30,
     enabled: open && mode === "slot",
   });
 
