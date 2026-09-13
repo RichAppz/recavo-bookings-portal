@@ -150,13 +150,25 @@ export type NativeAppleSignInResult =
  * reveals the user's name on their very first authorisation, so it is returned
  * for the caller to persist.
  */
+let signInWithApplePlugin: SignInWithApplePlugin | undefined;
+
+/**
+ * Binds to the native plugin by name rather than importing
+ * @capacitor-community/apple-sign-in's JS: its web fallback touches `document`
+ * at module scope, which crashes the SSR worker once the bundler inlines the
+ * import. Only ever called on iOS, so no web fallback is needed. Bound once —
+ * Capacitor warns if the same plugin name is registered twice.
+ */
+async function appleSignInPlugin(): Promise<SignInWithApplePlugin> {
+  if (!signInWithApplePlugin) {
+    const { registerPlugin } = await import("@capacitor/core");
+    signInWithApplePlugin = registerPlugin<SignInWithApplePlugin>("SignInWithApple");
+  }
+  return signInWithApplePlugin;
+}
+
 export async function runNativeAppleSignIn(): Promise<NativeAppleSignInResult> {
-  // Bind to the native plugin by name rather than importing
-  // @capacitor-community/apple-sign-in's JS: its web fallback touches
-  // `document` at module scope, which crashes the SSR worker once the bundler
-  // inlines the import. We only ever call it on iOS, so no web fallback needed.
-  const { registerPlugin } = await import("@capacitor/core");
-  const SignInWithApple = registerPlugin<SignInWithApplePlugin>("SignInWithApple");
+  const SignInWithApple = await appleSignInPlugin();
   const nonce = randomNonce();
   try {
     const { response } = await SignInWithApple.authorize({
