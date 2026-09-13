@@ -58,6 +58,13 @@ export const queryKeys = {
   service: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId] as const,
 
+  /** Consumables catalogue (automotive); the list carries `serviceIds` for "used by N services". */
+  consumables: (businessId: string) => ["biz", businessId, "consumables"] as const,
+  serviceConsumables: (businessId: string, serviceId: string) =>
+    ["biz", businessId, "services", serviceId, "consumables"] as const,
+  bookingConsumables: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "consumables"] as const,
+
   staff: (businessId: string) => ["biz", businessId, "staff"] as const,
   staffMember: (businessId: string, staffId: string) =>
     ["biz", businessId, "staff", staffId] as const,

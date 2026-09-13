@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { Check, Clock, Eye, EyeOff, Plus, Trash2, Users } from "lucide-react";
+import { Check, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -36,14 +36,19 @@ import { cn } from "@/lib/utils";
 import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
+  useConsumables,
   useCreateService,
   useDeleteService,
   useLocationsList,
+  useReplaceServiceConsumables,
+  useServiceConsumables,
   useServices,
   useStaffList,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
+import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
+import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
 import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
 import { PackageLinksCard } from "@/components/PackageLinksCard";
 import { ApiError } from "@/lib/api";
@@ -138,6 +143,16 @@ function ServicesPage() {
   const soleLocation = useSoleLocation();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
+  // "N consumables" on each card: the catalogue rows carry the services they're on,
+  // so one request covers every card. Detailing only; nothing is fetched otherwise.
+  const consumables = useConsumables({ enabled: isDetailing });
+  const consumableCountByService = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of consumables.data ?? []) {
+      for (const id of c.serviceIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  }, [consumables.data]);
   const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
@@ -257,6 +272,16 @@ function ServicesPage() {
                           {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
                         </span>
                       )}
+                      {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
+                        <span
+                          className="flex items-center gap-1.5 text-muted-foreground"
+                          title="Materials this service uses by default — your records only"
+                        >
+                          <Package className="size-4" />
+                          {consumableCountByService.get(s.id)}{" "}
+                          {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
+                        </span>
+                      ) : null}
                     </div>
 
                     {s.variants.length > 0 ? (
@@ -505,7 +530,22 @@ function ServiceDialog({
   const [windows, setWindows] = useState<AvailabilityWindow[]>(() => defaultWindows(service));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const submitting = createService.isPending || updateService.isPending;
+  // Consumables used (detailing only): the materials a job of this service uses by
+  // default, saved through their own endpoint once the service itself has saved.
+  // Staff-only records — they never touch the price.
+  const consumableCatalogue = useConsumables({ enabled: isDetailing && open });
+  const serviceUsage = useServiceConsumables(service?.id, { enabled: isDetailing && open });
+  const replaceServiceUsage = useReplaceServiceConsumables();
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageDirty, setUsageDirty] = useState(false);
+  const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
+  // The defaults arrive after the dialog opens; adopt them until staff start editing.
+  useEffect(() => {
+    if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
+  }, [open, usageDirty, serviceUsage.data]);
+
+  const submitting =
+    createService.isPending || updateService.isPending || replaceServiceUsage.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
     setName(s?.name ?? "");
@@ -525,6 +565,9 @@ function ServiceDialog({
     setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
+    setUsageRows([]);
+    setUsageDirty(false);
+    setUsageInvalid(null);
   };
 
   // Radix only reports open changes it initiates itself, so a dialog opened by the
@@ -615,6 +658,16 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
+    // Validate the consumables before anything saves, so a bad row can't leave the
+    // service written and its materials not.
+    const usage = isDetailing && usageDirty ? rowsToItems(usageRows) : null;
+    if (usage && !usage.ok) {
+      setUsageInvalid(usage.index);
+      toast.error("Pick a consumable and a quantity above zero on each line");
+      throw new Error("validation");
+    }
+    setUsageInvalid(null);
+
     const body: Record<string, unknown> = {
       name,
       eligibleStaffIds,
@@ -644,6 +697,15 @@ function ServiceDialog({
       } else {
         saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
         toast.success(`${noun} created`);
+      }
+      // Materials used by default. Its own endpoint, so it follows the service save;
+      // a failure here is toasted by the hook and leaves the service itself saved.
+      if (usage?.ok) {
+        try {
+          await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
+        } catch {
+          toast.warning("The consumables list didn't save — open the service and try again.");
+        }
       }
       // A staff record with its own service list would silently veto this service
       // even though it was just assigned to them here. Bring those lists into line
@@ -998,6 +1060,33 @@ function ServiceDialog({
               </div>
             )}
           </div>
+
+          {/* Detailing: what a job of this service uses up. Records only; never priced in. */}
+          {isDetailing ? (
+            <div className="grid gap-2 border-t pt-4">
+              <Label>Consumables used</Label>
+              <p className="text-xs text-muted-foreground">
+                What one job of this {lower} typically uses — a bottle of coating, two pads. New
+                bookings start with this list, which you can adjust per job. For your records only;
+                it never changes the price or shows to clients.
+              </p>
+              {serviceUsage.isLoading || consumableCatalogue.isLoading ? (
+                <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
+              ) : (
+                <ConsumableUsageEditor
+                  rows={usageRows}
+                  onChange={(rows) => {
+                    setUsageRows(rows);
+                    setUsageDirty(true);
+                    setUsageInvalid(null);
+                  }}
+                  catalogue={consumableCatalogue.data ?? []}
+                  invalidIndex={usageInvalid}
+                  idPrefix="sc"
+                />
+              )}
+            </div>
+          ) : null}
 
           {/* With one person on the books "everyone" and "them" are the same answer. */}
           {soleStaff ? null : (

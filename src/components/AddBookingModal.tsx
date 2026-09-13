@@ -9,6 +9,7 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound } from "lucide-react";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
+import { ServiceDefaultsHint } from "@/components/BookingConsumables";
 import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
@@ -1159,6 +1160,10 @@ export function AddBookingModal({
                       : undefined
                   }
                 />
+                {/* Detailing: the materials the job will start with (staff records; not charged). */}
+                {isCarDetailing && picked.length > 0 ? (
+                  <ServiceDefaultsHint serviceIds={picked.map((p) => p.serviceId)} />
+                ) : null}
               </div>
               {/* One location is picked for them above; nothing to ask. */}
               {soleLocation ? null : (
