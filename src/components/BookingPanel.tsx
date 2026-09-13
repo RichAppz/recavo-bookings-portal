@@ -110,6 +110,14 @@ import {
 } from "@/lib/booking-payment";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
+  allDayBlockDays,
+  bookingJobMinutes,
+  bookingWindowMinutes,
+  describeAllDayBlock,
+  formatAllDayDuration,
+  lineItemJobMinutes,
+} from "@/lib/booking-duration";
+import {
   formatBookingWhen,
   formatDuration,
   formatDurationLong,
@@ -223,12 +231,11 @@ export function BookingPanel({
     ? booking.serviceSnapshot.priceMinor +
       (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0)
     : null;
-  const totalMinutes = booking
-    ? Math.max(
-        0,
-        Math.round((new Date(booking.end).getTime() - new Date(booking.start).getTime()) / 60_000),
-      )
-    : 0;
+  // The work itself, not the diary it blocks: an all-day booking of a 2-hour coating
+  // is still a 2-hour job (the API writes the whole day onto start/end and the primary
+  // line item, so read the catalogue length back from the snapshot).
+  const totalMinutes = booking ? bookingJobMinutes(booking) : 0;
+  const blockMinutes = booking ? bookingWindowMinutes(booking) : 0;
   const canRecordPayment =
     Boolean(settlement && settlement.outstandingMinor > 0 && settlement.state !== "credit") &&
     (booking?.status === "confirmed" || booking?.status === "completed");
@@ -974,8 +981,11 @@ export function BookingPanel({
                       label="Duration"
                       value={
                         booking.allDay
-                          ? `All day · ${formatDurationLong(totalMinutes)}`
+                          ? formatAllDayDuration(totalMinutes, blockMinutes)
                           : formatDurationLong(totalMinutes)
+                      }
+                      hint={
+                        booking.allDay ? describeAllDayBlock(totalMinutes, blockMinutes) : undefined
                       }
                     />
                   </dl>
@@ -1000,7 +1010,7 @@ export function BookingPanel({
                                 ) : null}
                                 <span className="text-xs text-muted-foreground">
                                   {" "}
-                                  · {formatDuration(li.durationMinutes)}
+                                  · {formatDuration(lineItemJobMinutes(booking, li))}
                                 </span>
                               </span>
                               <span className="tabular-nums">
@@ -2032,7 +2042,11 @@ function RescheduleDialog({
           {mode === "custom" ? (
             <p className="text-xs text-muted-foreground">
               {booking.allDay
-                ? `Stays an all-day job of ${formatDurationLong(lengthMinutes)}, starting on the new date.`
+                ? `Stays an all-day job${
+                    allDayBlockDays(lengthMinutes) > 1
+                      ? ` across ${allDayBlockDays(lengthMinutes)} days`
+                      : ""
+                  }, starting on the new date.`
                 : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start.`}
               {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
             </p>
