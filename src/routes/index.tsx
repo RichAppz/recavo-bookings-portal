@@ -5,6 +5,7 @@ import {
   BadgePoundSterling,
   CalendarPlus,
   CalendarX,
+  CarFront,
   Clock,
   Lock,
   MessageSquarePlus,
@@ -617,11 +618,24 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
-            {booking.serviceSnapshot.name}
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+            <span className="truncate">{booking.serviceSnapshot.name}</span>
             {booking.attendees.length > 1 ? (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
+              <span className="text-xs font-normal text-muted-foreground">
                 {booking.seatCount} of {booking.attendees.length} booked
+              </span>
+            ) : null}
+            {/* The client needs running somewhere once the car is in. */}
+            {booking.clientLift ? (
+              <span
+                title={
+                  booking.clientLift.destination
+                    ? `Drop client at ${booking.clientLift.destination}`
+                    : "Lift needed"
+                }
+                className="inline-flex shrink-0"
+              >
+                <CarFront role="img" aria-label="Lift needed" className="size-3.5 text-primary" />
               </span>
             ) : null}
           </p>

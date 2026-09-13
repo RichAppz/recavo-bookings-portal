@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, ChevronLeft, ChevronRight, Clock, MoreHorizontal } from "lucide-react";
+import {
+  CalendarPlus,
+  CarFront,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MoreHorizontal,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
@@ -163,6 +170,21 @@ function DropInTag() {
 }
 
 /**
+ * The client needs running somewhere once the car is in. A glyph rather than a word:
+ * chips are narrow and the panel spells out where to.
+ */
+function LiftTag() {
+  return (
+    <CarFront
+      role="img"
+      aria-label="Lift needed"
+      className="size-3 shrink-0 text-primary"
+      strokeWidth={2.5}
+    />
+  );
+}
+
+/**
  * What identifies the linked record at a glance. The vehicle template's
  * `registration` field is the thing a detailer recognises a job by, so it wins;
  * other record types (pets, …) fall back to the record's own label.
@@ -236,9 +258,12 @@ const MONTH_LANES = 3;
  * is kept as-is, so someone who deliberately trimmed their bars is not surprised
  * by a new field appearing in them.
  */
-const MONTH_BAR_FIELDS = ["time", "client", "record", "category", "service"] as const;
+const MONTH_BAR_FIELDS = ["time", "client", "record", "category", "service", "lift"] as const;
 type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
 const DEFAULT_MONTH_BAR_FIELDS = "time,record,category,service";
+// A detailer plans their day around who needs running home, so the lift marker is on
+// from the start for them; other trades never book one and get no extra clutter.
+const DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE = `${DEFAULT_MONTH_BAR_FIELDS},lift`;
 
 function parseMonthBarFields(raw: string): Set<MonthBarField> {
   const set = new Set<MonthBarField>();
@@ -278,9 +303,10 @@ function CalendarPage() {
   );
   const [serviceFilter, setServiceFilter] = useStoredState<string>(prefKey("service"), "all");
   const serviceFiltered = serviceFilter !== "all";
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [monthBarRaw, setMonthBarRaw] = useStoredState<string>(
     prefKey("monthBar"),
-    DEFAULT_MONTH_BAR_FIELDS,
+    isCarDetailing ? DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE : DEFAULT_MONTH_BAR_FIELDS,
   );
   const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
   const toggleMonthBar = (field: MonthBarField) => {
@@ -785,6 +811,15 @@ function CalendarPage() {
                   >
                     {tenant.terminology.service || "Service"}
                   </DropdownMenuCheckboxItem>
+                  {isCarDetailing ? (
+                    <DropdownMenuCheckboxItem
+                      checked={monthBar.has("lift")}
+                      onCheckedChange={() => toggleMonthBar("lift")}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      Lift needed
+                    </DropdownMenuCheckboxItem>
+                  ) : null}
                 </>
               ) : null}
             </DropdownMenuContent>
@@ -954,6 +989,7 @@ function CalendarPage() {
                       const showTag = monthBar.has("record") && tag;
                       const category = categoryFor(b);
                       const showCategory = monthBar.has("category") && category;
+                      const showLift = monthBar.has("lift") && Boolean(b.clientLift);
                       // "Category only" on a service that has none would leave the
                       // bar blank, so the name steps in for that service.
                       const showService =
@@ -965,7 +1001,7 @@ function CalendarPage() {
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={style}
@@ -978,6 +1014,7 @@ function CalendarPage() {
                         >
                           <ServiceDot colour={serviceColour(b)} />
                           {isDropIn(b) ? <DropInTag /> : null}
+                          {showLift ? <LiftTag /> : null}
                           {/* The label slides if it is wider than the bar, so a one-day
                               cell still shows everything that was switched on. */}
                           <Marquee>
@@ -1113,7 +1150,7 @@ function CalendarPage() {
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={`${payment.label}${owner ? ` · ${owner.displayName}` : ""}`}
-                          aria-label={`All day: ${tag ? `${tag}, ` : ""}${serviceLabel(b)}${
+                          aria-label={`All day: ${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)}${
                             isMultiDay(b) ? `, until ${endLabel(b)}` : ""
                           } — ${payment.label}`}
                           style={{
@@ -1129,6 +1166,7 @@ function CalendarPage() {
                           )}
                         >
                           <ServiceDot colour={serviceColour(b)} />
+                          {b.clientLift ? <LiftTag /> : null}
                           {continuesBefore ? (
                             <span className="text-muted-foreground" aria-label="Continues">
                               ↳
@@ -1236,7 +1274,7 @@ function CalendarPage() {
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
+                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
@@ -1249,6 +1287,7 @@ function CalendarPage() {
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
                             <ServiceDot colour={serviceColour(b)} />
                             {isDropIn(b) ? <DropInTag /> : null}
+                            {b.clientLift ? <LiftTag /> : null}
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
                               {category ? (

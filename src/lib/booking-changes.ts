@@ -1,3 +1,4 @@
+import { describeClientLiftChange } from "./client-lift.ts";
 import { formatAllDaySpan, formatDuration, formatInTz, formatMoney } from "./format.ts";
 
 /**
@@ -86,6 +87,8 @@ export function describeBookingChange(
     }
     case "duration":
       return `Duration: ${formatDuration(Number(change.from ?? 0))} → ${formatDuration(Number(change.to ?? 0))}`;
+    case "clientLift":
+      return describeClientLiftChange(change.from, change.to);
     default: {
       const word = change.field.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
       return `${word.charAt(0).toUpperCase()}${word.slice(1)} changed`;
@@ -142,6 +145,7 @@ export function summariseBookingChanges(
   const fields = new Set(changes.map((c) => c.field));
   if (fields.size === 0) return "Booking edited";
   if (fields.size === 1 && fields.has("notesInternal")) return "Internal note edited";
+  if (fields.size === 1 && fields.has("clientLift")) return "Lift edited";
   // A quiet fix to the diary (reschedule with `correction: true`): the client was not
   // told, unlike a reschedule, so the headline says so rather than "moved".
   if (fields.has("when")) return "Date corrected by staff";
@@ -153,6 +157,7 @@ export function summariseBookingChanges(
   if (fields.has("leadCustomer")) parts.push("client");
   if (fields.has("linkedRecord")) parts.push(terms.linkedRecord.toLowerCase());
   if (fields.has("paymentMethod")) parts.push("payment");
+  if (fields.has("clientLift")) parts.push("lift");
   if (parts.length === 0) return "Booking edited";
   const joined =
     parts.length === 1
