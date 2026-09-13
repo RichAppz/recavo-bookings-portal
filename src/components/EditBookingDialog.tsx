@@ -10,6 +10,7 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
+import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -48,6 +49,13 @@ import { customerDisplayName } from "@/lib/api/types";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { paymentMethodLabel } from "@/lib/booking-changes";
 import { bookingJobMinutes } from "@/lib/booking-duration";
+import {
+  clientLiftFromDraft,
+  describeClientLift,
+  draftFromClientLift,
+  sameClientLift,
+  type ClientLiftDraft,
+} from "@/lib/client-lift";
 import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
@@ -183,6 +191,9 @@ export function EditBookingDialog({
     booking.paymentMethod,
   );
   const [notes, setNotes] = useState(booking.notesInternal ?? "");
+  // Automotive only: the run home/to the station once the car has been dropped off.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  const [lift, setLift] = useState<ClientLiftDraft>(() => draftFromClientLift(booking.clientLift));
   // null = follow the default (on for anything the client would notice).
   const [notifyChoice, setNotifyChoice] = useState<boolean | null>(null);
   const [notifyPref] = useStoredState<NotifyPref>(
@@ -459,6 +470,17 @@ export function EditBookingDialog({
       clientVisible: false,
     });
   }
+  // The client's confirmation carries the lift line, so a change is worth telling them.
+  const nextLift = isCarDetailing ? clientLiftFromDraft(lift) : (booking.clientLift ?? null);
+  const liftChanged = !sameClientLift(nextLift, booking.clientLift ?? null);
+  if (liftChanged) {
+    changes.push({
+      label: "Lift",
+      from: describeClientLift(booking.clientLift) ?? "none",
+      to: describeClientLift(nextLift) ?? "none",
+      clientVisible: true,
+    });
+  }
   const dirty = changes.length > 0;
   // Everything but the date fix goes through PATCH; the fix is its own request.
   const amendDirty = changes.some((c) => c.label !== "When");
@@ -589,6 +611,7 @@ export function EditBookingDialog({
         ? { paymentMethod: paymentMethod as EditablePaymentMethod }
         : {}),
       ...(notesChanged ? { notesInternal: notes.trim() || null } : {}),
+      ...(liftChanged ? { clientLift: nextLift } : {}),
       ...(notify && notifyChannels.length > 0 ? { notify: { channels: notifyChannels } } : {}),
     };
 
@@ -865,6 +888,10 @@ export function EditBookingDialog({
                   </div>
                 )}
               </div>
+            ) : null}
+
+            {isCarDetailing ? (
+              <ClientLiftFields value={lift} onChange={setLift} idPrefix="edit-booking" />
             ) : null}
 
             <div className="grid gap-2">

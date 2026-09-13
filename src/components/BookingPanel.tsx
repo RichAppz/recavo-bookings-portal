@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Ban,
   BellRing,
+  CarFront,
   Pencil,
   CheckCircle2,
   ChevronRight,
@@ -153,6 +154,7 @@ import {
   smsBlockedReason,
 } from "@/lib/booking-reminders";
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
+import { describeClientLift } from "@/lib/client-lift";
 import { cn } from "@/lib/utils";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
@@ -809,6 +811,17 @@ export function BookingPanel({
                     {booking.allDay ? "Shares the day" : "Drop-in"}
                   </span>
                 ) : null}
+                {/* The client needs running somewhere once the car is in — obvious at a
+                    glance so it is planned for, not discovered at the door. */}
+                {booking.clientLift ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary"
+                    title={describeClientLift(booking.clientLift) ?? undefined}
+                  >
+                    <CarFront className="size-3" aria-hidden />
+                    Lift needed
+                  </span>
+                ) : null}
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
@@ -942,6 +955,19 @@ export function BookingPanel({
                           </Link>
                         </dd>
                       </div>
+                    ) : null}
+                    {booking.clientLift ? (
+                      <Detail
+                        label="Lift"
+                        value={
+                          booking.clientLift.destination?.trim()
+                            ? `Drop client at ${booking.clientLift.destination.trim()}`
+                            : "Lift needed"
+                        }
+                        hint={booking.clientLift.notes?.trim() || undefined}
+                        // Destinations are addresses; give the line the full width.
+                        className="col-span-2"
+                      />
                     ) : null}
                     <Detail
                       label="Payment method"
