@@ -142,6 +142,27 @@ function ServiceDot({ colour, className }: { colour: string; className?: string 
 }
 
 /**
+ * A timed job staff squeezed in beside an all-day one. The all-day bar sits in the
+ * all-day lane and the drop-in under it as a normal timed chip, so the marker is
+ * what tells them apart from a clash. (An all-day job booked over timed work carries
+ * the same flag on the API but needs no marker — the timed chips show the sharing.)
+ */
+function isDropIn(b: Booking): boolean {
+  return b.dropIn === true && !b.allDay;
+}
+
+function DropInTag() {
+  return (
+    <span
+      aria-hidden
+      className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-semibold tracking-wide text-primary uppercase"
+    >
+      Drop-in
+    </span>
+  );
+}
+
+/**
  * What identifies the linked record at a glance. The vehicle template's
  * `registration` field is the thing a detailer recognises a job by, so it wins;
  * other record types (pets, …) fall back to the record's own label.
@@ -944,7 +965,7 @@ function CalendarPage() {
                           type="button"
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={style}
@@ -956,6 +977,7 @@ function CalendarPage() {
                           )}
                         >
                           <ServiceDot colour={serviceColour(b)} />
+                          {isDropIn(b) ? <DropInTag /> : null}
                           {/* The label slides if it is wider than the bar, so a one-day
                               cell still shows everything that was switched on. */}
                           <Marquee>
@@ -1214,7 +1236,7 @@ function CalendarPage() {
                           key={b.id}
                           onClick={() => setSelectedBookingId(b.id)}
                           title={payment.label}
-                          aria-label={`${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
+                          aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)} — ${payment.label}`}
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
@@ -1226,6 +1248,7 @@ function CalendarPage() {
                         >
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
                             <ServiceDot colour={serviceColour(b)} />
+                            {isDropIn(b) ? <DropInTag /> : null}
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
                               {category ? (
