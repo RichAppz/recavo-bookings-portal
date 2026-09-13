@@ -39,7 +39,12 @@ export interface WorkingLayout {
   occupiedDays: string[];
 }
 
-type Rule = { dayOfWeek: number; startMinute: number; endMinute: number; locationId: string | null };
+type Rule = {
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+  locationId: string | null;
+};
 type Opening = { dayOfWeek: number; openMinute: number; closeMinute: number };
 type Off = { start: string; end: string };
 
@@ -143,7 +148,9 @@ export function layoutWorkingDuration(
 
 /**
  * The working days inside a hand-set window (Add booking → custom start/end): the
- * first and last day always count, the days between only when worked.
+ * first and last day always count, the days between only when worked. `minutes` is
+ * the duration the API will store for it (worked days only), so the readout matches
+ * the saved booking.
  */
 export function layoutExplicitWindow(
   startIso: string,
@@ -151,13 +158,14 @@ export function layoutExplicitWindow(
   schedule: WorkingSchedule | null,
   timeZone: string,
   options: { allDay: boolean },
-): WorkingLayout {
+): WorkingLayout & { minutes: number } {
   const startMs = new Date(startIso).getTime();
   const endMs = new Date(endIso).getTime();
+  const rawMinutes = Math.round((endMs - startMs) / 60_000);
   const startDay = localDay(startIso, timeZone);
   const lastDay = localDay(new Date(endMs - 60_000).toISOString(), timeZone);
-  if (!schedule || endMs - startMs < DAY_MINUTES * 60_000 || startDay === lastDay) {
-    return continuous(startIso, endIso, timeZone);
+  if (!schedule || rawMinutes < DAY_MINUTES || startDay === lastDay) {
+    return { ...continuous(startIso, endIso, timeZone), minutes: rawMinutes };
   }
   const days = [startDay];
   let cursor = addDaysIso(startDay, 1);
@@ -171,18 +179,27 @@ export function layoutExplicitWindow(
       start: wallToUtc(day, 0, timeZone).toISOString(),
       end: wallToUtc(addDaysIso(day, 1), 0, timeZone).toISOString(),
     }));
-    return { start: startIso, end: segments[segments.length - 1]!.end, segments, occupiedDays: days };
+    return {
+      start: startIso,
+      end: segments[segments.length - 1]!.end,
+      segments,
+      occupiedDays: days,
+      minutes: days.length * DAY_MINUTES,
+    };
   }
   const segments: Segment[] = [];
+  let lastPartial = 0;
   for (const [index, day] of days.entries()) {
     const isFirst = index === 0;
     const isLast = index === days.length - 1;
     const hours = schedule.hoursOn(day);
-    const segStart = isFirst ? new Date(startMs) : wallToUtc(day, hours?.open ?? 0, timeZone);
+    const open = hours?.open ?? 0;
+    const segStart = isFirst ? new Date(startMs) : wallToUtc(day, open, timeZone);
     if (isLast) {
       // Ending at or before opening time does not occupy that day.
       if (endMs <= segStart.getTime()) break;
       segments.push({ start: segStart.toISOString(), end: endIso });
+      lastPartial = Math.round((endMs - wallToUtc(day, open, timeZone).getTime()) / 60_000);
       continue;
     }
     let segEnd = hours
@@ -191,11 +208,17 @@ export function layoutExplicitWindow(
     if (segEnd.getTime() <= segStart.getTime()) segEnd = wallToUtc(addDaysIso(day, 1), 0, timeZone);
     segments.push({ start: segStart.toISOString(), end: segEnd.toISOString() });
   }
+  // Last day dropped: the job ends at the previous day's close instead.
+  const minutes =
+    segments.length === days.length
+      ? (days.length - 1) * DAY_MINUTES + lastPartial
+      : segments.length * DAY_MINUTES;
   return {
     start: startIso,
     end: segments[segments.length - 1]!.end,
     segments,
     occupiedDays: days.slice(0, segments.length),
+    minutes,
   };
 }
 
@@ -225,7 +248,10 @@ export function occupiedDaysOf(item: Spanning, timeZone: string): string[] {
 export function segmentOn(item: Spanning, isoDate: string, timeZone: string): Segment | null {
   for (const segment of segmentsOf(item)) {
     const first = localDay(segment.start, timeZone);
-    const last = localDay(new Date(new Date(segment.end).getTime() - 60_000).toISOString(), timeZone);
+    const last = localDay(
+      new Date(new Date(segment.end).getTime() - 60_000).toISOString(),
+      timeZone,
+    );
     if (first <= isoDate && isoDate <= last) return segment;
   }
   return null;
@@ -252,11 +278,14 @@ export function contiguousRuns(cols: number[]): { startCol: number; endCol: numb
 
 /**
  * "Thu 24 – Mon 28 Sept · 3 working days" for a job over several days; null for a
- * one-day job so callers fall back to the ordinary duration.
+ * one-day job so callers fall back to the ordinary duration. A job laid out as one
+ * continuous span (an older booking, or no schedule to skip) says "3 days" — every
+ * calendar day in it is worked.
  */
 export function formatWorkingSpan(item: Spanning, timeZone: string): string | null {
   const days = occupiedDaysOf(item, timeZone);
   if (days.length < 2) return null;
+  const noun = segmentsOf(item).length > 1 ? "working days" : "days";
   const first = days[0]!;
   const last = days[days.length - 1]!;
   const sameMonth = first.slice(0, 7) === last.slice(0, 7);
@@ -270,21 +299,29 @@ export function formatWorkingSpan(item: Spanning, timeZone: string): string | nu
     ...(sameMonth ? {} : { month: "short" }),
   });
   const right = fmt(last, { weekday: "short", day: "numeric", month: "short" });
-  return `${left} – ${right} · ${days.length} working days`;
+  return `${left} – ${right} · ${days.length} ${noun}`;
 }
 
 // ---- Zone arithmetic (no library: Intl only) ---------------------------------------
 
 function continuous(startIso: string, endIso: string, timeZone: string): WorkingLayout {
   const segment = { start: startIso, end: endIso };
-  return { start: startIso, end: endIso, segments: [segment], occupiedDays: daysCovered([segment], timeZone) };
+  return {
+    start: startIso,
+    end: endIso,
+    segments: [segment],
+    occupiedDays: daysCovered([segment], timeZone),
+  };
 }
 
 function daysCovered(segments: Segment[], timeZone: string): string[] {
   const days: string[] = [];
   for (const segment of segments) {
     let cursor = localDay(segment.start, timeZone);
-    const last = localDay(new Date(new Date(segment.end).getTime() - 60_000).toISOString(), timeZone);
+    const last = localDay(
+      new Date(new Date(segment.end).getTime() - 60_000).toISOString(),
+      timeZone,
+    );
     while (cursor <= last) {
       if (days[days.length - 1] !== cursor) days.push(cursor);
       cursor = addDaysIso(cursor, 1);

@@ -199,13 +199,47 @@ describe("reading saved bookings", () => {
       formatWorkingSpan({ start: "2026-09-24T08:00:00.000Z", end: "2026-09-24T11:00:00.000Z" }, TZ),
       null,
     );
+    // One continuous span (an older booking, or nothing to skip): plain days.
     assert.equal(
-      formatWorkingSpan(
-        { start: "2026-09-29T23:00:00.000Z", end: "2026-10-01T23:00:00.000Z" },
-        TZ,
-      ),
-      "Wed 30 Sept – Thu 1 Oct · 2 working days",
+      formatWorkingSpan({ start: "2026-09-29T23:00:00.000Z", end: "2026-10-01T23:00:00.000Z" }, TZ),
+      "Wed 30 Sept – Thu 1 Oct · 2 days",
     );
+  });
+});
+
+describe("layoutExplicitWindow — minutes the API will store", () => {
+  const schedule = scheduleFor(sam, unit, TZ);
+
+  it("counts only the occupied days of a timed Thursday → Monday window", () => {
+    const layout = layoutExplicitWindow(
+      "2026-09-24T08:00:00.000Z",
+      "2026-09-28T16:00:00.000Z",
+      schedule,
+      TZ,
+      { allDay: false },
+    );
+    // Thu + Fri whole, then Monday 08:00 → 17:00 local.
+    assert.equal(layout.minutes, 2 * DAY + 9 * 60);
+  });
+
+  it("is whole days for an all-day window and raw minutes with no schedule", () => {
+    const allDay = layoutExplicitWindow(
+      "2026-09-23T23:00:00.000Z",
+      "2026-09-28T23:00:00.000Z",
+      schedule,
+      TZ,
+      { allDay: true },
+    );
+    assert.deepEqual(allDay.occupiedDays, ["2026-09-24", "2026-09-25", "2026-09-28"]);
+    assert.equal(allDay.minutes, 3 * DAY);
+    const plain = layoutExplicitWindow(
+      "2026-09-24T08:00:00.000Z",
+      "2026-09-28T16:00:00.000Z",
+      null,
+      TZ,
+      { allDay: false },
+    );
+    assert.equal(plain.minutes, 4 * DAY + 8 * 60);
   });
 });
 
