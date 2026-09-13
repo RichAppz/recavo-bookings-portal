@@ -110,7 +110,9 @@ export function EventModal({
   // The inline range picker: closed until "Dates" is tapped; the first tap on it
   // sets the start day, the second the last day (the same day twice = one day).
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [picking, setPicking] = useState<"start" | "end">("start");
+  // start → end → review: the range stays lit until "Confirm", so the dates can be
+  // double-checked before the picker folds away.
+  const [picking, setPicking] = useState<"start" | "end" | "review">("start");
 
   useEffect(() => {
     if (!open) return;
@@ -176,9 +178,19 @@ export function EventModal({
       setPicking("end");
       return;
     }
+    if (picking === "review") {
+      // A tap while reviewing starts a fresh pick from that day.
+      setStartDate(iso);
+      setEndDate(iso);
+      setPicking("end");
+      return;
+    }
     const range = rangeFromTaps(startDate, iso);
     setStartDate(range.startDate);
     setEndDate(range.endDate);
+    setPicking("review");
+  };
+  const confirmDates = () => {
     setPicking("start");
     setPickerOpen(false);
   };
@@ -313,7 +325,11 @@ export function EventModal({
                 <p className="px-3 pt-3 text-xs text-muted-foreground" aria-live="polite">
                   {picking === "start"
                     ? "Tap the first day."
-                    : "Now tap the last day (the same day again for one day)."}
+                    : picking === "end"
+                      ? "Now tap the last day (the same day again for one day)."
+                      : `${formatEventDateRange(startDate, endDate)} · ${
+                          spanDays === 1 ? "1 day" : `${spanDays} days`
+                        } — happy with that? Tap a day to start again.`}
                 </p>
                 <Calendar
                   mode="range"
@@ -322,9 +338,25 @@ export function EventModal({
                   selected={pickerSelected}
                   onSelect={(_range, day) => tapDay(day)}
                   disabled={pickerDisabled}
+                  fixedWeeks
                   className="bg-transparent [--cell-size:2.5rem]"
                   classNames={{ root: "w-full" }}
                 />
+                {picking === "review" ? (
+                  <div className="flex justify-end gap-2 border-t px-3 py-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPicking("start")}
+                    >
+                      Change
+                    </Button>
+                    <Button type="button" size="sm" onClick={confirmDates}>
+                      Confirm dates
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
