@@ -52,6 +52,7 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
+import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
 import {
   addDays,
@@ -1231,8 +1232,12 @@ export function AddBookingModal({
                           customWindow ? "text-muted-foreground" : "text-destructive",
                         )}
                       >
+                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
+                            coating booked all day is "All day · 2 hrs", never "1 day". */}
                         {customWindow
-                          ? `Duration: ${formatDurationLong(customWindow.minutes)}`
+                          ? allDay
+                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
+                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
                           : "The end must come after the start."}
                       </span>
                     </div>
