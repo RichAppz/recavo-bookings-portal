@@ -1022,6 +1022,29 @@ export function useServiceConsumables(
   });
 }
 
+/**
+ * Default usage for several services at once — the Add booking form's read-only
+ * "Includes: 1 bottle ceramic, 2 pads" from whatever has been picked so far.
+ */
+export function useServicesConsumables(
+  serviceIds: readonly string[],
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQueries({
+    queries: serviceIds.map((serviceId) => ({
+      queryKey: queryKeys.serviceConsumables(businessId, serviceId),
+      enabled: Boolean(businessId) && opts.enabled !== false,
+      queryFn: async () => {
+        const res = await api.get<{ items: ConsumableUsageLine[] }>(
+          `/api/v1/businesses/${businessId}/services/${serviceId}/consumables`,
+        );
+        return res.data.items;
+      },
+    })),
+  });
+}
+
 /** Replace a service's default usage list. */
 export function useReplaceServiceConsumables() {
   const businessId = useBusinessId();

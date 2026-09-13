@@ -15,13 +15,16 @@ import {
   useBookingConsumables,
   useConsumables,
   useReplaceBookingConsumables,
+  useServicesConsumables,
 } from "@/lib/api/hooks";
 import type { BookingConsumablesUsage } from "@/lib/api/types";
 import {
   estimateMaterialsCost,
   formatQuantity,
+  mergeUsage,
   rowsFromLines,
   rowsToItems,
+  summariseUsage,
   type UsageRow,
 } from "@/lib/consumables";
 import { formatMoney } from "@/lib/format";
@@ -126,6 +129,27 @@ export function BookingConsumablesSection({ bookingId }: { bookingId: string }) 
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Read-only "Includes: 1 bottle Ceramic coat, 2 pad Foam pad" under the service
+ * picker on the Add booking form — what the new job will start with, from the picked
+ * services' defaults. Automotive only; renders nothing until there's something to say.
+ */
+export function ServiceDefaultsHint({ serviceIds }: { serviceIds: readonly string[] }) {
+  const tenant = useTenant();
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  const results = useServicesConsumables(isCarDetailing ? serviceIds : []);
+  // A handful of short lists; merging on render is cheaper than memoising them.
+  const merged = mergeUsage(results.map((r) => r.data ?? []));
+  if (!isCarDetailing || merged.length === 0) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      <Package className="mr-1 inline size-3.5 align-[-2px]" />
+      Includes: {summariseUsage(merged)}
+      <span className="text-muted-foreground/70"> — your records only, not charged</span>
+    </p>
   );
 }
 
