@@ -23,7 +23,7 @@ import type { User, UserProfileUpdate } from "@/lib/api/types";
 import { mfaStepFor, verifiedTotp } from "@/lib/auth/mfa";
 import { clearPendingProfile, readPendingProfile } from "@/lib/auth/pending-profile";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
-import { NATIVE_AUTH_REDIRECT, isNativeApp, runNativeOAuth } from "@/lib/native";
+import { isNativeApp, nativeAuthRedirectUrl, runNativeOAuth } from "@/lib/native";
 import { toast } from "sonner";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
@@ -657,13 +657,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Inside the Capacitor shell the WebView must not navigate to Google:
         // Capacitor hands off-host navigations to Safari, where the session would
         // land and never reach the app. Run the OAuth page in the in-app browser
-        // sheet instead, with Supabase redirecting to the app's URL scheme, and
-        // install whatever comes back here (tokens for the implicit flow, or a
-        // PKCE code — whose verifier lives in this WebView).
+        // sheet instead, with Supabase redirecting to our https bounce page,
+        // which relays to the app's URL scheme. Install whatever comes back here
+        // (tokens for the implicit flow, or a PKCE code — whose verifier lives in
+        // this WebView).
         authLog("signInWithGoogle: opening OAuth in native browser sheet");
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true, queryParams },
+          options: { redirectTo: nativeAuthRedirectUrl(), skipBrowserRedirect: true, queryParams },
         });
         if (error) throw error;
         if (!data.url) throw new Error("Google sign-in did not return an authorisation URL");

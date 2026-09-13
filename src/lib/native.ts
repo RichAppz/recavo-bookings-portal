@@ -13,11 +13,22 @@
 export const NATIVE_URL_SCHEME = "app.recavo.portal";
 
 /**
- * Where Supabase sends the browser after Google sign-in when running in the
- * app. Must be listed under Authentication → URL Configuration → Redirect URLs
- * in every Supabase project the app is built against (staging and production).
+ * Deep link the app receives once Google sign-in has completed. Supabase does
+ * not redirect here directly: it sends the browser to the https bounce page
+ * (see nativeAuthRedirectUrl), which relays the result to this URL.
  */
 export const NATIVE_AUTH_REDIRECT = `${NATIVE_URL_SCHEME}://auth/callback`;
+
+/**
+ * Where Supabase sends the browser after Google sign-in when running in the
+ * app: public/auth/native.html on the origin the app is loaded from. That
+ * origin is already in each Supabase project's Redirect URL allowlist (the web
+ * sign-in depends on it), so no per-scheme dashboard entry is needed. The page
+ * forwards the tokens on to NATIVE_AUTH_REDIRECT.
+ */
+export function nativeAuthRedirectUrl(): string {
+  return `${window.location.origin}/auth/native.html`;
+}
 
 export function isNativeApp(): boolean {
   if (typeof window === "undefined") return false;
