@@ -99,7 +99,13 @@ import {
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import type { BookingConflict } from "@/lib/api/errors";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import { allDayHolds, describeHold, heldAllDayNote, timedClashNote, timedJobsWithin } from "@/lib/drop-in";
+import {
+  allDayHolds,
+  describeHold,
+  heldAllDayNote,
+  timedClashNote,
+  timedJobsWithin,
+} from "@/lib/drop-in";
 import {
   customerDisplayName,
   type Booking,
@@ -1716,6 +1722,10 @@ function historyReasonNote(reason: string, booking: Pick<Booking, "allDay">): st
       return booking.allDay
         ? "Booked over timed work already on the day — staff confirmed they can share it"
         : "Booked as a drop-in alongside an all-day job";
+    case "rescheduled_drop_in":
+      return booking.allDay
+        ? "Moved onto a day with timed work — staff confirmed they can share it"
+        : "Moved in as a drop-in alongside an all-day job";
     default:
       return null;
   }
@@ -2035,11 +2045,7 @@ function RescheduleDialog({
   const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
   const timedOnDay =
     booking.allDay && customStart
-      ? timedJobsWithin(
-          others,
-          { start: customStart, end: spanEnd.toISOString() },
-          customStaffId,
-        )
+      ? timedJobsWithin(others, { start: customStart, end: spanEnd.toISOString() }, customStaffId)
       : [];
   const timedNote = timedClashNote(timedOnDay, timezone);
   const sendDropIn =

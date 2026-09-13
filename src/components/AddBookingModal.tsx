@@ -57,7 +57,13 @@ import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
-import { allDayHolds, describeHold, heldAllDayNote, timedClashNote, timedJobsWithin } from "@/lib/drop-in";
+import {
+  allDayHolds,
+  describeHold,
+  heldAllDayNote,
+  timedClashNote,
+  timedJobsWithin,
+} from "@/lib/drop-in";
 import {
   addDays,
   formatDuration,

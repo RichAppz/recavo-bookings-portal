@@ -60,7 +60,11 @@ describe("allDayHolds", () => {
 
 describe("timedJobsWithin", () => {
   it("finds live timed jobs inside the window, never all-day ones", () => {
-    const jobs = timedJobsWithin([coating, valet, { ...valet, id: "b5", status: "expired" }], tuesday, "s1");
+    const jobs = timedJobsWithin(
+      [coating, valet, { ...valet, id: "b5", status: "expired" }],
+      tuesday,
+      "s1",
+    );
     assert.deepEqual(
       jobs.map((b) => b.id),
       ["b2"],
@@ -77,7 +81,10 @@ describe("hold wording", () => {
 
   it("reads as one line however many holds there are", () => {
     assert.equal(heldAllDayNote([]), "Held all day");
-    assert.equal(heldAllDayNote(["5 year coating · Lee Gamble"]), "Held all day by 5 year coating · Lee Gamble");
+    assert.equal(
+      heldAllDayNote(["5 year coating · Lee Gamble"]),
+      "Held all day by 5 year coating · Lee Gamble",
+    );
     assert.equal(heldAllDayNote(["A", "B", "C"]), "Held all day by A and 2 more");
   });
 });
@@ -93,7 +100,10 @@ describe("timedClashNote", () => {
 
   it("counts several", () => {
     const later = { ...valet, start: "2026-09-08T13:00:00.000Z", end: "2026-09-08T14:00:00.000Z" };
-    assert.equal(timedClashNote([valet, later], TZ), "Tuesday already has 2 timed jobs, the first at 10:00");
+    assert.equal(
+      timedClashNote([valet, later], TZ),
+      "Tuesday already has 2 timed jobs, the first at 10:00",
+    );
     assert.equal(timedClashNote([], TZ), null);
   });
 });
