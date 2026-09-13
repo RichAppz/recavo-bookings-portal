@@ -39,10 +39,19 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import { describeClientLiftForCustomer } from "@/lib/client-lift";
 import { formatAllDaySpan, formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
 import { isMultiDay } from "@/lib/working-days";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+/**
+ * The lift the business arranged once the customer has dropped their vehicle off,
+ * read-only and worded as their confirmation was. Only detailers ever set one.
+ */
+function liftLine(booking: Pick<Booking, "clientLift">): string | null {
+  return describeClientLiftForCustomer(booking.clientLift);
+}
 
 /**
  * What the customer owes on a booking, in their words (RECA-523): the deposit while
@@ -525,6 +534,12 @@ function Overview({
                       </p>
                       {hint ? (
                         <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">{hint}</p>
+                      ) : null}
+                      {/* Read-only: the lift the business arranged after drop-off. */}
+                      {liftLine(b) ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
+                          {liftLine(b)}
+                        </p>
                       ) : null}
                     </div>
                     <div
