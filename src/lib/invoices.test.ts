@@ -165,7 +165,7 @@ describe("validateLineDrafts", () => {
   it("reports per-row problems and leaves valid rows clean", () => {
     const result = validateLineDrafts([
       good,
-      { ...good, description: "   ", quantity: "0", unitPrice: "-3" },
+      { ...good, description: "   ", quantity: "0", unitPrice: "abc" },
       { ...good, quantity: "1.5" },
     ]);
     assert.equal(result.ok, false);
@@ -181,6 +181,16 @@ describe("validateLineDrafts", () => {
   it("allows a zero price but not a blank one", () => {
     assert.equal(validateLineDrafts([{ ...good, unitPrice: "0" }]).ok, true);
     assert.equal(validateLineDrafts([{ ...good, unitPrice: "" }]).ok, false);
+  });
+
+  it("keeps a negative unit price — a discount line — as typed", () => {
+    const result = validateLineDrafts([
+      good,
+      { ...good, description: "Discount", unitPrice: "-145.00" },
+    ]);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.lines[1]?.unitPriceMinor, -14500);
   });
 });
 

@@ -63,6 +63,7 @@ import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
+import { localDay, segmentOn } from "@/lib/working-days";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
@@ -147,6 +148,11 @@ function Overview() {
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
+    // A multi-day job that skips today (the weekend between Fri and Mon) isn't today's work.
+    .filter((b) => {
+      const zone = b.timezone || "Europe/London";
+      return segmentOn(b, localDay(new Date().toISOString(), zone), zone) !== null;
+    })
     .sort((a, b) => a.start.localeCompare(b.start));
   // Staff events (dentist, school run) share the diary, so they belong in "Today" too.
   const todaysEvents = useCalendarBlocks({ ...todayRange() });
@@ -585,6 +591,10 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
     soleLocation ? null : (location?.name ?? "—"),
   ].filter(Boolean);
   const timezone = booking.timezone || "Europe/London";
+  // Today's share of the job: a 3-day coating shows its Friday hours on Friday, not
+  // Thursday's start and Monday's finish.
+  const today =
+    segmentOn(booking, localDay(new Date().toISOString(), timezone), timezone) ?? booking;
 
   return (
     <li>
@@ -598,10 +608,10 @@ function TodayRow({ booking, onClick }: { booking: Booking; onClick: () => void 
           ) : (
             <>
               <p className="text-sm font-semibold tabular-nums">
-                {formatInTz(booking.start, timezone, { hour: "2-digit", minute: "2-digit" })}
+                {formatInTz(today.start, timezone, { hour: "2-digit", minute: "2-digit" })}
               </p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {formatInTz(booking.end, timezone, { hour: "2-digit", minute: "2-digit" })}
+                {formatInTz(today.end, timezone, { hour: "2-digit", minute: "2-digit" })}
               </p>
             </>
           )}

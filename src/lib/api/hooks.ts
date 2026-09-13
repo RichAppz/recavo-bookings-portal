@@ -31,6 +31,7 @@ import type {
   Booking,
   BookingHistoryEntry,
   CalendarBlock,
+  CorrectBookingTimeBody,
   Business,
   BusinessConfiguration,
   BusinessLifecycle,
@@ -652,6 +653,45 @@ export function useAmendBooking() {
       if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         toast.error("The longer job clashes with another booking", {
           description: err.detail ?? "Reschedule it first, or pick a shorter service.",
+        });
+        return;
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+/**
+ * Quietly fix a booking's date/time — a typo in the diary, not a move the client asked
+ * for. Same endpoint and clash rules as reschedule, but with `correction: true` the
+ * client is not messaged and the history reads "Date corrected by staff". Reminders
+ * still re-anchor to the new time. `end` is for all-day jobs (their new last day).
+ * No toast on success: the caller says what happened; a clash toasts here.
+ */
+export function useCorrectBookingTime() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      Booking,
+      { bookingId: string; body: CorrectBookingTimeBody }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ booking: Booking }>(
+        `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/reschedule`,
+        { ...vars.body, correction: true },
+        { idempotencyKey },
+      );
+      return res.data.booking;
+    }),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(queryKeys.booking(businessId, vars.bookingId), data);
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        toast.error("That time clashes with another booking", {
+          description: err.detail ?? "Pick a different day or time.",
         });
         return;
       }
