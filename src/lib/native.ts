@@ -21,13 +21,14 @@ export const NATIVE_AUTH_REDIRECT = `${NATIVE_URL_SCHEME}://auth/callback`;
 
 /**
  * Where Supabase sends the browser after Google sign-in when running in the
- * app: public/auth/native.html on the origin the app is loaded from. That
- * origin is already in each Supabase project's Redirect URL allowlist (the web
- * sign-in depends on it), so no per-scheme dashboard entry is needed. The page
- * forwards the tokens on to NATIVE_AUTH_REDIRECT.
+ * app: public/auth/native.html on the origin the app is loaded from (served
+ * extensionless by Cloudflare's asset handling). That origin is already in
+ * each Supabase project's Redirect URL allowlist (the web sign-in depends on
+ * it), so no per-scheme dashboard entry is needed. The page forwards the
+ * tokens on to NATIVE_AUTH_REDIRECT.
  */
 export function nativeAuthRedirectUrl(): string {
-  return `${window.location.origin}/auth/native.html`;
+  return `${window.location.origin}/auth/native`;
 }
 
 export function isNativeApp(): boolean {
