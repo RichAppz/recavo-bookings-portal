@@ -48,15 +48,6 @@ export function isNativeIOS(): boolean {
   return isNativeApp() && capacitor()?.getPlatform?.() === "ios";
 }
 
-/**
- * Whether Sign in with Apple should be offered. Required by App Store rules in
- * the iOS app, where it runs natively; the web/Android OAuth route also needs
- * an Apple Services ID configured in Supabase, so it stays off there for now.
- */
-export function offersAppleSignIn(): boolean {
-  return isNativeIOS();
-}
-
 async function closeInAppBrowser(): Promise<void> {
   try {
     const { Browser } = await import("@capacitor/browser");

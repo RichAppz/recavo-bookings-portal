@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
-import { useOffersAppleSignIn } from "@/hooks/use-apple-sign-in";
 import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingReferral } from "@/lib/auth/pending-referral";
 import { isCustomerHost } from "@/lib/hosts";
@@ -121,7 +120,6 @@ function CustomerLogin() {
 
 function StaffLogin() {
   const { signIn, signInWithGoogle, signInWithApple, confirmSignUp, resendSignUpCode } = useAuth();
-  const offersApple = useOffersAppleSignIn();
   const { ref } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -295,13 +293,11 @@ function StaffLogin() {
       }
     >
       <div className="space-y-3">
-        {offersApple && (
-          <AppleButton
-            label="Continue with Apple"
-            disabled={busy}
-            onClick={() => startSocial(signInWithApple, "Apple sign-in failed")}
-          />
-        )}
+        <AppleButton
+          label="Continue with Apple"
+          disabled={busy}
+          onClick={() => startSocial(signInWithApple, "Apple sign-in failed")}
+        />
         <GoogleButton
           label="Continue with Google"
           disabled={busy}

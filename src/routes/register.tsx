@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
-import { useOffersAppleSignIn } from "@/hooks/use-apple-sign-in";
 import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingBusiness } from "@/lib/auth/pending-business";
 import { stashPendingProfile } from "@/lib/auth/pending-profile";
@@ -55,7 +54,6 @@ export const Route = createFileRoute("/register")({
 function RegisterPage() {
   const { signUp, confirmSignUp, resendSignUpCode, signInWithGoogle, signInWithApple, status } =
     useAuth();
-  const offersApple = useOffersAppleSignIn();
   const navigate = useNavigate();
   const { ref } = Route.useSearch();
   const [name, setName] = useState("");
@@ -287,13 +285,11 @@ function RegisterPage() {
       </div>
 
       <div className="space-y-3">
-        {offersApple && (
-          <AppleButton
-            label="Sign up with Apple"
-            disabled={busy}
-            onClick={() => startSocial(signInWithApple, "Apple sign-up failed")}
-          />
-        )}
+        <AppleButton
+          label="Sign up with Apple"
+          disabled={busy}
+          onClick={() => startSocial(signInWithApple, "Apple sign-up failed")}
+        />
         <GoogleButton
           label="Sign up with Google"
           disabled={busy}
