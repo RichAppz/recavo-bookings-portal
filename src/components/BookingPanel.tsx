@@ -68,10 +68,12 @@ import { useBookingInvoices } from "@/lib/api/invoices";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
+import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import {
   useAvailability,
   useBooking,
   useBookingAction,
+  useBookings,
   useBusinessId,
   useBookingHistory,
   useBookingPayments,
@@ -95,7 +97,15 @@ import {
   type ResendChannel,
 } from "@/lib/api/hooks";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
+import type { BookingConflict } from "@/lib/api/errors";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import {
+  allDayHolds,
+  describeHold,
+  heldAllDayNote,
+  timedClashNote,
+  timedJobsWithin,
+} from "@/lib/drop-in";
 import {
   customerDisplayName,
   type Booking,
@@ -779,6 +789,20 @@ export function BookingPanel({
                 {/* Only once marked: an "Unknown" pill before then just restates the
                     untouched attendance row in the footer. */}
                 {attendanceMarked ? <StatusBadge status={booking.attendanceStatus} /> : null}
+                {/* Staff squeezed this in beside an all-day job (or booked the all-day
+                    job over timed work) — the calendar shows both on the same day. */}
+                {booking.dropIn ? (
+                  <span
+                    className="inline-flex items-center rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary"
+                    title={
+                      booking.allDay
+                        ? "Booked over timed work on the same day"
+                        : "Booked as a drop-in alongside an all-day job"
+                    }
+                  >
+                    {booking.allDay ? "Shares the day" : "Drop-in"}
+                  </span>
+                ) : null}
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
@@ -1105,6 +1129,7 @@ export function BookingPanel({
                           key={String(entry.id ?? entry.notificationId ?? i)}
                           entry={entry}
                           timezone={timezone}
+                          booking={booking}
                         />
                       ))}
                     </ul>
@@ -1687,7 +1712,34 @@ function editLockedReason(status: string): string {
   }
 }
 
-function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone: string }) {
+/**
+ * Machine reasons the API puts on a history entry, in plain English. Anything else
+ * is free text staff typed (a cancellation reason) and is shown quoted as-is.
+ */
+function historyReasonNote(reason: string, booking: Pick<Booking, "allDay">): string | null {
+  switch (reason) {
+    case "drop_in":
+      return booking.allDay
+        ? "Booked over timed work already on the day — staff confirmed they can share it"
+        : "Booked as a drop-in alongside an all-day job";
+    case "rescheduled_drop_in":
+      return booking.allDay
+        ? "Moved onto a day with timed work — staff confirmed they can share it"
+        : "Moved in as a drop-in alongside an all-day job";
+    default:
+      return null;
+  }
+}
+
+function HistoryRow({
+  entry,
+  timezone,
+  booking,
+}: {
+  entry: BookingHistoryEntry;
+  timezone: string;
+  booking: Pick<Booking, "allDay">;
+}) {
   // Messages sent about the booking (confirmation, reminders…) with delivery status.
   if (isMessageHistoryEntry(entry)) {
     return <BookingMessageHistoryRow entry={entry} timezone={timezone} />;
@@ -1701,6 +1753,7 @@ function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone:
       ? `${humanize(entry.fromStatus)} → ${humanize(entry.toStatus)}`
       : null;
   const reason = typeof entry.reason === "string" ? entry.reason : undefined;
+  const note = reason ? historyReasonNote(reason, booking) : null;
 
   return (
     <li className="flex gap-3 border-b py-3 last:border-0">
@@ -1708,7 +1761,11 @@ function HistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; timezone:
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{historyActionLabel(entry)}</p>
         {transition ? <p className="text-xs text-muted-foreground">{transition}</p> : null}
-        {reason ? <p className="mt-1 text-xs text-muted-foreground">“{reason}”</p> : null}
+        {note ? (
+          <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+        ) : reason ? (
+          <p className="mt-1 text-xs text-muted-foreground">“{reason}”</p>
+        ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
           {historyActorLabel(entry)}
           {ts ? ` · ${formatInTz(ts, timezone, { dateStyle: "medium", timeStyle: "short" })}` : ""}
@@ -1912,17 +1969,30 @@ function RescheduleDialog({
     const d = new Date(booking.start);
     return `${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`;
   });
+  // Staff said the moved job may share its new day with the other kind of work
+  // (see AddBookingModal). A booking that is already a drop-in keeps that on the
+  // server unless told otherwise, so this only needs asking for the new day.
+  const [dropIn, setDropIn] = useState(false);
+  const [override, setOverride] = useState<{
+    conflicts: BookingConflict[];
+    body: Record<string, unknown>;
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
       setStaffId(booking.staffId);
       setDate(isoDate(new Date(booking.start)));
       setSlotStart(null);
+      setDropIn(false);
+      setOverride(null);
       setMode(customLength ? "custom" : "slot");
       const d = new Date(booking.start);
       setTime(`${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`);
     }
   }, [open, booking.id, booking.staffId, booking.start, customLength]);
+  useEffect(() => {
+    setDropIn(false);
+  }, [date, staffId, mode]);
 
   const customStart = booking.allDay
     ? localDateTimeToIso(date, "00:00")
@@ -1937,6 +2007,7 @@ function RescheduleDialog({
     staffId: staffId !== "any" ? staffId : undefined,
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
+    dropIn: dropIn && mode === "slot",
     enabled: open && mode === "slot",
   });
 
@@ -1948,34 +2019,54 @@ function RescheduleDialog({
   const customStaffId = staffId !== "any" ? staffId : null;
   const canSubmit = mode === "slot" ? Boolean(selectedSlot) : Boolean(customStart && customStaffId);
 
-  const submit = async () => {
-    if (mode === "slot" && !selectedSlot) {
-      toast.error("Choose a new time slot");
-      return;
-    }
-    if (mode === "custom" && (!customStart || !customStaffId)) {
-      toast.error(!customStaffId ? `Choose a ${staffNoun.toLowerCase()}` : "Check the date");
-      return;
-    }
+  // The diary on the target day(s), minus this booking: what the move would land on.
+  const spanEnd = booking.allDay
+    ? new Date(dayStart.getTime() + Math.max(1, Math.ceil(lengthMinutes / 1440)) * 86_400_000)
+    : dayEnd;
+  const diary = useBookings({
+    from: dayStart.toISOString(),
+    to: spanEnd.toISOString(),
+    staffId: customStaffId ?? undefined,
+    limit: 200,
+    enabled: open && !Number.isNaN(dayStart.getTime()),
+  });
+  const others = useMemo(
+    () => (diary.data?.bookings ?? []).filter((b) => b.id !== booking.id),
+    [diary.data, booking.id],
+  );
+  const holdWindow =
+    mode === "custom" && !booking.allDay && customStart
+      ? {
+          start: customStart,
+          end: new Date(new Date(customStart).getTime() + lengthMinutes * 60_000).toISOString(),
+        }
+      : { start: dayStart.toISOString(), end: dayEnd.toISOString() };
+  const holds = booking.allDay ? [] : allDayHolds(others, holdWindow, customStaffId);
+  const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
+  const timedOnDay =
+    booking.allDay && customStart
+      ? timedJobsWithin(others, { start: customStart, end: spanEnd.toISOString() }, customStaffId)
+      : [];
+  const timedNote = timedClashNote(timedOnDay, timezone);
+  const sendDropIn =
+    dropIn && (mode === "slot" || (booking.allDay ? timedOnDay.length > 0 : holds.length > 0));
+
+  const move = async (body: Record<string, unknown>): Promise<boolean> => {
     try {
-      await rescheduleAction.mutateAsync({
-        bookingId: booking.id,
-        ifMatch: booking.version,
-        body:
-          mode === "slot"
-            ? { start: selectedSlot!.start, staffId: selectedSlot!.staffId }
-            : { start: customStart!, staffId: customStaffId! },
-      });
+      await rescheduleAction.mutateAsync({ bookingId: booking.id, ifMatch: booking.version, body });
       toast.success("Booking rescheduled");
       onOpenChange(false);
+      return true;
     } catch (err) {
-      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+        setOverride({ conflicts: err.conflicts, body });
+      } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         if (mode === "custom") {
           const who = staffOptions.find((s) => s.id === customStaffId)?.displayName;
           toast.error(`Clashes with another booking${who ? ` for ${who}` : ""}`, {
             description: "Pick a different day or time.",
           });
-          return;
+          return false;
         }
         toast.error("That slot was just taken", {
           description: "Availability has been refreshed — pick another time.",
@@ -1985,7 +2076,31 @@ function RescheduleDialog({
       } else {
         toastApiError(err);
       }
+      return false;
     }
+  };
+
+  const submit = async () => {
+    if (mode === "slot" && !selectedSlot) {
+      toast.error("Choose a new time slot");
+      return;
+    }
+    if (mode === "custom" && (!customStart || !customStaffId)) {
+      toast.error(!customStaffId ? `Choose a ${staffNoun.toLowerCase()}` : "Check the date");
+      return;
+    }
+    await move({
+      ...(mode === "slot"
+        ? { start: selectedSlot!.start, staffId: selectedSlot!.staffId }
+        : { start: customStart!, staffId: customStaffId! }),
+      ...(sendDropIn ? { dropIn: true } : {}),
+    });
+  };
+
+  const confirmOverride = async () => {
+    if (!override) return;
+    const ok = await move({ ...override.body, dropIn: true });
+    if (ok) setOverride(null);
   };
 
   return (
@@ -2065,18 +2180,75 @@ function RescheduleDialog({
           </div>
 
           {mode === "custom" ? (
-            <p className="text-xs text-muted-foreground">
-              {booking.allDay
-                ? `Stays an all-day job${
-                    allDayBlockDays(lengthMinutes) > 1
-                      ? ` across ${allDayBlockDays(lengthMinutes)} working days`
-                      : ""
-                  }, starting on the new date.`
-                : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start${
-                    lengthMinutes >= 1440 ? ", over working days only" : ""
-                  }.`}
-              {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
-            </p>
+            <div className="grid gap-2">
+              <p className="text-xs text-muted-foreground">
+                {booking.allDay
+                  ? `Stays an all-day job${
+                      allDayBlockDays(lengthMinutes) > 1
+                        ? ` across ${allDayBlockDays(lengthMinutes)} working days`
+                        : ""
+                    }, starting on the new date.`
+                  : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start${
+                      lengthMinutes >= 1440 ? ", over working days only" : ""
+                    }.`}
+                {staffId === "any" ? ` Choose a ${staffNoun.toLowerCase()} to move it.` : ""}
+              </p>
+              {/* Landing on the other kind of work: ask before the API has to say no. */}
+              {booking.allDay && timedNote ? (
+                dropIn ? (
+                  <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                    {timedNote}. Moving anyway — both stay on the calendar.{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-4"
+                      onClick={() => setDropIn(false)}
+                    >
+                      Undo
+                    </button>
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                    <span>{timedNote} — move anyway?</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setDropIn(true)}
+                    >
+                      Move anyway
+                    </Button>
+                  </div>
+                )
+              ) : null}
+              {!booking.allDay && holds.length > 0 ? (
+                dropIn ? (
+                  <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                    {holdNote}. Moved in as a drop-in alongside it.{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-4"
+                      onClick={() => setDropIn(false)}
+                    >
+                      Undo
+                    </button>
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                    <span>{holdNote}.</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setDropIn(true)}
+                    >
+                      Squeeze in as a drop-in
+                    </Button>
+                  </div>
+                )
+              ) : null}
+            </div>
           ) : (
             <div className="grid gap-2">
               <Label>Available times</Label>
@@ -2089,9 +2261,35 @@ function RescheduleDialog({
               ) : availability.isError ? (
                 <p className="text-xs text-destructive">Couldn't load availability.</p>
               ) : slots.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {emptySlotsMessage(catalogue?.availabilityWindows, date)}
-                </p>
+                holds.length > 0 && !dropIn ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">{holdNote}.</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setDropIn(true)}
+                    >
+                      Squeeze in as a drop-in
+                    </Button>
+                  </div>
+                ) : dropIn ? (
+                  <p className="text-xs text-muted-foreground">
+                    No room for a drop-in — timed work, an event or working hours are in the way.{" "}
+                    <button
+                      type="button"
+                      className="text-primary underline underline-offset-4"
+                      onClick={() => setDropIn(false)}
+                    >
+                      Undo
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {emptySlotsMessage(catalogue?.availabilityWindows, date)}
+                  </p>
+                )
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {slots.map((s) => (
@@ -2113,6 +2311,19 @@ function RescheduleDialog({
                   ))}
                 </div>
               )}
+              {dropIn && slots.length > 0 ? (
+                <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                  {holds.length > 0 ? `${holdNote}. ` : ""}
+                  Times shown are for a drop-in alongside the all-day job.{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-4"
+                    onClick={() => setDropIn(false)}
+                  >
+                    Undo
+                  </button>
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -2126,6 +2337,17 @@ function RescheduleDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <DropInConfirmDialog
+        open={override !== null}
+        onOpenChange={(next) => {
+          if (!next && !rescheduleAction.isPending) setOverride(null);
+        }}
+        conflicts={override?.conflicts ?? []}
+        newBookingAllDay={booking.allDay === true}
+        timezone={timezone}
+        busy={rescheduleAction.isPending}
+        onConfirm={() => void confirmOverride()}
+      />
     </Dialog>
   );
 }

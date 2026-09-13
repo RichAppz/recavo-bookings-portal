@@ -98,6 +98,67 @@
           }
         }
       },
+      "BookingConflict": {
+        "type": "object",
+        "required": [
+          "bookingId",
+          "kind",
+          "reference",
+          "allDay",
+          "start",
+          "end",
+          "serviceName",
+          "customerName"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "bookingId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The clashing booking, or the calendar block id when `kind` is `block`."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "booking",
+              "block"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Booking reference; null for blocks."
+          },
+          "allDay": {
+            "type": "boolean",
+            "description": "True when the clashing entry is an all-day job (what a drop-in may sit beside)."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serviceName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Primary service name (the block title for a block); null when unknown."
+          },
+          "customerName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Lead client name; null when unknown."
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "required": [
@@ -141,6 +202,17 @@
               "$ref": "#/components/schemas/FieldError"
             },
             "description": "Field-level validation problems (empty for non-validation errors)"
+          },
+          "conflicts": {
+            "type": "array",
+            "description": "BOOKING_CONFLICT only: the diary entries the booking clashed with. Each has `bookingId`, `kind` (`booking` | `block`), `reference`, `allDay`, `start`, `end`, `serviceName` and `customerName` (nullable where unknown).",
+            "items": {
+              "$ref": "#/components/schemas/BookingConflict"
+            }
+          },
+          "overridable": {
+            "type": "boolean",
+            "description": "BOOKING_CONFLICT only: true when every clash is an all-day job in the way of a timed booking (or a timed job in the way of an all-day one), so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise."
           }
         }
       },
@@ -479,6 +551,7 @@
           "start",
           "end",
           "allDay",
+          "dropIn",
           "segments",
           "occupiedDays",
           "occupiedStart",
@@ -612,6 +685,10 @@
           "allDay": {
             "type": "boolean",
             "description": "Staff marked this an all-day job (RECA-532): start/end are local midnights at the location (end exclusive). Show the date(s) and \"All day\" rather than times."
+          },
+          "dropIn": {
+            "type": "boolean",
+            "description": "Staff confirmed this booking shares its day with the other kind of work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked over timed work. Show a \"Drop-in\" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings."
           },
           "segments": {
             "type": "array",
@@ -33542,6 +33619,16 @@
               "type": "integer",
               "minimum": 1
             }
+          },
+          {
+            "name": "dropIn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Quote times as if the staff member’s all-day jobs were not there, so a short job can be squeezed in beside one as a drop-in. Timed bookings, calendar blocks, time off and working hours still apply. Book the chosen slot with `dropIn: true`. Staff only — the public availability search never ignores holds."
           }
         ],
         "responses": {
@@ -33899,6 +33986,11 @@
                     "type": "integer",
                     "minimum": 0,
                     "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up."
+                  },
+                  "dropIn": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
                   },
                   "notifyCustomer": {
                     "type": "boolean",
@@ -34547,6 +34639,11 @@
                     "type": "integer",
                     "minimum": 0,
                     "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot."
+                  },
+                  "dropIn": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
                   },
                   "notifyCustomer": {
                     "type": "boolean",
@@ -35734,6 +35831,10 @@
                     "type": "boolean",
                     "default": false,
                     "description": "true = a quiet correction: no client message, \"date corrected\" in the history."
+                  },
+                  "dropIn": {
+                    "type": "boolean",
+                    "description": "As on create: may the moved booking share its new day with the other kind of work? Omitted keeps the flag the booking already has. A clash that only this would resolve is a `409 BOOKING_CONFLICT` with `overridable: true`."
                   }
                 }
               }

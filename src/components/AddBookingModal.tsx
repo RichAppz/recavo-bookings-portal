@@ -12,6 +12,7 @@ import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMult
 import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
+import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,6 +38,7 @@ import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
 import {
   useAvailability,
+  useBookings,
   useConnectAccount,
   useCreateBooking,
   useCustomerCredits,
@@ -50,10 +52,18 @@ import {
   useStaffList,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
+import type { BookingConflict } from "@/lib/api/errors";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { formatAllDayDuration } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
+import {
+  allDayHolds,
+  describeHold,
+  heldAllDayNote,
+  timedClashNote,
+  timedJobsWithin,
+} from "@/lib/drop-in";
 import {
   addDays,
   formatDuration,
@@ -146,6 +156,18 @@ export function AddBookingModal({
   // Once the end has been edited by hand it stops following start + service length.
   const [endTouched, setEndTouched] = useState(false);
   const [allDay, setAllDay] = useState(false);
+  // Staff confirmed this booking may share its day with the other kind of work: a
+  // short job squeezed in beside an all-day one (a "drop-in"), or an all-day job on
+  // a day that already has timed work. Sent as `dropIn: true`; the API then ignores
+  // clashes with that other kind only. Customers never see or set this.
+  const [dropIn, setDropIn] = useState(false);
+  // A 409 the API marked overridable: what clashed and the body to re-send with
+  // `dropIn: true` once staff confirm (under a fresh Idempotency-Key).
+  const [override, setOverride] = useState<{
+    conflicts: BookingConflict[];
+    body: Record<string, unknown>;
+    allDay: boolean;
+  } | null>(null);
   // Price override (pounds, as typed). null = the catalogue total.
   const [priceInput, setPriceInput] = useState<string | null>(null);
   // "10% off" / "£10 off" the list price. Typing a price clears it and vice versa,
@@ -161,6 +183,7 @@ export function AddBookingModal({
     setEndTouched(false);
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
+    setDropIn(false);
   }, [open, defaultDate, defaultStaffId]);
   // A detailer who is paid after the job should not have to pick that every time, so
   // the up-front / after-the-job choice sticks per business.
@@ -377,6 +400,9 @@ export function AddBookingModal({
     staffId: staffId !== "all" ? staffId : undefined,
     from: validDate ? dayStart.toISOString() : "",
     to: validDate ? dayEnd.toISOString() : "",
+    // Once staff opt for a drop-in the quote ignores all-day holds, so the times
+    // the day actually has room for (around timed work and events) show up.
+    dropIn: dropIn && scheduling === "slot",
     enabled: open && validDate && scheduling === "slot",
   });
 
@@ -384,6 +410,27 @@ export function AddBookingModal({
     () => (availability.data ?? []).sort((a, b) => a.start.localeCompare(b.start)),
     [availability.data],
   );
+
+  // What is already on the diary for the day(s) in question — so an empty slot
+  // grid can say *why* ("Held all day by …") and offer a drop-in, and an all-day
+  // pick can warn about the timed work it would share the day with.
+  const diaryEnd = (() => {
+    if (allDay && scheduling === "custom" && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      const last = new Date(`${endDate}T00:00:00.000Z`);
+      if (!Number.isNaN(last.getTime()) && last.getTime() >= dayStart.getTime()) {
+        return new Date(last.getTime() + 24 * 60 * 60 * 1000);
+      }
+    }
+    return dayEnd;
+  })();
+  const diary = useBookings({
+    from: validDate ? dayStart.toISOString() : "",
+    to: validDate ? diaryEnd.toISOString() : "",
+    staffId: staffId !== "all" ? staffId : undefined,
+    limit: 200,
+    enabled: open && validDate && Boolean(serviceId),
+  });
+  const diaryBookings = useMemo(() => diary.data?.bookings ?? [], [diary.data]);
 
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
@@ -526,6 +573,40 @@ export function AddBookingModal({
     return outsideWorkingHours(customStaff, customWindow, locationId || null, timezone);
   }, [scheduling, allDay, customWindow, customStaff, locationId, timezone]);
 
+  // All-day jobs the new booking would sit beside: the whole day for a slot pick,
+  // the exact window for a hand-set time. Filtered to the chosen staff member —
+  // someone else's all-day job never blocked this one anyway.
+  const holdWindow =
+    scheduling === "custom" && !allDay && customWindow
+      ? customWindow
+      : { start: dayStart.toISOString(), end: dayEnd.toISOString() };
+  const holdStaffId = scheduling === "custom" ? customStaffId : staffId !== "all" ? staffId : null;
+  const holds = useMemo(
+    () => (validDate && !allDay ? allDayHolds(diaryBookings, holdWindow, holdStaffId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [validDate, allDay, diaryBookings, holdWindow.start, holdWindow.end, holdStaffId],
+  );
+  const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
+  // The mirror: timed work on the day(s) an all-day job would take.
+  const timedOnDay = useMemo(
+    () =>
+      allDay && scheduling === "custom" && customWindow
+        ? timedJobsWithin(diaryBookings, customWindow, customStaffId)
+        : [],
+    [allDay, scheduling, customWindow, diaryBookings, customStaffId],
+  );
+  const timedNote = timedClashNote(timedOnDay, timezone);
+  // A "yes" to sharing the day is about *this* day, this person and this kind of
+  // booking; change any of them and it is asked again.
+  useEffect(() => {
+    setDropIn(false);
+  }, [date, endDate, staffId, scheduling, allDay]);
+  // Sent when staff have said the two kinds of work may share the day. A slot picked
+  // from a drop-in quote always carries it; a hand-set window only while there is
+  // still something on the diary to share with.
+  const sendDropIn =
+    dropIn && (scheduling === "slot" || (allDay ? timedOnDay.length > 0 : holds.length > 0));
+
   // The API sums the booked services' deposits unless staff override it here.
   const defaultDepositMinor = configuredDepositMinor(
     [
@@ -613,10 +694,55 @@ export function AddBookingModal({
     setDiscount(null);
     setScheduling("slot");
     setAllDay(false);
+    setDropIn(false);
+    setOverride(null);
     setEndTouched(false);
     setNotes("");
     setAdditional([]);
     setBankResult(null);
+  };
+
+  // Sends the booking; a 409 the API marks overridable (only all-day jobs in the way
+  // of a timed booking, or only timed jobs in the way of an all-day one) opens the
+  // "book anyway?" confirmation instead of a toast. Returns true once created.
+  const create = async (body: Record<string, unknown>): Promise<boolean> => {
+    try {
+      const { bankTransfer } = await createBooking.mutateAsync(body);
+      if (bankTransfer) {
+        // Keep the dialog open on the details so staff can read them out.
+        setBankResult(bankTransfer);
+        toast.success("Booking reserved — awaiting bank transfer");
+        return true;
+      }
+      toast.success(
+        notifyChannels.length > 0 ? "Booking created" : "Booking created — client not notified",
+      );
+      reset();
+      onOpenChange(false);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+        setOverride({ conflicts: err.conflicts, body, allDay: body.allDay === true });
+      } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
+        handleConflict();
+      } else {
+        toastApiError(err);
+      }
+      return false;
+    }
+  };
+
+  // Staff confirmed the clash: same booking, now flagged as sharing the day. The
+  // mutation rotated its Idempotency-Key on the 409, so this is a fresh request.
+  const confirmOverride = async () => {
+    if (!override) return;
+    setSubmitting(true);
+    try {
+      const ok = await create({ ...override.body, dropIn: true });
+      if (ok) setOverride(null);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const submit = async () => {
@@ -737,6 +863,7 @@ export function AddBookingModal({
           }
         : { staffId: selectedSlot!.staffId, start: selectedSlot!.start }),
       ...(priceChanged ? { priceMinor: overridePriceMinor } : {}),
+      ...(sendDropIn ? { dropIn: true } : {}),
       leadCustomerId: customerId,
       ...(recordId ? { linkedRecordId: recordId } : {}),
       paymentMethod,
@@ -753,24 +880,7 @@ export function AddBookingModal({
     };
 
     try {
-      const { bankTransfer } = await createBooking.mutateAsync(body);
-      if (bankTransfer) {
-        // Keep the dialog open on the details so staff can read them out.
-        setBankResult(bankTransfer);
-        toast.success("Booking reserved — awaiting bank transfer");
-        return;
-      }
-      toast.success(
-        notifyChannels.length > 0 ? "Booking created" : "Booking created — client not notified",
-      );
-      reset();
-      onOpenChange(false);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
-        handleConflict();
-      } else {
-        toastApiError(err);
-      }
+      await create(body);
     } finally {
       setSubmitting(false);
     }
@@ -1307,6 +1417,63 @@ export function AddBookingModal({
                         {hoursWarning}
                       </p>
                     ) : null}
+                    {/* The mirror of a drop-in: an all-day job landing on a day that
+                        already has timed work. Staff say so explicitly; the request
+                        then carries dropIn and the API lets the two share the day. */}
+                    {allDay && timedNote ? (
+                      dropIn ? (
+                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                          {timedNote}. Booking anyway — both stay on the calendar.{" "}
+                          <button
+                            type="button"
+                            className="underline underline-offset-4"
+                            onClick={() => setDropIn(false)}
+                          >
+                            Undo
+                          </button>
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                          <span>{timedNote} — book anyway?</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setDropIn(true)}
+                          >
+                            Book anyway
+                          </Button>
+                        </div>
+                      )
+                    ) : null}
+                    {!allDay && holds.length > 0 ? (
+                      dropIn ? (
+                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                          {holdNote}. Booked as a drop-in alongside it.{" "}
+                          <button
+                            type="button"
+                            className="underline underline-offset-4"
+                            onClick={() => setDropIn(false)}
+                          >
+                            Undo
+                          </button>
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                          <span>{holdNote}.</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => setDropIn(true)}
+                          >
+                            Squeeze in a drop-in
+                          </Button>
+                        </div>
+                      )
+                    ) : null}
                   </div>
                 ) : (
                   <div className="grid gap-2">
@@ -1322,11 +1489,40 @@ export function AddBookingModal({
                       </div>
                     ) : slots.length === 0 ? (
                       <div className="grid gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {validDate
-                            ? emptySlotsMessage(service?.availabilityWindows, date)
-                            : "Pick a date to see available times."}
-                        </p>
+                        {/* Held by all-day work: say so, and offer to squeeze the job in
+                            beside it. Picking that re-quotes the day ignoring the hold
+                            (timed jobs and events still block). */}
+                        {holds.length > 0 && !dropIn ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
+                            <span className="text-muted-foreground">{holdNote}.</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => setDropIn(true)}
+                            >
+                              Squeeze in a drop-in
+                            </Button>
+                          </div>
+                        ) : dropIn ? (
+                          <p className="text-xs text-muted-foreground">
+                            {`No room for a drop-in${customStaff ? ` for ${customStaff.displayName}` : ""} — timed work, an event or working hours are in the way. `}
+                            <button
+                              type="button"
+                              className="text-primary underline underline-offset-4"
+                              onClick={() => setDropIn(false)}
+                            >
+                              Undo
+                            </button>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {validDate
+                              ? emptySlotsMessage(service?.availabilityWindows, date)
+                              : "Pick a date to see available times."}
+                          </p>
+                        )}
                         {validDate ? (
                           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                             <AllDayTile onPick={pickAllDay} />
@@ -1363,6 +1559,19 @@ export function AddBookingModal({
                         <AllDayTile onPick={pickAllDay} />
                       </div>
                     )}
+                    {scheduling === "slot" && dropIn && slots.length > 0 ? (
+                      <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
+                        {holds.length > 0 ? `${holdNote}. ` : ""}
+                        Times shown are for a drop-in alongside the all-day job.{" "}
+                        <button
+                          type="button"
+                          className="underline underline-offset-4"
+                          onClick={() => setDropIn(false)}
+                        >
+                          Undo
+                        </button>
+                      </p>
+                    ) : null}
                     {selectedSlot &&
                     spansDays(
                       selectedSlot.start,
@@ -1582,6 +1791,18 @@ export function AddBookingModal({
           </DialogFooter>
         )}
       </DialogContent>
+      {/* The API said the only things in the way can share the day: ask, then re-send. */}
+      <DropInConfirmDialog
+        open={override !== null}
+        onOpenChange={(next) => {
+          if (!next && !submitting) setOverride(null);
+        }}
+        conflicts={override?.conflicts ?? []}
+        newBookingAllDay={override?.allDay ?? false}
+        timezone={timezone}
+        busy={submitting}
+        onConfirm={() => void confirmOverride()}
+      />
       {/* Stacks over the booking drawer; the new client is selected on save. */}
       <AddClientDialog
         open={open && addClientOpen}

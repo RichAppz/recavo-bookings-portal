@@ -19010,6 +19010,8 @@ export interface paths {
                     variantId?: string | null;
                     staffId?: string | null;
                     granularityMinutes?: number;
+                    /** @description Quote times as if the staff member’s all-day jobs were not there, so a short job can be squeezed in beside one as a drop-in. Timed bookings, calendar blocks, time off and working hours still apply. Book the chosen slot with `dropIn: true`. Staff only — the public availability search never ignores holds. */
+                    dropIn?: boolean;
                 };
                 header?: never;
                 path: {
@@ -19375,6 +19377,11 @@ export interface paths {
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up. */
                         priceMinor?: number;
                         /**
+                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @default false
+                         */
+                        dropIn?: boolean;
+                        /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
                          * @default true
                          */
@@ -19581,6 +19588,11 @@ export interface paths {
                         allDay?: boolean;
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
                         priceMinor?: number;
+                        /**
+                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @default false
+                         */
+                        dropIn?: boolean;
                         /**
                          * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
                          * @default true
@@ -20390,6 +20402,8 @@ export interface paths {
                          * @default false
                          */
                         correction?: boolean;
+                        /** @description As on create: may the moved booking share its new day with the other kind of work? Omitted keeps the flag the booking already has. A clash that only this would resolve is a `409 BOOKING_CONFLICT` with `overridable: true`. */
+                        dropIn?: boolean;
                     };
                 };
             };
@@ -38641,6 +38655,27 @@ export interface components {
             /** @description Optional human-readable fallback for clients without a localisation map */
             message?: string;
         };
+        BookingConflict: {
+            /**
+             * Format: uuid
+             * @description The clashing booking, or the calendar block id when `kind` is `block`.
+             */
+            bookingId: string;
+            /** @enum {string} */
+            kind: "booking" | "block";
+            /** @description Booking reference; null for blocks. */
+            reference: string | null;
+            /** @description True when the clashing entry is an all-day job (what a drop-in may sit beside). */
+            allDay: boolean;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @description Primary service name (the block title for a block); null when unknown. */
+            serviceName: string | null;
+            /** @description Lead client name; null when unknown. */
+            customerName: string | null;
+        };
         ProblemDetails: {
             /**
              * Format: uri
@@ -38659,6 +38694,10 @@ export interface components {
             requestId: string;
             /** @description Field-level validation problems (empty for non-validation errors) */
             errors: components["schemas"]["FieldError"][];
+            /** @description BOOKING_CONFLICT only: the diary entries the booking clashed with. Each has `bookingId`, `kind` (`booking` | `block`), `reference`, `allDay`, `start`, `end`, `serviceName` and `customerName` (nullable where unknown). */
+            conflicts?: components["schemas"]["BookingConflict"][];
+            /** @description BOOKING_CONFLICT only: true when every clash is an all-day job in the way of a timed booking (or a timed job in the way of an all-day one), so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise. */
+            overridable?: boolean;
         };
         /** @description Opaque cursor for the next page, or null when the list is exhausted. Pass as `cursor` on the subsequent request. */
         NextCursor: string | null;
@@ -38784,6 +38823,8 @@ export interface components {
             end: string;
             /** @description Staff marked this an all-day job (RECA-532): start/end are local midnights at the location (end exclusive). Show the date(s) and "All day" rather than times. */
             allDay: boolean;
+            /** @description Staff confirmed this booking shares its day with the other kind of work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked over timed work. Show a "Drop-in" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings. */
+            dropIn: boolean;
             /** @description The time the job actually holds, one UTC interval per working day it occupies, in order. Jobs of a day or more follow the staff member’s working days (else the location’s opening hours): a three-day job started on a Thursday is Thu, Fri and Mon, so the weekend stays free for other work. `start` is the first segment’s start and `end` the last one’s end. Draw the job on these days only — never as one bar from start to end. A job under a day, or a booking made before segments existed, is a single `[start, end)` segment. */
             segments: {
                 /** Format: date-time */
