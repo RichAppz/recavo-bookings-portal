@@ -72,6 +72,8 @@ const TEMPLATE_LABELS: Record<string, string> = {
   package_payment_link: "Package payment link",
   invoice_issued: "Invoice",
   invoice_receipt: "Invoice receipt",
+  service_follow_up: "Follow-up reminder",
+  service_follow_up_staff: "Follow-up due (to you)",
 };
 
 /** "Confirmation", "Reminder"… from the API template key; unknown keys are humanised. */

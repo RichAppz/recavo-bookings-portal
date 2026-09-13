@@ -136,10 +136,16 @@ export function AddBookingModal({
   defaultCustomerId,
   defaultDate,
   defaultStaffId,
+  defaultServiceId,
+  defaultLinkedRecordId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultCustomerId?: string;
+  /** Pre-pick the main service — e.g. "Book" on a follow-up for a ceramic top-up. */
+  defaultServiceId?: string;
+  /** Pre-pick the client's vehicle/record the follow-up was for. */
+  defaultLinkedRecordId?: string;
   /** ISO date (YYYY-MM-DD) to start on — e.g. the day clicked in the calendar. */
   defaultDate?: string;
   /** Pre-select a staff member — e.g. the calendar's current staff filter. */
@@ -190,7 +196,21 @@ export function AddBookingModal({
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
     setDropIn(false);
-  }, [open, defaultDate, defaultStaffId]);
+    // Opened from a follow-up: the client, the service and the vehicle are known.
+    if (defaultCustomerId) setCustomerId(defaultCustomerId);
+    if (defaultServiceId) {
+      setServiceId(defaultServiceId);
+      setVariantId("none");
+    }
+    if (defaultLinkedRecordId) setLinkedRecordId(defaultLinkedRecordId);
+  }, [
+    open,
+    defaultDate,
+    defaultStaffId,
+    defaultCustomerId,
+    defaultServiceId,
+    defaultLinkedRecordId,
+  ]);
   // A detailer who is paid after the job should not have to pick that every time, so
   // the up-front / after-the-job choice sticks per business.
   const [paymentTiming, setPaymentTiming] = useStoredState<PaymentTiming>(
@@ -718,8 +738,8 @@ export function AddBookingModal({
 
   const reset = () => {
     setCustomerId(defaultCustomerId ?? "");
-    setLinkedRecordId("none");
-    setServiceId("");
+    setLinkedRecordId(defaultLinkedRecordId ?? "none");
+    setServiceId(defaultServiceId ?? "");
     setVariantId("none");
     setStaffId("all");
     setLocationId("");
@@ -928,7 +948,7 @@ export function AddBookingModal({
   // the defaults the form filled in on their behalf (location, staff, date) do not.
   const dirty =
     customerId !== (defaultCustomerId ?? "") ||
-    serviceId !== "" ||
+    serviceId !== (defaultServiceId ?? "") ||
     additional.length > 0 ||
     slotKey !== null ||
     notes.trim() !== "" ||

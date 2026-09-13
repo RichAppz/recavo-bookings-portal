@@ -28,6 +28,7 @@ import { CustomerAddressFields } from "@/components/CustomerAddressFields";
 import { addressToForm, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { CustomerFollowUpsCard } from "@/components/CustomerFollowUpsCard";
 import { BookingPanel } from "@/components/BookingPanel";
 import { CreateInvoiceDialog } from "@/components/CreateInvoiceDialog";
 import { FileAttachments } from "@/components/FileAttachments";
@@ -48,7 +49,7 @@ import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components
 import { ClientOfferLinksCard } from "@/components/ClientOfferLinksCard";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import type { ContactChannel } from "@/lib/api/types";
+import type { ContactChannel, ServiceFollowUp } from "@/lib/api/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -189,6 +190,8 @@ function ClientProfile() {
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  // "Book" from a follow-up row: the service and vehicle come along with the client.
+  const [bookingFollowUp, setBookingFollowUp] = useState<ServiceFollowUp | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [confirmDsar, setConfirmDsar] = useState(false);
@@ -351,7 +354,19 @@ function ClientProfile() {
           <CustomerProfileForm client={client} disabled={anonymised} />
         </TabsContent>
 
-        <TabsContent value="upcoming" className="mt-4">
+        <TabsContent value="upcoming" className="mt-4 space-y-6">
+          {/* Follow-ups due (top-ups); hidden when the client has none. */}
+          <CustomerFollowUpsCard
+            customerId={client.id}
+            onBook={
+              anonymised
+                ? undefined
+                : (f) => {
+                    setBookingFollowUp(f);
+                    setBookingOpen(true);
+                  }
+            }
+          />
           <SectionCard bodyClassName="p-0">
             {bookings.isLoading ? (
               <TableGhost rows={5} />
@@ -646,8 +661,13 @@ function ClientProfile() {
 
       <AddBookingModal
         open={bookingOpen}
-        onOpenChange={setBookingOpen}
+        onOpenChange={(open) => {
+          setBookingOpen(open);
+          if (!open) setBookingFollowUp(null);
+        }}
         defaultCustomerId={client.id}
+        defaultServiceId={bookingFollowUp?.serviceId}
+        defaultLinkedRecordId={bookingFollowUp?.linkedRecordId ?? undefined}
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} customerId={client.id} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />

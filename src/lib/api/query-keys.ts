@@ -65,6 +65,14 @@ export const queryKeys = {
   bookingConsumables: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "consumables"] as const,
 
+  /** Service follow-ups (top-up reminders). Lists are keyed by their filter so the prefix invalidates all. */
+  followUps: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "follow-ups", filter] as const)
+      : (["biz", businessId, "follow-ups"] as const),
+  followUp: (businessId: string, followUpId: string) =>
+    ["biz", businessId, "follow-ups", "one", followUpId] as const,
+
   staff: (businessId: string) => ["biz", businessId, "staff"] as const,
   staffMember: (businessId: string, staffId: string) =>
     ["biz", businessId, "staff", staffId] as const,

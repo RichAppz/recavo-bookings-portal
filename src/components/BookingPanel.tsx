@@ -64,6 +64,7 @@ import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
 import { BookingConsumablesSection } from "@/components/BookingConsumables";
+import { BookingFollowUpDetail } from "@/components/BookingFollowUpDetail";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
 import { useBookingInvoices } from "@/lib/api/invoices";
@@ -956,6 +957,12 @@ export function BookingPanel({
                         </dd>
                       </div>
                     ) : null}
+                    {/* "Next top-up due": follow-ups this job scheduled, once it is done. */}
+                    <BookingFollowUpDetail
+                      bookingId={booking.id}
+                      timezone={timezone}
+                      onNavigate={onClose}
+                    />
                     {booking.clientLift ? (
                       <Detail
                         label="Lift"
