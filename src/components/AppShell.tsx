@@ -51,7 +51,7 @@ import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { BillingBanner } from "@/components/BillingBanner";
+import { BillingBanner, TrialPill } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
@@ -545,6 +545,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </SelectContent>
                 </Select>
               ) : null}
+
+              {accessPending ? null : <TrialPill />}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
