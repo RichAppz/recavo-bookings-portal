@@ -12,7 +12,7 @@
 import type { SignInWithApplePlugin } from "@capacitor-community/apple-sign-in";
 
 /** Custom URL scheme registered in ios/App/App/Info.plist and AndroidManifest.xml. */
-export const NATIVE_URL_SCHEME = "app.recavo.portal";
+export const NATIVE_URL_SCHEME = "com.richappz.recavo";
 
 /**
  * Deep link the app receives once Google sign-in has completed. Supabase does

@@ -56,7 +56,7 @@
     <main>
       <h1>Returning to RECAVO…</h1>
       <p>If nothing happens, tap the button below to finish signing in.</p>
-      <a id="open" class="button" href="app.recavo.portal://auth/callback">Open RECAVO</a>
+      <a id="open" class="button" href="com.richappz.recavo://auth/callback">Open RECAVO</a>
     </main>
     <script>
       // Supabase can only redirect Google sign-in to an https URL on this
@@ -64,7 +64,7 @@
       // the query and fragment) to the mobile app's URL scheme. Runs inside
       // the app's in-app browser sheet; the app closes the sheet on arrival.
       (function () {
-        var target = "app.recavo.portal://auth/callback" + location.search + location.hash;
+        var target = "com.richappz.recavo://auth/callback" + location.search + location.hash;
         document.getElementById("open").setAttribute("href", target);
         location.replace(target);
       })();

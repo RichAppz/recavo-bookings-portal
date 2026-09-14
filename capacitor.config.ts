@@ -45,7 +45,7 @@ const serverUrl =
   (process.env.CAP_ENV === "production" ? SERVER_URLS.production : SERVER_URLS.staging);
 
 const config: CapacitorConfig = {
-  appId: "app.recavo.portal",
+  appId: "com.richappz.recavo",
   appName: "RECAVO",
   webDir: "mobile/www",
   server: {
