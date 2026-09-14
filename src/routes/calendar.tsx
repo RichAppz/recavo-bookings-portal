@@ -448,6 +448,9 @@ function CalendarPage() {
   };
 
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  // Seven columns need room to be legible, so the week grid scrolls sideways on
+  // phones; a single day fits the screen and shouldn't.
+  const gridMinWidth = view === "week" ? "min-w-[720px]" : "";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const todayIso = isoDate(new Date());
 
@@ -1062,7 +1065,9 @@ function CalendarPage() {
         </div>
       ) : (
         <div className="surface-card overflow-x-auto">
-          <div className="flex border-b bg-secondary/50">
+          {/* One scroll container for header + grid so the day headings stay
+              aligned with their columns and move with them on narrow screens. */}
+          <div className={cn("flex border-b bg-secondary/50", gridMinWidth)}>
             <div className="w-16 shrink-0" />
             {days.map((day) => {
               const iso = isoDate(day);
@@ -1079,11 +1084,11 @@ function CalendarPage() {
             })}
           </div>
 
-          <div className="overflow-x-auto">
+          <div>
             {/* All-day jobs (RECA-532) and all-day events get a lane above the hours
                 rather than a 00:00–00:00 block: they hold the whole day, not a time on it. */}
             {allDayPlaced.length > 0 ? (
-              <div className="flex min-w-[720px] border-b bg-secondary/20">
+              <div className={cn("flex border-b bg-secondary/20", gridMinWidth)}>
                 <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
                   All day
                 </div>
@@ -1200,7 +1205,7 @@ function CalendarPage() {
                 </div>
               </div>
             ) : null}
-            <div className="relative flex min-w-[720px]">
+            <div className={cn("relative flex", gridMinWidth)}>
               <div className="w-16 shrink-0">
                 {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
                   <div
