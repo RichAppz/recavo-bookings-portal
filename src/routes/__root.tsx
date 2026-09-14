@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
 import { NativeReturnGate } from "@/components/NativeReturnGate";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
@@ -205,6 +206,7 @@ function RootComponent() {
               mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
             />
             <MfaDialog />
+            <PullToRefresh />
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>
