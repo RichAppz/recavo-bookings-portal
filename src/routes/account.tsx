@@ -141,7 +141,7 @@ function AccountPage() {
   if (studios.isLoading || !studios.data) {
     return (
       <AccountShell view={view} title={copy.title}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="surface-card h-[124px] animate-pulse" />
           ))}
@@ -428,7 +428,7 @@ function Overview({
           `grid` sizes its single implicit column to the widest item's min-content, and
           with a nowrap (`truncate`) name inside, that can be wider than the screen. The
           column then grows past the viewport and the whole page scrolls sideways. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Next booking"
           value={
