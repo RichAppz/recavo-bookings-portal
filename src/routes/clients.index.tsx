@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Search, Upload, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useCustomersInfinite } from "@/lib/api/hooks";
+import { useCustomerCounts, useCustomersInfinite } from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
 
@@ -55,7 +55,7 @@ function ClientsPage() {
     status: status !== "all" ? status : undefined,
   });
   const rows = customers.items;
-  const activeCount = useMemo(() => rows.filter((c) => c.status === "active").length, [rows]);
+  const counts = useCustomerCounts();
   const { fetchNextPage } = customers;
   const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
 
@@ -78,10 +78,21 @@ function ClientsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-        <StatCard label="Clients loaded" value={String(rows.length)} />
-        <StatCard label="Active (loaded)" value={String(activeCount)} />
-        <StatCard label="Archived or anonymised" value={String(rows.length - activeCount)} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <StatCard
+          label="Total clients"
+          value={counts.data ? String(counts.data.total) : "—"}
+          hint={
+            counts.data && counts.data.total !== counts.data.active
+              ? `${counts.data.active} active`
+              : undefined
+          }
+        />
+        <StatCard
+          label="Archived"
+          value={counts.data ? String(counts.data.archived + counts.data.anonymised) : "—"}
+          hint={counts.data?.anonymised ? `${counts.data.anonymised} anonymised` : undefined}
+        />
       </div>
 
       <div className="surface-card overflow-hidden">

@@ -1528,6 +1528,47 @@ export function useCustomersInfinite(
   };
 }
 
+export type CustomerCounts = {
+  total: number;
+  active: number;
+  archived: number;
+  anonymised: number;
+};
+
+/**
+ * Whole-book client counts for the Clients page header. The list endpoint is
+ * cursor-paginated with no total, so walk it unfiltered at the largest page
+ * size and tally statuses; for a typical sole trader that is one or two
+ * requests, and the result is shared with the list's own cache key prefix so
+ * adding or archiving a client invalidates it too.
+ */
+export function useCustomerCounts() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerCounts(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async (): Promise<CustomerCounts> => {
+      type Page = { items: Customer[]; nextCursor?: string | null };
+      const counts: CustomerCounts = { total: 0, active: 0, archived: 0, anonymised: 0 };
+      let cursor: string | null = null;
+      do {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/customers`,
+          { query: { limit: 100, ...(cursor ? { cursor } : {}) } },
+        );
+        for (const c of res.data.items) {
+          counts.total += 1;
+          if (c.status === "active") counts.active += 1;
+          else if (c.status === "archived") counts.archived += 1;
+          else if (c.status === "anonymised") counts.anonymised += 1;
+        }
+        cursor = res.data.nextCursor ?? null;
+      } while (cursor);
+      return counts;
+    },
+  });
+}
+
 export function useCustomer(customerId: string | undefined) {
   const businessId = useBusinessId();
   return useQuery({

@@ -33,6 +33,7 @@ export const queryKeys = {
     ["biz", businessId, "customers", filters ?? {}] as const,
   customersInfinite: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "customers", "infinite", filters ?? {}] as const,
+  customerCounts: (businessId: string) => ["biz", businessId, "customers", "counts"] as const,
   customer: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId] as const,
   customerTagsCatalogue: (businessId: string, filters?: Record<string, unknown>) =>
