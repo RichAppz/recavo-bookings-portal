@@ -46,7 +46,7 @@ const serverUrl =
 
 const config: CapacitorConfig = {
   appId: "app.recavo.portal",
-  appName: "RECAVO Portal",
+  appName: "RECAVO",
   webDir: "mobile/www",
   server: {
     url: serverUrl,

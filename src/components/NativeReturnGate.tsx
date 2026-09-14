@@ -29,14 +29,14 @@ export function NativeReturnGate({ children }: { children: ReactNode }) {
         <div className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">Returning to the app…</h1>
           <p className="text-sm text-muted-foreground">
-            If nothing happens, tap the button below to carry on in RECAVO Portal.
+            If nothing happens, tap the button below to carry on in the RECAVO app.
           </p>
         </div>
         <a
           href={link}
           className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground"
         >
-          Open RECAVO Portal
+          Open RECAVO
         </a>
       </div>
     </div>
