@@ -276,9 +276,9 @@ function StaffLogin() {
 
   return (
     <AuthShell
-      eyebrow="PT console"
+      eyebrow="Welcome back"
       title="Sign in to RECAVO"
-      subtitle="Pick up where you left off — today's sessions, payments and client messages."
+      subtitle="Pick up where you left off — today's bookings, payments and client messages."
       footer={
         <span>
           New to RECAVO?{" "}
