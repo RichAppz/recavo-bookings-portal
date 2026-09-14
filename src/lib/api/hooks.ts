@@ -3734,6 +3734,8 @@ export type SubscriptionView = {
   /** Effective feature map (plan tier + Stripe entitlements + overrides, RECA-526). */
   features?: Record<string, boolean>;
   addons?: SubscriptionAddon[];
+  /** A platform billing_bypass override is standing in for a Stripe subscription. */
+  billingBypass?: boolean;
 };
 
 export function useSubscription() {

@@ -246,7 +246,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const portalLink = usePortalLink(noStaffBusiness);
   const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
-  const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
+  // A platform billing_bypass (demo / review / comp accounts) grants paid access
+  // with no Stripe subscription, so it must not send the console to the plan chooser.
+  const billingLocked =
+    subscription.isSuccess &&
+    !subscription.data?.billingBypass &&
+    isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
   const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
 
