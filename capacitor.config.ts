@@ -40,6 +40,13 @@ const config: CapacitorConfig = {
     url: serverUrl,
     // Plain http is only allowed for local dev servers.
     cleartext: serverUrl.startsWith("http://"),
+    // Hosts the WebView may navigate to in-app. Anything else is handed to the
+    // system browser, and once there Stripe's success/cancel/return redirects to
+    // our origin would land in Safari rather than back in the app. Stripe Checkout
+    // (subscriptions, SMS credits), the Billing Portal and Connect onboarding all
+    // redirect back to our own origin, so keeping them in the WebView completes the
+    // round trip inside the app.
+    allowNavigation: ["*.stripe.com"],
   },
 };
 
