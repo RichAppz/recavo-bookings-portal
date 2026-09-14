@@ -362,7 +362,13 @@ function CalendarPage() {
   }, [staff.data, staffFilter, setStaffFilter]);
 
   const days = useMemo(() => {
-    if (view === "day") return [anchor];
+    if (view === "day") {
+      // `anchor` carries a time of day ("Today" sets it to `new Date()`), so the
+      // day range must start at local midnight or earlier bookings fall outside it.
+      const start = new Date(anchor);
+      start.setHours(0, 0, 0, 0);
+      return [start];
+    }
     if (view === "month") return monthGrid(anchor);
     return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
   }, [view, anchor]);
