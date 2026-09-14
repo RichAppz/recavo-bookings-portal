@@ -16,6 +16,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
+import { NativeReturnGate } from "@/components/NativeReturnGate";
+import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
 
@@ -177,6 +179,14 @@ function PasswordRecoveryRedirect() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // The mobile app runs Stripe in a browser sheet; when it is dismissed by hand
+  // the plan, cards or Connect status may have changed behind our cache.
+  useEffect(() => {
+    const refresh = () => void queryClient.invalidateQueries();
+    window.addEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+    return () => window.removeEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -184,7 +194,9 @@ function RootComponent() {
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <PasswordRecoveryRedirect />
-            <Outlet />
+            <NativeReturnGate>
+              <Outlet />
+            </NativeReturnGate>
             {/* Keep toasts clear of the notch/Dynamic Island in the mobile app. */}
             <Toaster
               position="top-right"

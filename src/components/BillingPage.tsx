@@ -50,6 +50,7 @@ import { INVOICING_ADDON_KEY } from "@/lib/invoices";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
+import { openHostedFlow } from "@/lib/native";
 
 type PlanPitch = { tagline: string; popular?: boolean; bullets: string[] };
 
@@ -419,13 +420,13 @@ export function BillingPage() {
       interval: price?.interval ?? interval,
     });
     const url = result.checkoutUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   const openPortal = async () => {
     const result = await portal.mutateAsync();
     const url = result.portalUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   if (tenant.isLoading && !canManage) {

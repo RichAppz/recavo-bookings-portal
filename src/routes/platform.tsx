@@ -63,6 +63,7 @@ import {
 import type { FailedJob, OutboxEvent } from "@/lib/api/types";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
+import { openHostedFlow } from "@/lib/native";
 
 function toastWithRequestId(title: string, requestId?: string) {
   toast.success(title, {
@@ -201,7 +202,7 @@ function PlatformContent() {
                       interval,
                     });
                     const url = result.url ?? result.checkoutUrl;
-                    if (url) window.location.assign(url);
+                    if (url) void openHostedFlow(url);
                     else toast.success("Checkout started");
                   }}
                 >

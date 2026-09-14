@@ -42,6 +42,7 @@ import { customerDisplayName } from "@/lib/api/types";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
+import { openHostedFlow } from "@/lib/native";
 
 export const Route = createFileRoute("/payments")({
   head: () => ({
@@ -158,7 +159,7 @@ function PaymentsPage() {
                 disabled={startOnboarding.isPending}
                 onClick={async () => {
                   const result = await startOnboarding.mutateAsync();
-                  if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+                  if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
                   else toast.success("Onboarding started");
                 }}
               >
@@ -180,7 +181,7 @@ function PaymentsPage() {
                     disabled={startOnboarding.isPending}
                     onClick={async () => {
                       const result = await startOnboarding.mutateAsync();
-                      if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+                      if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
                     }}
                   >
                     Connect Stripe

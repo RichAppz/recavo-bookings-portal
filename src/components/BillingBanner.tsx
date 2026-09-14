@@ -6,6 +6,7 @@ import { subscriptionAccessState } from "@/lib/billing/access";
 import { formatInTz } from "@/lib/format";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { openHostedFlow } from "@/lib/native";
 
 /**
  * Compact trial reminder for the header: "Trial · 6 days left", linking to the plan.
@@ -84,7 +85,7 @@ export function BillingBanner() {
   const openPortal = async () => {
     const result = await portal.mutateAsync();
     const url = result.portalUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   const graceEnds = current?.graceEndsAt
