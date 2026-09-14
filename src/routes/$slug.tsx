@@ -69,7 +69,7 @@ function SlugBookingPage() {
 function ResolvingPage() {
   return (
     <main className="min-h-screen bg-background">
-      <header className="pt-safe flex min-h-16 items-center border-b px-4 sm:px-6">
+      <header className="pt-safe flex min-h-16 items-center px-4 sm:border-b sm:px-6">
         <Wordmark />
       </header>
       <div className="mx-auto w-full max-w-5xl p-4 sm:p-8">

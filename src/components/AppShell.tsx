@@ -258,7 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!portalLink.isFetched || portalBusinesses.isLoading) {
       return (
         <div className="min-h-screen bg-background">
-          <header className="pt-safe flex min-h-16 items-center border-b px-4 sm:px-6">
+          <header className="pt-safe flex min-h-16 items-center px-4 sm:border-b sm:px-6">
             <Wordmark />
           </header>
           <main className="mx-auto w-full max-w-5xl p-4 sm:p-8">
@@ -301,7 +301,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (billingLocked && onBilling) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="pt-safe flex min-h-16 items-center justify-between border-b px-4 sm:px-6">
+        <header className="pt-safe flex min-h-16 items-center justify-between px-4 sm:border-b sm:px-6">
           <Wordmark />
           <Button variant="ghost" size="sm" onClick={() => void signOut()}>
             <LogOut className="size-4" /> Sign out
