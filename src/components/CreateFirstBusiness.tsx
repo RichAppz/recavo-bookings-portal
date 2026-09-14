@@ -23,6 +23,7 @@ import { BusinessDetailsFields } from "@/components/BusinessDetailsFields";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
 import { bookingUrlFor } from "@/lib/hosts";
+import { isNativeApp } from "@/lib/native";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
 function referralFieldError(error: unknown): string | null {
@@ -45,17 +46,18 @@ type CreateVars = {
   referralCode?: string;
 };
 
-/** Hostname of the customer site paired with this origin, e.g. `book.recavo.app`. */
-function customerSiteLabel(): string {
-  if (typeof window === "undefined") return "book.recavo.app";
-  return new URL(bookingUrlFor("")).hostname;
+/** The customer account page paired with this origin, e.g. `https://book.recavo.app/account`. */
+function customerAccountUrl(): string {
+  if (typeof window === "undefined") return "https://book.recavo.app/account";
+  return `${new URL(bookingUrlFor("")).origin}/account`;
 }
 
 /**
  * `customerElsewhere`: this account books sessions as a client of some studio
- * but runs nothing. Shown in the mobile app, which has no customer side, so
- * the person learns where their bookings live instead of wondering why the
- * app wants a business name.
+ * but runs nothing. Whoever signs in on the business host (or in the app, which
+ * has no customer side) is here to run a business, so they still get the setup
+ * form — plus a pointer to where their own bookings live, so nobody wonders why
+ * we are asking for a business name.
  */
 export function CreateFirstBusiness({
   customerElsewhere = false,
@@ -178,8 +180,20 @@ export function CreateFirstBusiness({
           </p>
           {customerElsewhere ? (
             <p className="mt-3 rounded-lg bg-secondary/70 px-3 py-2 text-xs text-muted-foreground">
-              This app is for running a business. The sessions you've booked as a client are at{" "}
-              <span className="font-medium text-foreground">{customerSiteLabel()}</span>.
+              This is the business console. The sessions you've booked as a client are at{" "}
+              {isNativeApp() ? (
+                <span className="font-medium text-foreground">
+                  {new URL(customerAccountUrl()).hostname}
+                </span>
+              ) : (
+                <a
+                  href={customerAccountUrl()}
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  {new URL(customerAccountUrl()).hostname}
+                </a>
+              )}
+              .
             </p>
           ) : null}
 

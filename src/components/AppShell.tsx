@@ -258,7 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!portalLink.isFetched || portalBusinesses.isLoading) {
       return (
         <div className="min-h-screen bg-background">
-          <header className="pt-safe flex min-h-16 items-center px-4 sm:border-b sm:px-6">
+          <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
             <Wordmark />
           </header>
           <main className="mx-auto w-full max-w-5xl p-4 sm:p-8">
@@ -268,26 +268,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       );
     }
     const isCustomer = (portalBusinesses.data ?? []).length > 0;
-    // The mobile app is the business console only — there is no customer side
-    // to hand over to — so whoever signs in there is here to run a business,
-    // even if the same address also books sessions somewhere as a client.
-    if (isNativeApp()) {
+    // No membership, so the address they came in on is the evidence of intent.
+    // Customer links all point at the customer host; the business host (and the
+    // app, which is the business console only) is reached by choosing it, so
+    // whoever signs in there is here to run a business — even if the same
+    // address also books sessions somewhere as a client. They get the setup
+    // form, with a pointer to where their own bookings live.
+    const onCustomerHost =
+      !isNativeApp() && typeof window !== "undefined" && isCustomerHost(window.location.hostname);
+    if (!onCustomerHost) {
       return <CreateFirstBusiness customerElsewhere={isCustomer} />;
     }
-    // Someone who bought sessions has a customer record but nothing to run, so
-    // send them to their own account rather than offering to set up a studio.
-    // /account rather than one studio's page: which studio came first is an
-    // accident of history, and picking it for them hides the others.
+    // On the customer host a customer record means their own account. /account
+    // rather than one studio's page: which studio came first is an accident of
+    // history, and picking it for them hides the others.
     if (isCustomer) {
       return <Navigate to="/account" replace />;
     }
-    // Nothing to go on: no membership, no customer link. The hostname is the last
-    // evidence of why they came, and on the customer one "set up your studio" is
+    // Nothing to go on at all, and on the customer host "set up your studio" is
     // the wrong question — they are mid-claim, or their link has yet to redeem.
-    if (typeof window !== "undefined" && isCustomerHost(window.location.hostname)) {
-      return <NoCustomerAccount />;
-    }
-    return <CreateFirstBusiness />;
+    return <NoCustomerAccount />;
   }
 
   const accessPending = tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
@@ -301,7 +301,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (billingLocked && onBilling) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="pt-safe flex min-h-16 items-center justify-between px-4 sm:border-b sm:px-6">
+        <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center justify-between bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
           <Wordmark />
           <Button variant="ghost" size="sm" onClick={() => void signOut()}>
             <LogOut className="size-4" /> Sign out
