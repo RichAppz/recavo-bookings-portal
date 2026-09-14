@@ -792,7 +792,7 @@ export function BookingPanel({
           </div>
         ) : (
           <>
-            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5 pb-12 sm:pb-5">
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={booking.status} />
                 {/* Only once marked: an "Unknown" pill before then just restates the

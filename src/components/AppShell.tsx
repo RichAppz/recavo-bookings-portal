@@ -261,7 +261,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
             <Wordmark />
           </header>
-          <main className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+          <main className="mx-auto w-full max-w-5xl px-4 pt-4 pb-safe-12 sm:p-8">
             <PageGhost />
           </main>
         </div>
@@ -307,7 +307,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LogOut className="size-4" /> Sign out
           </Button>
         </header>
-        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{page}</main>
+        <main className="mx-auto w-full max-w-5xl space-y-6 px-4 pt-4 pb-safe-12 sm:p-8">
+          {page}
+        </main>
       </div>
     );
   }
@@ -661,7 +663,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+        <main className="mx-auto w-full max-w-[1440px] space-y-6 px-4 pt-4 pb-safe-12 sm:p-6">
           {accessPending ? null : <BillingBanner />}
           {page}
         </main>
