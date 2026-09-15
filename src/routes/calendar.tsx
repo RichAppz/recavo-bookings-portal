@@ -19,7 +19,6 @@ import { useSoleStaff } from "@/lib/sole";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterMenuItems } from "@/components/ServiceFilterSelect";
-import { ServiceKey } from "@/components/ServiceKey";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,38 +109,20 @@ const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
 /**
- * A booking chip is a solid bar in its service's colour; payment status is the
- * highlight on its right edge: green when nothing is owed (paid, free, credit,
- * cancelled), amber deposit or part paid, red nothing received. Staff asked for
- * one bright colour per bar rather than a tinted bar with a coloured sliver.
+ * A booking bar is one solid block of payment status — the thing staff most
+ * need to read off the calendar without opening the job: green when nothing is
+ * owed (paid, free, credit, cancelled), amber deposit or part paid, red nothing
+ * received. Service identity is left to the text.
  */
 // "Nothing to collect" (free, credit, cancelled) shares the settled green: to
 // the person reading the calendar both mean "no money to chase", and teal next
 // to green was too close to tell apart.
 const PAYMENT_CHIP: Record<PaymentTone, string> = {
-  paid: "border-r-success",
-  partial: "border-r-warning",
-  unpaid: "border-r-destructive",
-  none: "border-r-success",
+  paid: "bg-success text-white",
+  partial: "bg-warning text-neutral-900",
+  unpaid: "bg-destructive text-white",
+  none: "bg-success text-white",
 };
-
-/** Black or white, whichever reads better on a hex colour; white for anything else. */
-function readableTextOn(colour: string): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(colour.trim());
-  if (!m) return "#ffffff";
-  const n = parseInt(m[1], 16);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
-    const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.45 ? "#111827" : "#ffffff";
-}
-
-/** Solid service colour with text that stays legible on it. */
-function bookingChipStyle(colour: string): CSSProperties {
-  return { backgroundColor: colour, color: readableTextOn(colour) };
-}
 
 const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
   { tone: "paid", label: "Paid / nothing to collect" },
@@ -155,8 +136,6 @@ const PAYMENT_DOT: Record<PaymentTone, string> = {
   unpaid: "bg-destructive",
   none: "bg-success",
 };
-
-const SERVICE_FALLBACK_COLOUR = "var(--color-chart-1)";
 
 /**
  * A timed job staff squeezed in beside an all-day one. The all-day bar sits in the
@@ -443,14 +422,6 @@ function CalendarPage() {
       : recordDefinition.data.definition.singularLabel
     : null;
 
-  // Service identity rides along as a dot inside each chip; the chip's
-  // border/background belong to payment status. A service with no colour set
-  // still gets a dot so the row of chips reads consistently.
-  const serviceColour = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of services.data ?? []) map.set(s.id, s.colour ?? SERVICE_FALLBACK_COLOUR);
-    return (b: Booking) => map.get(b.serviceSnapshot.serviceId) ?? SERVICE_FALLBACK_COLOUR;
-  }, [services.data]);
   // The category comes from the live catalogue, not the snapshot: it is a grouping
   // label the business tidies over time, so the calendar should follow the tidy-up.
   const categoryFor = (b: Booking) =>
@@ -812,7 +783,6 @@ function CalendarPage() {
                 services={services.data ?? []}
                 value={serviceFilter}
                 onValueChange={setServiceFilter}
-                colourFor={(s) => s.colour ?? SERVICE_FALLBACK_COLOUR}
               />
               {view === "month" ? (
                 <>
@@ -1048,9 +1018,9 @@ function CalendarPage() {
                           aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
-                          style={{ ...style, ...bookingChipStyle(serviceColour(b)) }}
+                          style={style}
                           className={cn(
-                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-r-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
                             edges,
                             cancelled && "opacity-45 line-through",
@@ -1196,13 +1166,12 @@ function CalendarPage() {
                           style={{
                             gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                             gridRow: lane + 1,
-                            ...bookingChipStyle(serviceColour(b)),
                           }}
                           className={cn(
-                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-r-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
                             continuesBefore ? "ml-0 rounded-l-none" : "ml-1",
-                            continuesAfter ? "mr-0 rounded-r-none border-r-0" : "mr-1",
+                            continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
                             cancelled && "opacity-45 line-through",
                           )}
                         >
@@ -1314,11 +1283,11 @@ function CalendarPage() {
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
-                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg border-r-[3px] px-2 py-1 text-left",
+                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg px-2 py-1 text-left",
                             payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
-                          style={{ top, height, ...bookingChipStyle(serviceColour(b)) }}
+                          style={{ top, height }}
                         >
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
                             {isDropIn(b) ? <DropInTag /> : null}
@@ -1364,11 +1333,9 @@ function CalendarPage() {
         </div>
       )}
 
-      {/* Payment colours are a fixed handful, so they stay inline; the service
-          colours grow with the catalogue and live behind a button instead. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium">Payment (right edge):</span>
+          <span className="font-medium">Payment:</span>
           {PAYMENT_LEGEND.map(({ tone, label }) => (
             <span key={tone} className="flex items-center gap-2">
               <span className={cn("size-2.5 rounded-full", PAYMENT_DOT[tone])} />
@@ -1383,13 +1350,6 @@ function CalendarPage() {
             Event (own colour, hatched)
           </span>
         </div>
-        <ServiceKey
-          services={services.data ?? []}
-          fallbackColour={SERVICE_FALLBACK_COLOUR}
-          value={serviceFilter}
-          onValueChange={setServiceFilter}
-          className="sm:ml-auto"
-        />
       </div>
 
       <AddToCalendarChooser
