@@ -8,10 +8,12 @@ import {
   Clock,
   Hourglass,
   MoreHorizontal,
+  Palette,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
+import { CalendarColoursDialog } from "@/components/CalendarColoursSetting";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { summariseBookings } from "@/lib/calendar-stats";
@@ -76,6 +78,7 @@ import {
   paymentDotStyle,
   type PaymentColours,
 } from "@/lib/payment-colours";
+import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import {
@@ -308,6 +311,7 @@ function CalendarPage() {
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
   // "Add to waitlist instead" from the booking form when the day has no availability.
   const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
+  const [coloursOpen, setColoursOpen] = useState(false);
   const waitlistSummary = useWaitlistSummary();
   const waiting = waitlistSummary.data?.waiting ?? 0;
   const [addTime, setAddTime] = useState<string | undefined>(undefined);
@@ -1350,8 +1354,20 @@ function CalendarPage() {
             />
             Event (own colour, hatched)
           </span>
+          {tenant.can(PERMISSIONS.BUSINESS_UPDATE) ? (
+            <button
+              type="button"
+              onClick={() => setColoursOpen(true)}
+              className="flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+            >
+              <Palette className="size-3" aria-hidden />
+              Change colours
+            </button>
+          ) : null}
         </div>
       </div>
+
+      <CalendarColoursDialog open={coloursOpen} onOpenChange={setColoursOpen} />
 
       <AddToCalendarChooser
         open={chooserOpen}
