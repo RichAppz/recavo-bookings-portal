@@ -113,7 +113,12 @@ export function AddWaitlistDialog({
     setServiceId(defaults?.serviceId ?? "");
     setVariantId("none");
     setLinkedRecordId(defaults?.linkedRecordId ?? "none");
-    setLocationId(defaults?.locationId ?? tenant.currentLocationId ?? "any");
+    // The location filter's "all" is not a location; sending it to the API was a 500.
+    const currentLocation =
+      tenant.currentLocationId && tenant.currentLocationId !== "all"
+        ? tenant.currentLocationId
+        : "any";
+    setLocationId(defaults?.locationId ?? currentLocation);
     setStaffId(defaults?.staffId ?? "any");
     setFrom(defaults?.from ?? "");
     setTo("");
@@ -160,7 +165,8 @@ export function AddWaitlistDialog({
     const shared: Omit<WaitlistEntryInput, "customerId" | "serviceId"> = {
       variantId: variantId === "none" ? null : variantId,
       linkedRecordId: linkedRecordId === "none" ? null : linkedRecordId,
-      locationId: locationId === "any" ? null : locationId,
+      // Only a real location goes over the wire; "any"/"all" mean no preference.
+      locationId: locationList.some((l) => l.id === locationId) ? locationId : null,
       staffId: staffId === "any" ? null : staffId,
       preferences: {
         from: from || null,
