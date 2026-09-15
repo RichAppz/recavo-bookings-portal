@@ -590,7 +590,11 @@ function ServiceDialog({
     setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
-    setUsageRows([]);
+    // Seed from whatever the usage query already holds. The adopt effect below
+    // can't be relied on here: it runs in the same commit as this reset and its
+    // deps don't change afterwards, so a reopen after a save used to land on an
+    // empty list — and the next save would then wipe the lines already recorded.
+    setUsageRows(s && serviceUsage.data ? rowsFromLines(serviceUsage.data) : []);
     setUsageDirty(false);
     setUsageInvalid(null);
     setFollowUpDraft(draftFromRule(s?.followUp));
