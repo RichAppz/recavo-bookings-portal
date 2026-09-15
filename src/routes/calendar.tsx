@@ -70,6 +70,12 @@ import {
   paymentTone,
   type PaymentTone,
 } from "@/lib/booking-payment";
+import {
+  paymentBarStyle,
+  paymentColoursFrom,
+  paymentDotStyle,
+  type PaymentColours,
+} from "@/lib/payment-colours";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import {
@@ -116,26 +122,13 @@ const HOUR_HEIGHT = 60;
  */
 // "Nothing to collect" (free, credit, cancelled) shares the settled green: to
 // the person reading the calendar both mean "no money to chase", and teal next
-// to green was too close to tell apart.
-const PAYMENT_CHIP: Record<PaymentTone, string> = {
-  paid: "bg-success text-white",
-  partial: "bg-warning text-neutral-900",
-  unpaid: "bg-destructive text-white",
-  none: "bg-success text-white",
-};
-
+// to green was too close to tell apart. Businesses can swap any of the three
+// colours in Settings → Configuration; `paymentBarStyle` applies the override.
 const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
   { tone: "paid", label: "Paid / nothing to collect" },
   { tone: "partial", label: "Deposit / part paid" },
   { tone: "unpaid", label: "Unpaid" },
 ];
-
-const PAYMENT_DOT: Record<PaymentTone, string> = {
-  paid: "bg-success",
-  partial: "bg-warning",
-  unpaid: "bg-destructive",
-  none: "bg-success",
-};
 
 /**
  * A timed job staff squeezed in beside an all-day one. The all-day bar sits in the
@@ -190,13 +183,13 @@ const isCancelled = (b: Booking) =>
   b.status === "cancelled_by_business" ||
   b.status === "late_cancelled";
 
-/** Tone, classes and a spoken label for one booking's chip. */
-function chipPayment(b: Booking) {
+/** Tone, classes/inline colour and a spoken label for one booking's chip. */
+function chipPayment(b: Booking, colours: PaymentColours) {
   const settlement = bookingSettlement(b);
   const tone = paymentTone(settlement, b.status);
   return {
     tone,
-    className: PAYMENT_CHIP[tone],
+    ...paymentBarStyle(tone, colours),
     label: paymentLabel(settlement, b.currency, formatMoney),
   };
 }
@@ -274,6 +267,10 @@ function monthGrid(anchor: Date): Date[] {
 
 function CalendarPage() {
   const tenant = useTenant();
+  const paymentColours = useMemo(
+    () => paymentColoursFrom(tenant.configuration),
+    [tenant.configuration],
+  );
   // View and filters come back the way they were last left, per business.
   const prefKey = (name: string) => `recavo.calendar.${name}.${tenant.businessId ?? "none"}`;
   const [view, setView] = useStoredState<"day" | "week" | "month">(prefKey("view"), "week", [
@@ -994,7 +991,7 @@ function CalendarPage() {
                       }
                       const b = entry.item;
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const client = clientFor(b);
                       const multi = isMultiDay(b);
@@ -1018,7 +1015,7 @@ function CalendarPage() {
                           aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
-                          style={style}
+                          style={{ ...style, ...payment.style }}
                           className={cn(
                             "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
@@ -1150,7 +1147,7 @@ function CalendarPage() {
                       }
                       const b = p.entry.item;
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const owner = staff.data?.find((s) => s.id === b.staffId);
                       const category = categoryFor(b);
@@ -1166,6 +1163,7 @@ function CalendarPage() {
                           style={{
                             gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                             gridRow: lane + 1,
+                            ...payment.style,
                           }}
                           className={cn(
                             "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
@@ -1269,7 +1267,7 @@ function CalendarPage() {
 
                     {dayBookings.map((b) => {
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const { startsToday, endsToday, heightMin, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
@@ -1287,7 +1285,7 @@ function CalendarPage() {
                             payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
-                          style={{ top, height }}
+                          style={{ top, height, ...payment.style }}
                         >
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
                             {isDropIn(b) ? <DropInTag /> : null}
@@ -1336,12 +1334,15 @@ function CalendarPage() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
           <span className="font-medium">Payment:</span>
-          {PAYMENT_LEGEND.map(({ tone, label }) => (
-            <span key={tone} className="flex items-center gap-2">
-              <span className={cn("size-2.5 rounded-full", PAYMENT_DOT[tone])} />
-              {label}
-            </span>
-          ))}
+          {PAYMENT_LEGEND.map(({ tone, label }) => {
+            const dot = paymentDotStyle(tone, paymentColours);
+            return (
+              <span key={tone} className="flex items-center gap-2">
+                <span className={cn("size-2.5 rounded-full", dot.className)} style={dot.style} />
+                {label}
+              </span>
+            );
+          })}
           <span className="flex items-center gap-2">
             <span
               className="size-2.5 rounded-sm"

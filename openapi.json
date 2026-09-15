@@ -4959,6 +4959,38 @@
               }
             }
           },
+          "calendar": {
+            "type": "object",
+            "description": "Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only.",
+            "properties": {
+              "paymentColours": {
+                "type": "object",
+                "properties": {
+                  "paid": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "partial": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "unpaid": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^#[0-9a-f]{6}$"
+                  }
+                }
+              }
+            }
+          },
           "legalAddress": {
             "type": [
               "object",
@@ -18764,6 +18796,38 @@
                           "null"
                         ],
                         "maxLength": 1000
+                      }
+                    }
+                  },
+                  "calendar": {
+                    "type": "object",
+                    "description": "Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only.",
+                    "properties": {
+                      "paymentColours": {
+                        "type": "object",
+                        "properties": {
+                          "paid": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^#[0-9a-f]{6}$"
+                          },
+                          "partial": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^#[0-9a-f]{6}$"
+                          },
+                          "unpaid": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^#[0-9a-f]{6}$"
+                          }
+                        }
                       }
                     }
                   },

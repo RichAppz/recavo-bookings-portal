@@ -8739,6 +8739,14 @@ export interface paths {
                             dueDays?: number;
                             footerNote?: string | null;
                         };
+                        /** @description Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only. */
+                        calendar?: {
+                            paymentColours?: {
+                                paid?: string | null;
+                                partial?: string | null;
+                                unpaid?: string | null;
+                            };
+                        };
                         legalAddress?: {
                             line1?: string;
                             line2?: string | null;
@@ -42880,6 +42888,14 @@ export interface components {
                 numberPrefix?: string;
                 dueDays?: number;
                 footerNote?: string | null;
+            };
+            /** @description Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only. */
+            calendar?: {
+                paymentColours?: {
+                    paid?: string | null;
+                    partial?: string | null;
+                    unpaid?: string | null;
+                };
             };
             legalAddress?: {
                 line1?: string;
