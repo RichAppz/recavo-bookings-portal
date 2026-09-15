@@ -110,20 +110,38 @@ const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
 /**
- * Payment status is the one thing staff most need to read off the calendar
- * without opening a booking, so it owns the chip colour: green when nothing is
- * owed (paid, free, credit, cancelled), amber deposit or part paid, red
- * nothing received.
+ * A booking chip is a solid bar in its service's colour; payment status is the
+ * highlight on its right edge: green when nothing is owed (paid, free, credit,
+ * cancelled), amber deposit or part paid, red nothing received. Staff asked for
+ * one bright colour per bar rather than a tinted bar with a coloured sliver.
  */
 // "Nothing to collect" (free, credit, cancelled) shares the settled green: to
 // the person reading the calendar both mean "no money to chase", and teal next
 // to green was too close to tell apart.
 const PAYMENT_CHIP: Record<PaymentTone, string> = {
-  paid: "border-success bg-success-soft",
-  partial: "border-warning bg-warning-soft",
-  unpaid: "border-destructive bg-destructive-soft",
-  none: "border-success bg-success-soft",
+  paid: "border-r-success",
+  partial: "border-r-warning",
+  unpaid: "border-r-destructive",
+  none: "border-r-success",
 };
+
+/** Black or white, whichever reads better on a hex colour; white for anything else. */
+function readableTextOn(colour: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(colour.trim());
+  if (!m) return "#ffffff";
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.45 ? "#111827" : "#ffffff";
+}
+
+/** Solid service colour with text that stays legible on it. */
+function bookingChipStyle(colour: string): CSSProperties {
+  return { backgroundColor: colour, color: readableTextOn(colour) };
+}
 
 const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
   { tone: "paid", label: "Paid / nothing to collect" },
@@ -140,17 +158,6 @@ const PAYMENT_DOT: Record<PaymentTone, string> = {
 
 const SERVICE_FALLBACK_COLOUR = "var(--color-chart-1)";
 
-/** The service's colour swatch, shared by the chips and the legend. */
-function ServiceDot({ colour, className }: { colour: string; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn("inline-block size-2 shrink-0 rounded-full", className)}
-      style={{ backgroundColor: colour }}
-    />
-  );
-}
-
 /**
  * A timed job staff squeezed in beside an all-day one. The all-day bar sits in the
  * all-day lane and the drop-in under it as a normal timed chip, so the marker is
@@ -165,7 +172,7 @@ function DropInTag() {
   return (
     <span
       aria-hidden
-      className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-semibold tracking-wide text-primary uppercase"
+      className="shrink-0 rounded bg-white/25 px-1 text-[9px] font-semibold tracking-wide text-current uppercase"
     >
       Drop-in
     </span>
@@ -181,7 +188,7 @@ function LiftTag() {
     <CarFront
       role="img"
       aria-label="Lift needed"
-      className="size-3 shrink-0 text-primary"
+      className="size-3 shrink-0 text-current"
       strokeWidth={2.5}
     />
   );
@@ -1041,25 +1048,21 @@ function CalendarPage() {
                           aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
-                          style={style}
+                          style={{ ...style, ...bookingChipStyle(serviceColour(b)) }}
                           className={cn(
-                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-r-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
                             edges,
                             cancelled && "opacity-45 line-through",
                           )}
                         >
-                          <ServiceDot colour={serviceColour(b)} />
                           {isDropIn(b) ? <DropInTag /> : null}
                           {showLift ? <LiftTag /> : null}
                           {/* The label slides if it is wider than the bar, so a one-day
                               cell still shows everything that was switched on. */}
                           <Marquee>
                             {continuesBefore ? (
-                              <span
-                                className="text-muted-foreground"
-                                aria-label="Continues from earlier"
-                              >
+                              <span className="opacity-75" aria-label="Continues from earlier">
                                 ↳
                               </span>
                             ) : showTime ? (
@@ -1074,15 +1077,13 @@ function CalendarPage() {
                             {showClient ? <span className="font-semibold">{client}</span> : null}
                             {showTag ? <span className="font-semibold">{tag}</span> : null}
                             {showCategory ? (
-                              <span className="text-muted-foreground">
+                              <span className="opacity-75">
                                 {showService ? `${category} ·` : category}
                               </span>
                             ) : null}
                             {showService ? <span>{b.serviceSnapshot.name}</span> : null}
                           </Marquee>
-                          {continuesAfter ? (
-                            <span className="ml-auto text-muted-foreground">→</span>
-                          ) : null}
+                          {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
                         </button>
                       );
                     })}
@@ -1195,19 +1196,19 @@ function CalendarPage() {
                           style={{
                             gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                             gridRow: lane + 1,
+                            ...bookingChipStyle(serviceColour(b)),
                           }}
                           className={cn(
-                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-r-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
-                            continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1",
-                            continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
+                            continuesBefore ? "ml-0 rounded-l-none" : "ml-1",
+                            continuesAfter ? "mr-0 rounded-r-none border-r-0" : "mr-1",
                             cancelled && "opacity-45 line-through",
                           )}
                         >
-                          <ServiceDot colour={serviceColour(b)} />
                           {b.clientLift ? <LiftTag /> : null}
                           {continuesBefore ? (
-                            <span className="text-muted-foreground" aria-label="Continues">
+                            <span className="opacity-75" aria-label="Continues">
                               ↳
                             </span>
                           ) : null}
@@ -1216,16 +1217,12 @@ function CalendarPage() {
                           {/* Category trails the name here (not leads, as in month bars):
                               a week column is narrow and the name must survive truncation. */}
                           {category ? (
-                            <span className="truncate text-muted-foreground">· {category}</span>
+                            <span className="truncate opacity-75">· {category}</span>
                           ) : null}
                           {view === "day" && owner && !soleStaff ? (
-                            <span className="truncate text-muted-foreground">
-                              · {owner.displayName}
-                            </span>
+                            <span className="truncate opacity-75">· {owner.displayName}</span>
                           ) : null}
-                          {continuesAfter ? (
-                            <span className="ml-auto text-muted-foreground">→</span>
-                          ) : null}
+                          {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
                         </button>
                       );
                     })}
@@ -1317,23 +1314,19 @@ function CalendarPage() {
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
-                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left",
+                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg border-r-[3px] px-2 py-1 text-left",
                             payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
-                          style={{ top, height }}
+                          style={{ top, height, ...bookingChipStyle(serviceColour(b)) }}
                         >
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
-                            <ServiceDot colour={serviceColour(b)} />
                             {isDropIn(b) ? <DropInTag /> : null}
                             {b.clientLift ? <LiftTag /> : null}
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
                               {category ? (
-                                <span className="font-normal text-muted-foreground">
-                                  {" "}
-                                  · {category}
-                                </span>
+                                <span className="font-normal opacity-75"> · {category}</span>
                               ) : null}
                             </span>
                           </p>
@@ -1342,13 +1335,13 @@ function CalendarPage() {
                               {tag}
                             </p>
                           ) : null}
-                          <p className="truncate text-[11px] text-muted-foreground">
+                          <p className="truncate text-[11px] opacity-75">
                             {b.attendees.length > 1
                               ? `${b.seatCount}/${b.attendees.length} booked`
                               : trainer?.displayName}
                           </p>
                           {isMultiDay(b) ? (
-                            <p className="truncate text-[11px] text-muted-foreground">
+                            <p className="truncate text-[11px] opacity-75">
                               {endsToday ? `Ready ${endLabel(b)}` : `Until ${endLabel(b)}`}
                             </p>
                           ) : null}
@@ -1375,7 +1368,7 @@ function CalendarPage() {
           colours grow with the catalogue and live behind a button instead. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium">Payment (chip colour):</span>
+          <span className="font-medium">Payment (right edge):</span>
           {PAYMENT_LEGEND.map(({ tone, label }) => (
             <span key={tone} className="flex items-center gap-2">
               <span className={cn("size-2.5 rounded-full", PAYMENT_DOT[tone])} />

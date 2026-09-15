@@ -11,6 +11,8 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -58,6 +60,16 @@ export const Route = createFileRoute("/bookings")({
 
 const PAGE_SIZE = 10;
 
+/**
+ * Cancelled jobs are noise in the day-to-day list, so they are hidden unless
+ * asked for. Deleted bookings never come back from the API at all.
+ */
+const CANCELLED_STATUSES = new Set<Booking["status"]>([
+  "cancelled_by_customer",
+  "cancelled_by_business",
+  "late_cancelled",
+]);
+
 function addDays(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -69,6 +81,7 @@ function BookingsPage() {
   const [staffFilter, setStaffFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showCancelled, setShowCancelled] = useState(false);
   const [fromDate, setFromDate] = useState(isoDate(addDays(new Date(), -14)));
   const [toDate, setToDate] = useState(isoDate(addDays(new Date(), 30)));
   const [page, setPage] = useState(0);
@@ -102,10 +115,12 @@ function BookingsPage() {
       .filter(
         (b) =>
           matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)) &&
-          (!q || b.reference.toLowerCase().includes(q)),
+          (!q || b.reference.toLowerCase().includes(q)) &&
+          // Picking a cancelled status in the dropdown is asking to see them.
+          (showCancelled || statusFilter !== "all" || !CANCELLED_STATUSES.has(b.status)),
       )
       .sort((a, b) => b.start.localeCompare(a.start));
-  }, [bookings.data, serviceFilter, serviceById, query]);
+  }, [bookings.data, serviceFilter, serviceById, query, showCancelled, statusFilter]);
 
   const pageRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -186,6 +201,19 @@ function BookingsPage() {
             </SelectContent>
           </Select>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-cancelled"
+            checked={showCancelled}
+            onCheckedChange={(v) => {
+              setShowCancelled(v);
+              setPage(0);
+            }}
+          />
+          <Label htmlFor="show-cancelled" className="text-sm font-normal text-muted-foreground">
+            Show cancelled bookings
+          </Label>
+        </div>
       </div>
 
       <div className="surface-card overflow-hidden">
@@ -211,6 +239,7 @@ function BookingsPage() {
                     setStaffFilter("all");
                     setServiceFilter("all");
                     setStatusFilter("all");
+                    setShowCancelled(true);
                   }}
                 >
                   Clear filters
