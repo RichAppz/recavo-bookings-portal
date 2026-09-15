@@ -138,6 +138,8 @@ export function AddBookingModal({
   defaultStaffId,
   defaultServiceId,
   defaultLinkedRecordId,
+  waitlistEntryId,
+  onNoAvailability,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -150,6 +152,23 @@ export function AddBookingModal({
   defaultDate?: string;
   /** Pre-select a staff member — e.g. the calendar's current staff filter. */
   defaultStaffId?: string;
+  /**
+   * "Book" from the waitlist: sent with the create call so the API closes the entry
+   * once the booking exists. Nothing else about the form changes.
+   */
+  waitlistEntryId?: string;
+  /**
+   * Shown as "Add to waitlist instead" when the chosen day has no availability. Called
+   * with what staff had already picked so the waitlist form opens prefilled.
+   */
+  onNoAvailability?: (picked: {
+    customerId: string;
+    serviceId: string;
+    linkedRecordId?: string;
+    locationId?: string;
+    staffId?: string;
+    date: string;
+  }) => void;
 }) {
   const tenant = useTenant();
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
@@ -931,6 +950,7 @@ export function AddBookingModal({
       ...(clientLift ? { clientLift } : {}),
       notifyChannels,
       source: "staff_console",
+      ...(waitlistEntryId ? { waitlistEntryId } : {}),
       // Include slotToken when present so backends that accept it can bind the quote.
       ...(scheduling === "slot" && selectedSlot?.slotToken
         ? { slotToken: selectedSlot.slotToken }
@@ -1617,6 +1637,28 @@ export function AddBookingModal({
                           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                             <AllDayTile onPick={pickAllDay} />
                           </div>
+                        ) : null}
+                        {/* Nothing suits: capture them instead of losing the enquiry. */}
+                        {onNoAvailability && validDate && customerId && serviceId && !dropIn ? (
+                          <p className="text-xs text-muted-foreground">
+                            Can't find a time?{" "}
+                            <button
+                              type="button"
+                              className="font-medium text-primary underline underline-offset-4"
+                              onClick={() =>
+                                onNoAvailability({
+                                  customerId,
+                                  serviceId,
+                                  ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
+                                  ...(locationId ? { locationId } : {}),
+                                  ...(staffId !== "all" ? { staffId } : {}),
+                                  date,
+                                })
+                              }
+                            >
+                              Add to waitlist instead
+                            </button>
+                          </p>
                         ) : null}
                       </div>
                     ) : (

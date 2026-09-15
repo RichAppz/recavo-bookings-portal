@@ -11,6 +11,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { CardsGhost } from "@/components/ghost";
 import { ApiError } from "@/lib/api";
 import { BookingCheckout, type BookingContact } from "@/components/BookingCheckout";
+import { JoinWaitlistSheet } from "@/components/JoinWaitlistSheet";
 import {
   useBuyPublicPackage,
   useConfirmPublicBooking,
@@ -331,6 +332,8 @@ export function BookingFlow({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
+  // "Can't find a time? Join the waitlist" — the sheet for the expanded service.
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
@@ -1036,11 +1039,16 @@ export function BookingFlow({
                                     ))}
                                   </div>
                                 ) : slots.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground">
-                                    {loadingTimes
-                                      ? "Checking this date…"
-                                      : "No availability on this date. Try another day."}
-                                  </p>
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      {loadingTimes
+                                        ? "Checking this date…"
+                                        : "No availability on this date. Try another day."}
+                                    </p>
+                                    {loadingTimes ? null : (
+                                      <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    )}
+                                  </div>
                                 ) : (
                                   <>
                                     {/* The previous day's times stay put while the new ones
@@ -1075,6 +1083,7 @@ export function BookingFlow({
                                     <p className="text-xs text-muted-foreground">
                                       Times shown in {slots[0]?.displayTimezone}.
                                     </p>
+                                    <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
                                   </>
                                 )}
                               </div>
@@ -1526,7 +1535,37 @@ export function BookingFlow({
           </section>
         ) : null}
       </div>
+
+      {service ? (
+        <JoinWaitlistSheet
+          open={waitlistOpen}
+          onOpenChange={setWaitlistOpen}
+          businessId={businessId}
+          serviceId={service.id}
+          serviceName={service.name}
+          locationId={activeLocationId}
+          date={date}
+          contact={{ firstName, lastName, email, phone }}
+          studioName={studioName}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** The one line under the times: the diary can't help, but the studio can. */
+function WaitlistPrompt({ onClick }: { onClick: () => void }) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      Can't find a time that works?{" "}
+      <button
+        type="button"
+        onClick={onClick}
+        className="font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Join the waitlist
+      </button>
+    </p>
   );
 }
 

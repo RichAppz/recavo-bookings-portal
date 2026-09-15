@@ -36,6 +36,7 @@ import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as VehiclesRouteImport } from './routes/vehicles'
+import { Route as WaitlistRouteImport } from './routes/waitlist'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as BillingSetupRouteImport } from './routes/billing.setup'
@@ -187,6 +188,11 @@ const VehiclesRoute = VehiclesRouteImport.update({
   path: '/vehicles',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WaitlistRoute = WaitlistRouteImport.update({
+  id: '/waitlist',
+  path: '/waitlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BillingIndexRoute = BillingIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -293,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -336,6 +343,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -381,6 +389,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -427,6 +436,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -470,6 +480,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -514,6 +525,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -559,6 +571,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StaffRoute: typeof StaffRoute
   VehiclesRoute: typeof VehiclesRoute
+  WaitlistRoute: typeof WaitlistRoute
   ClaimTokenRoute: typeof ClaimTokenRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsImportRoute: typeof ClientsImportRoute
@@ -758,6 +771,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VehiclesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/waitlist': {
+      id: '/waitlist'
+      path: '/waitlist'
+      fullPath: '/waitlist'
+      preLoaderRoute: typeof WaitlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/billing/': {
       id: '/billing/'
       path: '/'
@@ -930,6 +950,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StaffRoute: StaffRoute,
   VehiclesRoute: VehiclesRoute,
+  WaitlistRoute: WaitlistRoute,
   ClaimTokenRoute: ClaimTokenRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsImportRoute: ClientsImportRoute,

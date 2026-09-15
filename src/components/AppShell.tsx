@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileText,
   Gift,
+  Hourglass,
   LayoutDashboard,
   LifeBuoy,
   Layers,
@@ -50,6 +51,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
@@ -68,6 +70,7 @@ import {
   usePortalBusinesses,
   usePortalLink,
   useSubscription,
+  useWaitlistSummary,
 } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
@@ -142,6 +145,14 @@ const NAV: NavGroup[] = [
         icon: ClipboardList,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
       },
+      // Clients who wanted a slot the diary couldn't give them; the badge is how
+      // many are waiting.
+      {
+        to: "/waitlist",
+        label: "Waitlist",
+        icon: Hourglass,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
+      },
     ],
   },
   {
@@ -215,6 +226,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  // null = closed; an object (possibly empty) = open with those fields prefilled.
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [addBusinessOpen, setAddBusinessOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
@@ -231,6 +244,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const canSeeWaitlist = tenant.can(PERMISSIONS.BOOKING_READ_ALL);
+  const waitlistSummary = useWaitlistSummary({ enabled: canSeeWaitlist });
+  const waiting = waitlistSummary.data?.waiting ?? 0;
   const navigate = useNavigate();
   // Gates the Vehicles nav item: only businesses with a linked-record schema get it.
   const recordDefinition = useLinkedRecordDefinition();
@@ -391,6 +407,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                             {item.to === "/messages" && unread > 0 ? (
                               <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
                                 {unread}
+                              </span>
+                            ) : null}
+                            {item.to === "/waitlist" && waiting > 0 ? (
+                              <span
+                                className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground"
+                                aria-label={`${waiting} waiting`}
+                              >
+                                {waiting}
                               </span>
                             ) : null}
                           </Link>
@@ -637,6 +661,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <DropdownMenuItem onClick={() => setBookingOpen(true)}>
                     Add booking
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setWaitlistDefaults({})}>
+                    Add to waitlist
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("client")}>Add client</DropdownMenuItem>
                   {!isCarDetailing ? (
                     <DropdownMenuItem onClick={() => setQuick("group")}>
@@ -674,7 +701,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <AddBookingModal
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+        onNoAvailability={(picked) => {
+          setBookingOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
+      />
       <AddBusinessDialog open={addBusinessOpen} onOpenChange={setAddBusinessOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />

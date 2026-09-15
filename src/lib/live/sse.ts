@@ -80,7 +80,8 @@ export type LiveEventType =
   | "notification.recorded"
   | "booking.changed"
   | "invoice.changed"
-  | "follow_up.changed";
+  | "follow_up.changed"
+  | "waitlist.changed";
 
 export type LiveEvent = {
   type: LiveEventType;
@@ -97,6 +98,7 @@ const LIVE_EVENT_TYPES = new Set<string>([
   "booking.changed",
   "invoice.changed",
   "follow_up.changed",
+  "waitlist.changed",
 ]);
 
 /** Turns a raw SSE frame into a typed hint, or null for anything we do not recognise. */
@@ -149,6 +151,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
   const invoicesPrefix = queryKeys.invoice(biz, "").slice(0, 3);
   const dashboardPrefix = queryKeys.dashboard(biz).slice(0, 4);
   const followUpsPrefix = queryKeys.followUps(biz);
+  const waitlistPrefix = queryKeys.waitlist(biz);
   switch (event.type) {
     case "hello":
       return [
@@ -159,6 +162,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
         notificationsPrefix,
         dashboardPrefix,
         followUpsPrefix,
+        waitlistPrefix,
       ];
     case "sms_credits.changed":
       return [queryKeys.smsCredits(biz)];
@@ -179,6 +183,8 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
     }
     case "follow_up.changed":
       return [followUpsPrefix];
+    case "waitlist.changed":
+      return [waitlistPrefix];
     default:
       return [];
   }

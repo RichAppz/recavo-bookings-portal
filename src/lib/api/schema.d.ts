@@ -3951,6 +3951,185 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/businesses/{businessId}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join the waitlist from the public booking page
+         * @description "Can’t find a time? Join the waitlist." Identifies the visitor the way a public booking does (name + email and/or phone; an existing customer with matching contact details is reused). No slot is reserved and nothing is promised: staff are shown the entry and book people in by hand. The visitor receives a "you’re on the list" message by email/text. A repeat join for the same service returns the existing entry with `alreadyOnList: true` (200). Rate-limited like booking holds.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        serviceId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        firstName: string;
+                        lastName?: string | null;
+                        /** @description Email or phone is required. */
+                        email?: string | null;
+                        phone?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        marketingConsent?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Joined (201) or already on the list (200) */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            waitlist: components["schemas"]["PublicWaitlistReceipt"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/businesses/{businessId}/bookings/confirm": {
         parameters: {
             query?: never;
@@ -19624,6 +19803,11 @@ export interface paths {
                         notifyCustomer?: boolean;
                         /** @description Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only. */
                         notifyChannels?: ("email" | "sms")[];
+                        /**
+                         * Format: uuid
+                         * @description The waitlist entry this booking answers, when staff book someone in from the list. The entry is marked `booked` (with this booking’s id) once the booking is created. Staff routes only.
+                         */
+                        waitlistEntryId?: string | null;
                     };
                 };
             };
@@ -28539,6 +28723,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -28909,6 +29095,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -29102,6 +29290,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -29276,9 +29466,9 @@ export interface paths {
                                 unlimited: boolean;
                                 /** @description The pack on sale. Display amount only — Stripe is the money authority. */
                                 bundle: {
-                                    /** @example sms_100 */
+                                    /** @example sms_150 */
                                     key: string;
-                                    /** @example 100 */
+                                    /** @example 150 */
                                     credits: number;
                                     /** @example 600 */
                                     unitAmountMinor: number;
@@ -29432,7 +29622,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Buy a bundle of 100 texts (£6)
+         * Buy a bundle of 150 texts (£6)
          * @description Creates a one-off Stripe Checkout Session (`mode: payment`) for the bundle on the business’s Stripe Customer and returns its URL. Nothing is credited here: the balance moves when Stripe confirms payment (webhook) or when the success page calls /sms-credits/checkout/reconcile — both are idempotent per Session. Success URL: `{PUBLIC_APP_URL}/billing/sms-credits/success?session_id=…`. Requires billing.manage and an Idempotency-Key (replays return the same URL). `403` when checkout is disabled.
          */
         post: {
@@ -29449,7 +29639,7 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @description Bundle key; defaults to `sms_100`. Unknown keys → 404. */
+                        /** @description Bundle key; defaults to `sms_150` (`sms_100` is accepted as a legacy alias). Unknown keys → 404. */
                         bundle?: string;
                     };
                 };
@@ -29474,9 +29664,9 @@ export interface paths {
                             /** Format: uri */
                             checkoutUrl: string;
                             bundle: {
-                                /** @example sms_100 */
+                                /** @example sms_150 */
                                 key: string;
-                                /** @example 100 */
+                                /** @example 150 */
                                 credits: number;
                                 /** @example 600 */
                                 unitAmountMinor: number;
@@ -29645,9 +29835,9 @@ export interface paths {
                                 unlimited: boolean;
                                 /** @description The pack on sale. Display amount only — Stripe is the money authority. */
                                 bundle: {
-                                    /** @example sms_100 */
+                                    /** @example sms_150 */
                                     key: string;
-                                    /** @example 100 */
+                                    /** @example 150 */
                                     credits: number;
                                     /** @example 600 */
                                     unitAmountMinor: number;
@@ -29868,6 +30058,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -30223,6 +30415,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -30429,6 +30623,8 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
                                 /** @example invoicing */
@@ -30841,6 +31037,8 @@ export interface paths {
                                 features: {
                                     [key: string]: boolean;
                                 };
+                                /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                                billingBypass?: boolean;
                                 /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                                 addons: {
                                     /** @example invoicing */
@@ -40452,6 +40650,802 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List waitlist entries
+         * @description Customers waiting for a slot, soonest preferred start first (entries with no preferred start come first). Open (`waiting`) entries by default; pass `status` (comma-separated or repeated) for others. `from`/`to` are calendar dates the entry’s preferred window must overlap. Requires `booking.read_all`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    serviceId?: string;
+                    locationId?: string;
+                    customerId?: string;
+                    /** @description Only entries whose preferred window reaches this day or later. */
+                    from?: string;
+                    /** @description Only entries whose preferred window starts on this day or earlier. */
+                    to?: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waitlist page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entries: components["schemas"]["WaitlistEntry"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Add a customer to the waitlist
+         * @description One open entry per customer + service: adding the same pair again returns the existing entry. `linkedRecordId` must belong to the customer. Requires `booking.create` and an `Idempotency-Key`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        customerId: string;
+                        /** Format: uuid */
+                        serviceId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Must belong to the customer.
+                         */
+                        linkedRecordId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        /** Format: uuid */
+                        staffId?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        /** @enum {string} */
+                        priority?: "normal" | "high";
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Waitlist entry */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/waitlist/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Waitlist count
+         * @description How many customers are currently waiting; for the nav badge and calendar.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waiting count */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            waiting: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/waitlist/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a waitlist entry */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waitlist entry */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit or act on a waitlist entry
+         * @description Either `{ action }` — `cancel` removes an open entry, `reopen` brings a booked, cancelled or expired one back (409 if the customer is already waiting for that service) — or a set of fields to change on an open entry (409 when it is closed). Booking someone in is not an action here: create the booking with `waitlistEntryId` and the entry closes itself. Requires `booking.create`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "cancel" | "reopen";
+                    } | {
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Must belong to the customer.
+                         */
+                        linkedRecordId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        /** Format: uuid */
+                        staffId?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        /** @enum {string} */
+                        priority?: "normal" | "high";
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated waitlist entry */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -41299,6 +42293,152 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        WaitlistPreferences: {
+            /**
+             * Format: date
+             * @description Inclusive calendar date the window opens; null = as soon as possible.
+             */
+            from: string | null;
+            /**
+             * Format: date
+             * @description Inclusive calendar date the window closes; null = open-ended.
+             */
+            to: string | null;
+            /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+            days: number[] | null;
+            /** @enum {string} */
+            timeOfDay: "any" | "morning" | "afternoon" | "evening";
+        };
+        /** @description A customer waiting for a slot. Added by staff (`source: staff`) or by the customer on the public booking page (`source: public`). One open entry per customer + service. Closed by creating a booking with `waitlistEntryId` (→ `booked`), by staff removing it (`cancelled`), or by housekeeping when the window passes (`expired`). */
+        WaitlistEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            customerId: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: uuid */
+            variantId: string | null;
+            /**
+             * Format: uuid
+             * @description The vehicle (or other linked record) the job is for, when known.
+             */
+            linkedRecordId: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description A staff member they asked for; null = anyone.
+             */
+            staffId: string | null;
+            preferences: {
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window opens; null = as soon as possible.
+                 */
+                from: string | null;
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window closes; null = open-ended.
+                 */
+                to: string | null;
+                /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+                days: number[] | null;
+                /** @enum {string} */
+                timeOfDay: "any" | "morning" | "afternoon" | "evening";
+            };
+            notes: string | null;
+            /** @enum {string} */
+            priority: "normal" | "high";
+            /** @enum {string} */
+            source: "staff" | "public";
+            /** @enum {string} */
+            status: "waiting" | "booked" | "cancelled" | "expired";
+            /**
+             * Format: uuid
+             * @description The booking staff created from this entry (status `booked`).
+             */
+            bookingId: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description The staff user who added it; null for public joins.
+             */
+            createdByUserId: string | null;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                firstName: string;
+                lastName: string | null;
+                email: string | null;
+                phone: string | null;
+            } | null;
+            service: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            variant: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            location: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            staff: {
+                /** Format: uuid */
+                id: string;
+                displayName: string;
+            } | null;
+            linkedRecord: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+            } | null;
+            booking: {
+                /** Format: uuid */
+                id: string;
+                reference: string;
+                /** Format: date-time */
+                start: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PublicWaitlistReceipt: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "waiting";
+            /** Format: uuid */
+            serviceId: string;
+            preferences: {
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window opens; null = as soon as possible.
+                 */
+                from: string | null;
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window closes; null = open-ended.
+                 */
+                to: string | null;
+                /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+                days: number[] | null;
+                /** @enum {string} */
+                timeOfDay: "any" | "morning" | "afternoon" | "evening";
+            };
+            /** @description True when this person was already waiting for this service; the existing entry is returned (200) and no second confirmation is sent. */
+            alreadyOnList: boolean;
         };
         Resource: {
             /** Format: uuid */

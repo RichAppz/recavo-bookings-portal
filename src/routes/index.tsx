@@ -7,6 +7,7 @@ import {
   CalendarX,
   CarFront,
   Clock,
+  Hourglass,
   Lock,
   MessageSquarePlus,
   Package,
@@ -29,6 +30,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { EventModal } from "@/components/EventModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { BookingPanel } from "@/components/BookingPanel";
@@ -59,6 +61,7 @@ import {
   useDashboard,
   useLocationsList,
   useStaffList,
+  useWaitlistSummary,
 } from "@/lib/api/hooks";
 import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
@@ -138,6 +141,7 @@ function Overview() {
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarBlock | null>(null);
@@ -146,6 +150,8 @@ function Overview() {
 
   const range = useMemo(() => dashboardRange(rangeKey), [rangeKey]);
   const dashboard = useDashboard({ from: range.from, to: range.to });
+  const waitlistSummary = useWaitlistSummary({ enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL) });
+  const waiting = waitlistSummary.data?.waiting ?? 0;
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
@@ -417,6 +423,17 @@ function Overview() {
           <SectionCard title="Tasks requiring attention">
             <ul className="space-y-3">
               {[
+                // Real, live: people waiting for a slot. Only listed when there are some.
+                ...(waiting > 0
+                  ? [
+                      {
+                        icon: Hourglass,
+                        text: `${waiting} ${waiting === 1 ? "client" : "clients"} waiting for a slot`,
+                        to: "/waitlist" as const,
+                        tone: "info",
+                      },
+                    ]
+                  : []),
                 {
                   icon: Package,
                   text: "Review packages nearing expiry",
@@ -469,6 +486,13 @@ function Overview() {
               <Button
                 variant="outline"
                 className="justify-start"
+                onClick={() => setWaitlistDefaults({})}
+              >
+                <Hourglass className="size-4" /> Add to waitlist
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start"
                 onClick={() => setQuick("client")}
               >
                 <UserPlus className="size-4" /> Add client
@@ -508,7 +532,21 @@ function Overview() {
         </div>
       </div>
 
-      <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <AddBookingModal
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+        onNoAvailability={(picked) => {
+          setBookingOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
+      />
       <EventModal
         open={eventOpen}
         onOpenChange={(o) => {

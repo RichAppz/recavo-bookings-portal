@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CalendarPlus,
   CarFront,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Hourglass,
   MoreHorizontal,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { summariseBookings } from "@/lib/calendar-stats";
@@ -45,6 +47,7 @@ import {
   useLinkedRecordsById,
   useServices,
   useStaffList,
+  useWaitlistSummary,
 } from "@/lib/api/hooks";
 import {
   addDays,
@@ -320,6 +323,10 @@ function CalendarPage() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
+  // "Add to waitlist instead" from the booking form when the day has no availability.
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
+  const waitlistSummary = useWaitlistSummary();
+  const waiting = waitlistSummary.data?.waiting ?? 0;
   const [addTime, setAddTime] = useState<string | undefined>(undefined);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
@@ -745,6 +752,27 @@ function CalendarPage() {
               <TabsTrigger value="month">Month</TabsTrigger>
             </TabsList>
           </Tabs>
+          {/* Who's waiting for a slot in the range on screen; the list opens filtered
+              to it so a gap in the diary can be filled from here. */}
+          {waitlistSummary.isSuccess ? (
+            <Link
+              to="/waitlist"
+              search={{ from: isoDate(rangeStart), to: isoDate(addDays(rangeEnd, -1)) }}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors hover:bg-secondary",
+                waiting > 0 ? "text-foreground" : "text-muted-foreground",
+              )}
+              aria-label={`Waitlist: ${waiting} waiting`}
+            >
+              <Hourglass className="size-3.5" />
+              <span className="hidden sm:inline">Waitlist</span>
+              {waiting > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground tabular-nums">
+                  {waiting}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1390,6 +1418,17 @@ function CalendarPage() {
         onOpenChange={setAddOpen}
         defaultDate={addDate}
         defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
+        onNoAvailability={(picked) => {
+          setAddOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
       />
       <EventModal
         open={eventOpen}
