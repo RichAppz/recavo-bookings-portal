@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
+import { AddClientDialog } from "@/components/QuickActions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,6 +71,8 @@ export function AddWaitlistDialog({
   const tenant = useTenant();
   const editing = Boolean(entry);
   const [customerId, setCustomerId] = useState("");
+  /** "+" beside the client picker: add someone new without leaving the half-filled form. */
+  const [addClientOpen, setAddClientOpen] = useState(false);
   const [serviceId, setServiceId] = useState("");
   const [variantId, setVariantId] = useState("none");
   const [linkedRecordId, setLinkedRecordId] = useState("none");
@@ -218,15 +222,30 @@ export function AddWaitlistDialog({
                   : "Client"}
               </p>
             ) : (
-              <CustomerSearchPicker
-                value={selectedCustomer}
-                suggestions={customerList}
-                placeholder="Choose or search for a client"
-                onSelect={(c) => {
-                  setCustomerId(c.id);
-                  setLinkedRecordId("none");
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <CustomerSearchPicker
+                    value={selectedCustomer}
+                    suggestions={customerList}
+                    placeholder="Choose or search for a client"
+                    onSelect={(c) => {
+                      setCustomerId(c.id);
+                      setLinkedRecordId("none");
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setAddClientOpen(true)}
+                  aria-label="Add a new client"
+                  title="Add a new client"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
             )}
           </div>
 
@@ -425,6 +444,15 @@ export function AddWaitlistDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {/* Stacks over this dialog; the new client is selected on save. */}
+      <AddClientDialog
+        open={open && addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+        onCreated={(c) => {
+          setCustomerId(c.id);
+          setLinkedRecordId("none");
+        }}
+      />
     </Dialog>
   );
 }
