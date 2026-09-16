@@ -36,6 +36,7 @@ export function InvoicingUpgradeDialog({
         pitch:
           "issue numbered PDF invoices, email them to clients and have jobs invoiced automatically when they’re marked attended",
         addLabel: "Add invoicing",
+        fallbackPrice: "£8/month",
         icon: FileText,
       }}
     />

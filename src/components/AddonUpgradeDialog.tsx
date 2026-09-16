@@ -29,6 +29,8 @@ export type AddonUpgradeCopy = {
   pitch: string;
   /** Button label verb phrase: "Add invoicing". */
   addLabel: string;
+  /** Shown before the subscription view has loaded the real price: "£8/month". */
+  fallbackPrice: string;
   icon: LucideIcon;
 };
 
@@ -74,7 +76,7 @@ export function AddonUpgradeDialog({
   });
   const price = addon
     ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
-    : "£8/month";
+    : copy.fallbackPrice;
   const canBuyHere = live && addon?.status === "available" && canManage;
   const Icon = copy.icon;
 

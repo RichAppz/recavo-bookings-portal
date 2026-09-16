@@ -2,7 +2,7 @@
  * Upsells: the add-ons a service offers, the extras a visitor ticks on the public page,
  * and the offer/request loop after a staff-made booking. Kept out of `hooks.ts`; same
  * conventions (business-scoped keys, problem+json toasts). Gated by the `upsells` plan
- * feature — Business and Growth include it, Solo buys the £8/month bolt-on.
+ * feature — Business and Growth include it, Solo buys the £5/month bolt-on.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, queryKeys, toastApiError } from "@/lib/api";
@@ -42,7 +42,7 @@ export function useUpsellsEntitled(): boolean | undefined {
 const DEFAULT_UPSELLS_ADDON: Omit<SubscriptionAddon, "status"> = {
   key: UPSELLS_ADDON_KEY,
   featureKey: UPSELLS_FEATURE_KEY,
-  unitAmountMinor: 800,
+  unitAmountMinor: 500,
   currency: "GBP",
   interval: "month",
 };
