@@ -47,6 +47,7 @@ import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access"
 import { formatInTz, formatMoney } from "@/lib/format";
 import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -356,6 +357,73 @@ function AddonsCard({
 }
 
 export function BillingPage() {
+  // Recavo is sold on the web only (see saasPurchasesAllowedInApp): the store
+  // apps get a read-only view with no plan chooser, prices or Stripe hand-offs.
+  // Stable for the life of the page, so choosing the component here is safe.
+  if (!saasPurchasesAllowedInApp()) return <InAppBillingPage />;
+  return <WebBillingPage />;
+}
+
+/**
+ * Billing as the store apps show it. Nothing here can start, change or pay
+ * for a subscription: an unsubscribed business sees a plain "not active"
+ * notice, a subscribed one sees its plan and text balance. Deliberately no
+ * price, no "manage on the website" line and no link out — App Store
+ * guideline 3.1.3 counts those as steering to another purchase route.
+ */
+function InAppBillingPage() {
+  const tenant = useTenant();
+  const subscription = useSubscription();
+  const current = subscription.data?.subscription;
+  const plan = subscription.data?.plan;
+  const tz = tenant.business?.defaultTimezone ?? "Europe/London";
+
+  if (tenant.isLoading || subscription.isLoading) {
+    return <PageGhost />;
+  }
+
+  if (!current || isBillingBlocked(current)) {
+    return (
+      <EmptyState
+        title="Subscription not active"
+        description={`${tenant.business?.tradingName ?? "This business"} doesn’t have an active RECAVO subscription, so the app can’t open its console right now.`}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionCard
+        title="Current plan"
+        action={current.status ? <StatusBadge status={current.status} /> : null}
+      >
+        <div className="space-y-3 text-sm">
+          <p>
+            Plan: <span className="font-medium">{plan?.name ?? current.planVersion ?? "—"}</span>
+            {current.accessState ? (
+              <>
+                {" "}
+                · Access: <span className="font-medium capitalize">{current.accessState}</span>
+              </>
+            ) : null}
+          </p>
+          {current.trialEnd && current.accessState === "trial" ? (
+            <p>Trial ends {formatInTz(current.trialEnd, tz)}</p>
+          ) : current.currentPeriodEnd ? (
+            <p>Period ends {formatInTz(current.currentPeriodEnd, tz)}</p>
+          ) : null}
+          {current.cancelAtPeriodEnd ? (
+            <p className="text-amber-700 dark:text-amber-400">Cancels at period end</p>
+          ) : null}
+        </div>
+      </SectionCard>
+
+      <SmsCreditsCard />
+    </div>
+  );
+}
+
+function WebBillingPage() {
   const tenant = useTenant();
   const subscription = useSubscription();
   const catalogue = useBillingCatalogue();

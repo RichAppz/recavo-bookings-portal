@@ -10,6 +10,7 @@ import {
 import { isBillingBlocked } from "@/lib/billing/access";
 import { bundleLabel, smsCreditsLevel } from "@/lib/billing/sms-credits";
 import { formatInTz, formatMoney } from "@/lib/format";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -34,11 +35,16 @@ export function SmsCreditsCard({ className }: { className?: string }) {
   const tz = tenant.business?.defaultTimezone ?? "Europe/London";
 
   const current = subscription.data?.subscription ?? null;
-  const canBuy = canManageSaasBilling({
-    can: tenant.can,
-    roleKeys: tenant.roleKeys,
-    blocked: isBillingBlocked(current),
-  });
+  // Bundles are sold on the web only; the store apps show the balance and
+  // nothing about buying (see saasPurchasesAllowedInApp).
+  const sellsHere = saasPurchasesAllowedInApp();
+  const canBuy =
+    sellsHere &&
+    canManageSaasBilling({
+      can: tenant.can,
+      roleKeys: tenant.roleKeys,
+      blocked: isBillingBlocked(current),
+    });
 
   const data = credits.data;
   const level = smsCreditsLevel(data);
@@ -102,11 +108,11 @@ export function SmsCreditsCard({ className }: { className?: string }) {
             <Button disabled={checkout.isPending} onClick={() => void buy()}>
               {checkout.isPending ? "Opening checkout…" : `Buy ${bundleLabel(data.bundle)}`}
             </Button>
-          ) : (
+          ) : sellsHere ? (
             <p className="text-xs text-muted-foreground">
               Ask the business owner to buy more — {bundleLabel(data.bundle)} a bundle.
             </p>
-          )}
+          ) : null}
         </div>
 
         {level === "empty" || level === "low" ? (
@@ -122,7 +128,9 @@ export function SmsCreditsCard({ className }: { className?: string }) {
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             <p>
               {level === "empty"
-                ? "You're out of text credits. Texts are currently going out as emails until you buy a bundle."
+                ? sellsHere
+                  ? "You're out of text credits. Texts are currently going out as emails until you buy a bundle."
+                  : "You're out of text credits. Texts are currently going out as emails."
                 : `Running low — ${data.balance} ${data.balance === 1 ? "text" : "texts"} left. Once they're gone, messages set to SMS are sent by email instead.`}
             </p>
           </div>

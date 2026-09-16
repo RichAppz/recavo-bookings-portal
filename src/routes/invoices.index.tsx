@@ -28,6 +28,7 @@ import {
   type InvoiceStatus,
   type InvoiceStatusFilter,
 } from "@/lib/invoices";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Can, RequirePermission, useTenant } from "@/lib/tenant/tenant-context";
 
@@ -139,7 +140,8 @@ function InvoicesPage() {
         }
       />
 
-      {entitled === false && canManage ? (
+      {/* The bolt-on is sold on the web only, so the store apps skip this upsell. */}
+      {entitled === false && canManage && saasPurchasesAllowedInApp() ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed bg-primary-soft/40 px-4 py-3 text-sm">
           <div className="flex items-start gap-3">
             <FileText className="mt-0.5 size-5 shrink-0 text-primary" />

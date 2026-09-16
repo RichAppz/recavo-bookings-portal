@@ -59,6 +59,7 @@ import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
+import { NoBusinessInApp } from "@/components/NoBusinessInApp";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import {
   useCustomers,
@@ -72,6 +73,7 @@ import {
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
 import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -245,6 +247,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const portalLink = usePortalLink(noStaffBusiness);
   const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
+  // Recavo plans are sold on the web only. In the store apps nothing may create
+  // a business (it would need a plan the app cannot sell) or point at the plan
+  // chooser; see saasPurchasesAllowedInApp. Rendered client-side after the
+  // tenant query resolves, so reading the Capacitor bridge here is safe.
+  const canStartBusinessHere = saasPurchasesAllowedInApp();
   const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
   const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
@@ -278,6 +285,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     // the wrong question — they are mid-claim, or their link has yet to redeem.
     if (typeof window !== "undefined" && isCustomerHost(window.location.hostname)) {
       return <NoCustomerAccount />;
+    }
+    if (!canStartBusinessHere) {
+      return <NoBusinessInApp />;
     }
     return <CreateFirstBusiness />;
   }
@@ -442,15 +452,19 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {b.tradingName}
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setMobileNav(false);
-                  setAddBusinessOpen(true);
-                }}
-              >
-                <Plus className="size-4" /> Add a business
-              </DropdownMenuItem>
+              {canStartBusinessHere ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setMobileNav(false);
+                      setAddBusinessOpen(true);
+                    }}
+                  >
+                    <Plus className="size-4" /> Add a business
+                  </DropdownMenuItem>
+                </>
+              ) : null}
               {canViewPlatform ? (
                 <>
                   <DropdownMenuSeparator />

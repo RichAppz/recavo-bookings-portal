@@ -122,6 +122,7 @@ import {
   isSettledPaymentState,
 } from "@/lib/booking-payment";
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import {
   allDayBlockDays,
@@ -364,7 +365,10 @@ export function BookingPanel({
     } catch (err) {
       if (channel === "sms" && err instanceof ApiError && err.status === 422) {
         setResendError(
-          err.detail ?? "You have no text credits left; buy a bundle to send text messages.",
+          err.detail ??
+            (saasPurchasesAllowedInApp()
+              ? "You have no text credits left; buy a bundle to send text messages."
+              : "You have no text credits left, so this can’t go by text right now."),
         );
         return;
       }
@@ -522,14 +526,20 @@ export function BookingPanel({
             : [],
           error: resendError ? (
             <>
-              {resendError}{" "}
-              <Link
-                to="/billing/sms-credits"
-                onClick={onClose}
-                className="font-medium underline underline-offset-2"
-              >
-                Buy texts
-              </Link>
+              {resendError}
+              {/* Bundles are sold on the web only; no buy prompt in the store apps. */}
+              {saasPurchasesAllowedInApp() ? (
+                <>
+                  {" "}
+                  <Link
+                    to="/billing/sms-credits"
+                    onClick={onClose}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Buy texts
+                  </Link>
+                </>
+              ) : null}
             </>
           ) : null,
         },

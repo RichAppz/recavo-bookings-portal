@@ -25,6 +25,27 @@ export function isNativeApp(): boolean {
   return Boolean(cap?.isNativePlatform?.());
 }
 
+/**
+ * Whether this surface may sell Recavo's own plans, bolt-ons and text-credit
+ * bundles, or point at somewhere that does.
+ *
+ * Recavo subscriptions are sold on the web only. The store apps are a companion
+ * for businesses that already subscribe: App Store guideline 3.1.1 requires
+ * In-App Purchase for anything an individual can buy inside the app, and 3.1.3
+ * forbids buttons, prices or links that steer to another purchase route (the
+ * UK storefront has no link-out exemption). Google Play applies the same rule.
+ * So in the app there is no plan chooser, no trial button, no add-on or bundle
+ * purchase, no Stripe portal, no price for any of them, and no "buy on the
+ * website" call to action. Payments a business takes from its own clients for
+ * in-person services are unaffected.
+ *
+ * `native` is a parameter only so the rule can be unit-tested; callers use the
+ * default.
+ */
+export function saasPurchasesAllowedInApp(native: boolean = isNativeApp()): boolean {
+  return !native;
+}
+
 async function closeInAppBrowser(): Promise<void> {
   try {
     const { Browser } = await import("@capacitor/browser");

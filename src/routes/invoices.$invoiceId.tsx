@@ -74,6 +74,7 @@ import {
   showsVat,
   type InvoiceAddress,
 } from "@/lib/invoices";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { RequirePermission, useTenant } from "@/lib/tenant/tenant-context";
 
@@ -439,11 +440,18 @@ function InvoiceDetail() {
 
       {inv.status === "draft" && entitled === false && canManage ? (
         <p className="text-sm text-muted-foreground">
-          Invoicing isn’t on your plan, so this draft can’t be edited or issued until the bolt-on is
-          added.{" "}
-          <button type="button" className="underline" onClick={() => setUpsell(true)}>
-            Add invoicing
-          </button>
+          {saasPurchasesAllowedInApp() ? (
+            <>
+              Invoicing isn’t on your plan, so this draft can’t be edited or issued until the
+              bolt-on is added.{" "}
+              <button type="button" className="underline" onClick={() => setUpsell(true)}>
+                Add invoicing
+              </button>
+            </>
+          ) : (
+            // The bolt-on is sold on the web only; no purchase prompt in the store apps.
+            <>Invoicing isn’t on your plan, so this draft can’t be edited or issued.</>
+          )}
         </p>
       ) : null}
 

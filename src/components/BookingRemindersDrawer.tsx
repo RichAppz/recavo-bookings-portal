@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { useIsPhone } from "@/hooks/use-media-query";
 import type { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 export interface ReminderAction {
@@ -68,14 +69,20 @@ export function BookingRemindersDrawer({
       "Texts are included in your plan."
     ) : smsCredits.level === "empty" ? (
       <>
-        No text credits left — texts go by email instead.{" "}
-        <Link
-          to="/billing/sms-credits"
-          onClick={onNavigate}
-          className="font-medium text-primary underline underline-offset-2"
-        >
-          Buy texts
-        </Link>
+        No text credits left — texts go by email instead.
+        {/* Bundles are sold on the web only; no buy prompt in the store apps. */}
+        {saasPurchasesAllowedInApp() ? (
+          <>
+            {" "}
+            <Link
+              to="/billing/sms-credits"
+              onClick={onNavigate}
+              className="font-medium text-primary underline underline-offset-2"
+            >
+              Buy texts
+            </Link>
+          </>
+        ) : null}
       </>
     ) : smsCredits.credits ? (
       `${smsCredits.credits.balance} text${smsCredits.credits.balance === 1 ? "" : "s"} left.`

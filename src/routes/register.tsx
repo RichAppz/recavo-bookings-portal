@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
+import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
 import { useAuth } from "@/lib/auth/auth-store";
 import { stashPendingBusiness } from "@/lib/auth/pending-business";
 import { stashPendingProfile } from "@/lib/auth/pending-profile";
@@ -85,6 +86,13 @@ function RegisterPage() {
       void navigate({ to: "/" });
     }
   }, [status, navigate]);
+
+  // Recavo is sold on the web only: in the store apps a new account would land
+  // on a plan it cannot buy there, so sign-up is not offered in the app at all.
+  const canSignUpHere = useSaasPurchasesAllowed();
+  useEffect(() => {
+    if (!canSignUpHere) void navigate({ to: "/login", replace: true });
+  }, [canSignUpHere, navigate]);
 
   useEffect(() => {
     if (resendIn <= 0) return;

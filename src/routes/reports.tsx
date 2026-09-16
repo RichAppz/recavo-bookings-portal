@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
 import { StatsGhost } from "@/components/ghost";
@@ -94,11 +95,17 @@ function pctChange(current: number, previous: number) {
 
 function planGateMessage(error: unknown) {
   if (!(error instanceof ApiError)) return null;
+  // Plans are sold on the web only, so the store apps state the gate without
+  // an upgrade prompt (saasPurchasesAllowedInApp).
   if (error.code === "FEATURE_NOT_AVAILABLE") {
-    return "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics.";
+    return saasPurchasesAllowedInApp()
+      ? "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics."
+      : "Advanced reports aren't included on your current plan.";
   }
   if (error.code === "BILLING_ACCESS_REQUIRED") {
-    return "Your subscription needs attention before reports can be loaded. Open billing to start or update a Recavo plan.";
+    return saasPurchasesAllowedInApp()
+      ? "Your subscription needs attention before reports can be loaded. Open billing to start or update a Recavo plan."
+      : "Your subscription needs attention before reports can be loaded.";
   }
   return null;
 }
@@ -269,11 +276,14 @@ function ReportsPage() {
             title="Reports unavailable"
             description={planGate}
             action={
-              <Button asChild>
-                <Link to="/settings" search={{ tab: "billing" }}>
-                  Go to billing
-                </Link>
-              </Button>
+              // Plans are sold on the web only; no pointer to them in the store apps.
+              saasPurchasesAllowedInApp() ? (
+                <Button asChild>
+                  <Link to="/settings" search={{ tab: "billing" }}>
+                    Go to billing
+                  </Link>
+                </Button>
+              ) : undefined
             }
           />
         ) : dashboard.isLoading ? (

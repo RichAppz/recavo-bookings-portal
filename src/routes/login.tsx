@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
+import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
 import { useAuth } from "@/lib/auth/auth-store";
 import { stashPendingReferral } from "@/lib/auth/pending-referral";
 import { isCustomerHost } from "@/lib/hosts";
@@ -121,6 +122,9 @@ function CustomerLogin() {
 function StaffLogin() {
   const { signIn, signInWithGoogle, confirmSignUp, resendSignUpCode } = useAuth();
   const { ref } = Route.useSearch();
+  // Recavo is sold on the web, so the store apps only sign existing customers
+  // in: no path from here to creating an account that would then need a plan.
+  const canSignUpHere = useSaasPurchasesAllowed();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -268,16 +272,18 @@ function StaffLogin() {
       title="Sign in to RECAVO"
       subtitle="Pick up where you left off — today's sessions, payments and client messages."
       footer={
-        <span>
-          New to RECAVO?{" "}
-          <Link
-            to="/register"
-            search={ref?.trim() ? { ref: ref.trim() } : undefined}
-            className="font-medium text-primary hover:underline"
-          >
-            Create an account
-          </Link>
-        </span>
+        canSignUpHere ? (
+          <span>
+            New to RECAVO?{" "}
+            <Link
+              to="/register"
+              search={ref?.trim() ? { ref: ref.trim() } : undefined}
+              className="font-medium text-primary hover:underline"
+            >
+              Create an account
+            </Link>
+          </span>
+        ) : null
       }
     >
       <GoogleButton

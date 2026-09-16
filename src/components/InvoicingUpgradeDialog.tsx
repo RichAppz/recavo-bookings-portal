@@ -16,6 +16,7 @@ import { useInvoicingAddon } from "@/lib/api/invoices";
 import { isBillingBlocked } from "@/lib/billing/access";
 import { formatMoney } from "@/lib/format";
 import { INVOICING_ADDON_KEY, INVOICING_FEATURE_KEY } from "@/lib/invoices";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
@@ -64,7 +65,12 @@ export function InvoicingUpgradeDialog({
 
   let body: ReactNode;
   let actions: ReactNode;
-  if (!canManage) {
+  if (!saasPurchasesAllowedInApp()) {
+    // Bolt-ons are sold on the web only. In the store apps the dialog may only
+    // say the feature is missing: no price, no add button, no pointer to plans.
+    body = <>Invoicing isn’t included on this workspace’s plan.</>;
+    actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
+  } else if (!canManage) {
     body = (
       <>
         Invoicing isn’t included on this workspace’s plan. Ask the business owner to add the
@@ -136,7 +142,7 @@ export function InvoicingUpgradeDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="size-5 text-primary" />
-            Invoicing needs an add-on
+            {saasPurchasesAllowedInApp() ? "Invoicing needs an add-on" : "Invoicing not available"}
           </DialogTitle>
           <DialogDescription>{body}</DialogDescription>
         </DialogHeader>

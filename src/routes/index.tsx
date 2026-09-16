@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useBookings,
@@ -230,14 +231,21 @@ function Overview() {
           isPlanGated(dashboard.error) ? (
             <EmptyState
               icon={<Lock className="size-5" />}
-              title="Upgrade your plan for reports"
+              title={
+                saasPurchasesAllowedInApp()
+                  ? "Upgrade your plan for reports"
+                  : "Reports aren't on your plan"
+              }
               description="Revenue, attendance and occupancy reporting isn't included on your current plan."
               action={
-                <Button variant="outline" asChild>
-                  <Link to="/settings" search={{ tab: "billing" }}>
-                    View plans
-                  </Link>
-                </Button>
+                // Plans are sold on the web only; no pointer to them in the store apps.
+                saasPurchasesAllowedInApp() ? (
+                  <Button variant="outline" asChild>
+                    <Link to="/settings" search={{ tab: "billing" }}>
+                      View plans
+                    </Link>
+                  </Button>
+                ) : undefined
               }
             />
           ) : (
