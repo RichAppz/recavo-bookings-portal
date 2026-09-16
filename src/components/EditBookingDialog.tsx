@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Lock, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -145,12 +145,28 @@ export function EditBookingDialog({
   const smsCredits = useSmsCreditsSummary();
 
   // ---- What the booking is now -------------------------------------------------
+  // A line's variant id can predate a service edit that re-created its variants (older
+  // API builds did that on every save). Map it onto the current variant with the same
+  // name so the picker shows "Level 2 · S" and sends an id the catalogue knows.
   const originalPicked = useMemo<PickedService[]>(
     () =>
       [...(booking.lineItems ?? [])]
         .sort((a, b) => a.position - b.position)
-        .map((li) => ({ serviceId: li.serviceId, variantId: li.variantId ?? null })),
-    [booking.lineItems],
+        .map((li) => {
+          const variantId = li.variantId ?? null;
+          if (!variantId) return { serviceId: li.serviceId, variantId: null };
+          const service = services.data?.find((s) => s.id === li.serviceId);
+          if (!service || service.variants.some((v) => v.id === variantId)) {
+            return { serviceId: li.serviceId, variantId };
+          }
+          const byName = li.variantName
+            ? service.variants.find(
+                (v) => v.name.trim().toLowerCase() === li.variantName!.trim().toLowerCase(),
+              )
+            : undefined;
+          return { serviceId: li.serviceId, variantId: byName?.id ?? variantId };
+        }),
+    [booking.lineItems, services.data],
   );
   const originalLabels = useMemo(
     () =>
@@ -187,6 +203,24 @@ export function EditBookingDialog({
       .map((serviceId) => ({ serviceId, variantId: null }));
     return [...originalPicked, ...extra];
   });
+  // If the catalogue arrived after mount and remapped a stale variant id, carry that
+  // into the untouched picker (a stale id in `picked` would otherwise read as a change).
+  const seenOriginal = useRef(originalPicked);
+  useEffect(() => {
+    if (samePicked(seenOriginal.current, originalPicked)) return;
+    setPickedState((current) =>
+      samePicked(current, seenOriginal.current)
+        ? originalPicked
+        : current.map((p) => {
+            const remapped = originalPicked.find(
+              (o, i) =>
+                o.serviceId === p.serviceId && seenOriginal.current[i]?.variantId === p.variantId,
+            );
+            return remapped ? { ...p, variantId: remapped.variantId } : p;
+          }),
+    );
+    seenOriginal.current = originalPicked;
+  }, [originalPicked]);
   const [customerId, setCustomerId] = useState(booking.leadCustomerId);
   const [linkedRecordId, setLinkedRecordId] = useState(booking.linkedRecordId ?? "none");
   const [staffId, setStaffId] = useState(booking.staffId);
