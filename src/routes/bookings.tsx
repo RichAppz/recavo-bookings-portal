@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, Search } from "lucide-react";
+import { z } from "zod";
+import { CalendarPlus, Search, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { UpsellRequestsCard } from "@/components/UpsellRequestsCard";
+import { useUpsellOffers } from "@/lib/api/upsells";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
 import { matchesServiceFilter } from "@/lib/service-categories";
@@ -33,7 +36,13 @@ import { balanceDueLabel, bookingSettlement } from "@/lib/booking-payment";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { formatAllDaySpan, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
+/** `?booking=<id>` opens that booking's drawer — the staff add-on request email links here. */
+const searchSchema = z.object({
+  booking: z.string().min(1).optional(),
+});
+
 export const Route = createFileRoute("/bookings")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Bookings — RECAVO" },
@@ -77,6 +86,7 @@ function addDays(date: Date, days: number) {
 }
 
 function BookingsPage() {
+  const search = Route.useSearch();
   const [query, setQuery] = useState("");
   const [staffFilter, setStaffFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -85,10 +95,19 @@ function BookingsPage() {
   const [fromDate, setFromDate] = useState(isoDate(addDays(new Date(), -14)));
   const [toDate, setToDate] = useState(isoDate(addDays(new Date(), 30)));
   const [page, setPage] = useState(0);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(search.booking ?? null);
   const [addOpen, setAddOpen] = useState(false);
+  useEffect(() => {
+    if (search.booking) setSelectedBookingId(search.booking);
+  }, [search.booking]);
 
   const staff = useStaffList();
+  // Pending add-on requests, so rows can carry a marker and the card above can list them.
+  const upsellRequests = useUpsellOffers(["requested"]);
+  const requestedBookingIds = useMemo(
+    () => new Set((upsellRequests.data ?? []).map((o) => o.bookingId)),
+    [upsellRequests.data],
+  );
   // One staff member / one location: nothing to filter by and nothing to show.
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
@@ -136,6 +155,8 @@ function BookingsPage() {
           </Button>
         }
       />
+
+      <UpsellRequestsCard onOpenBooking={setSelectedBookingId} />
 
       <div className="surface-card space-y-3 p-4">
         <div className="relative">
@@ -287,6 +308,7 @@ function BookingsPage() {
                         : (locations.data?.find((l) => l.id === b.locationId)?.name ?? "—")
                     }
                     onSelect={() => setSelectedBookingId(b.id)}
+                    addOnRequested={requestedBookingIds.has(b.id)}
                   />
                 ))}
               </tbody>
@@ -334,12 +356,15 @@ function BookingRow({
   trainerName,
   locationName,
   onSelect,
+  addOnRequested,
 }: {
   booking: Booking;
   /** Null hides the column (a one-person / one-place business). */
   trainerName: string | null;
   locationName: string | null;
   onSelect: () => void;
+  /** The client asked for an add-on from their offer email and staff haven't acted yet. */
+  addOnRequested?: boolean;
 }) {
   const customer = useCustomer(booking.leadCustomerId);
   const timezone = booking.timezone || "Europe/London";
@@ -347,7 +372,20 @@ function BookingRow({
 
   return (
     <tr onClick={onSelect} className="cursor-pointer transition-colors hover:bg-secondary/50">
-      <td className="px-4 py-3 font-medium whitespace-nowrap">{booking.reference}</td>
+      <td className="px-4 py-3 font-medium whitespace-nowrap">
+        <span className="flex items-center gap-1.5">
+          {booking.reference}
+          {addOnRequested ? (
+            <span
+              title="Add-on requested"
+              className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary"
+            >
+              <Sparkles className="size-3" />
+              Add-on
+            </span>
+          ) : null}
+        </span>
+      </td>
       <td className="px-4 py-3 tabular-nums whitespace-nowrap">
         {booking.allDay ? (
           <>

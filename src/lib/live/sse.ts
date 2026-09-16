@@ -152,6 +152,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
   const dashboardPrefix = queryKeys.dashboard(biz).slice(0, 4);
   const followUpsPrefix = queryKeys.followUps(biz);
   const waitlistPrefix = queryKeys.waitlist(biz);
+  const upsellOffersPrefix = queryKeys.upsellOffers(biz);
   switch (event.type) {
     case "hello":
       return [
@@ -163,6 +164,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
         dashboardPrefix,
         followUpsPrefix,
         waitlistPrefix,
+        upsellOffersPrefix,
       ];
     case "sms_credits.changed":
       return [queryKeys.smsCredits(biz)];
@@ -175,7 +177,8 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
       return keys;
     }
     case "booking.changed":
-      return [bookingsPrefix, dashboardPrefix];
+      // Offer state rides on the booking hint (a request, decline or add closes it).
+      return [bookingsPrefix, dashboardPrefix, upsellOffersPrefix];
     case "invoice.changed": {
       const keys: (readonly unknown[])[] = [invoicesPrefix];
       if (event.bookingId) keys.push(queryKeys.booking(biz, event.bookingId));

@@ -47,6 +47,7 @@ import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
 import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
+import { Route as OffersTokenRouteImport } from './routes/offers.$token'
 import { Route as BillingSmsCreditsIndexRouteImport } from './routes/billing.sms-credits.index'
 import { Route as BillingSmsCreditsCancelRouteImport } from './routes/billing.sms-credits.cancel'
 import { Route as BillingSmsCreditsSuccessRouteImport } from './routes/billing.sms-credits.success'
@@ -243,6 +244,11 @@ const InvoicesInvoiceIdRoute = InvoicesInvoiceIdRouteImport.update({
   path: '/invoices/$invoiceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OffersTokenRoute = OffersTokenRouteImport.update({
+  id: '/offers/$token',
+  path: '/offers/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BillingSmsCreditsIndexRoute = BillingSmsCreditsIndexRouteImport.update({
   id: '/sms-credits/',
   path: '/sms-credits/',
@@ -307,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/invoices': typeof InvoicesIndexRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -444,6 +453,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
@@ -488,6 +498,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing'
     | '/clients'
     | '/invoices'
@@ -533,6 +544,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
@@ -576,6 +588,7 @@ export interface RootRouteChildren {
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsImportRoute: typeof ClientsImportRoute
   InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
+  OffersTokenRoute: typeof OffersTokenRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
 }
@@ -848,6 +861,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoicesInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offers/$token': {
+      id: '/offers/$token'
+      path: '/offers/$token'
+      fullPath: '/offers/$token'
+      preLoaderRoute: typeof OffersTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/billing/sms-credits/': {
       id: '/billing/sms-credits/'
       path: '/sms-credits'
@@ -955,6 +975,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsImportRoute: ClientsImportRoute,
   InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
+  OffersTokenRoute: OffersTokenRoute,
   ClientsIndexRoute: ClientsIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
 }

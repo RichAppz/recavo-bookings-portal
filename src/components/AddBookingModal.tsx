@@ -9,6 +9,7 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { Layers, MapPin, Plus, UserRound } from "lucide-react";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
+import { useServiceUpsells } from "@/lib/api/upsells";
 import { ServiceDefaultsHint } from "@/components/BookingConsumables";
 import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
@@ -424,6 +425,15 @@ export function AddBookingModal({
   // additionalServices only apply to individual bookings and can't mix with credit (RECA-516).
   const isIndividual = !service || service.bookingMode === "individual";
   const multiAllowed = Boolean(service) && isIndividual && paymentMethod !== "credit";
+  // The add-ons the business pairs with the main service: one-tap suggestions under
+  // the picker, priced at the pairing price by the API when booked together.
+  const suggestions = useServiceUpsells(open && service ? service.id : undefined);
+  const suggested = (suggestions.data ?? []).filter(
+    (u) =>
+      u.service?.active &&
+      u.upsellServiceId !== serviceId &&
+      !additional.some((a) => a.serviceId === u.upsellServiceId),
+  );
   // The tile picker sees one list; the first entry is the main service and the rest
   // are the additional services, which is exactly how the API wants them.
   const picked: PickedService[] = serviceId
@@ -1200,6 +1210,29 @@ export function AddBookingModal({
                       : undefined
                   }
                 />
+                {multiAllowed && suggested.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Suggested add-ons:</span>
+                    {suggested.map((u) => (
+                      <button
+                        key={u.upsellServiceId}
+                        type="button"
+                        onClick={() =>
+                          setPicked([...picked, { serviceId: u.upsellServiceId, variantId: null }])
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-secondary"
+                      >
+                        <Plus className="size-3" />
+                        {u.service?.name}
+                        {u.effectivePriceMinor !== null ? (
+                          <span className="text-muted-foreground">
+                            {formatMoney(u.effectivePriceMinor, u.service?.currency ?? "GBP")}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {/* Detailing: the materials the job will start with (staff records; not charged). */}
                 {isCarDetailing && picked.length > 0 ? (
                   <ServiceDefaultsHint serviceIds={picked.map((p) => p.serviceId)} />

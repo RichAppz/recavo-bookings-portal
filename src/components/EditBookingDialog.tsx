@@ -121,11 +121,14 @@ export function EditBookingDialog({
   booking,
   onClose,
   onReschedule,
+  addServiceIds,
 }: {
   booking: Booking;
   onClose: () => void;
   /** Close this and open the reschedule dialog. */
   onReschedule: () => void;
+  /** Services to start with added (a customer's add-on request); duplicates are ignored. */
+  addServiceIds?: readonly string[];
 }) {
   const tenant = useTenant();
   const timezone = booking.timezone || tenant.business?.defaultTimezone || "Europe/London";
@@ -177,7 +180,12 @@ export function EditBookingDialog({
       booking.serviceSnapshot.durationMinutes;
 
   // ---- Form state ---------------------------------------------------------------
-  const [picked, setPickedState] = useState<PickedService[]>(originalPicked);
+  const [picked, setPickedState] = useState<PickedService[]>(() => {
+    const extra = (addServiceIds ?? [])
+      .filter((id) => !originalPicked.some((p) => p.serviceId === id))
+      .map((serviceId) => ({ serviceId, variantId: null }));
+    return [...originalPicked, ...extra];
+  });
   const [customerId, setCustomerId] = useState(booking.leadCustomerId);
   const [linkedRecordId, setLinkedRecordId] = useState(booking.linkedRecordId ?? "none");
   const [staffId, setStaffId] = useState(booking.staffId);

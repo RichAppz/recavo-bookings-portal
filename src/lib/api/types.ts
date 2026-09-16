@@ -28,6 +28,14 @@ export type WaitlistPreferences = schemas["WaitlistPreferences"];
 export type WaitlistTimeOfDay = WaitlistPreferences["timeOfDay"];
 export type WaitlistAction = "cancel" | "reopen";
 export type PublicWaitlistReceipt = schemas["PublicWaitlistReceipt"];
+/** Upsells: add-ons paired with a service, and the post-booking offer loop. */
+export type ServiceUpsell = schemas["ServiceUpsell"];
+export type PublicServiceUpsell = schemas["PublicServiceUpsell"];
+export type UpsellOffer = schemas["UpsellOffer"];
+export type UpsellOfferStatus = UpsellOffer["status"];
+export type BookingUpsellSummary = schemas["BookingUpsellSummary"];
+export type PublicUpsellOffer = schemas["PublicUpsellOffer"];
+export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
 /**
  * A material a job uses up (ceramic bottle, pads, chemicals) — automotive only.
  * Staff-only bookkeeping: never priced into a booking, never shown to a client.

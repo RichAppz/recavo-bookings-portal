@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { BellRing, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
+import { BellRing, Clock, Eye, EyeOff, Package, Plus, Sparkles, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,15 @@ import {
 } from "@/lib/api/hooks";
 import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
 import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { UpsellEditor } from "@/components/UpsellEditor";
+import { rowsFromUpsells, rowsToUpsellItems, type UpsellRow } from "@/lib/upsells";
+import { UpsellsUpgradeDialog } from "@/components/UpsellsUpgradeDialog";
+import {
+  isFeatureNotAvailable,
+  useReplaceServiceUpsells,
+  useServiceUpsells,
+  useUpsellsEntitled,
+} from "@/lib/api/upsells";
 import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
 import {
   draftFromRule,
@@ -530,6 +539,20 @@ function ServiceDialog({
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageDirty, setUsageDirty] = useState(false);
   const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
+  // Upsells: add-ons offered with this service, at a price set here. Their own
+  // endpoint, saved after the service; gated by the `upsells` plan feature on write.
+  const upsellsEntitled = useUpsellsEntitled();
+  const serviceUpsells = useServiceUpsells(open ? service?.id : undefined);
+  const replaceUpsells = useReplaceServiceUpsells();
+  const [upsellRows, setUpsellRows] = useState<UpsellRow[]>([]);
+  const [upsellsDirty, setUpsellsDirty] = useState(false);
+  const [upsellInvalid, setUpsellInvalid] = useState<number | null>(null);
+  const [upsellsPaywall, setUpsellsPaywall] = useState(false);
+  useEffect(() => {
+    if (open && !upsellsDirty && serviceUpsells.data) {
+      setUpsellRows(rowsFromUpsells(serviceUpsells.data));
+    }
+  }, [open, upsellsDirty, serviceUpsells.data]);
   // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
   // so it saves with the service itself. All verticals.
   const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
@@ -545,7 +568,10 @@ function ServiceDialog({
   }, [open, usageDirty, serviceUsage.data]);
 
   const submitting =
-    createService.isPending || updateService.isPending || replaceServiceUsage.isPending;
+    createService.isPending ||
+    updateService.isPending ||
+    replaceServiceUsage.isPending ||
+    replaceUpsells.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
     setName(s?.name ?? "");
@@ -571,6 +597,9 @@ function ServiceDialog({
     setUsageRows(s && serviceUsage.data ? rowsFromLines(serviceUsage.data) : []);
     setUsageDirty(false);
     setUsageInvalid(null);
+    setUpsellRows(s && serviceUpsells.data ? rowsFromUpsells(serviceUpsells.data) : []);
+    setUpsellsDirty(false);
+    setUpsellInvalid(null);
     setFollowUpDraft(draftFromRule(s?.followUp));
     setFollowUpError(null);
   };
@@ -673,6 +702,14 @@ function ServiceDialog({
     }
     setUsageInvalid(null);
 
+    const upsells = upsellsDirty ? rowsToUpsellItems(upsellRows) : null;
+    if (upsells && !upsells.ok) {
+      setUpsellInvalid(upsells.index);
+      toast.error(upsells.message);
+      throw new Error("validation");
+    }
+    setUpsellInvalid(null);
+
     const followUp = ruleFromDraft(followUpDraft);
     if (!followUp.ok) {
       setFollowUpError({ field: followUp.field, message: followUp.message });
@@ -718,6 +755,19 @@ function ServiceDialog({
           await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
         } catch {
           toast.warning("The consumables list didn't save — open the service and try again.");
+        }
+      }
+      // Add-ons offered with this service. Its own endpoint; a plan without the
+      // feature answers 403, which opens the bolt-on dialog rather than a toast.
+      if (upsells?.ok) {
+        try {
+          await replaceUpsells.mutateAsync({ serviceId: saved.id, items: upsells.items });
+        } catch (err) {
+          if (isFeatureNotAvailable(err)) {
+            setUpsellsPaywall(true);
+          } else {
+            toast.warning("The add-ons list didn't save — open the service and try again.");
+          }
         }
       }
       // A staff record with its own service list would silently veto this service
@@ -1036,6 +1086,48 @@ function ServiceDialog({
               )}
             </div>
           ) : null}
+
+          {/* Upsells: add-ons offered alongside this service, on the booking page and
+              by email after staff book someone in. */}
+          <div className="grid gap-2 border-t pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Add-ons to offer</Label>
+              {upsellsEntitled === false ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUpsellsPaywall(true)}
+                >
+                  <Sparkles className="size-4" />
+                  Unlock upsells
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Other {lower}s to suggest with this one — ticked as extras when clients book online,
+              and offered by email when you book them in. Set a special price for the pairing or
+              leave it blank to charge the add-on&apos;s own price.
+            </p>
+            {serviceUpsells.isLoading || catalogue.isLoading ? (
+              <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
+            ) : (
+              <UpsellEditor
+                rows={upsellRows}
+                onChange={(rows) => {
+                  setUpsellRows(rows);
+                  setUpsellsDirty(true);
+                  setUpsellInvalid(null);
+                }}
+                catalogue={catalogue.data ?? []}
+                ownServiceId={service?.id ?? null}
+                invalidIndex={upsellInvalid}
+                disabled={upsellsEntitled === false}
+                idPrefix="su"
+              />
+            )}
+          </div>
+          <UpsellsUpgradeDialog open={upsellsPaywall} onOpenChange={setUpsellsPaywall} />
 
           {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
           <FollowUpRuleEditor

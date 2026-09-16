@@ -16,6 +16,7 @@ import {
   Phone,
   Repeat,
   Send,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -66,6 +67,7 @@ import { BookingInvoices } from "@/components/BookingInvoices";
 import { BookingConsumablesSection } from "@/components/BookingConsumables";
 import { BookingFollowUpDetail } from "@/components/BookingFollowUpDetail";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
+import { useBookingUpsellOffer, useDeclineUpsellOffer } from "@/lib/api/upsells";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
 import { useBookingInvoices } from "@/lib/api/invoices";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
@@ -185,6 +187,8 @@ export function BookingPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  /** Services to pre-add when Edit opens from an add-on request. */
+  const [editAddServiceIds, setEditAddServiceIds] = useState<string[]>([]);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -195,6 +199,9 @@ export function BookingPanel({
   const [checkout, setCheckout] = useState<PublicBookingPayment | null>(null);
 
   const bookingQuery = useBooking(bookingId ?? undefined);
+  // The add-on offer emailed after this (staff-made) booking, if any (upsells).
+  const upsellOffer = useBookingUpsellOffer(bookingId ?? undefined);
+  const declineUpsell = useDeclineUpsellOffer();
   const staffList = useStaffList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
@@ -734,7 +741,13 @@ export function BookingPanel({
                   {/* Edit covers what (services, price, who, where, vehicle, notes)
                       and, via its "Reschedule" hand-off, when — so it's the single
                       entry point. Final bookings are a record, so it locks. */}
-                  <DropdownMenuItem disabled={isFinal} onSelect={() => setEditOpen(true)}>
+                  <DropdownMenuItem
+                    disabled={isFinal}
+                    onSelect={() => {
+                      setEditAddServiceIds([]);
+                      setEditOpen(true);
+                    }}
+                  >
                     <Pencil className="size-4" /> Edit booking
                   </DropdownMenuItem>
                   {isFinal ? (
@@ -844,6 +857,49 @@ export function BookingPanel({
                   </span>
                 ) : null}
               </div>
+
+              {upsellOffer.data?.status === "requested" && upsellOffer.data.requested.length > 0 ? (
+                <div className="rounded-xl border border-primary/40 bg-primary-soft p-3 text-sm">
+                  <p className="flex items-center gap-2 font-medium">
+                    <Sparkles className="size-4 text-primary" />
+                    Client asked to add{" "}
+                    {upsellOffer.data.requested
+                      .map((r) => `${r.name} (${formatMoney(r.priceMinor, r.currency)})`)
+                      .join(", ")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    From the offer email. Adding it extends the job by{" "}
+                    {formatDuration(
+                      upsellOffer.data.requested.reduce((sum, r) => sum + r.durationMinutes, 0),
+                    )}{" "}
+                    — check it still fits, then save and they get an updated confirmation.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={isFinal}
+                      onClick={() => {
+                        setEditAddServiceIds(upsellOffer.data!.requested.map((r) => r.serviceId));
+                        setEditOpen(true);
+                      }}
+                    >
+                      Add to booking
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={declineUpsell.isPending}
+                      onClick={() => {
+                        void declineUpsell.mutateAsync(upsellOffer.data!.offerId).then(() => {
+                          toast.success("Request declined");
+                        });
+                      }}
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               <Tabs value={tab} onValueChange={setTab}>
                 <TabsList className="w-full">
@@ -1590,9 +1646,14 @@ export function BookingPanel({
       {booking && editOpen ? (
         <EditBookingDialog
           booking={booking}
-          onClose={() => setEditOpen(false)}
+          addServiceIds={editAddServiceIds}
+          onClose={() => {
+            setEditOpen(false);
+            setEditAddServiceIds([]);
+          }}
           onReschedule={() => {
             setEditOpen(false);
+            setEditAddServiceIds([]);
             setRescheduleOpen(true);
           }}
         />

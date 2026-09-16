@@ -81,6 +81,7 @@ import type {
   ServiceFollowUp,
   ServiceFollowUpAction,
   ServiceFollowUpStatus,
+  PublicServiceUpsell,
   PublicWaitlistReceipt,
   WaitlistAction,
   WaitlistEntry,
@@ -4717,6 +4718,8 @@ export type PublicService = Pick<
   colour: string | null;
   /** Optional until every API build returns it (RECA-523). */
   depositMinor?: number | null;
+  /** Extras the visitor can tick with this service (`upsells` feature); optional until every API build returns it. */
+  upsells?: PublicServiceUpsell[];
 };
 
 export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
@@ -4793,6 +4796,8 @@ export function usePublicAvailability(
     to?: string;
     /** Shared link code; lets the search reach a session kept off the public page. */
     linkCode?: string | null;
+    /** Upsell add-ons ticked with the service; slots are sized and priced for the whole job. */
+    additionalServiceIds?: readonly string[];
     enabled?: boolean;
   },
 ) {
@@ -4805,6 +4810,9 @@ export function usePublicAvailability(
     from: filters.from!,
     to: filters.to!,
     ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
+    ...(filters.additionalServiceIds?.length
+      ? { additionalServiceIds: filters.additionalServiceIds.join(",") }
+      : {}),
   };
   return useQuery({
     queryKey: queryKeys.publicAvailability(businessId ?? "", query),

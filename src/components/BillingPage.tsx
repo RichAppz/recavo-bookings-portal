@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, Check, FileText } from "lucide-react";
+import { ArrowDown, Check, FileText, Sparkles } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import { SmsCreditsCard } from "@/components/SmsCreditsCard";
@@ -47,6 +47,7 @@ import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access"
 import { formatInTz, formatMoney } from "@/lib/format";
 import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
+import { UPSELLS_ADDON_KEY } from "@/lib/api/upsells";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -69,7 +70,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Card payments with deposits",
         "Client records, goals and session notes",
         "Email reminders, texts from prepaid credit bundles",
-        "Your logo and colours on emails and invoices (invoicing is an £8/month bolt-on)",
+        "Your logo and colours on emails and invoices (invoicing and upsells are £8/month bolt-ons)",
         "Core revenue reporting",
       ],
     },
@@ -78,6 +79,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       popular: true,
       bullets: [
         "Trainer availability and role permissions",
+        "Upsell add-ons on your booking page and after booking",
         "Packages, credits and memberships",
         "Group sessions and out-call training",
         "Email reminders, texts from prepaid credit bundles",
@@ -105,7 +107,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Card payments with deposits",
         "Customer records with vehicle history",
         "Email reminders, texts from prepaid credit bundles",
-        "Your logo and colours on emails and invoices (invoicing is an £8/month bolt-on)",
+        "Your logo and colours on emails and invoices (invoicing and upsells are £8/month bolt-ons)",
         "Core revenue reporting",
       ],
     },
@@ -115,6 +117,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       bullets: [
         "Staff availability and role permissions",
         "Multi-service jobs with rolled-up pricing",
+        "Upsell add-ons on your booking page and after booking",
         "Vehicles saved to every customer",
         "Email reminders, texts from prepaid credit bundles",
         "Full reporting suite",
@@ -233,6 +236,22 @@ const ADDON_COPY: Record<string, AddonCopy> = {
     keepLabel: "Keep invoicing",
     addedTitle: "Invoicing added",
     removedTitle: "Invoicing removed",
+  },
+  [UPSELLS_ADDON_KEY]: {
+    name: "Upsells",
+    icon: Sparkles,
+    included: (plan) =>
+      `Included in ${plan}. Offer add-ons with each service on your booking page and by email after you book someone in, at a price you set.`,
+    active: (price) =>
+      `Active · ${price}. Offer add-ons with each service on your booking page and by email after you book someone in, at a price you set.`,
+    available: (price) =>
+      `Pair add-ons with your services: customers tick them when booking online, and get an offer email when you book them in. ${price}, or included with Business and Growth.`,
+    removeTitle: "Remove upsells?",
+    removeBody:
+      "Extras will stop showing on your booking page and no more offer emails will go out. Add-ons already on bookings stay as they are, and your pairings are kept for when you switch it back on. The unused part of this month is credited to your next invoice.",
+    keepLabel: "Keep upsells",
+    addedTitle: "Upsells added",
+    removedTitle: "Upsells removed",
   },
 };
 

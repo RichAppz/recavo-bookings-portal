@@ -11,6 +11,7 @@ import {
   Lock,
   MessageSquarePlus,
   Package,
+  Sparkles,
   TrendingUp,
   UserPlus,
   Users,
@@ -63,6 +64,7 @@ import {
   useStaffList,
   useWaitlistSummary,
 } from "@/lib/api/hooks";
+import { useUpsellOffersSummary } from "@/lib/api/upsells";
 import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
@@ -152,6 +154,10 @@ function Overview() {
   const dashboard = useDashboard({ from: range.from, to: range.to });
   const waitlistSummary = useWaitlistSummary({ enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL) });
   const waiting = waitlistSummary.data?.waiting ?? 0;
+  const upsellSummary = useUpsellOffersSummary({
+    enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL),
+  });
+  const addOnRequests = upsellSummary.data?.requested ?? 0;
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
@@ -423,6 +429,17 @@ function Overview() {
           <SectionCard title="Tasks requiring attention">
             <ul className="space-y-3">
               {[
+                // Real, live: clients who asked for an add-on from their offer email.
+                ...(addOnRequests > 0
+                  ? [
+                      {
+                        icon: Sparkles,
+                        text: `${addOnRequests} add-on ${addOnRequests === 1 ? "request" : "requests"} to action`,
+                        to: "/bookings" as const,
+                        tone: "info",
+                      },
+                    ]
+                  : []),
                 // Real, live: people waiting for a slot. Only listed when there are some.
                 ...(waiting > 0
                   ? [

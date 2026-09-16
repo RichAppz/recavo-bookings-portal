@@ -323,6 +323,8 @@ export function BookingFlow({
   );
   const [date, setDate] = useState(bookingStartDate(initialDate));
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(initialSlot);
+  /** Upsell add-ons ticked with the service; the slot is sized and priced for the lot. */
+  const [extraIds, setExtraIds] = useState<string[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -378,8 +380,13 @@ export function BookingFlow({
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
     linkCode,
+    additionalServiceIds: extraIds,
     enabled: step === STEP_CHOOSE && Boolean(serviceId && activeLocationId),
   });
+  const chosenExtras = useMemo(
+    () => (service?.upsells ?? []).filter((u) => extraIds.includes(u.serviceId)),
+    [service, extraIds],
+  );
 
   const slots = useMemo(
     () => (availability.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start)),
@@ -449,6 +456,7 @@ export function BookingFlow({
     setServiceId(null);
     setLocationId(null);
     setSelectedSlot(null);
+    setExtraIds([]);
     setNotes("");
     setFieldErrors({});
     setHold(null);
@@ -922,10 +930,12 @@ export function BookingFlow({
                             if (expanded) {
                               setServiceId(null);
                               setSelectedSlot(null);
+                              setExtraIds([]);
                               return;
                             }
                             setServiceId(s.id);
                             setSelectedSlot(null);
+                            setExtraIds([]);
                           }}
                           aria-expanded={expanded}
                           className={`surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition ${
@@ -957,6 +967,77 @@ export function BookingFlow({
 
                         {expanded ? (
                           <div className="animate-in fade-in slide-in-from-top-2 space-y-5 rounded-xl border border-dashed p-4 duration-300 sm:p-5">
+                            {s.upsells && s.upsells.length > 0 ? (
+                              <div className="space-y-2">
+                                <h2 className="text-sm font-medium">Add extras</h2>
+                                <p className="text-xs text-muted-foreground">
+                                  Done in the same visit — the times below allow for whatever you
+                                  add.
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {s.upsells.map((u) => {
+                                    const on = extraIds.includes(u.serviceId);
+                                    const discounted = u.priceMinor < u.basePriceMinor;
+                                    return (
+                                      <button
+                                        key={u.serviceId}
+                                        type="button"
+                                        role="checkbox"
+                                        aria-checked={on}
+                                        onClick={() => {
+                                          setExtraIds((ids) =>
+                                            on
+                                              ? ids.filter((id) => id !== u.serviceId)
+                                              : [...ids, u.serviceId],
+                                          );
+                                          setSelectedSlot(null);
+                                        }}
+                                        className={`flex items-start justify-between gap-3 rounded-xl border p-3 text-left transition ${
+                                          on
+                                            ? "border-primary bg-primary-soft"
+                                            : "bg-card hover:bg-secondary"
+                                        }`}
+                                      >
+                                        <span className="min-w-0">
+                                          <span className="flex items-center gap-2 text-sm font-medium">
+                                            <span
+                                              aria-hidden
+                                              className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                                                on
+                                                  ? "border-primary bg-primary text-primary-foreground"
+                                                  : "border-input"
+                                              }`}
+                                            >
+                                              {on ? <Check className="size-3" /> : null}
+                                            </span>
+                                            {u.name}
+                                          </span>
+                                          {u.pitch ? (
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                              {u.pitch}
+                                            </span>
+                                          ) : null}
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            +{formatDuration(u.durationMinutes)}
+                                          </span>
+                                        </span>
+                                        <span className="shrink-0 text-right text-sm whitespace-nowrap">
+                                          <span className="block font-semibold">
+                                            +{formatMoney(u.priceMinor, u.currency)}
+                                          </span>
+                                          {discounted ? (
+                                            <span className="block text-xs text-muted-foreground line-through">
+                                              {formatMoney(u.basePriceMinor, u.currency)}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+
                             {(locations.data ?? []).length > 1 ? (
                               <div className="space-y-2">
                                 <h2 className="text-sm font-medium">Where</h2>
@@ -1277,6 +1358,10 @@ export function BookingFlow({
             ) : service && selectedSlot && location ? (
               <Summary
                 serviceName={service.name}
+                extras={chosenExtras.map((u) => ({
+                  name: u.name,
+                  price: formatMoney(u.priceMinor, u.currency),
+                }))}
                 locationName={location.name}
                 start={selectedSlot.start}
                 end={selectedSlot.end}
@@ -1360,6 +1445,7 @@ export function BookingFlow({
             {service && location ? (
               <Summary
                 serviceName={service.name}
+                extras={lineExtras(hold.booking)}
                 locationName={location.name}
                 start={hold.booking.start}
                 end={hold.booking.end}
@@ -1505,6 +1591,7 @@ export function BookingFlow({
             {service && location ? (
               <Summary
                 serviceName={service.name}
+                extras={lineExtras(confirmedBooking)}
                 locationName={location.name}
                 start={confirmedBooking.start}
                 end={confirmedBooking.end}
@@ -1670,8 +1757,21 @@ function PackageSummary({ pkg }: { pkg: PublicPackage }) {
   );
 }
 
+/** Add-on line items on a booking (everything after the primary), for the summary. */
+function lineExtras(
+  booking: Pick<Booking, "currency"> & { lineItems?: Booking["lineItems"] },
+): { name: string; price: string }[] {
+  return (booking.lineItems ?? [])
+    .filter((i) => i.position > 0)
+    .map((i) => ({
+      name: i.variantName ? `${i.name} · ${i.variantName}` : i.name,
+      price: formatMoney(i.priceMinor, i.currency ?? booking.currency),
+    }));
+}
+
 function Summary({
   serviceName,
+  extras,
   locationName,
   start,
   end,
@@ -1680,6 +1780,8 @@ function Summary({
   deposit,
 }: {
   serviceName: string;
+  /** Upsell add-ons taken with the service. */
+  extras?: { name: string; price: string }[];
   locationName: string;
   start: string;
   end?: string;
@@ -1700,6 +1802,7 @@ function Summary({
     <dl className="surface-card space-y-2 p-5 text-left text-sm">
       {[
         ["Service", serviceName],
+        ...(extras ?? []).map((e) => [`+ ${e.name}`, e.price]),
         ["Where", locationName],
         [multiDay ? "Drop off" : "When", formatInTz(start, timezone, whenOpts)],
         ...(multiDay && end ? [["Ready by", formatInTz(end, timezone, whenOpts)]] : []),
