@@ -497,11 +497,22 @@ export function AddBookingModal({
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
 
+  const pairingPrices = useMemo(
+    () =>
+      new Map(
+        (suggestions.data ?? [])
+          .filter((u) => u.priceMinor !== null)
+          .map((u) => [u.upsellServiceId, u.priceMinor as number]),
+      ),
+    [suggestions.data],
+  );
   const additionalTotalMinor = additional.reduce((sum, a) => {
     const s = serviceById.get(a.serviceId);
     if (!s) return sum;
     const variant = a.variantId ? s.variants.find((v) => v.id === a.variantId) : undefined;
-    return sum + (variant?.priceMinor ?? s.basePriceMinor);
+    if (variant?.priceMinor != null) return sum + variant.priceMinor;
+    // Paired add-ons are charged at the pairing price (upsells), as the API will.
+    return sum + (pairingPrices.get(a.serviceId) ?? s.basePriceMinor);
   }, 0);
   const primaryMinor =
     selectedSlot?.priceMinor ??
@@ -1203,6 +1214,7 @@ export function AddBookingModal({
                   services={serviceList}
                   value={picked}
                   onChange={setPicked}
+                  pairingPrices={pairingPrices}
                   multi={!service || multiAllowed}
                   singleReason={
                     paymentMethod === "credit"

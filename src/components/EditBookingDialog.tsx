@@ -9,6 +9,7 @@ import {
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
+import { useServiceUpsells } from "@/lib/api/upsells";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
@@ -290,14 +291,31 @@ export function EditBookingDialog({
   // ---- Money --------------------------------------------------------------------
   // The API re-prices from the catalogue when services change and otherwise keeps
   // the snapshot, so "list" means whichever of those applies.
-  const catalogueMinor = (p: PickedService) => {
+  // Add-ons the main service pairs with carry their own price (upsells); the API
+  // prices those lines the same way, so the estimate matches what gets saved.
+  const pairings = useServiceUpsells(picked[0]?.serviceId);
+  const pairingPrices = useMemo(
+    () =>
+      new Map(
+        (pairings.data ?? [])
+          .filter((u) => u.priceMinor !== null)
+          .map((u) => [u.upsellServiceId, u.priceMinor as number]),
+      ),
+    [pairings.data],
+  );
+  const catalogueMinor = (p: PickedService, index: number) => {
     const s = serviceById.get(p.serviceId);
     if (!s) return 0;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
-    return v?.priceMinor ?? s.basePriceMinor;
+    if (v?.priceMinor != null) return v.priceMinor;
+    if (index > 0) {
+      const paired = pairingPrices.get(p.serviceId);
+      if (paired !== undefined) return paired;
+    }
+    return s.basePriceMinor;
   };
   const rolledTotalMinor = servicesChanged
-    ? picked.reduce((sum, p) => sum + catalogueMinor(p), 0)
+    ? picked.reduce((sum, p, index) => sum + catalogueMinor(p, index), 0)
     : snapshotListMinor;
   // The services keep their list prices and the API records the difference as a
   // discount line, so any total from zero up is valid — even below what the
@@ -921,6 +939,7 @@ export function EditBookingDialog({
                     services={serviceList}
                     value={picked}
                     onChange={setPicked}
+                    pairingPrices={pairingPrices}
                     multi={isIndividual}
                     singleReason={isIndividual ? undefined : "A group session covers one service."}
                   />
