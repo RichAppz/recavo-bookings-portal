@@ -29,6 +29,7 @@ import {
 import { useInvoicingAddon, useInvoicingEntitled } from "@/lib/api/invoices";
 import { isBillingBlocked } from "@/lib/billing/access";
 import { formatMoney } from "@/lib/format";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import {
   DEFAULT_DUE_DAYS,
   DEFAULT_NUMBER_PREFIX,
@@ -136,13 +137,17 @@ export function InvoicingSetting({ className }: { className?: string }) {
     }
   };
 
-  // Bolt-on control
+  // Bolt-on control. Sold on the web only: in the store apps the bolt-on can be
+  // neither bought nor removed here, and no price is shown (saasPurchasesAllowedInApp).
   const current = subscription.data?.subscription ?? null;
-  const canManageBilling = canManageSaasBilling({
-    can: tenant.can,
-    roleKeys: tenant.roleKeys,
-    blocked: isBillingBlocked(current),
-  });
+  const sellsHere = saasPurchasesAllowedInApp();
+  const canManageBilling =
+    sellsHere &&
+    canManageSaasBilling({
+      can: tenant.can,
+      roleKeys: tenant.roleKeys,
+      blocked: isBillingBlocked(current),
+    });
   const price = addon
     ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
     : "£8/month";
@@ -186,7 +191,9 @@ export function InvoicingSetting({ className }: { className?: string }) {
     entitlementControl = (
       <div className="flex items-center gap-2">
         <StatusBadge status="active" />
-        <span className="text-xs text-muted-foreground">Bolt-on · {price}</span>
+        <span className="text-xs text-muted-foreground">
+          {sellsHere ? `Bolt-on · ${price}` : "Bolt-on"}
+        </span>
         {canManageBilling ? (
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -228,7 +235,9 @@ export function InvoicingSetting({ className }: { className?: string }) {
         {addAddon.isPending ? "Adding…" : `Add invoicing — ${price}`}
       </Button>
     ) : (
-      <span className="text-xs text-muted-foreground">Not on your plan — ask the owner</span>
+      <span className="text-xs text-muted-foreground">
+        {sellsHere ? "Not on your plan — ask the owner" : "Not on your plan"}
+      </span>
     );
   }
 
@@ -243,8 +252,9 @@ export function InvoicingSetting({ className }: { className?: string }) {
             <p className="text-base font-semibold tracking-tight">Invoicing</p>
             <p className="text-sm text-muted-foreground">
               Numbered PDF invoices, emailed to clients and issued automatically when a job is
-              marked attended. Included with Growth; a {price} bolt-on on Solo and Business.
-              {!current && !subscription.isLoading ? (
+              marked attended.
+              {sellsHere ? ` Included with Growth; a ${price} bolt-on on Solo and Business.` : ""}
+              {sellsHere && !current && !subscription.isLoading ? (
                 <>
                   {" "}
                   <Link to="/billing" className="underline">

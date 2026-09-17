@@ -36,6 +36,7 @@ import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as VehiclesRouteImport } from './routes/vehicles'
+import { Route as WaitlistRouteImport } from './routes/waitlist'
 import { Route as BillingIndexRouteImport } from './routes/billing.index'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as BillingSetupRouteImport } from './routes/billing.setup'
@@ -46,6 +47,7 @@ import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
 import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
+import { Route as OffersTokenRouteImport } from './routes/offers.$token'
 import { Route as BillingSmsCreditsIndexRouteImport } from './routes/billing.sms-credits.index'
 import { Route as BillingSmsCreditsCancelRouteImport } from './routes/billing.sms-credits.cancel'
 import { Route as BillingSmsCreditsSuccessRouteImport } from './routes/billing.sms-credits.success'
@@ -187,6 +189,11 @@ const VehiclesRoute = VehiclesRouteImport.update({
   path: '/vehicles',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WaitlistRoute = WaitlistRouteImport.update({
+  id: '/waitlist',
+  path: '/waitlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BillingIndexRoute = BillingIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -235,6 +242,11 @@ const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
 const InvoicesInvoiceIdRoute = InvoicesInvoiceIdRouteImport.update({
   id: '/invoices/$invoiceId',
   path: '/invoices/$invoiceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OffersTokenRoute = OffersTokenRouteImport.update({
+  id: '/offers/$token',
+  path: '/offers/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingSmsCreditsIndexRoute = BillingSmsCreditsIndexRouteImport.update({
@@ -293,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -300,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -336,6 +350,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -343,6 +358,7 @@ export interface FileRoutesByTo {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/invoices': typeof InvoicesIndexRoute
@@ -381,6 +397,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/staff': typeof StaffRoute
   '/vehicles': typeof VehiclesRoute
+  '/waitlist': typeof WaitlistRoute
   '/billing/cancel': typeof BillingCancelRoute
   '/billing/setup': typeof BillingSetupRoute
   '/billing/success': typeof BillingSuccessRoute
@@ -388,6 +405,7 @@ export interface FileRoutesById {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/offers/$token': typeof OffersTokenRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -427,6 +445,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -434,6 +453,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
@@ -470,6 +490,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -477,6 +498,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing'
     | '/clients'
     | '/invoices'
@@ -514,6 +536,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/staff'
     | '/vehicles'
+    | '/waitlist'
     | '/billing/cancel'
     | '/billing/setup'
     | '/billing/success'
@@ -521,6 +544,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/offers/$token'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
@@ -559,10 +583,12 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StaffRoute: typeof StaffRoute
   VehiclesRoute: typeof VehiclesRoute
+  WaitlistRoute: typeof WaitlistRoute
   ClaimTokenRoute: typeof ClaimTokenRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsImportRoute: typeof ClientsImportRoute
   InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
+  OffersTokenRoute: typeof OffersTokenRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
 }
@@ -758,6 +784,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VehiclesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/waitlist': {
+      id: '/waitlist'
+      path: '/waitlist'
+      fullPath: '/waitlist'
+      preLoaderRoute: typeof WaitlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/billing/': {
       id: '/billing/'
       path: '/'
@@ -826,6 +859,13 @@ declare module '@tanstack/react-router' {
       path: '/invoices/$invoiceId'
       fullPath: '/invoices/$invoiceId'
       preLoaderRoute: typeof InvoicesInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/offers/$token': {
+      id: '/offers/$token'
+      path: '/offers/$token'
+      fullPath: '/offers/$token'
+      preLoaderRoute: typeof OffersTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing/sms-credits/': {
@@ -930,10 +970,12 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StaffRoute: StaffRoute,
   VehiclesRoute: VehiclesRoute,
+  WaitlistRoute: WaitlistRoute,
   ClaimTokenRoute: ClaimTokenRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsImportRoute: ClientsImportRoute,
   InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
+  OffersTokenRoute: OffersTokenRoute,
   ClientsIndexRoute: ClientsIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
 }

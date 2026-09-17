@@ -15,6 +15,7 @@ import {
 import { ApiError } from "@/lib/api";
 import { useUpdateConfiguration } from "@/lib/api/hooks";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   CHANNEL_LABELS,
@@ -263,7 +264,10 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
                 <>
                   {" "}
                   <Link to="/billing/sms-credits" className="underline underline-offset-2">
-                    {smsCredits.level === "empty" ? "Buy texts" : "Text credits"}
+                    {/* The store apps show a balance page there, never a purchase. */}
+                    {smsCredits.level === "empty" && saasPurchasesAllowedInApp()
+                      ? "Buy texts"
+                      : "Text credits"}
                   </Link>
                 </>
               ) : null}

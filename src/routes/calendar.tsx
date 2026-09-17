@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CalendarPlus,
   CarFront,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Hourglass,
   MoreHorizontal,
+  Palette,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
+import { CalendarColoursDialog } from "@/components/CalendarColoursSetting";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { summariseBookings } from "@/lib/calendar-stats";
@@ -17,7 +21,6 @@ import { useSoleStaff } from "@/lib/sole";
 import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterMenuItems } from "@/components/ServiceFilterSelect";
-import { ServiceKey } from "@/components/ServiceKey";
 import { PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +48,7 @@ import {
   useLinkedRecordsById,
   useServices,
   useStaffList,
+  useWaitlistSummary,
 } from "@/lib/api/hooks";
 import {
   addDays,
@@ -68,6 +72,13 @@ import {
   paymentTone,
   type PaymentTone,
 } from "@/lib/booking-payment";
+import {
+  paymentBarStyle,
+  paymentColoursFrom,
+  paymentDotStyle,
+  type PaymentColours,
+} from "@/lib/payment-colours";
+import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import {
@@ -107,46 +118,20 @@ const END_HOUR = 21;
 const HOUR_HEIGHT = 60;
 
 /**
- * Payment status is the one thing staff most need to read off the calendar
- * without opening a booking, so it owns the chip colour: green when nothing is
- * owed (paid, free, credit, cancelled), amber deposit or part paid, red
- * nothing received.
+ * A booking bar is one solid block of payment status — the thing staff most
+ * need to read off the calendar without opening the job: green when nothing is
+ * owed (paid, free, credit, cancelled), amber deposit or part paid, red nothing
+ * received. Service identity is left to the text.
  */
 // "Nothing to collect" (free, credit, cancelled) shares the settled green: to
 // the person reading the calendar both mean "no money to chase", and teal next
-// to green was too close to tell apart.
-const PAYMENT_CHIP: Record<PaymentTone, string> = {
-  paid: "border-success bg-success-soft",
-  partial: "border-warning bg-warning-soft",
-  unpaid: "border-destructive bg-destructive-soft",
-  none: "border-success bg-success-soft",
-};
-
+// to green was too close to tell apart. Businesses can swap any of the three
+// colours in Settings → Configuration; `paymentBarStyle` applies the override.
 const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
   { tone: "paid", label: "Paid / nothing to collect" },
   { tone: "partial", label: "Deposit / part paid" },
   { tone: "unpaid", label: "Unpaid" },
 ];
-
-const PAYMENT_DOT: Record<PaymentTone, string> = {
-  paid: "bg-success",
-  partial: "bg-warning",
-  unpaid: "bg-destructive",
-  none: "bg-success",
-};
-
-const SERVICE_FALLBACK_COLOUR = "var(--color-chart-1)";
-
-/** The service's colour swatch, shared by the chips and the legend. */
-function ServiceDot({ colour, className }: { colour: string; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn("inline-block size-2 shrink-0 rounded-full", className)}
-      style={{ backgroundColor: colour }}
-    />
-  );
-}
 
 /**
  * A timed job staff squeezed in beside an all-day one. The all-day bar sits in the
@@ -162,7 +147,7 @@ function DropInTag() {
   return (
     <span
       aria-hidden
-      className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-semibold tracking-wide text-primary uppercase"
+      className="shrink-0 rounded bg-white/25 px-1 text-[9px] font-semibold tracking-wide text-current uppercase"
     >
       Drop-in
     </span>
@@ -178,7 +163,7 @@ function LiftTag() {
     <CarFront
       role="img"
       aria-label="Lift needed"
-      className="size-3 shrink-0 text-primary"
+      className="size-3 shrink-0 text-current"
       strokeWidth={2.5}
     />
   );
@@ -201,13 +186,13 @@ const isCancelled = (b: Booking) =>
   b.status === "cancelled_by_business" ||
   b.status === "late_cancelled";
 
-/** Tone, classes and a spoken label for one booking's chip. */
-function chipPayment(b: Booking) {
+/** Tone, classes/inline colour and a spoken label for one booking's chip. */
+function chipPayment(b: Booking, colours: PaymentColours) {
   const settlement = bookingSettlement(b);
   const tone = paymentTone(settlement, b.status);
   return {
     tone,
-    className: PAYMENT_CHIP[tone],
+    ...paymentBarStyle(tone, colours),
     label: paymentLabel(settlement, b.currency, formatMoney),
   };
 }
@@ -285,6 +270,10 @@ function monthGrid(anchor: Date): Date[] {
 
 function CalendarPage() {
   const tenant = useTenant();
+  const paymentColours = useMemo(
+    () => paymentColoursFrom(tenant.configuration),
+    [tenant.configuration],
+  );
   // View and filters come back the way they were last left, per business.
   const prefKey = (name: string) => `recavo.calendar.${name}.${tenant.businessId ?? "none"}`;
   const [view, setView] = useStoredState<"day" | "week" | "month">(prefKey("view"), "week", [
@@ -320,6 +309,11 @@ function CalendarPage() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
+  // "Add to waitlist instead" from the booking form when the day has no availability.
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
+  const [coloursOpen, setColoursOpen] = useState(false);
+  const waitlistSummary = useWaitlistSummary();
+  const waiting = waitlistSummary.data?.waiting ?? 0;
   const [addTime, setAddTime] = useState<string | undefined>(undefined);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
@@ -362,7 +356,13 @@ function CalendarPage() {
   }, [staff.data, staffFilter, setStaffFilter]);
 
   const days = useMemo(() => {
-    if (view === "day") return [anchor];
+    if (view === "day") {
+      // `anchor` carries a time of day ("Today" sets it to `new Date()`), so the
+      // day range must start at local midnight or earlier bookings fall outside it.
+      const start = new Date(anchor);
+      start.setHours(0, 0, 0, 0);
+      return [start];
+    }
     if (view === "month") return monthGrid(anchor);
     return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
   }, [view, anchor]);
@@ -423,14 +423,6 @@ function CalendarPage() {
       : recordDefinition.data.definition.singularLabel
     : null;
 
-  // Service identity rides along as a dot inside each chip; the chip's
-  // border/background belong to payment status. A service with no colour set
-  // still gets a dot so the row of chips reads consistently.
-  const serviceColour = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of services.data ?? []) map.set(s.id, s.colour ?? SERVICE_FALLBACK_COLOUR);
-    return (b: Booking) => map.get(b.serviceSnapshot.serviceId) ?? SERVICE_FALLBACK_COLOUR;
-  }, [services.data]);
   // The category comes from the live catalogue, not the snapshot: it is a grouping
   // label the business tidies over time, so the calendar should follow the tidy-up.
   const categoryFor = (b: Booking) =>
@@ -442,6 +434,9 @@ function CalendarPage() {
   };
 
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  // Seven columns need room to be legible, so the week grid scrolls sideways on
+  // phones; a single day fits the screen and shouldn't.
+  const gridMinWidth = view === "week" ? "min-w-[720px]" : "";
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const todayIso = isoDate(new Date());
 
@@ -736,6 +731,27 @@ function CalendarPage() {
               <TabsTrigger value="month">Month</TabsTrigger>
             </TabsList>
           </Tabs>
+          {/* Who's waiting for a slot in the range on screen; the list opens filtered
+              to it so a gap in the diary can be filled from here. */}
+          {waitlistSummary.isSuccess ? (
+            <Link
+              to="/waitlist"
+              search={{ from: isoDate(rangeStart), to: isoDate(addDays(rangeEnd, -1)) }}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors hover:bg-secondary",
+                waiting > 0 ? "text-foreground" : "text-muted-foreground",
+              )}
+              aria-label={`Waitlist: ${waiting} waiting`}
+            >
+              <Hourglass className="size-3.5" />
+              <span className="hidden sm:inline">Waitlist</span>
+              {waiting > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground tabular-nums">
+                  {waiting}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -768,7 +784,6 @@ function CalendarPage() {
                 services={services.data ?? []}
                 value={serviceFilter}
                 onValueChange={setServiceFilter}
-                colourFor={(s) => s.colour ?? SERVICE_FALLBACK_COLOUR}
               />
               {view === "month" ? (
                 <>
@@ -980,7 +995,7 @@ function CalendarPage() {
                       }
                       const b = entry.item;
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const client = clientFor(b);
                       const multi = isMultiDay(b);
@@ -1004,25 +1019,21 @@ function CalendarPage() {
                           aria-label={`${isDropIn(b) ? "Drop-in, " : ""}${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
                             b,
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
-                          style={style}
+                          style={{ ...style, ...payment.style }}
                           className={cn(
-                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
                             edges,
                             cancelled && "opacity-45 line-through",
                           )}
                         >
-                          <ServiceDot colour={serviceColour(b)} />
                           {isDropIn(b) ? <DropInTag /> : null}
                           {showLift ? <LiftTag /> : null}
                           {/* The label slides if it is wider than the bar, so a one-day
                               cell still shows everything that was switched on. */}
                           <Marquee>
                             {continuesBefore ? (
-                              <span
-                                className="text-muted-foreground"
-                                aria-label="Continues from earlier"
-                              >
+                              <span className="opacity-75" aria-label="Continues from earlier">
                                 ↳
                               </span>
                             ) : showTime ? (
@@ -1037,15 +1048,13 @@ function CalendarPage() {
                             {showClient ? <span className="font-semibold">{client}</span> : null}
                             {showTag ? <span className="font-semibold">{tag}</span> : null}
                             {showCategory ? (
-                              <span className="text-muted-foreground">
+                              <span className="opacity-75">
                                 {showService ? `${category} ·` : category}
                               </span>
                             ) : null}
                             {showService ? <span>{b.serviceSnapshot.name}</span> : null}
                           </Marquee>
-                          {continuesAfter ? (
-                            <span className="ml-auto text-muted-foreground">→</span>
-                          ) : null}
+                          {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
                         </button>
                       );
                     })}
@@ -1056,7 +1065,9 @@ function CalendarPage() {
         </div>
       ) : (
         <div className="surface-card overflow-x-auto">
-          <div className="flex border-b bg-secondary/50">
+          {/* One scroll container for header + grid so the day headings stay
+              aligned with their columns and move with them on narrow screens. */}
+          <div className={cn("flex border-b bg-secondary/50", gridMinWidth)}>
             <div className="w-16 shrink-0" />
             {days.map((day) => {
               const iso = isoDate(day);
@@ -1073,11 +1084,11 @@ function CalendarPage() {
             })}
           </div>
 
-          <div className="overflow-x-auto">
+          <div>
             {/* All-day jobs (RECA-532) and all-day events get a lane above the hours
                 rather than a 00:00–00:00 block: they hold the whole day, not a time on it. */}
             {allDayPlaced.length > 0 ? (
-              <div className="flex min-w-[720px] border-b bg-secondary/20">
+              <div className={cn("flex border-b bg-secondary/20", gridMinWidth)}>
                 <div className="w-16 shrink-0 pt-1.5 pr-2 text-right text-[11px] text-muted-foreground">
                   All day
                 </div>
@@ -1140,7 +1151,7 @@ function CalendarPage() {
                       }
                       const b = p.entry.item;
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const owner = staff.data?.find((s) => s.id === b.staffId);
                       const category = categoryFor(b);
@@ -1156,19 +1167,19 @@ function CalendarPage() {
                           style={{
                             gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                             gridRow: lane + 1,
+                            ...payment.style,
                           }}
                           className={cn(
-                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
                             payment.className,
-                            continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1",
+                            continuesBefore ? "ml-0 rounded-l-none" : "ml-1",
                             continuesAfter ? "mr-0 rounded-r-none" : "mr-1",
                             cancelled && "opacity-45 line-through",
                           )}
                         >
-                          <ServiceDot colour={serviceColour(b)} />
                           {b.clientLift ? <LiftTag /> : null}
                           {continuesBefore ? (
-                            <span className="text-muted-foreground" aria-label="Continues">
+                            <span className="opacity-75" aria-label="Continues">
                               ↳
                             </span>
                           ) : null}
@@ -1177,16 +1188,12 @@ function CalendarPage() {
                           {/* Category trails the name here (not leads, as in month bars):
                               a week column is narrow and the name must survive truncation. */}
                           {category ? (
-                            <span className="truncate text-muted-foreground">· {category}</span>
+                            <span className="truncate opacity-75">· {category}</span>
                           ) : null}
                           {view === "day" && owner && !soleStaff ? (
-                            <span className="truncate text-muted-foreground">
-                              · {owner.displayName}
-                            </span>
+                            <span className="truncate opacity-75">· {owner.displayName}</span>
                           ) : null}
-                          {continuesAfter ? (
-                            <span className="ml-auto text-muted-foreground">→</span>
-                          ) : null}
+                          {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
                         </button>
                       );
                     })}
@@ -1194,7 +1201,7 @@ function CalendarPage() {
                 </div>
               </div>
             ) : null}
-            <div className="relative flex min-w-[720px]">
+            <div className={cn("relative flex", gridMinWidth)}>
               <div className="w-16 shrink-0">
                 {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (
                   <div
@@ -1264,7 +1271,7 @@ function CalendarPage() {
 
                     {dayBookings.map((b) => {
                       const cancelled = isCancelled(b);
-                      const payment = chipPayment(b);
+                      const payment = chipPayment(b, paymentColours);
                       const tag = tagFor(b);
                       const { startsToday, endsToday, heightMin, top, height } = columnBox(b, iso);
                       const trainer = staff.data?.find((s) => s.id === b.staffId);
@@ -1278,23 +1285,19 @@ function CalendarPage() {
                           className={cn(
                             // flex-col so the text sits at the top of a tall block; a
                             // button centres its content vertically by default.
-                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left",
+                            "absolute inset-x-1 z-10 flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-lg px-2 py-1 text-left",
                             payment.className,
                             cancelled && "opacity-45 line-through",
                           )}
-                          style={{ top, height }}
+                          style={{ top, height, ...payment.style }}
                         >
                           <p className="flex items-center gap-1.5 truncate text-[11px] font-semibold">
-                            <ServiceDot colour={serviceColour(b)} />
                             {isDropIn(b) ? <DropInTag /> : null}
                             {b.clientLift ? <LiftTag /> : null}
                             <span className="truncate">
                               {startsToday ? timeLabel(b.start) : "↳"} {b.serviceSnapshot.name}
                               {category ? (
-                                <span className="font-normal text-muted-foreground">
-                                  {" "}
-                                  · {category}
-                                </span>
+                                <span className="font-normal opacity-75"> · {category}</span>
                               ) : null}
                             </span>
                           </p>
@@ -1303,13 +1306,13 @@ function CalendarPage() {
                               {tag}
                             </p>
                           ) : null}
-                          <p className="truncate text-[11px] text-muted-foreground">
+                          <p className="truncate text-[11px] opacity-75">
                             {b.attendees.length > 1
                               ? `${b.seatCount}/${b.attendees.length} booked`
                               : trainer?.displayName}
                           </p>
                           {isMultiDay(b) ? (
-                            <p className="truncate text-[11px] text-muted-foreground">
+                            <p className="truncate text-[11px] opacity-75">
                               {endsToday ? `Ready ${endLabel(b)}` : `Until ${endLabel(b)}`}
                             </p>
                           ) : null}
@@ -1332,17 +1335,18 @@ function CalendarPage() {
         </div>
       )}
 
-      {/* Payment colours are a fixed handful, so they stay inline; the service
-          colours grow with the catalogue and live behind a button instead. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium">Payment (chip colour):</span>
-          {PAYMENT_LEGEND.map(({ tone, label }) => (
-            <span key={tone} className="flex items-center gap-2">
-              <span className={cn("size-2.5 rounded-full", PAYMENT_DOT[tone])} />
-              {label}
-            </span>
-          ))}
+          <span className="font-medium">Payment:</span>
+          {PAYMENT_LEGEND.map(({ tone, label }) => {
+            const dot = paymentDotStyle(tone, paymentColours);
+            return (
+              <span key={tone} className="flex items-center gap-2">
+                <span className={cn("size-2.5 rounded-full", dot.className)} style={dot.style} />
+                {label}
+              </span>
+            );
+          })}
           <span className="flex items-center gap-2">
             <span
               className="size-2.5 rounded-sm"
@@ -1350,15 +1354,20 @@ function CalendarPage() {
             />
             Event (own colour, hatched)
           </span>
+          {tenant.can(PERMISSIONS.BUSINESS_UPDATE) ? (
+            <button
+              type="button"
+              onClick={() => setColoursOpen(true)}
+              className="flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+            >
+              <Palette className="size-3" aria-hidden />
+              Change colours
+            </button>
+          ) : null}
         </div>
-        <ServiceKey
-          services={services.data ?? []}
-          fallbackColour={SERVICE_FALLBACK_COLOUR}
-          value={serviceFilter}
-          onValueChange={setServiceFilter}
-          className="sm:ml-auto"
-        />
       </div>
+
+      <CalendarColoursDialog open={coloursOpen} onOpenChange={setColoursOpen} />
 
       <AddToCalendarChooser
         open={chooserOpen}
@@ -1379,6 +1388,17 @@ function CalendarPage() {
         onOpenChange={setAddOpen}
         defaultDate={addDate}
         defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
+        onNoAvailability={(picked) => {
+          setAddOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
       />
       <EventModal
         open={eventOpen}

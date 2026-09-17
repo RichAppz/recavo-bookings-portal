@@ -133,7 +133,7 @@ function StaffPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
         <StatCard label="Team members" value={String(list.length)} />
         <StatCard label="Active" value={String(list.filter((s) => s.status === "active").length)} />
         <StatCard
@@ -564,7 +564,7 @@ function StaffDialog({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="px-6 pt-6 pb-4">
+        <DialogHeader className="px-6 pt-safe-6 pb-4">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
@@ -801,7 +801,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter className="px-6 pb-6">
+        <DialogFooter className="px-6 pb-safe-6">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

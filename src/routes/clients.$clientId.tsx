@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   CalendarPlus,
+  Hourglass,
   Camera,
   Check,
   ChevronDown,
@@ -29,6 +30,8 @@ import { addressToForm, formToAddress, type AddressFormState } from "@/lib/custo
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { CustomerFollowUpsCard } from "@/components/CustomerFollowUpsCard";
+import { CustomerWaitlistCard } from "@/components/CustomerWaitlistCard";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { BookingPanel } from "@/components/BookingPanel";
 import { CreateInvoiceDialog } from "@/components/CreateInvoiceDialog";
 import { FileAttachments } from "@/components/FileAttachments";
@@ -49,7 +52,7 @@ import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components
 import { ClientOfferLinksCard } from "@/components/ClientOfferLinksCard";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import type { ContactChannel, ServiceFollowUp } from "@/lib/api/types";
+import type { ContactChannel, ServiceFollowUp, WaitlistEntry } from "@/lib/api/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -148,7 +151,8 @@ import {
   type Notification,
 } from "@/lib/api/types";
 import { PERMISSIONS } from "@/lib/permissions";
-import { formatInTz, formatMoney, ukDate } from "@/lib/format";
+import { formatInTz, formatMoney, isoDate, ukDate } from "@/lib/format";
+import { suggestedBookingDate } from "@/lib/waitlist";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
@@ -192,6 +196,11 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   // "Book" from a follow-up row: the service and vehicle come along with the client.
   const [bookingFollowUp, setBookingFollowUp] = useState<ServiceFollowUp | null>(null);
+  // "Book" from a waitlist row: service, vehicle, place and person come along too, and
+  // the entry closes itself once the booking exists.
+  const [bookingWaitlist, setBookingWaitlist] = useState<WaitlistEntry | null>(null);
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
+  const [editingWaitlist, setEditingWaitlist] = useState<WaitlistEntry | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [confirmDsar, setConfirmDsar] = useState(false);
@@ -308,6 +317,13 @@ function ClientProfile() {
           <Button variant="outline" disabled={anonymised} onClick={() => setQuick("package")}>
             <Package className="size-4" /> Sell package
           </Button>
+          <Button
+            variant="outline"
+            disabled={anonymised}
+            onClick={() => setWaitlistDefaults({ customerId: client.id })}
+          >
+            <Hourglass className="size-4" /> Add to waitlist
+          </Button>
           <Button disabled={anonymised} onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
@@ -366,6 +382,18 @@ function ClientProfile() {
                     setBookingOpen(true);
                   }
             }
+          />
+          <CustomerWaitlistCard
+            customerId={client.id}
+            onBook={
+              anonymised
+                ? undefined
+                : (e) => {
+                    setBookingWaitlist(e);
+                    setBookingOpen(true);
+                  }
+            }
+            onEdit={anonymised ? undefined : setEditingWaitlist}
           />
           <SectionCard bodyClassName="p-0">
             {bookings.isLoading ? (
@@ -660,14 +688,45 @@ function ClientProfile() {
       </div>
 
       <AddBookingModal
+        key={bookingWaitlist?.id ?? bookingFollowUp?.id ?? "plain"}
         open={bookingOpen}
         onOpenChange={(open) => {
           setBookingOpen(open);
-          if (!open) setBookingFollowUp(null);
+          if (!open) {
+            setBookingFollowUp(null);
+            setBookingWaitlist(null);
+          }
         }}
         defaultCustomerId={client.id}
-        defaultServiceId={bookingFollowUp?.serviceId}
-        defaultLinkedRecordId={bookingFollowUp?.linkedRecordId ?? undefined}
+        defaultServiceId={bookingWaitlist?.serviceId ?? bookingFollowUp?.serviceId}
+        defaultLinkedRecordId={
+          bookingWaitlist?.linkedRecordId ?? bookingFollowUp?.linkedRecordId ?? undefined
+        }
+        defaultStaffId={bookingWaitlist?.staffId ?? undefined}
+        defaultDate={
+          bookingWaitlist
+            ? suggestedBookingDate(bookingWaitlist.preferences, isoDate(new Date()))
+            : undefined
+        }
+        waitlistEntryId={bookingWaitlist?.id}
+        onNoAvailability={(picked) => {
+          setBookingOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
+      />
+      <AddWaitlistDialog
+        open={editingWaitlist !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingWaitlist(null);
+        }}
+        entry={editingWaitlist}
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} customerId={client.id} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />

@@ -38,6 +38,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useCancelPlatformBillingImmediate,
@@ -63,6 +64,7 @@ import {
 import type { FailedJob, OutboxEvent } from "@/lib/api/types";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
+import { openHostedFlow } from "@/lib/native";
 
 function toastWithRequestId(title: string, requestId?: string) {
   toast.success(title, {
@@ -161,57 +163,60 @@ function PlatformContent() {
         )}
       </SectionCard>
 
-      <SectionCard title="Plan catalogue" bodyClassName="p-0">
-        {plans.isLoading ? (
-          <TableGhost rows={4} />
-        ) : plans.isError ? (
-          <div className="p-6">
-            <EmptyState title="Couldn't load plans" />
-          </div>
-        ) : (
-          <div className="grid gap-5 p-5 sm:grid-cols-3">
-            {(plans.data ?? []).map((p) => (
-              <div key={p.code} className="surface-card p-5">
-                <p className="flex items-center gap-2 text-sm font-semibold">
-                  <Building2 className="size-4" /> {p.name}
-                </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {p.prices[0] ? formatMoney(p.prices[0].amountMinor, p.currency) : "—"}
-                  <span className="text-sm font-normal text-muted-foreground">
-                    /{p.prices[0]?.interval ?? "month"}
-                  </span>
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{p.trialDays} day free trial</p>
-                <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-                  {Object.entries(p.limits).map(([key, value]) => (
-                    <li key={key} className="flex justify-between gap-2">
-                      <span className="capitalize">{key.replace(/[._]/g, " ")}</span>
-                      <span className="font-medium">{value}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="mt-4 w-full"
-                  variant="outline"
-                  disabled={checkout.isPending}
-                  onClick={async () => {
-                    const interval = p.prices[0]?.interval ?? "month";
-                    const result = await checkout.mutateAsync({
-                      plan: p.code,
-                      interval,
-                    });
-                    const url = result.url ?? result.checkoutUrl;
-                    if (url) window.location.assign(url);
-                    else toast.success("Checkout started");
-                  }}
-                >
-                  <ArrowUpRight className="size-4" /> Start checkout
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+      {/* Prices and Stripe Checkout: web only (saasPurchasesAllowedInApp). */}
+      {!saasPurchasesAllowedInApp() ? null : (
+        <SectionCard title="Plan catalogue" bodyClassName="p-0">
+          {plans.isLoading ? (
+            <TableGhost rows={4} />
+          ) : plans.isError ? (
+            <div className="p-6">
+              <EmptyState title="Couldn't load plans" />
+            </div>
+          ) : (
+            <div className="grid gap-5 p-5 sm:grid-cols-3">
+              {(plans.data ?? []).map((p) => (
+                <div key={p.code} className="surface-card p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    <Building2 className="size-4" /> {p.name}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {p.prices[0] ? formatMoney(p.prices[0].amountMinor, p.currency) : "—"}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      /{p.prices[0]?.interval ?? "month"}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{p.trialDays} day free trial</p>
+                  <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
+                    {Object.entries(p.limits).map(([key, value]) => (
+                      <li key={key} className="flex justify-between gap-2">
+                        <span className="capitalize">{key.replace(/[._]/g, " ")}</span>
+                        <span className="font-medium">{value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    className="mt-4 w-full"
+                    variant="outline"
+                    disabled={checkout.isPending}
+                    onClick={async () => {
+                      const interval = p.prices[0]?.interval ?? "month";
+                      const result = await checkout.mutateAsync({
+                        plan: p.code,
+                        interval,
+                      });
+                      const url = result.url ?? result.checkoutUrl;
+                      if (url) void openHostedFlow(url);
+                      else toast.success("Checkout started");
+                    }}
+                  >
+                    <ArrowUpRight className="size-4" /> Start checkout
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <PlatformBillingAdminSection />
 

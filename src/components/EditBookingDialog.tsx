@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Lock, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -9,6 +9,7 @@ import {
   activeSortedFields,
 } from "@/components/LinkedRecordDialogs";
 import { ServiceMultiPicker, type PickedService } from "@/components/ServiceMultiPicker";
+import { useServiceUpsells } from "@/lib/api/upsells";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
@@ -121,11 +122,14 @@ export function EditBookingDialog({
   booking,
   onClose,
   onReschedule,
+  addServiceIds,
 }: {
   booking: Booking;
   onClose: () => void;
   /** Close this and open the reschedule dialog. */
   onReschedule: () => void;
+  /** Services to start with added (a customer's add-on request); duplicates are ignored. */
+  addServiceIds?: readonly string[];
 }) {
   const tenant = useTenant();
   const timezone = booking.timezone || tenant.business?.defaultTimezone || "Europe/London";
@@ -141,12 +145,28 @@ export function EditBookingDialog({
   const smsCredits = useSmsCreditsSummary();
 
   // ---- What the booking is now -------------------------------------------------
+  // A line's variant id can predate a service edit that re-created its variants (older
+  // API builds did that on every save). Map it onto the current variant with the same
+  // name so the picker shows "Level 2 · S" and sends an id the catalogue knows.
   const originalPicked = useMemo<PickedService[]>(
     () =>
       [...(booking.lineItems ?? [])]
         .sort((a, b) => a.position - b.position)
-        .map((li) => ({ serviceId: li.serviceId, variantId: li.variantId ?? null })),
-    [booking.lineItems],
+        .map((li) => {
+          const variantId = li.variantId ?? null;
+          if (!variantId) return { serviceId: li.serviceId, variantId: null };
+          const service = services.data?.find((s) => s.id === li.serviceId);
+          if (!service || service.variants.some((v) => v.id === variantId)) {
+            return { serviceId: li.serviceId, variantId };
+          }
+          const byName = li.variantName
+            ? service.variants.find(
+                (v) => v.name.trim().toLowerCase() === li.variantName!.trim().toLowerCase(),
+              )
+            : undefined;
+          return { serviceId: li.serviceId, variantId: byName?.id ?? variantId };
+        }),
+    [booking.lineItems, services.data],
   );
   const originalLabels = useMemo(
     () =>
@@ -177,7 +197,30 @@ export function EditBookingDialog({
       booking.serviceSnapshot.durationMinutes;
 
   // ---- Form state ---------------------------------------------------------------
-  const [picked, setPickedState] = useState<PickedService[]>(originalPicked);
+  const [picked, setPickedState] = useState<PickedService[]>(() => {
+    const extra = (addServiceIds ?? [])
+      .filter((id) => !originalPicked.some((p) => p.serviceId === id))
+      .map((serviceId) => ({ serviceId, variantId: null }));
+    return [...originalPicked, ...extra];
+  });
+  // If the catalogue arrived after mount and remapped a stale variant id, carry that
+  // into the untouched picker (a stale id in `picked` would otherwise read as a change).
+  const seenOriginal = useRef(originalPicked);
+  useEffect(() => {
+    if (samePicked(seenOriginal.current, originalPicked)) return;
+    setPickedState((current) =>
+      samePicked(current, seenOriginal.current)
+        ? originalPicked
+        : current.map((p) => {
+            const remapped = originalPicked.find(
+              (o, i) =>
+                o.serviceId === p.serviceId && seenOriginal.current[i]?.variantId === p.variantId,
+            );
+            return remapped ? { ...p, variantId: remapped.variantId } : p;
+          }),
+    );
+    seenOriginal.current = originalPicked;
+  }, [originalPicked]);
   const [customerId, setCustomerId] = useState(booking.leadCustomerId);
   const [linkedRecordId, setLinkedRecordId] = useState(booking.linkedRecordId ?? "none");
   const [staffId, setStaffId] = useState(booking.staffId);
@@ -282,14 +325,31 @@ export function EditBookingDialog({
   // ---- Money --------------------------------------------------------------------
   // The API re-prices from the catalogue when services change and otherwise keeps
   // the snapshot, so "list" means whichever of those applies.
-  const catalogueMinor = (p: PickedService) => {
+  // Add-ons the main service pairs with carry their own price (upsells); the API
+  // prices those lines the same way, so the estimate matches what gets saved.
+  const pairings = useServiceUpsells(picked[0]?.serviceId);
+  const pairingPrices = useMemo(
+    () =>
+      new Map(
+        (pairings.data ?? [])
+          .filter((u) => u.priceMinor !== null)
+          .map((u) => [u.upsellServiceId, u.priceMinor as number]),
+      ),
+    [pairings.data],
+  );
+  const catalogueMinor = (p: PickedService, index: number) => {
     const s = serviceById.get(p.serviceId);
     if (!s) return 0;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
-    return v?.priceMinor ?? s.basePriceMinor;
+    if (v?.priceMinor != null) return v.priceMinor;
+    if (index > 0) {
+      const paired = pairingPrices.get(p.serviceId);
+      if (paired !== undefined) return paired;
+    }
+    return s.basePriceMinor;
   };
   const rolledTotalMinor = servicesChanged
-    ? picked.reduce((sum, p) => sum + catalogueMinor(p), 0)
+    ? picked.reduce((sum, p, index) => sum + catalogueMinor(p, index), 0)
     : snapshotListMinor;
   // The services keep their list prices and the API records the difference as a
   // discount line, so any total from zero up is valid — even below what the
@@ -913,6 +973,7 @@ export function EditBookingDialog({
                     services={serviceList}
                     value={picked}
                     onChange={setPicked}
+                    pairingPrices={pairingPrices}
                     multi={isIndividual}
                     singleReason={isIndividual ? undefined : "A group session covers one service."}
                   />

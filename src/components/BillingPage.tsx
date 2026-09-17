@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, Check, FileText } from "lucide-react";
+import { ArrowDown, Check, FileText, Sparkles } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import { SmsCreditsCard } from "@/components/SmsCreditsCard";
@@ -47,9 +47,12 @@ import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access"
 import { formatInTz, formatMoney } from "@/lib/format";
 import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { UPSELLS_ADDON_KEY } from "@/lib/api/upsells";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
+import { openHostedFlow } from "@/lib/native";
 
 type PlanPitch = { tagline: string; popular?: boolean; bullets: string[] };
 
@@ -68,7 +71,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Card payments with deposits",
         "Client records, goals and session notes",
         "Email reminders, texts from prepaid credit bundles",
-        "Your logo and colours on emails and invoices (invoicing is an £8/month bolt-on)",
+        "Your logo and colours on emails and invoices (invoicing is £8/month and upsells £5/month as bolt-ons)",
         "Core revenue reporting",
       ],
     },
@@ -77,6 +80,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       popular: true,
       bullets: [
         "Trainer availability and role permissions",
+        "Upsell add-ons on your booking page and after booking",
         "Packages, credits and memberships",
         "Group sessions and out-call training",
         "Email reminders, texts from prepaid credit bundles",
@@ -104,7 +108,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
         "Card payments with deposits",
         "Customer records with vehicle history",
         "Email reminders, texts from prepaid credit bundles",
-        "Your logo and colours on emails and invoices (invoicing is an £8/month bolt-on)",
+        "Your logo and colours on emails and invoices (invoicing is £8/month and upsells £5/month as bolt-ons)",
         "Core revenue reporting",
       ],
     },
@@ -114,6 +118,7 @@ const PLAN_PITCH_BY_INDUSTRY: Record<string, Record<string, PlanPitch>> = {
       bullets: [
         "Staff availability and role permissions",
         "Multi-service jobs with rolled-up pricing",
+        "Upsell add-ons on your booking page and after booking",
         "Vehicles saved to every customer",
         "Email reminders, texts from prepaid credit bundles",
         "Full reporting suite",
@@ -232,6 +237,22 @@ const ADDON_COPY: Record<string, AddonCopy> = {
     keepLabel: "Keep invoicing",
     addedTitle: "Invoicing added",
     removedTitle: "Invoicing removed",
+  },
+  [UPSELLS_ADDON_KEY]: {
+    name: "Upsells",
+    icon: Sparkles,
+    included: (plan) =>
+      `Included in ${plan}. Offer add-ons with each service on your booking page and by email after you book someone in, at a price you set.`,
+    active: (price) =>
+      `Active · ${price}. Offer add-ons with each service on your booking page and by email after you book someone in, at a price you set.`,
+    available: (price) =>
+      `Pair add-ons with your services: customers tick them when booking online, and get an offer email when you book them in. ${price}, or included with Business and Growth.`,
+    removeTitle: "Remove upsells?",
+    removeBody:
+      "Extras will stop showing on your booking page and no more offer emails will go out. Add-ons already on bookings stay as they are, and your pairings are kept for when you switch it back on. The unused part of this month is credited to your next invoice.",
+    keepLabel: "Keep upsells",
+    addedTitle: "Upsells added",
+    removedTitle: "Upsells removed",
   },
 };
 
@@ -356,6 +377,73 @@ function AddonsCard({
 }
 
 export function BillingPage() {
+  // Recavo is sold on the web only (see saasPurchasesAllowedInApp): the store
+  // apps get a read-only view with no plan chooser, prices or Stripe hand-offs.
+  // Stable for the life of the page, so choosing the component here is safe.
+  if (!saasPurchasesAllowedInApp()) return <InAppBillingPage />;
+  return <WebBillingPage />;
+}
+
+/**
+ * Billing as the store apps show it. Nothing here can start, change or pay
+ * for a subscription: an unsubscribed business sees a plain "not active"
+ * notice, a subscribed one sees its plan and text balance. Deliberately no
+ * price, no "manage on the website" line and no link out — App Store
+ * guideline 3.1.3 counts those as steering to another purchase route.
+ */
+function InAppBillingPage() {
+  const tenant = useTenant();
+  const subscription = useSubscription();
+  const current = subscription.data?.subscription;
+  const plan = subscription.data?.plan;
+  const tz = tenant.business?.defaultTimezone ?? "Europe/London";
+
+  if (tenant.isLoading || subscription.isLoading) {
+    return <PageGhost />;
+  }
+
+  if (!current || isBillingBlocked(current)) {
+    return (
+      <EmptyState
+        title="Subscription not active"
+        description={`${tenant.business?.tradingName ?? "This business"} doesn’t have an active RECAVO subscription, so the app can’t open its console right now.`}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionCard
+        title="Current plan"
+        action={current.status ? <StatusBadge status={current.status} /> : null}
+      >
+        <div className="space-y-3 text-sm">
+          <p>
+            Plan: <span className="font-medium">{plan?.name ?? current.planVersion ?? "—"}</span>
+            {current.accessState ? (
+              <>
+                {" "}
+                · Access: <span className="font-medium capitalize">{current.accessState}</span>
+              </>
+            ) : null}
+          </p>
+          {current.trialEnd && current.accessState === "trial" ? (
+            <p>Trial ends {formatInTz(current.trialEnd, tz)}</p>
+          ) : current.currentPeriodEnd ? (
+            <p>Period ends {formatInTz(current.currentPeriodEnd, tz)}</p>
+          ) : null}
+          {current.cancelAtPeriodEnd ? (
+            <p className="text-amber-700 dark:text-amber-400">Cancels at period end</p>
+          ) : null}
+        </div>
+      </SectionCard>
+
+      <SmsCreditsCard />
+    </div>
+  );
+}
+
+function WebBillingPage() {
   const tenant = useTenant();
   const subscription = useSubscription();
   const catalogue = useBillingCatalogue();
@@ -419,13 +507,13 @@ export function BillingPage() {
       interval: price?.interval ?? interval,
     });
     const url = result.checkoutUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   const openPortal = async () => {
     const result = await portal.mutateAsync();
     const url = result.portalUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   if (tenant.isLoading && !canManage) {

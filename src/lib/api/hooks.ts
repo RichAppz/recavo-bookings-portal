@@ -81,6 +81,11 @@ import type {
   ServiceFollowUp,
   ServiceFollowUpAction,
   ServiceFollowUpStatus,
+  PublicServiceUpsell,
+  PublicWaitlistReceipt,
+  WaitlistAction,
+  WaitlistEntry,
+  WaitlistStatus,
   SaasInterval,
   SaasPlanCode,
   Staff,
@@ -229,7 +234,11 @@ export function useAvailability(filters: {
 export function useCreateBooking() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<
+    { booking: Booking; bankTransfer?: BankTransferInstructions },
+    Error,
+    Record<string, unknown>
+  >({
     mutationFn: createIdempotentMutationFn(
       async (body: Record<string, unknown>, idempotencyKey: string) => {
         // With paymentMethod: bank_transfer the 201 carries account details +
@@ -242,8 +251,14 @@ export function useCreateBooking() {
         return res.data;
       },
     ),
-    onSuccess: () => {
+    onSuccess: (_data, body) => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      // Booked from the waitlist: the entry closes off the event, so refetch shortly after.
+      if (body.waitlistEntryId) {
+        setTimeout(() => {
+          void qc.invalidateQueries({ queryKey: queryKeys.waitlist(businessId) });
+        }, 1500);
+      }
       invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
@@ -1210,6 +1225,168 @@ export function useFollowUpAction() {
   });
 }
 
+/* ---------------- Waitlist ---------------- */
+
+export type WaitlistListFilters = {
+  /** One or more statuses; the API defaults to `waiting`. */
+  status?: WaitlistStatus[];
+  serviceId?: string;
+  locationId?: string;
+  customerId?: string;
+  /** Calendar dates (`YYYY-MM-DD`) the entry's preferred window must overlap. */
+  from?: string;
+  to?: string;
+  enabled?: boolean;
+};
+
+function waitlistQuery(filters: WaitlistListFilters) {
+  return {
+    ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
+    ...(filters.serviceId ? { serviceId: filters.serviceId } : {}),
+    ...(filters.locationId ? { locationId: filters.locationId } : {}),
+    ...(filters.customerId ? { customerId: filters.customerId } : {}),
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+  };
+}
+
+/** Preferences as the API accepts them on create/update. */
+export type WaitlistPreferencesInput = {
+  from?: string | null;
+  to?: string | null;
+  days?: number[] | null;
+  timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+};
+
+export type WaitlistEntryInput = {
+  customerId: string;
+  serviceId: string;
+  variantId?: string | null;
+  linkedRecordId?: string | null;
+  locationId?: string | null;
+  staffId?: string | null;
+  preferences?: WaitlistPreferencesInput;
+  notes?: string | null;
+  priority?: "normal" | "high";
+};
+
+/**
+ * Clients waiting for a slot, soonest preferred start first (no date first), cursor-paged.
+ * Open entries unless `status` says otherwise.
+ */
+export function useWaitlist(filters: WaitlistListFilters = {}) {
+  const businessId = useBusinessId();
+  const query = waitlistQuery(filters);
+  const q = usePaginatedQuery<WaitlistEntry, "entries">({
+    queryKey: queryKeys.waitlist(businessId, query),
+    path: `/api/v1/businesses/${businessId}/waitlist`,
+    listKey: "entries",
+    query,
+    limit: 50,
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+  return { ...q, items: flattenPages(q.data, "entries") };
+}
+
+/** How many clients are waiting — the nav badge and calendar pill. */
+export function useWaitlistSummary(options: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistSummary(businessId),
+    enabled: Boolean(businessId) && options.enabled !== false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const res = await api.get<{ waiting: number }>(
+        `/api/v1/businesses/${businessId}/waitlist/summary`,
+      );
+      return res.data;
+    },
+  });
+}
+
+/** A client's open waitlist entries (client profile). */
+export function useCustomerWaitlist(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  const query = { customerId: customerId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.waitlist(businessId, query),
+    enabled: Boolean(businessId && customerId),
+    queryFn: async () => {
+      const res = await api.get<{ entries: WaitlistEntry[] }>(
+        `/api/v1/businesses/${businessId}/waitlist`,
+        { query },
+      );
+      return res.data.entries;
+    },
+  });
+}
+
+/**
+ * Add a client to the waitlist. The API answers with the existing entry when they are
+ * already waiting for that service, so a double-tap never doubles them up.
+ */
+export function useCreateWaitlistEntry() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: WaitlistEntryInput, idempotencyKey: string) => {
+        const res = await api.post<{ entry: WaitlistEntry }>(
+          `/api/v1/businesses/${businessId}/waitlist`,
+          body,
+          { idempotencyKey },
+        );
+        return res.data.entry;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.waitlist(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Edit an open entry's preferences, notes, priority or references. */
+export function useUpdateWaitlistEntry() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      entryId: string;
+      patch: Omit<WaitlistEntryInput, "customerId" | "serviceId">;
+    }) => {
+      const res = await api.patch<{ entry: WaitlistEntry }>(
+        `/api/v1/businesses/${businessId}/waitlist/${vars.entryId}`,
+        vars.patch,
+      );
+      return res.data.entry;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.waitlist(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** `cancel` removes an entry from the list; `reopen` brings a closed one back. */
+export function useWaitlistAction() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { entryId: string; action: WaitlistAction }) => {
+      const res = await api.patch<{ entry: WaitlistEntry }>(
+        `/api/v1/businesses/${businessId}/waitlist/${vars.entryId}`,
+        { action: vars.action },
+      );
+      return res.data.entry;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.waitlist(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useStaffList() {
   const businessId = useBusinessId();
   return useQuery({
@@ -1526,6 +1703,47 @@ export function useCustomersInfinite(
     ...q,
     items: flattenPages(q.data, "items"),
   };
+}
+
+export type CustomerCounts = {
+  total: number;
+  active: number;
+  archived: number;
+  anonymised: number;
+};
+
+/**
+ * Whole-book client counts for the Clients page header. The list endpoint is
+ * cursor-paginated with no total, so walk it unfiltered at the largest page
+ * size and tally statuses; for a typical sole trader that is one or two
+ * requests, and the result is shared with the list's own cache key prefix so
+ * adding or archiving a client invalidates it too.
+ */
+export function useCustomerCounts() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.customerCounts(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async (): Promise<CustomerCounts> => {
+      type Page = { items: Customer[]; nextCursor?: string | null };
+      const counts: CustomerCounts = { total: 0, active: 0, archived: 0, anonymised: 0 };
+      let cursor: string | null = null;
+      do {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/customers`,
+          { query: { limit: 100, ...(cursor ? { cursor } : {}) } },
+        );
+        for (const c of res.data.items) {
+          counts.total += 1;
+          if (c.status === "active") counts.active += 1;
+          else if (c.status === "archived") counts.archived += 1;
+          else if (c.status === "anonymised") counts.anonymised += 1;
+        }
+        cursor = res.data.nextCursor ?? null;
+      } while (cursor);
+      return counts;
+    },
+  });
 }
 
 export function useCustomer(customerId: string | undefined) {
@@ -3693,6 +3911,8 @@ export type SubscriptionView = {
   /** Effective feature map (plan tier + Stripe entitlements + overrides, RECA-526). */
   features?: Record<string, boolean>;
   addons?: SubscriptionAddon[];
+  /** A platform billing_bypass override is standing in for a Stripe subscription. */
+  billingBypass?: boolean;
 };
 
 export function useSubscription() {
@@ -4498,6 +4718,8 @@ export type PublicService = Pick<
   colour: string | null;
   /** Optional until every API build returns it (RECA-523). */
   depositMinor?: number | null;
+  /** Extras the visitor can tick with this service (`upsells` feature); optional until every API build returns it. */
+  upsells?: PublicServiceUpsell[];
 };
 
 export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
@@ -4574,6 +4796,8 @@ export function usePublicAvailability(
     to?: string;
     /** Shared link code; lets the search reach a session kept off the public page. */
     linkCode?: string | null;
+    /** Upsell add-ons ticked with the service; slots are sized and priced for the whole job. */
+    additionalServiceIds?: readonly string[];
     enabled?: boolean;
   },
 ) {
@@ -4586,6 +4810,9 @@ export function usePublicAvailability(
     from: filters.from!,
     to: filters.to!,
     ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
+    ...(filters.additionalServiceIds?.length
+      ? { additionalServiceIds: filters.additionalServiceIds.join(",") }
+      : {}),
   };
   return useQuery({
     queryKey: queryKeys.publicAvailability(businessId ?? "", query),
@@ -4716,6 +4943,40 @@ export function useBuyPublicPackage(businessId: string | undefined) {
           { public: true, idempotencyKey },
         );
         return res.data;
+      },
+    ),
+  });
+}
+
+/**
+ * "Can't find a time? Join the waitlist." No slot: the visitor asks to be contacted
+ * when one appears. A repeat join for the same service returns the existing entry
+ * with `alreadyOnList: true`.
+ */
+export function useJoinPublicWaitlist(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        body: {
+          serviceId: string;
+          variantId?: string | null;
+          locationId?: string | null;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          preferences?: WaitlistPreferencesInput;
+          notes?: string | null;
+          marketingConsent?: boolean;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ waitlist: PublicWaitlistReceipt }>(
+          `/api/v1/public/businesses/${businessId}/waitlist`,
+          body,
+          { public: true, idempotencyKey },
+        );
+        return res.data.waitlist;
       },
     ),
   });

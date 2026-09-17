@@ -23,6 +23,7 @@ import {
   type FileOwner,
 } from "@/lib/api/hooks";
 import type { FileResource, LinkedRecord } from "@/lib/api/types";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -126,13 +127,20 @@ function PhotosPanel({ record }: { record: LinkedRecord }) {
       <EmptyState
         icon={<Sparkles className="size-6" />}
         title="Photos are a Business plan feature"
-        description="Upgrade to the Business or Growth plan to attach photos to your records."
+        description={
+          saasPurchasesAllowedInApp()
+            ? "Upgrade to the Business or Growth plan to attach photos to your records."
+            : "Photos aren't included on your current plan."
+        }
         action={
-          <Button asChild>
-            <Link to="/settings" search={{ tab: "billing" }}>
-              View plans
-            </Link>
-          </Button>
+          // Plans are sold on the web only; no pointer to them in the store apps.
+          saasPurchasesAllowedInApp() ? (
+            <Button asChild>
+              <Link to="/settings" search={{ tab: "billing" }}>
+                View plans
+              </Link>
+            </Button>
+          ) : undefined
         }
       />
     );

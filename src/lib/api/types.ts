@@ -20,6 +20,22 @@ export type ServiceFollowUpRule = schemas["ServiceFollowUpRule"];
 export type ServiceFollowUp = schemas["ServiceFollowUp"];
 export type ServiceFollowUpStatus = ServiceFollowUp["status"];
 export type ServiceFollowUpAction = "dismiss" | "snooze" | "send_now" | "reopen";
+/** A client waiting for a slot; staff book them in from the list. */
+export type WaitlistEntry = schemas["WaitlistEntry"];
+export type WaitlistStatus = WaitlistEntry["status"];
+export type WaitlistPriority = WaitlistEntry["priority"];
+export type WaitlistPreferences = schemas["WaitlistPreferences"];
+export type WaitlistTimeOfDay = WaitlistPreferences["timeOfDay"];
+export type WaitlistAction = "cancel" | "reopen";
+export type PublicWaitlistReceipt = schemas["PublicWaitlistReceipt"];
+/** Upsells: add-ons paired with a service, and the post-booking offer loop. */
+export type ServiceUpsell = schemas["ServiceUpsell"];
+export type PublicServiceUpsell = schemas["PublicServiceUpsell"];
+export type UpsellOffer = schemas["UpsellOffer"];
+export type UpsellOfferStatus = UpsellOffer["status"];
+export type BookingUpsellSummary = schemas["BookingUpsellSummary"];
+export type PublicUpsellOffer = schemas["PublicUpsellOffer"];
+export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
 /**
  * A material a job uses up (ceramic bottle, pads, chemicals) — automotive only.
  * Staff-only bookkeeping: never priced into a booking, never shown to a client.
