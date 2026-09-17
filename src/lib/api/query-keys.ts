@@ -33,6 +33,7 @@ export const queryKeys = {
     ["biz", businessId, "customers", filters ?? {}] as const,
   customersInfinite: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "customers", "infinite", filters ?? {}] as const,
+  customerCounts: (businessId: string) => ["biz", businessId, "customers", "counts"] as const,
   customer: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId] as const,
   customerTagsCatalogue: (businessId: string, filters?: Record<string, unknown>) =>
@@ -72,6 +73,24 @@ export const queryKeys = {
       : (["biz", businessId, "follow-ups"] as const),
   followUp: (businessId: string, followUpId: string) =>
     ["biz", businessId, "follow-ups", "one", followUpId] as const,
+
+  /** Waitlist. Lists are keyed by their filter; the bare prefix invalidates lists and the count. */
+  waitlist: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "waitlist", filter] as const)
+      : (["biz", businessId, "waitlist"] as const),
+  waitlistSummary: (businessId: string) => ["biz", businessId, "waitlist", "summary"] as const,
+
+  /** Upsells: a service's add-on pairings, and the offers/requests on staff-made bookings. */
+  serviceUpsells: (businessId: string, serviceId: string) =>
+    ["biz", businessId, "services", serviceId, "upsells"] as const,
+  upsellOffers: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "upsell-offers", filter] as const)
+      : (["biz", businessId, "upsell-offers"] as const),
+  upsellOffersSummary: (businessId: string) =>
+    ["biz", businessId, "upsell-offers", "summary"] as const,
+  publicUpsellOffer: (token: string) => ["public", "upsell-offer", token] as const,
 
   staff: (businessId: string) => ["biz", businessId, "staff"] as const,
   staffMember: (businessId: string, staffId: string) =>

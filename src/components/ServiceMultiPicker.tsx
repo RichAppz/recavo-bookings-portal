@@ -45,6 +45,7 @@ export function ServiceMultiPicker({
   multi,
   singleReason,
   id,
+  pairingPrices,
 }: {
   services: CatalogueService[];
   value: PickedService[];
@@ -54,6 +55,11 @@ export function ServiceMultiPicker({
   /** Why only one can be picked, shown when someone clicks a second. */
   singleReason?: string;
   id?: string;
+  /**
+   * Upsell pairing prices keyed by add-on service id, for the main service: an add-on
+   * without a variant is quoted at that price, as the API will charge it.
+   */
+  pairingPrices?: ReadonlyMap<string, number>;
 }) {
   const tenant = useTenant();
   // On a phone the list is a bottom sheet rather than a popover: a popover anchored
@@ -111,11 +117,18 @@ export function ServiceMultiPicker({
     : services;
   const grouped = hasCategories(services);
 
-  const total = picked.reduce((sum, p) => {
+  /** What a picked row costs: variant price, else pairing price for an add-on, else list. */
+  const priceOf = (p: PickedService, idx: number): number => {
     const s = byId.get(p.serviceId)!;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
-    return sum + (v?.priceMinor ?? s.basePriceMinor);
-  }, 0);
+    if (v?.priceMinor != null) return v.priceMinor;
+    if (idx > 0) {
+      const paired = pairingPrices?.get(p.serviceId);
+      if (paired !== undefined) return paired;
+    }
+    return s.basePriceMinor;
+  };
+  const total = picked.reduce((sum, p, idx) => sum + priceOf(p, idx), 0);
   const minutes = picked.reduce((sum, p) => {
     const s = byId.get(p.serviceId)!;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
@@ -348,7 +361,12 @@ export function ServiceMultiPicker({
                   </Select>
                 ) : null}
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatMoney(v?.priceMinor ?? s.basePriceMinor, s.currency)}
+                  {formatMoney(priceOf(p, idx), s.currency)}
+                  {idx > 0 && priceOf(p, idx) !== (v?.priceMinor ?? s.basePriceMinor) ? (
+                    <span className="ml-1 line-through opacity-70">
+                      {formatMoney(v?.priceMinor ?? s.basePriceMinor, s.currency)}
+                    </span>
+                  ) : null}
                 </span>
                 <button
                   type="button"

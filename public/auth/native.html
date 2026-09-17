@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Returning to RECAVO…</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #f5f5f4;
+        color: #1c1917;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0c0a09;
+          color: #fafaf9;
+        }
+      }
+      main {
+        max-width: 360px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0 0 24px;
+        opacity: 0.75;
+        line-height: 1.5;
+      }
+      a.button {
+        display: inline-block;
+        padding: 14px 24px;
+        border-radius: 12px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Returning to RECAVO…</h1>
+      <p>If nothing happens, tap the button below to finish signing in.</p>
+      <a id="open" class="button" href="com.richappz.recavo://auth/callback">Open RECAVO</a>
+    </main>
+    <script>
+      // Supabase can only redirect Google sign-in to an https URL on this
+      // origin, so this page relays the result (tokens or error, carried in
+      // the query and fragment) to the mobile app's URL scheme. Runs inside
+      // the app's in-app browser sheet; the app closes the sheet on arrival.
+      (function () {
+        var target = "com.richappz.recavo://auth/callback" + location.search + location.hash;
+        document.getElementById("open").setAttribute("href", target);
+        location.replace(target);
+      })();
+    </script>
+  </body>
+</html>

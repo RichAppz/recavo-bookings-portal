@@ -56,16 +56,16 @@ export function StatCard({
 }) {
   const positive = (change ?? 0) >= 0;
   return (
-    <div className="surface-card flex h-full flex-col p-5">
-      <div className="flex min-h-9 items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+    <div className="surface-card flex h-full flex-col p-4 sm:p-5">
+      <div className="flex min-h-8 items-start justify-between gap-2 sm:min-h-9 sm:gap-3">
+        <p className="text-xs font-medium text-muted-foreground sm:text-sm">{label}</p>
         {icon ? (
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary sm:size-9">
             {icon}
           </span>
         ) : null}
       </div>
-      <p className="mt-3 text-3xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight sm:mt-3 sm:text-3xl">{value}</p>
       <div className="mt-auto flex items-center gap-2 pt-2 text-xs">
         {change !== undefined ? (
           <span

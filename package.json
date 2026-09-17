@@ -18,12 +18,14 @@
     "gen:api": "openapi-typescript openapi.json -o src/lib/api/schema.d.ts",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts src/lib/api/*.test.ts src/lib/auth/*.test.ts src/lib/customers/*.test.ts src/lib/reminders/*.test.ts src/lib/live/*.test.ts",
     "cap:sync": "cap sync",
+    "cap:sync:production": "CAP_ENV=production cap sync",
     "cap:ios": "cap open ios",
     "cap:android": "cap open android",
     "cap:run:ios": "cap run ios",
     "cap:run:android": "cap run android"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",

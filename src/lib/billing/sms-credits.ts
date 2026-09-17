@@ -1,5 +1,6 @@
 import { useSmsCredits, type SmsCreditBundle, type SmsCredits } from "@/lib/api/hooks";
 import { formatMoney } from "@/lib/format";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 
 /** Balance at or below which the UI nudges the owner to top up (matches the API's emails at 20 / 10 / 0). */
 export const SMS_LOW_BALANCE = 20;
@@ -29,7 +30,10 @@ export function smsChannelNote(credits: SmsCredits | undefined): string {
     case "unlimited":
       return "Texts are included in your plan.";
     case "empty":
-      return "You have no text credits left — anything set to SMS is currently sent by email until you buy a bundle.";
+      // Bundles are sold on the web only; the store apps must not suggest buying.
+      return saasPurchasesAllowedInApp()
+        ? "You have no text credits left — anything set to SMS is currently sent by email until you buy a bundle."
+        : "You have no text credits left — anything set to SMS is currently sent by email.";
     case "low":
     case "ok":
       return `Texts use your credit balance (${credits!.balance} left). When you run out, messages are sent by email instead.`;

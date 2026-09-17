@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { MessageSquareText } from "lucide-react";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,12 +14,14 @@ export function SmsCreditsNavCard({ onClick }: { onClick?: () => void }) {
   if (!credits || level === "unlimited" || level === "unknown") return null;
 
   const balance = credits.balance;
+  // "buy more" is a purchase prompt; the store apps only sell on the web.
+  const buyHint = saasPurchasesAllowedInApp() ? " · buy more" : "";
   const subtitle =
     level === "empty"
       ? "Out — texts going as email"
       : level === "low"
-        ? "Running low · buy more"
-        : "Prepaid texts · buy more";
+        ? `Running low${buyHint}`
+        : `Prepaid texts${buyHint}`;
 
   return (
     <Link

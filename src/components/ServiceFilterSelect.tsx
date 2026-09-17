@@ -71,29 +71,20 @@ export function ServiceFilterSelect({
  * The same filter as `ServiceFilterSelect`, as radio items for use inside a
  * `DropdownMenu` (the calendar's ⋯ menu). Same values, same grouping; a nested
  * `Select` cannot live inside a Radix menu, so the options are menu items
- * instead. Pass `colourFor` to prefix each service with its swatch.
+ * instead.
  */
 export function ServiceFilterMenuItems({
   services,
   value,
   onValueChange,
-  colourFor,
 }: {
   services: readonly CatalogueService[];
   value: string;
   onValueChange: (value: string) => void;
-  colourFor?: (service: CatalogueService) => string;
 }) {
   const grouped = hasCategories(services);
   const serviceItem = (s: CatalogueService) => (
     <DropdownMenuRadioItem key={s.id} value={s.id} className={cn(grouped && "ml-3")}>
-      {colourFor ? (
-        <span
-          aria-hidden
-          className="mr-2 inline-block size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: colourFor(s) }}
-        />
-      ) : null}
       <span className="truncate">{s.name}</span>
     </DropdownMenuRadioItem>
   );

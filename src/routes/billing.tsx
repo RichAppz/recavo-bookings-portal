@@ -33,7 +33,7 @@ function BillingLayout() {
 
   if (bouncing) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="screen-center bg-background px-4">
         <p className="text-sm text-muted-foreground">Opening the console…</p>
       </div>
     );

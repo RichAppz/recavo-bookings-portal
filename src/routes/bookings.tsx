@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarPlus, Search } from "lucide-react";
+import { z } from "zod";
+import { CalendarPlus, Search, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
+import { UpsellRequestsCard } from "@/components/UpsellRequestsCard";
+import { useUpsellOffers } from "@/lib/api/upsells";
 import { EmptyState, PageHeader, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
 import { matchesServiceFilter } from "@/lib/service-categories";
@@ -11,6 +14,8 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { ServiceFilterSelect } from "@/components/ServiceFilterSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -31,7 +36,13 @@ import { balanceDueLabel, bookingSettlement } from "@/lib/booking-payment";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { formatAllDaySpan, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
 
+/** `?booking=<id>` opens that booking's drawer — the staff add-on request email links here. */
+const searchSchema = z.object({
+  booking: z.string().min(1).optional(),
+});
+
 export const Route = createFileRoute("/bookings")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Bookings — RECAVO" },
@@ -58,6 +69,16 @@ export const Route = createFileRoute("/bookings")({
 
 const PAGE_SIZE = 10;
 
+/**
+ * Cancelled jobs are noise in the day-to-day list, so they are hidden unless
+ * asked for. Deleted bookings never come back from the API at all.
+ */
+const CANCELLED_STATUSES = new Set<Booking["status"]>([
+  "cancelled_by_customer",
+  "cancelled_by_business",
+  "late_cancelled",
+]);
+
 function addDays(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -65,17 +86,28 @@ function addDays(date: Date, days: number) {
 }
 
 function BookingsPage() {
+  const search = Route.useSearch();
   const [query, setQuery] = useState("");
   const [staffFilter, setStaffFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showCancelled, setShowCancelled] = useState(false);
   const [fromDate, setFromDate] = useState(isoDate(addDays(new Date(), -14)));
   const [toDate, setToDate] = useState(isoDate(addDays(new Date(), 30)));
   const [page, setPage] = useState(0);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(search.booking ?? null);
   const [addOpen, setAddOpen] = useState(false);
+  useEffect(() => {
+    if (search.booking) setSelectedBookingId(search.booking);
+  }, [search.booking]);
 
   const staff = useStaffList();
+  // Pending add-on requests, so rows can carry a marker and the card above can list them.
+  const upsellRequests = useUpsellOffers(["requested"]);
+  const requestedBookingIds = useMemo(
+    () => new Set((upsellRequests.data ?? []).map((o) => o.bookingId)),
+    [upsellRequests.data],
+  );
   // One staff member / one location: nothing to filter by and nothing to show.
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
@@ -102,10 +134,12 @@ function BookingsPage() {
       .filter(
         (b) =>
           matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)) &&
-          (!q || b.reference.toLowerCase().includes(q)),
+          (!q || b.reference.toLowerCase().includes(q)) &&
+          // Picking a cancelled status in the dropdown is asking to see them.
+          (showCancelled || statusFilter !== "all" || !CANCELLED_STATUSES.has(b.status)),
       )
       .sort((a, b) => b.start.localeCompare(a.start));
-  }, [bookings.data, serviceFilter, serviceById, query]);
+  }, [bookings.data, serviceFilter, serviceById, query, showCancelled, statusFilter]);
 
   const pageRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -121,6 +155,8 @@ function BookingsPage() {
           </Button>
         }
       />
+
+      <UpsellRequestsCard onOpenBooking={setSelectedBookingId} />
 
       <div className="surface-card space-y-3 p-4">
         <div className="relative">
@@ -186,6 +222,19 @@ function BookingsPage() {
             </SelectContent>
           </Select>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-cancelled"
+            checked={showCancelled}
+            onCheckedChange={(v) => {
+              setShowCancelled(v);
+              setPage(0);
+            }}
+          />
+          <Label htmlFor="show-cancelled" className="text-sm font-normal text-muted-foreground">
+            Show cancelled bookings
+          </Label>
+        </div>
       </div>
 
       <div className="surface-card overflow-hidden">
@@ -211,6 +260,7 @@ function BookingsPage() {
                     setStaffFilter("all");
                     setServiceFilter("all");
                     setStatusFilter("all");
+                    setShowCancelled(true);
                   }}
                 >
                   Clear filters
@@ -258,6 +308,7 @@ function BookingsPage() {
                         : (locations.data?.find((l) => l.id === b.locationId)?.name ?? "—")
                     }
                     onSelect={() => setSelectedBookingId(b.id)}
+                    addOnRequested={requestedBookingIds.has(b.id)}
                   />
                 ))}
               </tbody>
@@ -305,12 +356,15 @@ function BookingRow({
   trainerName,
   locationName,
   onSelect,
+  addOnRequested,
 }: {
   booking: Booking;
   /** Null hides the column (a one-person / one-place business). */
   trainerName: string | null;
   locationName: string | null;
   onSelect: () => void;
+  /** The client asked for an add-on from their offer email and staff haven't acted yet. */
+  addOnRequested?: boolean;
 }) {
   const customer = useCustomer(booking.leadCustomerId);
   const timezone = booking.timezone || "Europe/London";
@@ -318,7 +372,20 @@ function BookingRow({
 
   return (
     <tr onClick={onSelect} className="cursor-pointer transition-colors hover:bg-secondary/50">
-      <td className="px-4 py-3 font-medium whitespace-nowrap">{booking.reference}</td>
+      <td className="px-4 py-3 font-medium whitespace-nowrap">
+        <span className="flex items-center gap-1.5">
+          {booking.reference}
+          {addOnRequested ? (
+            <span
+              title="Add-on requested"
+              className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary"
+            >
+              <Sparkles className="size-3" />
+              Add-on
+            </span>
+          ) : null}
+        </span>
+      </td>
       <td className="px-4 py-3 tabular-nums whitespace-nowrap">
         {booking.allDay ? (
           <>

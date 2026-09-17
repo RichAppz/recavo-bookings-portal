@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>RECAVO Portal</string>
+        <string>RECAVO</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,15 +20,15 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<!-- Deep link scheme: Supabase OAuth redirects to app.recavo.portal://auth/callback (see src/lib/native.ts) -->
+	<!-- Deep link scheme: Supabase OAuth redirects to com.richappz.recavo://auth/callback (see src/lib/native.ts) -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>app.recavo.portal</string>
+			<string>com.richappz.recavo</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>app.recavo.portal</string>
+				<string>com.richappz.recavo</string>
 			</array>
 		</dict>
 	</array>

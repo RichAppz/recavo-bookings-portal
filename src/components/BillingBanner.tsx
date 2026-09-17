@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useBillingPortal, useSubscription } from "@/lib/api/hooks";
 import { subscriptionAccessState } from "@/lib/billing/access";
 import { formatInTz } from "@/lib/format";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { openHostedFlow } from "@/lib/native";
 
 /**
  * Compact trial reminder for the header: "Trial · 6 days left", linking to the plan.
@@ -84,12 +86,16 @@ export function BillingBanner() {
   const openPortal = async () => {
     const result = await portal.mutateAsync();
     const url = result.portalUrl ?? result.url;
-    if (url) window.location.assign(url);
+    if (url) void openHostedFlow(url);
   };
 
   const graceEnds = current?.graceEndsAt
     ? formatInTz(current.graceEndsAt, tz, { dateStyle: "medium" })
     : null;
+
+  // The Stripe portal (and the Billing tab it stands in for) are web-only in the
+  // store apps; there the banner just states the fact. See saasPurchasesAllowedInApp.
+  const canFixHere = saasPurchasesAllowedInApp();
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
@@ -97,9 +103,11 @@ export function BillingBanner() {
         <span className="font-medium">Payment failed.</span>
         {graceEnds
           ? ` Access continues until ${graceEnds}.`
-          : " Update your payment method to keep access."}
+          : canFixHere
+            ? " Update your payment method to keep access."
+            : ""}
       </p>
-      {canManage ? (
+      {!canFixHere ? null : canManage ? (
         <Button
           size="sm"
           variant="outline"
