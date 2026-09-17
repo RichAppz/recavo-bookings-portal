@@ -114,6 +114,7 @@ describe("queryKeysForLiveEvent", () => {
     assert.deepEqual(queryKeysForLiveEvent({ type: "booking.changed", businessId: BIZ }), [
       ["biz", BIZ, "bookings"],
       ["biz", BIZ, "reports", "dashboard"],
+      ["biz", BIZ, "upsell-offers"],
     ]);
   });
 
