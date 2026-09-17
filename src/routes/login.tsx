@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
+import { AppleButton, AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
 import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
 import { AuthChromeGhost } from "@/components/ghost";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
-import { useAuth } from "@/lib/auth/auth-store";
+import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingReferral } from "@/lib/auth/pending-referral";
 import { isCustomerHost } from "@/lib/hosts";
 
@@ -120,7 +120,7 @@ function CustomerLogin() {
 }
 
 function StaffLogin() {
-  const { signIn, signInWithGoogle, confirmSignUp, resendSignUpCode } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple, confirmSignUp, resendSignUpCode } = useAuth();
   const { ref } = Route.useSearch();
   // Recavo is sold on the web, so the store apps only sign existing customers
   // in: no path from here to creating an account that would then need a plan.
@@ -129,6 +129,18 @@ function StaffLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  async function startSocial(start: () => Promise<SocialSignInOutcome>, failureMessage: string) {
+    setBusy(true);
+    try {
+      // In the mobile app the sheet can be dismissed without signing in,
+      // in which case this page stays put and must come back to life.
+      if ((await start()) === "cancelled") setBusy(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : failureMessage);
+      setBusy(false);
+    }
+  }
   // Sign-in hit an unconfirmed account: a fresh code has been sent and we're
   // showing the code-entry step instead of the password form.
   const [awaitingCode, setAwaitingCode] = useState(false);
@@ -268,9 +280,9 @@ function StaffLogin() {
 
   return (
     <AuthShell
-      eyebrow="PT console"
+      eyebrow="Welcome back"
       title="Sign in to RECAVO"
-      subtitle="Pick up where you left off — today's sessions, payments and client messages."
+      subtitle="Pick up where you left off — today's bookings, payments and client messages."
       footer={
         canSignUpHere ? (
           <span>
@@ -286,21 +298,18 @@ function StaffLogin() {
         ) : null
       }
     >
-      <GoogleButton
-        label="Continue with Google"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            // In the mobile app the sheet can be dismissed without signing in,
-            // in which case this page stays put and must come back to life.
-            if ((await signInWithGoogle()) === "cancelled") setBusy(false);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Google sign-in failed");
-            setBusy(false);
-          }
-        }}
-      />
+      <div className="space-y-3">
+        <AppleButton
+          label="Continue with Apple"
+          disabled={busy}
+          onClick={() => startSocial(signInWithApple, "Apple sign-in failed")}
+        />
+        <GoogleButton
+          label="Continue with Google"
+          disabled={busy}
+          onClick={() => startSocial(signInWithGoogle, "Google sign-in failed")}
+        />
+      </div>
       <AuthDivider />
 
       <form onSubmit={submit} className="space-y-4">

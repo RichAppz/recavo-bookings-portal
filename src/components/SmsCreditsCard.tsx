@@ -14,6 +14,7 @@ import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
+import { openHostedFlow } from "@/lib/native";
 
 const KIND_LABEL: Record<SmsCreditLedgerEntry["kind"], string> = {
   purchase: "Bundle purchased",
@@ -52,7 +53,7 @@ export function SmsCreditsCard({ className }: { className?: string }) {
   const buy = async () => {
     if (!data) return;
     const result = await checkout.mutateAsync({ bundle: data.bundle.key });
-    if (result.checkoutUrl) window.location.assign(result.checkoutUrl);
+    if (result.checkoutUrl) void openHostedFlow(result.checkoutUrl);
   };
 
   if (credits.isLoading || !data) {

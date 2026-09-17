@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileText,
   Gift,
+  Hourglass,
   LayoutDashboard,
   LifeBuoy,
   Layers,
@@ -50,6 +51,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
@@ -69,11 +71,13 @@ import {
   usePortalBusinesses,
   usePortalLink,
   useSubscription,
+  useWaitlistSummary,
 } from "@/lib/api/hooks";
 import { customerDisplayName, userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
 import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { isNativeApp } from "@/lib/native";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -142,6 +146,14 @@ const NAV: NavGroup[] = [
         label: "Bookings",
         icon: ClipboardList,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+      },
+      // Clients who wanted a slot the diary couldn't give them; the badge is how
+      // many are waiting.
+      {
+        to: "/waitlist",
+        label: "Waitlist",
+        icon: Hourglass,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
       },
     ],
   },
@@ -216,6 +228,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  // null = closed; an object (possibly empty) = open with those fields prefilled.
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [addBusinessOpen, setAddBusinessOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
@@ -232,6 +246,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const canSeeWaitlist = tenant.can(PERMISSIONS.BOOKING_READ_ALL);
+  const waitlistSummary = useWaitlistSummary({ enabled: canSeeWaitlist });
+  const waiting = waitlistSummary.data?.waiting ?? 0;
   const navigate = useNavigate();
   // Gates the Vehicles nav item: only businesses with a linked-record schema get it.
   const recordDefinition = useLinkedRecordDefinition();
@@ -252,7 +269,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // chooser; see saasPurchasesAllowedInApp. Rendered client-side after the
   // tenant query resolves, so reading the Capacitor bridge here is safe.
   const canStartBusinessHere = saasPurchasesAllowedInApp();
-  const billingLocked = subscription.isSuccess && isBillingBlocked(subscription.data?.subscription);
+  // A platform billing_bypass (demo / review / comp accounts) grants paid access
+  // with no Stripe subscription, so it must not send the console to the plan chooser.
+  const billingLocked =
+    subscription.isSuccess &&
+    !subscription.data?.billingBypass &&
+    isBillingBlocked(subscription.data?.subscription);
   const onBilling = isBillingPath(pathname);
   const onPlatform = pathname === "/platform" || pathname.startsWith("/platform/");
 
@@ -264,32 +286,41 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!portalLink.isFetched || portalBusinesses.isLoading) {
       return (
         <div className="min-h-screen bg-background">
-          <header className="flex h-16 items-center border-b px-4 sm:px-6">
+          <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
             <Wordmark />
           </header>
-          <main className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+          <main className="mx-auto w-full max-w-5xl px-4 pt-4 pb-safe-12 sm:p-8">
             <PageGhost />
           </main>
         </div>
       );
     }
-    // Someone who bought sessions has a customer record but nothing to run, so
-    // send them to their own account rather than offering to set up a studio.
-    // /account rather than one studio's page: which studio came first is an
-    // accident of history, and picking it for them hides the others.
-    if ((portalBusinesses.data ?? []).length > 0) {
+    const isCustomer = (portalBusinesses.data ?? []).length > 0;
+    // No membership, so the address they came in on is the evidence of intent.
+    // Customer links all point at the customer host; the business host (and the
+    // app, which is the business console only) is reached by choosing it, so
+    // whoever signs in there is here to run a business — even if the same
+    // address also books sessions somewhere as a client. They get the setup
+    // form, with a pointer to where their own bookings live.
+    const onCustomerHost =
+      !isNativeApp() && typeof window !== "undefined" && isCustomerHost(window.location.hostname);
+    if (!onCustomerHost) {
+      // In the store apps the setup form would end at a plan the app cannot
+      // sell, so they get a plain notice instead (saasPurchasesAllowedInApp).
+      if (!canStartBusinessHere) {
+        return <NoBusinessInApp />;
+      }
+      return <CreateFirstBusiness customerElsewhere={isCustomer} />;
+    }
+    // On the customer host a customer record means their own account. /account
+    // rather than one studio's page: which studio came first is an accident of
+    // history, and picking it for them hides the others.
+    if (isCustomer) {
       return <Navigate to="/account" replace />;
     }
-    // Nothing to go on: no membership, no customer link. The hostname is the last
-    // evidence of why they came, and on the customer one "set up your studio" is
+    // Nothing to go on at all, and on the customer host "set up your studio" is
     // the wrong question — they are mid-claim, or their link has yet to redeem.
-    if (typeof window !== "undefined" && isCustomerHost(window.location.hostname)) {
-      return <NoCustomerAccount />;
-    }
-    if (!canStartBusinessHere) {
-      return <NoBusinessInApp />;
-    }
-    return <CreateFirstBusiness />;
+    return <NoCustomerAccount />;
   }
 
   const accessPending = tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
@@ -303,13 +334,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (billingLocked && onBilling) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="flex h-16 items-center justify-between border-b px-4 sm:px-6">
+        <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center justify-between bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
           <Wordmark />
           <Button variant="ghost" size="sm" onClick={() => void signOut()}>
             <LogOut className="size-4" /> Sign out
           </Button>
         </header>
-        <main className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-8">{page}</main>
+        <main className="mx-auto w-full max-w-5xl space-y-6 px-4 pt-4 pb-safe-12 sm:p-8">
+          {page}
+        </main>
       </div>
     );
   }
@@ -386,6 +419,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                             {item.to === "/messages" && unread > 0 ? (
                               <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
                                 {unread}
+                              </span>
+                            ) : null}
+                            {item.to === "/waitlist" && waiting > 0 ? (
+                              <span
+                                className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground"
+                                aria-label={`${waiting} waiting`}
+                              >
+                                {waiting}
                               </span>
                             ) : null}
                           </Link>
@@ -636,6 +677,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <DropdownMenuItem onClick={() => setBookingOpen(true)}>
                     Add booking
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setWaitlistDefaults({})}>
+                    Add to waitlist
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("client")}>Add client</DropdownMenuItem>
                   {!isCarDetailing ? (
                     <DropdownMenuItem onClick={() => setQuick("group")}>
@@ -667,13 +711,27 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+        <main className="mx-auto w-full max-w-[1440px] space-y-6 px-4 pt-4 pb-safe-12 sm:p-6">
           {accessPending ? null : <BillingBanner />}
           {page}
         </main>
       </div>
 
-      <AddBookingModal open={bookingOpen} onOpenChange={setBookingOpen} />
+      <AddBookingModal
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+        onNoAvailability={(picked) => {
+          setBookingOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
+      />
       <AddBusinessDialog open={addBusinessOpen} onOpenChange={setAddBusinessOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />

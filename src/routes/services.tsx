@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { BellRing, Check, Clock, Eye, EyeOff, Package, Plus, Trash2, Users } from "lucide-react";
+import { BellRing, Clock, Eye, EyeOff, Package, Plus, Sparkles, Trash2, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,15 @@ import {
 } from "@/lib/api/hooks";
 import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
 import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { UpsellEditor } from "@/components/UpsellEditor";
+import { rowsFromUpsells, rowsToUpsellItems, type UpsellRow } from "@/lib/upsells";
+import { UpsellsUpgradeDialog } from "@/components/UpsellsUpgradeDialog";
+import {
+  isFeatureNotAvailable,
+  useReplaceServiceUpsells,
+  useServiceUpsells,
+  useUpsellsEntitled,
+} from "@/lib/api/upsells";
 import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
 import {
   draftFromRule,
@@ -83,24 +92,6 @@ function serviceNoun(service: string) {
   const plural = lower.endsWith("s") ? noun : `${noun}s`;
   return { noun, lower, plural, pluralLower: plural.toLowerCase() };
 }
-
-/**
- * Preset swatches for the calendar dot. Chosen to stay distinguishable from each
- * other and from the payment colours the calendar chips already use (teal,
- * green, amber, red), so a service dot never reads as a payment state.
- */
-const SERVICE_COLOURS = [
-  "#2563eb", // blue
-  "#7c3aed", // violet
-  "#db2777", // pink
-  "#0891b2", // cyan
-  "#ea580c", // orange
-  "#4d7c0f", // olive
-  "#78350f", // brown
-  "#475569", // slate
-];
-
-const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 /** Deposit input shows blank for "no deposit" so the field reads as optional. */
 function depositToInput(minor: number | null | undefined): string {
@@ -238,11 +229,6 @@ function ServicesPage() {
                 {group.items.map((s) => (
                   <article key={s.id} className="surface-card flex flex-col p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <span
-                        className="size-2.5 rounded-full"
-                        // Same fallback as the calendar dot, so the card matches what staff see there.
-                        style={{ backgroundColor: s.colour ?? "var(--color-chart-1)" }}
-                      />
                       <div className="flex items-center gap-2">
                         {s.publicVisible ? (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -536,8 +522,6 @@ function ServiceDialog({
   );
   const [active, setActive] = useState(service?.active ?? true);
   const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
-  // Calendar swatch; null = "no colour", which renders the theme default.
-  const [colour, setColour] = useState<string | null>(service?.colour ?? null);
   const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service));
   // Creating: start from the business's opening hours so the offer matches the
   // door hours without retyping them. Editing: whatever is saved.
@@ -555,6 +539,20 @@ function ServiceDialog({
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageDirty, setUsageDirty] = useState(false);
   const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
+  // Upsells: add-ons offered with this service, at a price set here. Their own
+  // endpoint, saved after the service; gated by the `upsells` plan feature on write.
+  const upsellsEntitled = useUpsellsEntitled();
+  const serviceUpsells = useServiceUpsells(open ? service?.id : undefined);
+  const replaceUpsells = useReplaceServiceUpsells();
+  const [upsellRows, setUpsellRows] = useState<UpsellRow[]>([]);
+  const [upsellsDirty, setUpsellsDirty] = useState(false);
+  const [upsellInvalid, setUpsellInvalid] = useState<number | null>(null);
+  const [upsellsPaywall, setUpsellsPaywall] = useState(false);
+  useEffect(() => {
+    if (open && !upsellsDirty && serviceUpsells.data) {
+      setUpsellRows(rowsFromUpsells(serviceUpsells.data));
+    }
+  }, [open, upsellsDirty, serviceUpsells.data]);
   // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
   // so it saves with the service itself. All verticals.
   const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
@@ -570,7 +568,10 @@ function ServiceDialog({
   }, [open, usageDirty, serviceUsage.data]);
 
   const submitting =
-    createService.isPending || updateService.isPending || replaceServiceUsage.isPending;
+    createService.isPending ||
+    updateService.isPending ||
+    replaceServiceUsage.isPending ||
+    replaceUpsells.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
     setName(s?.name ?? "");
@@ -586,13 +587,19 @@ function ServiceDialog({
     setCategory(s?.category ?? "");
     setActive(s?.active ?? true);
     setPublicVisible(s?.publicVisible ?? true);
-    setColour(s?.colour ?? null);
     setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
     setFieldErrors({});
-    setUsageRows([]);
+    // Seed from whatever the usage query already holds. The adopt effect below
+    // can't be relied on here: it runs in the same commit as this reset and its
+    // deps don't change afterwards, so a reopen after a save used to land on an
+    // empty list — and the next save would then wipe the lines already recorded.
+    setUsageRows(s && serviceUsage.data ? rowsFromLines(serviceUsage.data) : []);
     setUsageDirty(false);
     setUsageInvalid(null);
+    setUpsellRows(s && serviceUpsells.data ? rowsFromUpsells(serviceUpsells.data) : []);
+    setUpsellsDirty(false);
+    setUpsellInvalid(null);
     setFollowUpDraft(draftFromRule(s?.followUp));
     setFollowUpError(null);
   };
@@ -695,6 +702,14 @@ function ServiceDialog({
     }
     setUsageInvalid(null);
 
+    const upsells = upsellsDirty ? rowsToUpsellItems(upsellRows) : null;
+    if (upsells && !upsells.ok) {
+      setUpsellInvalid(upsells.index);
+      toast.error(upsells.message);
+      throw new Error("validation");
+    }
+    setUpsellInvalid(null);
+
     const followUp = ruleFromDraft(followUpDraft);
     if (!followUp.ok) {
       setFollowUpError({ field: followUp.field, message: followUp.message });
@@ -713,7 +728,6 @@ function ServiceDialog({
       capacityMax,
       active,
       publicVisible,
-      colour,
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: windows,
@@ -741,6 +755,19 @@ function ServiceDialog({
           await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
         } catch {
           toast.warning("The consumables list didn't save — open the service and try again.");
+        }
+      }
+      // Add-ons offered with this service. Its own endpoint; a plan without the
+      // feature answers 403, which opens the bolt-on dialog rather than a toast.
+      if (upsells?.ok) {
+        try {
+          await replaceUpsells.mutateAsync({ serviceId: saved.id, items: upsells.items });
+        } catch (err) {
+          if (isFeatureNotAvailable(err)) {
+            setUpsellsPaywall(true);
+          } else {
+            toast.warning("The add-ons list didn't save — open the service and try again.");
+          }
         }
       }
       // A staff record with its own service list would silently veto this service
@@ -858,70 +885,6 @@ function ServiceDialog({
             <p className="text-xs text-muted-foreground">
               Groups {pluralLower} on your booking page and in the calendar filter — e.g. all your
               polishing work under one heading.
-            </p>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="s-colour">Calendar colour</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {SERVICE_COLOURS.map((hex) => {
-                const selected = colour?.toLowerCase() === hex;
-                return (
-                  <button
-                    key={hex}
-                    type="button"
-                    onClick={() => setColour(hex)}
-                    aria-label={`Use colour ${hex}`}
-                    aria-pressed={selected}
-                    className={cn(
-                      "inline-flex size-7 cursor-pointer items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow hover:ring-2 hover:ring-ring/50",
-                      selected && "ring-2 ring-ring",
-                    )}
-                    style={{ backgroundColor: hex }}
-                  >
-                    {selected ? <Check className="size-3.5 text-white" strokeWidth={3} /> : null}
-                  </button>
-                );
-              })}
-              {/* Anything off-palette: the native picker, shown as one more swatch. */}
-              <label
-                className={cn(
-                  "relative inline-flex size-7 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-input ring-offset-2 ring-offset-background hover:ring-2 hover:ring-ring/50",
-                  colour && !SERVICE_COLOURS.includes(colour.toLowerCase()) && "ring-2 ring-ring",
-                )}
-                style={
-                  colour && !SERVICE_COLOURS.includes(colour.toLowerCase())
-                    ? { backgroundColor: colour, borderStyle: "solid" }
-                    : undefined
-                }
-                title="Custom colour"
-              >
-                <input
-                  id="s-colour"
-                  type="color"
-                  value={colour && HEX_COLOUR.test(colour) ? colour : "#2563eb"}
-                  onChange={(e) => setColour(e.target.value)}
-                  className="absolute inset-0 size-full cursor-pointer opacity-0"
-                  aria-label="Custom colour"
-                />
-                {!colour || SERVICE_COLOURS.includes(colour.toLowerCase()) ? (
-                  <Plus className="pointer-events-none size-3.5 text-muted-foreground" />
-                ) : null}
-              </label>
-              {colour ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={() => setColour(null)}
-                >
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Marks this {lower} on the calendar and legend. Payment status sets the chip colour;
-              this is the dot.
             </p>
           </div>
           {/* Detailing stacks duration over price: the long label wraps and would
@@ -1123,6 +1086,48 @@ function ServiceDialog({
               )}
             </div>
           ) : null}
+
+          {/* Upsells: add-ons offered alongside this service, on the booking page and
+              by email after staff book someone in. */}
+          <div className="grid gap-2 border-t pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Add-ons to offer</Label>
+              {upsellsEntitled === false ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUpsellsPaywall(true)}
+                >
+                  <Sparkles className="size-4" />
+                  Unlock upsells
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Other {lower}s to suggest with this one — ticked as extras when clients book online,
+              and offered by email when you book them in. Set a special price for the pairing or
+              leave it blank to charge the add-on&apos;s own price.
+            </p>
+            {serviceUpsells.isLoading || catalogue.isLoading ? (
+              <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
+            ) : (
+              <UpsellEditor
+                rows={upsellRows}
+                onChange={(rows) => {
+                  setUpsellRows(rows);
+                  setUpsellsDirty(true);
+                  setUpsellInvalid(null);
+                }}
+                catalogue={catalogue.data ?? []}
+                ownServiceId={service?.id ?? null}
+                invalidIndex={upsellInvalid}
+                disabled={upsellsEntitled === false}
+                idPrefix="su"
+              />
+            )}
+          </div>
+          <UpsellsUpgradeDialog open={upsellsPaywall} onOpenChange={setUpsellsPaywall} />
 
           {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
           <FollowUpRuleEditor

@@ -157,7 +157,7 @@ function InvoicesPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard label="Outstanding (shown)" value={formatMoney(totals.outstanding, currency)} />
         <StatCard label="Overdue (shown)" value={formatMoney(totals.overdue, currency)} />
         <StatCard label="Paid (shown)" value={String(totals.paidCount)} />

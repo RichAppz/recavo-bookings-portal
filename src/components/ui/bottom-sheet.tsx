@@ -40,7 +40,7 @@ const BottomSheetContent = React.forwardRef<
         <DialogPrimitive.Content
           ref={ref}
           className={cn(
-            "pointer-events-auto flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-xl outline-none",
+            "pointer-events-auto safe-spacer-bottom flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-xl outline-none",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
             className,
           )}

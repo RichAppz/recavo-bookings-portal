@@ -23,7 +23,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (status === "unconfigured") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="screen-center bg-background px-4">
         <div className="max-w-md space-y-2 text-center">
           <h1 className="text-lg font-semibold">Auth not configured</h1>
           <p className="text-sm text-muted-foreground">

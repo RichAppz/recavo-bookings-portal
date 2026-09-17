@@ -151,7 +151,7 @@ export function AccountShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full min-w-0 max-w-[1440px] space-y-6 p-4 sm:p-6">
+        <main className="mx-auto w-full min-w-0 max-w-[1440px] space-y-6 px-4 pt-4 pb-safe-12 sm:p-6">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
             {description ? (

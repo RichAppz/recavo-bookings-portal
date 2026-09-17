@@ -242,3 +242,34 @@
 @utility pb-safe-* {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(--value(integer)));
 }
+/* Full-viewport centred card (setup, invite, error, loading screens). `safe`
+   alignment falls back to the start when the card is taller than the viewport,
+   so nothing is clipped off the top; the padding keeps it clear of the notch and
+   home indicator in the mobile app. */
+@utility screen-center {
+  display: flex;
+  min-height: 100vh;
+  align-items: safe center;
+  justify-content: safe center;
+  padding-top: calc(env(safe-area-inset-top, 0px) + --spacing(6));
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(6));
+}
+/* Safe-area room as a spacer pseudo-element rather than padding, for panels
+   (e.g. Sheet) whose consumers set their own padding. Works in block and
+   flex-column layouts; zero-height outside the mobile app. */
+@utility safe-spacer-top {
+  &::before {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    height: env(safe-area-inset-top, 0px);
+  }
+}
+@utility safe-spacer-bottom {
+  &::after {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    height: env(safe-area-inset-bottom, 0px);
+  }
+}

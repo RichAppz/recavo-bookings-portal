@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "app.recavo.portal"
+    namespace = "com.richappz.recavo"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.recavo.portal"
+        applicationId "com.richappz.recavo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

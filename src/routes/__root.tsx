@@ -16,12 +16,15 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
+import { NativeReturnGate } from "@/components/NativeReturnGate";
+import { PullToRefresh } from "@/components/PullToRefresh";
+import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
@@ -49,7 +52,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
@@ -177,6 +180,14 @@ function PasswordRecoveryRedirect() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // The mobile app runs Stripe in a browser sheet; when it is dismissed by hand
+  // the plan, cards or Connect status may have changed behind our cache.
+  useEffect(() => {
+    const refresh = () => void queryClient.invalidateQueries();
+    window.addEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+    return () => window.removeEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -184,9 +195,18 @@ function RootComponent() {
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <PasswordRecoveryRedirect />
-            <Outlet />
-            <Toaster position="top-right" richColors />
+            <NativeReturnGate>
+              <Outlet />
+            </NativeReturnGate>
+            {/* Keep toasts clear of the notch/Dynamic Island in the mobile app. */}
+            <Toaster
+              position="top-right"
+              richColors
+              offset={{ top: "calc(env(safe-area-inset-top, 0px) + 24px)" }}
+              mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+            />
             <MfaDialog />
+            <PullToRefresh />
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -37,7 +37,7 @@ const NEW_CATEGORY = "__new";
  * Compact "new service" form for the middle of a booking: a detailer with a customer
  * beside them asking for something not on the menu adds it here — name, category,
  * how long, how much — and it's ticked in the picker straight away. Everything the
- * full Services form also asks (deposit, variants, offer windows, colour, who delivers
+ * full Services form also asks (deposit, variants, offer windows, who delivers
  * it) takes a sensible default and can be tidied up later.
  */
 export function QuickAddServiceDialog({

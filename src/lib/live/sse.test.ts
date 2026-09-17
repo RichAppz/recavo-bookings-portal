@@ -126,6 +126,20 @@ describe("queryKeysForLiveEvent", () => {
     assert.ok(keys.some((k) => k[2] === "follow-ups" && k.length === 3));
   });
 
+  it("refreshes the waitlist lists and count on waitlist.changed", () => {
+    const keys = queryKeysForLiveEvent({ type: "waitlist.changed", businessId: BIZ });
+    assert.deepEqual(keys, [["biz", BIZ, "waitlist"]]);
+    assert.ok(
+      parseLiveEvent({
+        event: "waitlist.changed",
+        data: JSON.stringify({ businessId: BIZ }),
+        id: null,
+      }),
+    );
+    const hello = queryKeysForLiveEvent({ type: "hello", businessId: BIZ });
+    assert.ok(hello.some((k) => k[2] === "waitlist" && k.length === 3));
+  });
+
   it("refreshes every follow-up list (any filter) on follow_up.changed", () => {
     const keys = queryKeysForLiveEvent({ type: "follow_up.changed", businessId: BIZ });
     assert.deepEqual(keys, [["biz", BIZ, "follow-ups"]]);

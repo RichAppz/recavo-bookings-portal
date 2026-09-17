@@ -106,8 +106,8 @@ export function AppChromeGhost() {
         </div>
       </aside>
       <div className="lg:pl-[264px]">
-        <header className="h-16 border-b" />
-        <main className="mx-auto w-full max-w-[1440px] p-4 sm:p-6">
+        <header className="pt-safe min-h-16 sm:border-b" />
+        <main className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-safe-12 sm:p-6">
           <PageGhost />
         </main>
       </div>
