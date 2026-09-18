@@ -4,11 +4,15 @@ import {
   allDayHolds,
   describeConflict,
   describeHold,
+  eventsWithin,
   formatDurationLabel,
+  hardClashCopy,
   heldAllDayNote,
+  leadName,
   overrideCopy,
   timedClashNote,
   timedJobsWithin,
+  timedOverlapNote,
 } from "./drop-in.ts";
 
 const TZ = "Europe/London";
@@ -72,11 +76,43 @@ describe("timedJobsWithin", () => {
   });
 });
 
+describe("eventsWithin", () => {
+  const dentist = {
+    id: "e1",
+    start: "2026-09-08T09:15:00.000Z",
+    end: "2026-09-08T10:15:00.000Z",
+    staffId: "s1",
+    status: "active",
+    title: "Dentist",
+  };
+  it("finds active events for the staff member inside the window", () => {
+    const found = eventsWithin(
+      [
+        dentist,
+        { ...dentist, id: "e2", status: "cancelled" },
+        { ...dentist, id: "e3", staffId: "s2" },
+      ],
+      tuesday,
+      "s1",
+    );
+    assert.deepEqual(
+      found.map((e) => e.id),
+      ["e1"],
+    );
+    assert.deepEqual(eventsWithin([dentist], tuesday, "s2").length, 0);
+  });
+});
+
 describe("hold wording", () => {
   it("names the service and the lead client", () => {
     assert.equal(describeHold(coating), "5 year coating · Lee Gamble");
     assert.equal(describeHold(coating, "L. Gamble"), "5 year coating · L. Gamble");
     assert.equal(describeHold({ ...coating, attendees: [] }), "5 year coating");
+  });
+
+  it("does not mistake the 'Lead' placeholder for a name", () => {
+    assert.equal(leadName({ attendees: [{ name: "Lead", isLead: true }] }), null);
+    assert.equal(describeHold({ ...coating, attendees: [{ name: "Lead" }] }), "5 year coating");
   });
 
   it("reads as one line however many holds there are", () => {
@@ -105,6 +141,120 @@ describe("timedClashNote", () => {
       "Tuesday already has 2 timed jobs, the first at 10:00",
     );
     assert.equal(timedClashNote([], TZ), null);
+  });
+
+  it("names an event, and counts jobs and events together", () => {
+    const dentist = {
+      start: "2026-09-08T09:15:00.000Z",
+      end: "2026-09-08T10:15:00.000Z",
+      kind: "event" as const,
+      title: "Dentist",
+    };
+    assert.equal(timedClashNote([dentist], TZ), "Tuesday already has an event at 10:15 (Dentist)");
+    assert.equal(
+      timedClashNote([dentist, { ...dentist, title: null }], TZ),
+      "Tuesday already has 2 events, the first at 10:15",
+    );
+    assert.equal(
+      timedClashNote([dentist, { ...valet, kind: "job" as const }], TZ),
+      "Tuesday already has a timed job and an event, the first at 10:15",
+    );
+  });
+});
+
+describe("timedOverlapNote", () => {
+  it("names the job or event a hand-set time lands on", () => {
+    assert.equal(timedOverlapNote([valet], TZ), "Overlaps Mini valet · Pat · 10:00–11:00");
+    assert.equal(
+      timedOverlapNote(
+        [{ start: valet.start, end: valet.end, kind: "event", title: "Dentist" }, valet],
+        TZ,
+      ),
+      "Overlaps Dentist · 10:00–11:00 and 1 more",
+    );
+    assert.equal(timedOverlapNote([], TZ), null);
+  });
+});
+
+describe("hardClashCopy", () => {
+  const timedClash = {
+    bookingId: "b2",
+    kind: "booking" as const,
+    reference: null,
+    allDay: false,
+    start: valet.start,
+    end: valet.end,
+    serviceName: "Mini valet",
+    customerName: "Pat",
+  };
+  const holiday = {
+    bookingId: "e9",
+    kind: "block" as const,
+    reference: null,
+    allDay: false,
+    start: "2026-09-06T23:00:00.000Z",
+    end: "2026-09-12T23:00:00.000Z",
+    serviceName: "Holiday",
+    customerName: null,
+  };
+
+  it("names the clash and only offers someone else when there is someone", () => {
+    const solo = hardClashCopy({
+      conflicts: [timedClash],
+      who: "Taylor",
+      newBookingAllDay: false,
+      timeZone: TZ,
+      alternative: null,
+    });
+    assert.equal(solo.kind, "timed");
+    assert.equal(solo.title, "That time is already taken");
+    assert.equal(
+      solo.description,
+      "Taylor already has Mini valet · Pat · Tue 10:00–11:00. Pick a different time.",
+    );
+    const team = hardClashCopy({
+      conflicts: [timedClash],
+      who: "Taylor",
+      newBookingAllDay: false,
+      timeZone: TZ,
+      alternative: "another detailer",
+    });
+    assert.match(team.description, /Pick a different time, or another detailer\.$/);
+  });
+
+  it("copes with a 409 that named nothing", () => {
+    const copy = hardClashCopy({
+      conflicts: [],
+      who: null,
+      newBookingAllDay: false,
+      timeZone: TZ,
+      alternative: null,
+    });
+    assert.equal(copy.description, "Pick a different time.");
+  });
+
+  it("tells an all-day job blocked by a holiday apart from one blocked by another all-day job", () => {
+    const blocked = hardClashCopy({
+      conflicts: [holiday],
+      who: "Taylor",
+      newBookingAllDay: true,
+      timeZone: TZ,
+      alternative: null,
+    });
+    assert.equal(blocked.kind, "blocked");
+    assert.equal(blocked.title, "Taylor is unavailable then");
+    assert.match(blocked.description, /^Holiday · .*Pick a different day\.$/);
+
+    const held = hardClashCopy({
+      conflicts: [{ ...timedClash, allDay: true, serviceName: "5 year coating" }],
+      who: "Taylor",
+      newBookingAllDay: true,
+      timeZone: TZ,
+      alternative: null,
+    });
+    assert.equal(held.kind, "all-day-job");
+    assert.equal(held.title, "Taylor already has an all-day job then");
+    assert.match(held.description, /at a set time alongside it instead\?$/);
   });
 });
 

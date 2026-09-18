@@ -107,6 +107,7 @@ import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import {
   allDayHolds,
   describeHold,
+  hardClashCopy,
   heldAllDayNote,
   timedClashNote,
   timedJobsWithin,
@@ -2182,10 +2183,17 @@ function RescheduleDialog({
         setOverride({ conflicts: err.conflicts, body });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         if (mode === "custom") {
-          const who = staffOptions.find((s) => s.id === customStaffId)?.displayName;
-          toast.error(`Clashes with another booking${who ? ` for ${who}` : ""}`, {
-            description: "Pick a different day or time.",
+          const copy = hardClashCopy({
+            conflicts: err.conflicts,
+            who: staffOptions.find((s) => s.id === customStaffId)?.displayName ?? null,
+            newBookingAllDay: booking.allDay,
+            timeZone: timezone,
+            alternative:
+              staffOptions.filter((s) => s.status === "active").length > 1
+                ? `another ${staffNoun.toLowerCase()}`
+                : null,
           });
+          toast.error(copy.title, { description: copy.description });
           return false;
         }
         toast.error("That slot was just taken", {
