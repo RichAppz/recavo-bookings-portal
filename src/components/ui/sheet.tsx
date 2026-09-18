@@ -63,7 +63,13 @@ const SheetContent = React.forwardRef<
 >(({ side = "right", className, children, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+    {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
+    <SheetPrimitive.Content
+      ref={ref}
+      data-sheet-side={side}
+      className={cn(sheetVariants({ side }), className)}
+      {...props}
+    >
       <SheetPrimitive.Close
         className={cn(
           "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary",
