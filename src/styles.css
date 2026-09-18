@@ -200,6 +200,100 @@
   border-radius: var(--radius-xl);
 }
 
+/* Toasts (components/ui/sonner.tsx). Sonner handles stacking, timers and swipe;
+   these rules give the card its look, swap sonner's drop-down entrance for a slide
+   in from the right, and draw a timer bar along the bottom edge. Sonner injects its
+   own stylesheet after ours, so every rule is prefixed with `.toaster` to outrank it. */
+.toaster {
+  --toast-accent: var(--color-primary);
+  --toast-surface: oklch(0.2 0.008 258);
+  --toast-duration: 5000ms;
+  --toast-motion: cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: var(--font-sans);
+  /* `right` moves when a side drawer opens; glide rather than jump. */
+  transition:
+    right 400ms var(--toast-motion),
+    transform 400ms ease;
+}
+.dark .toaster {
+  --toast-surface: oklch(0.27 0.012 258);
+}
+.toaster [data-sonner-toast] {
+  background:
+    radial-gradient(
+      120% 170% at 100% 100%,
+      color-mix(in oklch, var(--toast-accent) 32%, transparent),
+      transparent 62%
+    ),
+    var(--toast-surface);
+}
+.toaster [data-sonner-toast][data-type="success"] {
+  --toast-accent: var(--color-success);
+}
+.toaster [data-sonner-toast][data-type="error"] {
+  --toast-accent: var(--color-destructive);
+}
+.toaster [data-sonner-toast][data-type="warning"] {
+  --toast-accent: var(--color-warning);
+}
+.toaster [data-sonner-toast][data-type="info"] {
+  --toast-accent: var(--color-info);
+}
+
+/* Motion. Sonner drives everything through its `--y` transform: we point the
+   not-yet-mounted and removed states off to the right instead of up, and the
+   stack reshuffles with the same easing. Swiping keeps sonner's `transition: none`. */
+.toaster [data-sonner-toast][data-swiping="false"] {
+  transition:
+    transform 520ms var(--toast-motion),
+    opacity 320ms ease,
+    height 400ms ease;
+}
+.toaster [data-sonner-toast][data-x-position="right"][data-mounted="false"] {
+  --y: translateX(calc(100% + 32px));
+}
+.toaster
+  [data-sonner-toast][data-x-position="right"][data-removed="true"][data-swipe-out="false"][data-expanded="true"] {
+  --y: translateY(calc(var(--lift) * var(--offset))) translateX(calc(100% + 32px));
+  opacity: 0;
+}
+
+/* Timer bar: shrinks from the right over the toast's lifetime, in step with sonner's
+   auto-dismiss, and pauses with it while the pointer is over the stack. Inset from
+   the corners so it sits on the straight part of the rounded bottom edge. */
+.toaster [data-sonner-toast] [data-content]::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--toast-accent);
+  opacity: 0.9;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.toaster [data-sonner-toast][data-mounted="true"]:not([data-type="loading"]) [data-content]::after {
+  animation: toast-timer var(--toast-duration) linear forwards;
+}
+.toaster:hover [data-sonner-toast] [data-content]::after {
+  animation-play-state: paused;
+}
+@keyframes toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toaster [data-sonner-toast] [data-content]::after {
+    display: none;
+  }
+}
+
 /* Calendar bars slide their label back and forth when it is wider than the bar
    (see components/Marquee.tsx, which sets the two custom properties). Pausing at
    each end gives the eye time to read the start and the finish. */
