@@ -42,6 +42,7 @@ import type { BankTransferInstructions } from "@/lib/api/types";
 import {
   useAvailability,
   useBookings,
+  useCalendarBlocks,
   useConnectAccount,
   useCreateBooking,
   useCustomerCredits,
@@ -64,9 +65,13 @@ import { clientLiftFromDraft, EMPTY_LIFT_DRAFT, type ClientLiftDraft } from "@/l
 import {
   allDayHolds,
   describeHold,
+  eventsWithin,
+  hardClashCopy,
   heldAllDayNote,
   timedClashNote,
   timedJobsWithin,
+  timedOverlapNote,
+  type TimedEntry,
 } from "@/lib/drop-in";
 import {
   addDays,
@@ -323,7 +328,7 @@ export function AddBookingModal({
 
   const serviceList = services.data ?? [];
   const locationList = useMemo(() => locations.data ?? [], [locations.data]);
-  const customerList = customers.data?.items ?? [];
+  const customerList = useMemo(() => customers.data?.items ?? [], [customers.data]);
   // The chosen client may sit beyond the first page (e.g. opened from their profile).
   const chosenCustomer = useCustomer(customerId || undefined);
   const selectedCustomer =
@@ -493,6 +498,15 @@ export function AddBookingModal({
     enabled: open && validDate && Boolean(serviceId),
   });
   const diaryBookings = useMemo(() => diary.data?.bookings ?? [], [diary.data]);
+  // Events (calendar blocks) on the same day(s): a dentist appointment is something a
+  // hand-set time must avoid and an all-day job may be booked around.
+  const diaryBlocks = useCalendarBlocks({
+    from: validDate ? dayStart.toISOString() : "",
+    to: validDate ? diaryEnd.toISOString() : "",
+    ...(staffId !== "all" ? { staffId } : {}),
+    enabled: open && validDate && Boolean(serviceId),
+  });
+  const diaryEvents = useMemo(() => diaryBlocks.data ?? [], [diaryBlocks.data]);
 
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
@@ -659,16 +673,70 @@ export function AddBookingModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [validDate, allDay, diaryBookings, holdWindow.start, holdWindow.end, holdStaffId],
   );
-  const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
-  // The mirror: timed work on the day(s) an all-day job would take.
-  const timedOnDay = useMemo(
+  // Name the client as the directory knows them; the booking's own lead attendee is
+  // the fallback (and is often just the "Lead" placeholder on staff-made bookings).
+  const holdNote = heldAllDayNote(
+    holds.map((b) => {
+      const client = b.leadCustomerId
+        ? customerList.find((c) => c.id === b.leadCustomerId)
+        : undefined;
+      return describeHold(b, client ? customerDisplayName(client) : null);
+    }),
+  );
+  // The mirror: timed work — and events taking part of a day — on the day(s) an
+  // all-day job would take. Sorted so the note leads with the earliest.
+  const timedOnDay = useMemo<TimedEntry[]>(
     () =>
       allDay && scheduling === "custom" && customWindow
-        ? timedJobsWithin(diaryBookings, customWindow, customStaffId)
+        ? [
+            ...timedJobsWithin(diaryBookings, customWindow, customStaffId).map((b) => ({
+              start: b.start,
+              end: b.end,
+              kind: "job" as const,
+            })),
+            ...eventsWithin(diaryEvents, customWindow, customStaffId).map((e) => ({
+              start: e.start,
+              end: e.end,
+              kind: "event" as const,
+              title: e.title,
+            })),
+          ].sort((a, b) => a.start.localeCompare(b.start))
         : [],
-    [allDay, scheduling, customWindow, diaryBookings, customStaffId],
+    [allDay, scheduling, customWindow, diaryBookings, diaryEvents, customStaffId],
   );
   const timedNote = timedClashNote(timedOnDay, timezone);
+  // A hand-set time on top of this person's other timed work or an event: nothing to
+  // override, it has to move — say so before the API does.
+  const timedOverlaps = useMemo(
+    () =>
+      !allDay && scheduling === "custom" && customWindow
+        ? [
+            ...timedJobsWithin(diaryBookings, customWindow, customStaffId).map((b) => {
+              const client = b.leadCustomerId
+                ? customerList.find((c) => c.id === b.leadCustomerId)
+                : undefined;
+              return {
+                start: b.start,
+                end: b.end,
+                kind: "job" as const,
+                serviceSnapshot: b.serviceSnapshot,
+                // The directory's name for the client, else whatever the booking holds.
+                attendees: client
+                  ? [{ name: customerDisplayName(client), isLead: true }]
+                  : b.attendees,
+              };
+            }),
+            ...eventsWithin(diaryEvents, customWindow, customStaffId).map((e) => ({
+              start: e.start,
+              end: e.end,
+              kind: "event" as const,
+              title: e.title,
+            })),
+          ].sort((a, b) => a.start.localeCompare(b.start))
+        : [],
+    [allDay, scheduling, customWindow, diaryBookings, diaryEvents, customStaffId, customerList],
+  );
+  const overlapNote = timedOverlapNote(timedOverlaps, timezone);
   // A "yes" to sharing the day is about *this* day, this person and this kind of
   // booking; change any of them and it is asked again.
   // …except when the switch itself was "book it as a drop-in instead", which
@@ -746,13 +814,20 @@ export function AddBookingModal({
   }
   const blocked = blockers.length > 0;
 
-  const handleConflict = () => {
+  const handleConflict = (conflicts: readonly BookingConflict[]) => {
     if (scheduling === "custom") {
-      const who = customStaff?.displayName ?? `the ${staffLower}`;
-      if (allDay) {
+      const copy = hardClashCopy({
+        conflicts,
+        who: customStaff?.displayName ?? null,
+        newBookingAllDay: allDay,
+        timeZone: timezone,
+        // Suggesting someone else only helps when there is someone else.
+        alternative: soleStaff ? null : `another ${staffLower}`,
+      });
+      if (copy.kind === "all-day-job") {
         // Two all-day jobs can't share a day, but a timed drop-in alongside one can.
-        toast.error(`${who} already has an all-day job then`, {
-          description: "Book this one at a set time alongside it instead?",
+        toast.error(copy.title, {
+          description: copy.description,
           action: {
             label: "Pick a time",
             onClick: () => {
@@ -764,9 +839,7 @@ export function AddBookingModal({
         });
         return;
       }
-      toast.error(`Clashes with another booking for ${who}`, {
-        description: "Pick a different time, or someone else.",
-      });
+      toast.error(copy.title, { description: copy.description });
       return;
     }
     toast.error("That slot was just taken", {
@@ -821,7 +894,7 @@ export function AddBookingModal({
       if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
         setOverride({ conflicts: err.conflicts, body, allDay: body.allDay === true });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
-        handleConflict();
+        handleConflict(err.conflicts);
       } else {
         toastApiError(err);
       }
@@ -1572,9 +1645,17 @@ export function AddBookingModal({
                         {hoursWarning}
                       </p>
                     ) : null}
+                    {/* Timed on timed (or on an event) cannot be overridden — the API
+                        would refuse it — so flag it while the time is being set. */}
+                    {overlapNote ? (
+                      <p className="rounded-md bg-destructive-soft px-3 py-2 text-xs text-destructive">
+                        {overlapNote} — pick a different time
+                        {soleStaff ? "" : ` or another ${staffLower}`}.
+                      </p>
+                    ) : null}
                     {/* The mirror of a drop-in: an all-day job landing on a day that
-                        already has timed work. Staff say so explicitly; the request
-                        then carries dropIn and the API lets the two share the day. */}
+                        already has timed work or an event. Staff say so explicitly; the
+                        request then carries dropIn and the API lets the two share the day. */}
                     {allDay && timedNote ? (
                       dropIn ? (
                         <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">

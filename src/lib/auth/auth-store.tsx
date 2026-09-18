@@ -35,6 +35,7 @@ import {
   runNativeOAuth,
 } from "@/lib/native";
 import { toast } from "sonner";
+import { toastDuration } from "@/lib/toast";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unconfigured";
 
@@ -566,7 +567,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const callbackError = takeAuthCallbackError();
     if (callbackError) {
       authLog("auth callback returned an error", callbackError);
-      toast.error("Sign-in link didn't work", { description: callbackError, duration: 10_000 });
+      toast.error("Sign-in link didn't work", {
+        description: callbackError,
+        ...toastDuration(10_000),
+      });
     }
 
     awaitingOauthCallbackRef.current = hasPendingAuthCallback();
