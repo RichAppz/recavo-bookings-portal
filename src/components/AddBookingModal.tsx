@@ -328,7 +328,7 @@ export function AddBookingModal({
 
   const serviceList = services.data ?? [];
   const locationList = useMemo(() => locations.data ?? [], [locations.data]);
-  const customerList = customers.data?.items ?? [];
+  const customerList = useMemo(() => customers.data?.items ?? [], [customers.data]);
   // The chosen client may sit beyond the first page (e.g. opened from their profile).
   const chosenCustomer = useCustomer(customerId || undefined);
   const selectedCustomer =
@@ -711,13 +711,21 @@ export function AddBookingModal({
     () =>
       !allDay && scheduling === "custom" && customWindow
         ? [
-            ...timedJobsWithin(diaryBookings, customWindow, customStaffId).map((b) => ({
-              start: b.start,
-              end: b.end,
-              kind: "job" as const,
-              serviceSnapshot: b.serviceSnapshot,
-              attendees: b.attendees,
-            })),
+            ...timedJobsWithin(diaryBookings, customWindow, customStaffId).map((b) => {
+              const client = b.leadCustomerId
+                ? customerList.find((c) => c.id === b.leadCustomerId)
+                : undefined;
+              return {
+                start: b.start,
+                end: b.end,
+                kind: "job" as const,
+                serviceSnapshot: b.serviceSnapshot,
+                // The directory's name for the client, else whatever the booking holds.
+                attendees: client
+                  ? [{ name: customerDisplayName(client), isLead: true }]
+                  : b.attendees,
+              };
+            }),
             ...eventsWithin(diaryEvents, customWindow, customStaffId).map((e) => ({
               start: e.start,
               end: e.end,
@@ -726,7 +734,7 @@ export function AddBookingModal({
             })),
           ].sort((a, b) => a.start.localeCompare(b.start))
         : [],
-    [allDay, scheduling, customWindow, diaryBookings, diaryEvents, customStaffId],
+    [allDay, scheduling, customWindow, diaryBookings, diaryEvents, customStaffId, customerList],
   );
   const overlapNote = timedOverlapNote(timedOverlaps, timezone);
   // A "yes" to sharing the day is about *this* day, this person and this kind of
