@@ -45,7 +45,6 @@ import {
   useServices,
   useStaffList,
   useUpdateService,
-  useUpdateStaff,
 } from "@/lib/api/hooks";
 import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
 import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
@@ -474,7 +473,6 @@ function ServiceDialog({
   const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
   const createService = useCreateService();
   const updateService = useUpdateService();
-  const updateStaff = useUpdateStaff();
   const staffList = useStaffList();
   const soleStaff = useSoleStaff();
   const activeStaff = useMemo(
@@ -770,27 +768,10 @@ function ServiceDialog({
           }
         }
       }
-      // A staff record with its own service list would silently veto this service
-      // even though it was just assigned to them here. Bring those lists into line
-      // so this dialog is the one place that decides who delivers what.
-      const toReconcile = staffNeedingReconcile(saved.id, eligibleStaffIds, activeStaff);
-      if (toReconcile.length > 0) {
-        const results = await Promise.allSettled(
-          toReconcile.map((m) =>
-            updateStaff.mutateAsync({
-              staffId: m.id,
-              version: m.version,
-              body: { eligibleServiceIds: [...m.eligibleServiceIds, saved.id] },
-            }),
-          ),
-        );
-        const failed = results.filter((r) => r.status === "rejected").length;
-        if (failed > 0) {
-          toast.warning(
-            `${failed} staff record${failed === 1 ? "" : "s"} couldn't be updated — check their services list.`,
-          );
-        }
-      }
+      // A staff record with its own services list would otherwise veto this service
+      // even though it was just assigned to them here. The API brings those lists
+      // into line on save (so quick-add and other clients get it too); the hooks
+      // refetch staff so the pages reflect it.
     } catch (err) {
       // The mutation hooks already toast the error. On 409, the services list is
       // refetched and this dialog rehydrates from the fresh version.
