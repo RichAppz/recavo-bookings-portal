@@ -95,8 +95,8 @@ function pctChange(current: number, previous: number) {
 
 function planGateMessage(error: unknown) {
   if (!(error instanceof ApiError)) return null;
-  // Plans are sold on the web only, so the store apps state the gate without
-  // an upgrade prompt (saasPurchasesAllowedInApp).
+  // A store app that cannot sell states the gate without an upgrade prompt
+  // (saasPurchasesAllowedInApp).
   if (error.code === "FEATURE_NOT_AVAILABLE") {
     return saasPurchasesAllowedInApp()
       ? "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics."
@@ -276,7 +276,7 @@ function ReportsPage() {
             title="Reports unavailable"
             description={planGate}
             action={
-              // Plans are sold on the web only; no pointer to them in the store apps.
+              // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
               saasPurchasesAllowedInApp() ? (
                 <Button asChild>
                   <Link to="/settings" search={{ tab: "billing" }}>

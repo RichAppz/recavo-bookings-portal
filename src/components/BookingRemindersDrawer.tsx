@@ -70,7 +70,7 @@ export function BookingRemindersDrawer({
     ) : smsCredits.level === "empty" ? (
       <>
         No text credits left — texts go by email instead.
-        {/* Bundles are sold on the web only; no buy prompt in the store apps. */}
+        {/* Buy prompt only where bundles can be bought (web or iOS In-App Purchase). */}
         {saasPurchasesAllowedInApp() ? (
           <>
             {" "}

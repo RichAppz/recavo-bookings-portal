@@ -3,13 +3,14 @@ import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
 
 /**
- * Signed in to the store app with no staff membership anywhere.
+ * Signed in to a store app that cannot sell (no In-App Purchase configured)
+ * with no staff membership anywhere.
  *
- * On the web this account would be offered "Set up your business", which ends
- * at the plan chooser. Recavo is sold on the web only, so the app shows neither
- * the form nor a pointer to where to buy — App Store guideline 3.1.3 treats any
- * such call to action as steering, and the UK storefront has no exemption. Just
- * say what is missing and let them sign out.
+ * Elsewhere this account would be offered "Set up your business", which ends
+ * at the plan chooser. Here there is no way to buy one, so the app shows
+ * neither the form nor a pointer to where to buy — App Store guideline 3.1.3
+ * treats any such call to action as steering, and the UK storefront has no
+ * exemption. Just say what is missing and let them sign out.
  */
 export function NoBusinessInApp() {
   const { user, signOut } = useAuth();

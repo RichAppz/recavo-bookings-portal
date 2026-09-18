@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, Check, FileText, Sparkles } from "lucide-react";
+import { ArrowDown, Check, ExternalLink, FileText, RotateCcw, Sparkles } from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import { SmsCreditsCard } from "@/components/SmsCreditsCard";
@@ -43,11 +43,18 @@ import type {
   SaasPlanCode,
   SubscriptionChangePreview,
 } from "@/lib/api/types";
-import { isBillingBlocked, subscriptionAccessState } from "@/lib/billing/access";
+import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
+import {
+  isBillingBlocked,
+  subscriptionAccessState,
+  subscriptionManagedHere,
+  subscriptionProvider,
+} from "@/lib/billing/access";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { addonsWithInvoicing } from "@/lib/api/invoices";
+import { openIapManagement, planOrder, type IapProduct } from "@/lib/iap";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { billingSurface } from "@/lib/native";
 import { UPSELLS_ADDON_KEY } from "@/lib/api/upsells";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -280,10 +287,13 @@ function AddonsCard({
   addons,
   currentPlanName,
   disabled,
+  managedHere = true,
 }: {
   addons: SubscriptionAddon[];
   currentPlanName: string | null;
   disabled: boolean;
+  /** False when the subscription is billed elsewhere (App Store): show state only. */
+  managedHere?: boolean;
 }) {
   const add = useAddSubscriptionAddon();
   const remove = useRemoveSubscriptionAddon();
@@ -293,7 +303,11 @@ function AddonsCard({
   return (
     <SectionCard
       title="Add-ons"
-      description="Extras you can switch on without changing plan. Prorated onto your current bill."
+      description={
+        managedHere
+          ? "Extras you can switch on without changing plan. Prorated onto your current bill."
+          : "Extras on this subscription. It is billed through the App Store, so add or remove them from Billing in the Recavo iPhone app."
+      }
     >
       <div className="grid gap-3">
         {addons.map((addon) => {
@@ -312,15 +326,23 @@ function AddonsCard({
                   <p className="text-xs text-muted-foreground">
                     {addon.status === "included"
                       ? copy.included(currentPlanName ?? "your plan")
-                      : addon.status === "active"
-                        ? copy.active(price)
-                        : copy.available(price)}
+                      : !managedHere
+                        ? addon.status === "active"
+                          ? "Active."
+                          : "Not on this subscription."
+                        : addon.status === "active"
+                          ? copy.active(price)
+                          : copy.available(price)}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {addon.status === "included" ? (
                   <StatusBadge status="active" />
+                ) : !managedHere ? (
+                  addon.status === "active" ? (
+                    <StatusBadge status="active" />
+                  ) : null
                 ) : addon.status === "active" ? (
                   <>
                     <StatusBadge status="active" />
@@ -377,19 +399,21 @@ function AddonsCard({
 }
 
 export function BillingPage() {
-  // Recavo is sold on the web only (see saasPurchasesAllowedInApp): the store
-  // apps get a read-only view with no plan chooser, prices or Stripe hand-offs.
-  // Stable for the life of the page, so choosing the component here is safe.
-  if (!saasPurchasesAllowedInApp()) return <InAppBillingPage />;
-  return <WebBillingPage />;
+  // Three surfaces (see billingSurface): the web sells through Stripe, the iOS
+  // app through In-App Purchase, and a store app that cannot sell shows plan
+  // state only. Stable for the life of the page, so choosing here is safe.
+  const surface = billingSurface();
+  if (surface === "web") return <WebBillingPage />;
+  if (surface === "store") return <StoreBillingPage />;
+  return <InAppBillingPage />;
 }
 
 /**
- * Billing as the store apps show it. Nothing here can start, change or pay
- * for a subscription: an unsubscribed business sees a plain "not active"
- * notice, a subscribed one sees its plan and text balance. Deliberately no
- * price, no "manage on the website" line and no link out — App Store
- * guideline 3.1.3 counts those as steering to another purchase route.
+ * Billing as a store app without In-App Purchase shows it. Nothing here can
+ * start, change or pay for a subscription: an unsubscribed business sees a
+ * plain "not active" notice, a subscribed one sees its plan and text balance.
+ * Deliberately no price, no "manage on the website" line and no link out —
+ * App Store guideline 3.1.3 counts those as steering to another purchase route.
  */
 function InAppBillingPage() {
   const tenant = useTenant();
@@ -443,6 +467,392 @@ function InAppBillingPage() {
   );
 }
 
+/** Apple's standard EULA — App Store Review requires a Terms of Use link beside subscription pricing. */
+const APPLE_STANDARD_EULA_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+const PRIVACY_POLICY_URL = "https://recavo.app/privacy";
+
+function planTitle(item: IapProduct): string {
+  const tier = item.product.plan ?? "";
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+/**
+ * Billing in the iOS app: plans, bolt-ons and text bundles bought through
+ * StoreKit (App Store Review Guideline 3.1.1). Every price on this screen is
+ * the App Store's own, read from the product; the Stripe catalogue is never
+ * shown. Plan changes and cancellation happen on Apple's subscription page —
+ * the app reflects them once RevenueCat tells the API.
+ *
+ * A business billed through Stripe sees its plan read-only here (the API
+ * refuses a second provider) but may still buy text bundles, which are
+ * consumables and provider-agnostic.
+ */
+function StoreBillingPage() {
+  const tenant = useTenant();
+  const subscription = useSubscription();
+  const iap = useIapProducts();
+  const flow = useIapPurchase();
+  const [interval, setInterval] = useState<SaasInterval>("month");
+
+  const current = subscription.data?.subscription;
+  const plan = subscription.data?.plan;
+  const addonRows = addonsWithInvoicing(subscription.data);
+  const tz = tenant.business?.defaultTimezone ?? "Europe/London";
+  const blocked = isBillingBlocked(current);
+  const canManage = canManageSaasBilling({
+    can: tenant.can,
+    roleKeys: tenant.roleKeys,
+    blocked,
+  });
+  const managedHere = subscriptionManagedHere(current, "store");
+  const stripeBilled = Boolean(current) && !blocked && subscriptionProvider(current) === "stripe";
+
+  const planItems = useMemo(
+    () =>
+      iap
+        .byKind("plan")
+        .filter((p) => p.product.interval === interval)
+        .sort((a, b) => planOrder(a.product) - planOrder(b.product)),
+    [iap, interval],
+  );
+  const hasYearly = iap.byKind("plan").some((p) => p.product.interval === "year");
+  const currentProductId =
+    current && typeof current === "object" && "planVersion" in current
+      ? planItems.find((p) => `${p.product.plan}_v1` === current.planVersion)?.productId
+      : undefined;
+
+  if (tenant.isLoading || subscription.isLoading) {
+    return <PageGhost />;
+  }
+
+  if (!canManage) {
+    return (
+      <EmptyState
+        title="Ask the owner to subscribe"
+        description="A business owner needs to start a Recavo plan before this workspace can be used."
+      />
+    );
+  }
+
+  const trialLine = (item: IapProduct) =>
+    item.introOffer && item.introOffer.priceString.replace(/[^\d]/g, "") === "000"
+      ? `${item.introOffer.cycles > 1 ? `${item.introOffer.cycles} × ` : ""}${item.introOffer.period.replace(/^P/, "").toLowerCase()} free, then `
+      : "";
+
+  return (
+    <div className="space-y-6">
+      {blocked ? (
+        <div className="max-w-2xl">
+          <p className="text-sm text-muted-foreground">
+            {subscriptionAccessState(current) === "ended"
+              ? "Your subscription has ended. Choose a plan to reopen the console."
+              : "Choose a plan to start your 14-day free trial. Billed through your Apple ID; cancel any time in Settings before the trial ends and you won’t be charged."}
+          </p>
+        </div>
+      ) : null}
+
+      {!blocked && current ? (
+        <SectionCard
+          title="Current plan"
+          action={current.status ? <StatusBadge status={current.status} /> : null}
+        >
+          <div className="space-y-3 text-sm">
+            <p>
+              Plan: <span className="font-medium">{plan?.name ?? current.planVersion ?? "—"}</span>
+              {current.accessState ? (
+                <>
+                  {" "}
+                  · Access: <span className="font-medium capitalize">{current.accessState}</span>
+                </>
+              ) : null}
+            </p>
+            {current.trialEnd && current.accessState === "trial" ? (
+              <p>Trial ends {formatInTz(current.trialEnd, tz)}</p>
+            ) : current.currentPeriodEnd ? (
+              <p>Renews {formatInTz(current.currentPeriodEnd, tz)}</p>
+            ) : null}
+            {current.cancelAtPeriodEnd ? (
+              <p className="text-amber-700 dark:text-amber-400">
+                Auto-renew is off — access ends with the current period
+              </p>
+            ) : null}
+            {stripeBilled ? (
+              <p className="text-muted-foreground">
+                This subscription is billed on the website, where the plan and bolt-ons are managed.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => void openIapManagement()}>
+                  <ExternalLink className="size-4" />
+                  Manage subscription
+                </Button>
+                <Button variant="ghost" disabled={flow.busy} onClick={() => void flow.restore()}>
+                  <RotateCcw className="size-4" />
+                  {flow.state === "restoring" ? "Restoring…" : "Restore purchases"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {!blocked && current && addonRows.length ? (
+        stripeBilled ? (
+          <AddonsCard
+            addons={addonRows}
+            currentPlanName={plan?.name ?? null}
+            disabled
+            managedHere={false}
+          />
+        ) : (
+          <StoreAddonsCard
+            addons={addonRows}
+            currentPlanName={plan?.name ?? null}
+            items={iap.byKind("addon")}
+            flow={flow}
+          />
+        )
+      ) : null}
+
+      {!blocked && current ? <SmsCreditsCard /> : null}
+
+      {managedHere || blocked ? (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
+            {hasYearly ? (
+              <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Monthly</SelectItem>
+                  <SelectItem value="year">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null}
+          </div>
+
+          {iap.isLoading ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="surface-card h-64 animate-pulse" />
+              ))}
+            </div>
+          ) : planItems.length === 0 ? (
+            <EmptyState
+              title="Plans unavailable"
+              description="The App Store didn’t return any plans. Check you’re signed in to the App Store and try again."
+              action={
+                <Button variant="outline" onClick={() => void iap.refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid items-stretch gap-5 pt-2 md:grid-cols-3">
+              {planItems.map((item) => {
+                const code = item.product.plan ?? "";
+                const isCurrent = item.productId === currentProductId;
+                const pitch = planPitch(tenant.business?.industryTemplateKey, code) ?? {
+                  tagline: planTitle(item),
+                  bullets: [],
+                };
+                const popular = Boolean(pitch.popular);
+                // Capacity comes from the web catalogue; the store product has no limits
+                // attached, so the pitch bullets stand alone here.
+                const bullets = pitch.bullets.filter((b) => !/£\d/.test(b));
+                return (
+                  <div
+                    key={item.productId}
+                    className={cn(
+                      "relative flex flex-col rounded-3xl border bg-card p-6 pt-8 shadow-sm",
+                      popular && "border-2 border-primary shadow-md",
+                    )}
+                  >
+                    {popular ? (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                        Most popular
+                      </span>
+                    ) : null}
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xl font-semibold tracking-tight">{planTitle(item)}</p>
+                      {isCurrent ? <StatusBadge status="active" /> : null}
+                    </div>
+                    <p className="mt-1 min-h-10 text-sm text-muted-foreground">{pitch.tagline}</p>
+                    <p className="mt-5 text-4xl font-semibold tracking-tight">
+                      {item.priceString}
+                      <span className="text-base font-normal text-muted-foreground">
+                        /{item.product.interval ?? interval}
+                      </span>
+                    </p>
+                    {blocked && item.introOffer ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {trialLine(item)}
+                        {item.priceString}/{item.product.interval ?? interval}. Renews automatically
+                        until cancelled.
+                      </p>
+                    ) : null}
+                    <ul className="mt-6 flex-1 space-y-2.5">
+                      {bullets.map((label) => (
+                        <FeatureRow key={label} label={label} />
+                      ))}
+                    </ul>
+                    <div className="mt-8">
+                      {isCurrent ? (
+                        <Button className="h-11 w-full rounded-full" variant="secondary" disabled>
+                          Current plan
+                        </Button>
+                      ) : (
+                        <Button
+                          className="h-11 w-full rounded-full"
+                          variant={popular ? "default" : "secondary"}
+                          disabled={flow.busy}
+                          onClick={() =>
+                            void flow.purchase(
+                              item,
+                              blocked ? "Your plan is active" : `Switched to ${planTitle(item)}`,
+                            )
+                          }
+                        >
+                          {flow.state === "purchasing"
+                            ? "Waiting for App Store…"
+                            : flow.state === "reconciling"
+                              ? "Activating…"
+                              : blocked
+                                ? item.introOffer
+                                  ? "Start free trial"
+                                  : "Subscribe"
+                                : `Switch to ${planTitle(item)}`}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <p>
+              Payment is charged to your Apple ID at confirmation. Subscriptions renew automatically
+              at the same price unless auto-renew is turned off at least 24 hours before the end of
+              the current period. Any unused portion of a free trial is forfeited when you
+              subscribe. Manage or cancel in Settings › Apple ID › Subscriptions.
+            </p>
+            <p className="flex flex-wrap gap-x-3">
+              <a
+                className="underline underline-offset-2"
+                href={APPLE_STANDARD_EULA_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Terms of Use
+              </a>
+              <a
+                className="underline underline-offset-2"
+                href={PRIVACY_POLICY_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Privacy Policy
+              </a>
+              {blocked ? (
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  disabled={flow.busy}
+                  onClick={() => void flow.restore()}
+                >
+                  {flow.state === "restoring" ? "Restoring…" : "Restore purchases"}
+                </button>
+              ) : null}
+            </p>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Bolt-ons bought through StoreKit. Removal happens on Apple's subscription page. */
+function StoreAddonsCard({
+  addons,
+  currentPlanName,
+  items,
+  flow,
+}: {
+  addons: SubscriptionAddon[];
+  currentPlanName: string | null;
+  items: IapProduct[];
+  flow: ReturnType<typeof useIapPurchase>;
+}) {
+  if (addons.length === 0) return null;
+  return (
+    <SectionCard
+      title="Add-ons"
+      description="Extras you can switch on without changing plan. Billed monthly through your Apple ID."
+    >
+      <div className="grid gap-3">
+        {addons.map((addon) => {
+          const copy = ADDON_COPY[addon.key] ?? genericAddonCopy(addon.key);
+          const Icon = copy.icon;
+          const item = items.find((p) => p.product.addonKey === addon.key);
+          const price = item ? `${item.priceString}/month` : null;
+          return (
+            <div
+              key={addon.key}
+              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4"
+            >
+              <div className="flex items-start gap-3">
+                <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">{copy.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {addon.status === "included"
+                      ? copy.included(currentPlanName ?? "your plan")
+                      : addon.status === "active"
+                        ? price
+                          ? copy.active(price)
+                          : "Active."
+                        : price
+                          ? copy.available(price)
+                          : "Not available from the App Store right now."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {addon.status === "included" ? (
+                  <StatusBadge status="active" />
+                ) : addon.status === "active" ? (
+                  <>
+                    <StatusBadge status="active" />
+                    <Button variant="outline" size="sm" onClick={() => void openIapManagement()}>
+                      Manage
+                    </Button>
+                  </>
+                ) : item ? (
+                  <Button
+                    size="sm"
+                    disabled={flow.busy}
+                    onClick={() => void flow.purchase(item, copy.addedTitle)}
+                  >
+                    {flow.state === "purchasing"
+                      ? "Waiting for App Store…"
+                      : flow.state === "reconciling"
+                        ? "Activating…"
+                        : `Add for ${price}`}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
 function WebBillingPage() {
   const tenant = useTenant();
   const subscription = useSubscription();
@@ -467,6 +877,9 @@ function WebBillingPage() {
     roleKeys: tenant.roleKeys,
     blocked,
   });
+  // An App Store subscription is Apple's to change; the website shows it but
+  // offers no Stripe buttons or plan chooser for it (the API would refuse).
+  const appleBilled = Boolean(current) && !blocked && subscriptionProvider(current) === "apple";
 
   const plans = useMemo(() => {
     const list = [...(catalogue.data ?? [])];
@@ -565,60 +978,68 @@ function WebBillingPage() {
             {current.cancelAtPeriodEnd ? (
               <p className="text-amber-700 dark:text-amber-400">Cancels at period end</p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              {plans.length > 0 ? (
-                <Button onClick={jumpToPlans}>
-                  {hasUpgrade ? "Upgrade plan" : "Change plan"}
-                  <ArrowDown className="size-4" />
-                </Button>
-              ) : null}
-              <Button
-                variant="outline"
-                disabled={portal.isPending}
-                onClick={() => void openPortal()}
-              >
-                Manage in Stripe
-              </Button>
-              {current.cancelAtPeriodEnd ? (
+            {appleBilled ? (
+              <p className="text-muted-foreground">
+                Billed through the App Store. Change plan, add bolt-ons or cancel from Billing in
+                the Recavo iPhone app, or in Settings › Apple ID › Subscriptions on your iPhone.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {plans.length > 0 ? (
+                  <Button onClick={jumpToPlans}>
+                    {hasUpgrade ? "Upgrade plan" : "Change plan"}
+                    <ArrowDown className="size-4" />
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
-                  disabled={resume.isPending}
-                  onClick={async () => {
-                    await resume.mutateAsync();
-                    toast.success("Subscription resumed");
-                  }}
+                  disabled={portal.isPending}
+                  onClick={() => void openPortal()}
                 >
-                  Resume
+                  Manage in Stripe
                 </Button>
-              ) : (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" disabled={cancel.isPending}>
-                      Cancel at period end
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Access continues until the current period ends. You can resume before then.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Keep plan</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={async () => {
-                          await cancel.mutateAsync();
-                          toast.success("Cancellation scheduled");
-                        }}
-                      >
-                        Confirm cancel
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </div>
+                {current.cancelAtPeriodEnd ? (
+                  <Button
+                    variant="outline"
+                    disabled={resume.isPending}
+                    onClick={async () => {
+                      await resume.mutateAsync();
+                      toast.success("Subscription resumed");
+                    }}
+                  >
+                    Resume
+                  </Button>
+                ) : (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" disabled={cancel.isPending}>
+                        Cancel at period end
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Access continues until the current period ends. You can resume before
+                          then.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep plan</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={async () => {
+                            await cancel.mutateAsync();
+                            toast.success("Cancellation scheduled");
+                          }}
+                        >
+                          Confirm cancel
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            )}
           </div>
         </SectionCard>
       ) : null}
@@ -627,156 +1048,161 @@ function WebBillingPage() {
         <AddonsCard
           addons={addonRows}
           currentPlanName={currentPlan?.name ?? plan?.name ?? null}
-          disabled={!canManage}
+          disabled={!canManage || appleBilled}
+          managedHere={!appleBilled}
         />
       ) : null}
 
       {!blocked && current ? <SmsCreditsCard /> : null}
 
-      {/* scroll-mt clears the sticky header when the "Upgrade plan" button jumps here. */}
-      <div
-        ref={plansRef}
-        className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3"
-      >
-        <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
-        <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Monthly</SelectItem>
-            <SelectItem value="year">Yearly</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {appleBilled ? null : (
+        <>
+          {/* scroll-mt clears the sticky header when the "Upgrade plan" button jumps here. */}
+          <div
+            ref={plansRef}
+            className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3"
+          >
+            <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
+            <Select value={interval} onValueChange={(v) => setInterval(v as SaasInterval)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">Monthly</SelectItem>
+                <SelectItem value="year">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      {catalogue.isLoading ? (
-        <div className="grid gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="surface-card h-64 animate-pulse" />
-          ))}
-        </div>
-      ) : plans.length === 0 ? (
-        <EmptyState
-          title="Plans unavailable"
-          description="The Recavo catalogue couldn’t be loaded. Try again shortly."
-        />
-      ) : (
-        <div className="grid items-stretch gap-5 pt-2 md:grid-cols-3">
-          {plans.map((p) => {
-            const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
-            const isCurrent = currentPlan?.code === p.code;
-            const pitch = planPitch(tenant.business?.industryTemplateKey, p.code) ?? {
-              tagline: p.name,
-              bullets: [],
-            };
-            const popular = Boolean(pitch.popular);
-            const bullets = [capacityBullet(p, tenant.terminology.staff), ...pitch.bullets];
-            return (
-              <div
-                key={p.code}
-                className={cn(
-                  "relative flex flex-col rounded-3xl border bg-card p-6 pt-8 shadow-sm",
-                  popular && "border-2 border-primary shadow-md",
-                )}
-              >
-                {popular ? (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-                    Most popular
-                  </span>
-                ) : null}
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xl font-semibold tracking-tight">{p.name}</p>
-                  {isCurrent ? <StatusBadge status="active" /> : null}
-                </div>
-                <p className="mt-1 min-h-10 text-sm text-muted-foreground">{pitch.tagline}</p>
-                <p className="mt-5 text-4xl font-semibold tracking-tight">
-                  {price ? formatMoney(price.amountMinor, p.currency, { compact: true }) : "—"}
-                  <span className="text-base font-normal text-muted-foreground">
-                    /{price?.interval ?? interval}
-                  </span>
+          {catalogue.isLoading ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="surface-card h-64 animate-pulse" />
+              ))}
+            </div>
+          ) : plans.length === 0 ? (
+            <EmptyState
+              title="Plans unavailable"
+              description="The Recavo catalogue couldn’t be loaded. Try again shortly."
+            />
+          ) : (
+            <div className="grid items-stretch gap-5 pt-2 md:grid-cols-3">
+              {plans.map((p) => {
+                const price = p.prices.find((x) => x.interval === interval) ?? p.prices[0];
+                const isCurrent = currentPlan?.code === p.code;
+                const pitch = planPitch(tenant.business?.industryTemplateKey, p.code) ?? {
+                  tagline: p.name,
+                  bullets: [],
+                };
+                const popular = Boolean(pitch.popular);
+                const bullets = [capacityBullet(p, tenant.terminology.staff), ...pitch.bullets];
+                return (
+                  <div
+                    key={p.code}
+                    className={cn(
+                      "relative flex flex-col rounded-3xl border bg-card p-6 pt-8 shadow-sm",
+                      popular && "border-2 border-primary shadow-md",
+                    )}
+                  >
+                    {popular ? (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                        Most popular
+                      </span>
+                    ) : null}
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xl font-semibold tracking-tight">{p.name}</p>
+                      {isCurrent ? <StatusBadge status="active" /> : null}
+                    </div>
+                    <p className="mt-1 min-h-10 text-sm text-muted-foreground">{pitch.tagline}</p>
+                    <p className="mt-5 text-4xl font-semibold tracking-tight">
+                      {price ? formatMoney(price.amountMinor, p.currency, { compact: true }) : "—"}
+                      <span className="text-base font-normal text-muted-foreground">
+                        /{price?.interval ?? interval}
+                      </span>
+                    </p>
+                    <ul className="mt-6 flex-1 space-y-2.5">
+                      {bullets.map((label) => (
+                        <FeatureRow key={label} label={label} />
+                      ))}
+                    </ul>
+                    <div className="mt-8">
+                      {blocked || !current ? (
+                        <Button
+                          className="h-11 w-full rounded-full"
+                          variant={popular ? "default" : "secondary"}
+                          disabled={checkout.isPending}
+                          onClick={() => void startCheckout(p)}
+                        >
+                          {checkout.isPending ? "Starting checkout…" : "Start free trial"}
+                        </Button>
+                      ) : isCurrent ? (
+                        <Button className="h-11 w-full rounded-full" variant="secondary" disabled>
+                          Current plan
+                        </Button>
+                      ) : (
+                        <Button
+                          className="h-11 w-full rounded-full"
+                          variant={popular ? "default" : "secondary"}
+                          disabled={preview.isPending}
+                          onClick={async () => {
+                            const result = await preview.mutateAsync({
+                              plan: p.code as SaasPlanCode,
+                              interval: (price?.interval ?? interval) as SaasInterval,
+                            });
+                            setPreviewResult(result);
+                          }}
+                        >
+                          {preview.isPending ? "Checking…" : `Switch to ${p.name}`}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {previewResult ? (
+            <SectionCard title="Change preview">
+              <div className="space-y-3 text-sm">
+                <p>
+                  {CHANGE_KIND_COPY[previewResult.changeKind]}, effective{" "}
+                  {formatInTz(previewResult.effectiveAt, tz)} (
+                  {CHANGE_TIMING_COPY[previewResult.timing]}).
                 </p>
-                <ul className="mt-6 flex-1 space-y-2.5">
-                  {bullets.map((label) => (
-                    <FeatureRow key={label} label={label} />
-                  ))}
-                </ul>
-                <div className="mt-8">
-                  {blocked || !current ? (
-                    <Button
-                      className="h-11 w-full rounded-full"
-                      variant={popular ? "default" : "secondary"}
-                      disabled={checkout.isPending}
-                      onClick={() => void startCheckout(p)}
-                    >
-                      {checkout.isPending ? "Starting checkout…" : "Start free trial"}
-                    </Button>
-                  ) : isCurrent ? (
-                    <Button className="h-11 w-full rounded-full" variant="secondary" disabled>
-                      Current plan
-                    </Button>
-                  ) : (
-                    <Button
-                      className="h-11 w-full rounded-full"
-                      variant={popular ? "default" : "secondary"}
-                      disabled={preview.isPending}
-                      onClick={async () => {
-                        const result = await preview.mutateAsync({
-                          plan: p.code as SaasPlanCode,
-                          interval: (price?.interval ?? interval) as SaasInterval,
-                        });
-                        setPreviewResult(result);
-                      }}
-                    >
-                      {preview.isPending ? "Checking…" : `Switch to ${p.name}`}
-                    </Button>
-                  )}
+                <p>
+                  Charge now: {formatMoney(previewResult.chargeNowMinor, previewResult.currency)} ·
+                  Credit now: {formatMoney(previewResult.creditNowMinor, previewResult.currency)} ·
+                  Tax: {formatMoney(previewResult.taxMinor, previewResult.currency)}
+                </p>
+                {previewResult.overLimitBlockers.length > 0 ? (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    Blockers:{" "}
+                    {previewResult.overLimitBlockers
+                      .map((b) => `${b.limitKey} (${b.currentUsage}/${b.targetLimit})`)
+                      .join(", ")}
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button
+                    disabled={apply.isPending || previewResult.overLimitBlockers.length > 0}
+                    onClick={async () => {
+                      await apply.mutateAsync({ previewToken: previewResult.previewToken });
+                      setPreviewResult(null);
+                      toast.success("Plan change applied");
+                    }}
+                  >
+                    Apply change
+                  </Button>
+                  <Button variant="outline" onClick={() => setPreviewResult(null)}>
+                    Dismiss
+                  </Button>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </SectionCard>
+          ) : null}
+        </>
       )}
-
-      {previewResult ? (
-        <SectionCard title="Change preview">
-          <div className="space-y-3 text-sm">
-            <p>
-              {CHANGE_KIND_COPY[previewResult.changeKind]}, effective{" "}
-              {formatInTz(previewResult.effectiveAt, tz)} (
-              {CHANGE_TIMING_COPY[previewResult.timing]}).
-            </p>
-            <p>
-              Charge now: {formatMoney(previewResult.chargeNowMinor, previewResult.currency)} ·
-              Credit now: {formatMoney(previewResult.creditNowMinor, previewResult.currency)} · Tax:{" "}
-              {formatMoney(previewResult.taxMinor, previewResult.currency)}
-            </p>
-            {previewResult.overLimitBlockers.length > 0 ? (
-              <p className="text-amber-700 dark:text-amber-400">
-                Blockers:{" "}
-                {previewResult.overLimitBlockers
-                  .map((b) => `${b.limitKey} (${b.currentUsage}/${b.targetLimit})`)
-                  .join(", ")}
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <Button
-                disabled={apply.isPending || previewResult.overLimitBlockers.length > 0}
-                onClick={async () => {
-                  await apply.mutateAsync({ previewToken: previewResult.previewToken });
-                  setPreviewResult(null);
-                  toast.success("Plan change applied");
-                }}
-              >
-                Apply change
-              </Button>
-              <Button variant="outline" onClick={() => setPreviewResult(null)}>
-                Dismiss
-              </Button>
-            </div>
-          </div>
-        </SectionCard>
-      ) : null}
     </div>
   );
 }

@@ -49,24 +49,53 @@ export function isNativeIOS(): boolean {
 }
 
 /**
- * Whether this surface may sell Recavo's own plans, bolt-ons and text-credit
- * bundles, or point at somewhere that does.
- *
- * Recavo subscriptions are sold on the web only. The store apps are a companion
- * for businesses that already subscribe: App Store guideline 3.1.1 requires
- * In-App Purchase for anything an individual can buy inside the app, and 3.1.3
- * forbids buttons, prices or links that steer to another purchase route (the
- * UK storefront has no link-out exemption). Google Play applies the same rule.
- * So in the app there is no plan chooser, no trial button, no add-on or bundle
- * purchase, no Stripe portal, no price for any of them, and no "buy on the
- * website" call to action. Payments a business takes from its own clients for
- * in-person services are unaffected.
- *
- * `native` is a parameter only so the rule can be unit-tested; callers use the
- * default.
+ * RevenueCat *public* SDK key for the Apple app (starts `appl_`). Public by
+ * design — it identifies the app, it does not authorise anything. Set per
+ * environment in .env.staging / .env.production; unset means the store apps
+ * cannot sell and fall back to the read-only billing view.
  */
-export function saasPurchasesAllowedInApp(native: boolean = isNativeApp()): boolean {
-  return !native;
+export function revenueCatApiKey(): string | undefined {
+  // `import.meta.env` is Vite's; the unit tests run this file under plain Node.
+  const env = (import.meta as { env?: Record<string, string | undefined> }).env;
+  const key = env?.VITE_REVENUECAT_IOS_API_KEY;
+  return key && key.length > 0 ? key : undefined;
+}
+
+/**
+ * Where Recavo's own plans, bolt-ons and text bundles are sold on this surface.
+ *
+ * - `web`: a browser tab — Stripe Checkout and the Billing Portal.
+ * - `store`: the iOS app with In-App Purchase wired up — StoreKit via
+ *   RevenueCat (App Store Review Guideline 3.1.1 requires it for anything an
+ *   individual can buy inside the app, and 3.1.3 forbids steering to another
+ *   purchase route, so the app never shows a Stripe price or link).
+ * - `none`: a store app that cannot sell (Android today, or the RevenueCat key
+ *   is not configured). It shows plan state only: no prices, no purchase
+ *   buttons, no "buy on the website" pointer.
+ *
+ * Payments a business takes from its own clients are unaffected by any of this.
+ *
+ * Parameters exist only so the rule can be unit-tested; callers use the defaults.
+ */
+export type BillingSurface = "web" | "store" | "none";
+
+export function billingSurface(
+  native: boolean = isNativeApp(),
+  storeReady: boolean = isNativeIOS() && revenueCatApiKey() !== undefined,
+): BillingSurface {
+  if (!native) return "web";
+  return storeReady ? "store" : "none";
+}
+
+/**
+ * Whether this surface may sell Recavo's own services, or point at the billing
+ * page that does. False only on a store app with no In-App Purchase.
+ */
+export function saasPurchasesAllowedInApp(
+  native: boolean = isNativeApp(),
+  storeReady: boolean = isNativeIOS() && revenueCatApiKey() !== undefined,
+): boolean {
+  return billingSurface(native, storeReady) !== "none";
 }
 
 async function closeInAppBrowser(): Promise<void> {

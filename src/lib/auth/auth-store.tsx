@@ -26,6 +26,7 @@ import {
   readPendingProfile,
   stashPendingProfile,
 } from "@/lib/auth/pending-profile";
+import { resetIap } from "@/lib/iap";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   isNativeApp,
@@ -985,6 +986,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeRecoveryFlag(false);
     setPasswordRecovery(false);
     queryClient.clear();
+    // Detach the store SDK from the business so the next sign-in cannot see its receipts.
+    void resetIap();
 
     if (isSupabaseConfigured()) {
       try {

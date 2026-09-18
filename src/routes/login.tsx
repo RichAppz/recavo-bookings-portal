@@ -122,8 +122,8 @@ function CustomerLogin() {
 function StaffLogin() {
   const { signIn, signInWithGoogle, signInWithApple, confirmSignUp, resendSignUpCode } = useAuth();
   const { ref } = Route.useSearch();
-  // Recavo is sold on the web, so the store apps only sign existing customers
-  // in: no path from here to creating an account that would then need a plan.
+  // Sign-up is offered wherever a plan can be bought (web via Stripe, iOS app
+  // via In-App Purchase); a store app that cannot sell only signs members in.
   const canSignUpHere = useSaasPurchasesAllowed();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

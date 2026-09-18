@@ -449,7 +449,7 @@ function InvoiceDetail() {
               </button>
             </>
           ) : (
-            // The bolt-on is sold on the web only; no purchase prompt in the store apps.
+            // Purchase prompt only where the bolt-on can be bought (saasPurchasesAllowedInApp).
             <>Invoicing isn’t on your plan, so this draft can’t be edited or issued.</>
           )}
         </p>

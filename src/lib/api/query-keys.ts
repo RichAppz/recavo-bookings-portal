@@ -138,6 +138,7 @@ export const queryKeys = {
     ["biz", businessId, "exports", exportId] as const,
 
   subscription: (businessId: string) => ["biz", businessId, "subscription"] as const,
+  appStoreConfig: (businessId: string) => ["biz", businessId, "iap-config"] as const,
   smsCredits: (businessId: string) => ["biz", businessId, "sms-credits"] as const,
   referral: (businessId: string) => ["biz", businessId, "referral"] as const,
   plans: () => ["plans"] as const,

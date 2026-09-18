@@ -14,7 +14,7 @@ export function SmsCreditsNavCard({ onClick }: { onClick?: () => void }) {
   if (!credits || level === "unlimited" || level === "unknown") return null;
 
   const balance = credits.balance;
-  // "buy more" is a purchase prompt; the store apps only sell on the web.
+  // "buy more" is a purchase prompt; only where bundles can be bought.
   const buyHint = saasPurchasesAllowedInApp() ? " · buy more" : "";
   const subtitle =
     level === "empty"

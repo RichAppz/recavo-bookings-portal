@@ -133,7 +133,7 @@ function PhotosPanel({ record }: { record: LinkedRecord }) {
             : "Photos aren't included on your current plan."
         }
         action={
-          // Plans are sold on the web only; no pointer to them in the store apps.
+          // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
           saasPurchasesAllowedInApp() ? (
             <Button asChild>
               <Link to="/settings" search={{ tab: "billing" }}>

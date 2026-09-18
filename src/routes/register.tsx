@@ -88,8 +88,9 @@ function RegisterPage() {
     }
   }, [status, navigate]);
 
-  // Recavo is sold on the web only: in the store apps a new account would land
-  // on a plan it cannot buy there, so sign-up is not offered in the app at all.
+  // A new account ends at the plan chooser, so sign-up is only offered where a
+  // plan can be bought: the web (Stripe) and the iOS app (In-App Purchase). A
+  // store app that cannot sell only signs existing members in.
   const canSignUpHere = useSaasPurchasesAllowed();
   useEffect(() => {
     if (!canSignUpHere) void navigate({ to: "/login", replace: true });
