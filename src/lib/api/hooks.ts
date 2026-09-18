@@ -862,6 +862,8 @@ export function useCreateService() {
         old && !old.some((s) => s.id === created.id) ? [...old, created] : old,
       );
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      // The API adds the new service to any restricted staff list that should have it.
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
       invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),
@@ -905,6 +907,8 @@ export function useUpdateService() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      // Changing who delivers a service may have updated restricted staff lists.
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
       invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
