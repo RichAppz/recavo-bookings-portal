@@ -91,7 +91,7 @@ export function DetailGhost() {
 export function AppChromeGhost() {
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 hidden w-[264px] flex-col bg-sidebar lg:flex">
+      <aside className="pl-safe w-sidebar fixed inset-y-0 left-0 hidden flex-col bg-sidebar lg:flex">
         <div className="px-5 py-5">
           <Skeleton className="h-8 w-32 bg-sidebar-accent" />
         </div>
@@ -105,9 +105,9 @@ export function AppChromeGhost() {
           <Skeleton className="h-12 rounded-xl bg-sidebar-accent/70" />
         </div>
       </aside>
-      <div className="lg:pl-[264px]">
+      <div className="lg:pl-sidebar">
         <header className="pt-safe min-h-16 sm:border-b" />
-        <main className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-safe-12 sm:p-6">
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full max-w-[1440px] pt-4 pb-safe-12 sm:p-6">
           <PageGhost />
         </main>
       </div>

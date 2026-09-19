@@ -53,7 +53,7 @@ function LegacyBookingLink() {
 
   if (!businessId) {
     return (
-      <main className="screen-center bg-background px-4">
+      <main className="screen-center bg-background px-safe-4">
         <div className="max-w-md text-center">
           <h1 className="text-lg font-semibold">Missing business</h1>
           <p className="mt-2 text-sm text-muted-foreground">

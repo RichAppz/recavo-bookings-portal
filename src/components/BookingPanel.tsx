@@ -725,7 +725,7 @@ export function BookingPanel({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-[2px]" onClick={onClose} />
-      <aside className="pt-safe pb-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
+      <aside className="pt-safe pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
         <header className="flex items-start justify-between gap-3 border-b p-5">
           {bookingQuery.isLoading || !booking ? (
             <div className="w-full">

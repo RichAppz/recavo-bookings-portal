@@ -314,7 +314,7 @@ export function OnboardingChecklist({
   // Desktop: an unobtrusive bottom-right popup — an expandable card that collapses
   // to a small pill, rather than a full-height drawer taking over the screen.
   return (
-    <div className="pointer-events-none fixed right-6 bottom-6 z-40 flex max-w-[min(100vw-2rem,22rem)] flex-col items-end gap-2">
+    <div className="pointer-events-none fixed right-safe-6 bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] z-40 flex max-w-[min(100vw-2rem,22rem)] flex-col items-end gap-2">
       {open ? (
         <div className="pointer-events-auto surface-card w-[min(100vw-2rem,22rem)] overflow-hidden shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-start gap-3 border-b px-4 py-3">

@@ -249,7 +249,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         ? err.detail || err.title
         : "The portal couldn't reach the API. Check your connection or the API URL.";
     return (
-      <div className="screen-center bg-background px-4">
+      <div className="screen-center bg-background px-safe-4">
         <div className="max-w-md space-y-3 text-center">
           <h1 className="text-lg font-semibold">Couldn't load your businesses</h1>
           <p className="text-sm text-muted-foreground">{detail}</p>

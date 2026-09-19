@@ -74,7 +74,7 @@ export function AccountShell({
 
       <aside
         className={cn(
-          "pt-safe pb-safe fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
+          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
           mobileNav ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -134,9 +134,9 @@ export function AccountShell({
         </div>
       </aside>
 
-      <div className="lg:pl-[264px]">
+      <div className="lg:pl-sidebar">
         <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-          <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+          <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -151,7 +151,7 @@ export function AccountShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full min-w-0 max-w-[1440px] space-y-6 px-4 pt-4 pb-safe-12 sm:p-6">
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
             {description ? (

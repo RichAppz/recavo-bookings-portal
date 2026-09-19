@@ -89,7 +89,7 @@ export function CustomerAuthLayout({
         </div>
       </aside>
 
-      <main className="pt-safe-8 pb-safe-8 flex flex-col px-5 sm:px-10">
+      <main className="pt-safe-8 pb-safe-8 px-safe-5 sm:px-safe-10 flex flex-col">
         <div className="flex items-center">
           <Link to="/" className="lg:invisible">
             <BrandMark tone="light" />
