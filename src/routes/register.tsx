@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
-import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
+import { useIsNativeApp, useSaasPurchasesAllowed } from "@/hooks/use-native-app";
 import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingBusiness } from "@/lib/auth/pending-business";
 import { stashPendingProfile } from "@/lib/auth/pending-profile";
@@ -92,6 +92,10 @@ function RegisterPage() {
   // plan can be bought: the web (Stripe) and the iOS app (In-App Purchase). A
   // store app that cannot sell only signs existing members in.
   const canSignUpHere = useSaasPurchasesAllowed();
+  // On the web the trial is ours (Stripe: 14 days, card up front). In the iOS app any
+  // trial is an App Store intro offer and StoreKit decides eligibility, so don't
+  // promise one here — the plan chooser shows exactly what the store offers.
+  const storeBilled = useIsNativeApp();
   useEffect(() => {
     if (!canSignUpHere) void navigate({ to: "/login", replace: true });
   }, [canSignUpHere, navigate]);
@@ -271,7 +275,7 @@ function RegisterPage() {
 
   return (
     <AuthShell
-      eyebrow="Free 14-day trial"
+      eyebrow={storeBilled ? "Set up in minutes" : "Free 14-day trial"}
       title="Create your workspace"
       subtitle="Set up bookings, clients and payments in minutes — tailored to your trade."
       brand={VERTICALS[vertical].brand}
@@ -392,8 +396,10 @@ function RegisterPage() {
             onChange={(e) => setReferralCode(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            You&apos;ll get the normal 14-day trial. The trainer who referred you earns a free month
-            after your first paid invoice.
+            {storeBilled
+              ? "Your plan and price don’t change."
+              : "You’ll get the normal 14-day trial."}{" "}
+            The trainer who referred you earns a free month after your first paid invoice.
           </p>
         </div>
 
