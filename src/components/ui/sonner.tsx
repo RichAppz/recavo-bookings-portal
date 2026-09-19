@@ -49,6 +49,39 @@ function useSideDrawerInset(): number {
   return inset;
 }
 
+/**
+ * Keeps a finger that lands on a toast out of the page's scroll view. Sonner sets
+ * `touch-action: none` on each toast, but WebKit (Safari and the Capacitor WKWebView)
+ * still hands a vertical pan to the scroller and cancels the pointer sequence unless
+ * `touchmove` is prevented from a non-passive listener — so a swipe up nudged the
+ * card and then stuck, while a swipe right worked. Horizontal swipes are unaffected.
+ */
+function useToastTouchGuard() {
+  useEffect(() => {
+    let onToast = false;
+    const start = (e: TouchEvent) => {
+      const target = e.target as Element | null;
+      onToast = Boolean(target?.closest?.("[data-sonner-toast]"));
+    };
+    const move = (e: TouchEvent) => {
+      if (onToast && e.cancelable) e.preventDefault();
+    };
+    const end = () => {
+      onToast = false;
+    };
+    document.addEventListener("touchstart", start, { passive: true });
+    document.addEventListener("touchmove", move, { passive: false });
+    document.addEventListener("touchend", end, { passive: true });
+    document.addEventListener("touchcancel", end, { passive: true });
+    return () => {
+      document.removeEventListener("touchstart", start);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", end);
+      document.removeEventListener("touchcancel", end);
+    };
+  }, []);
+}
+
 /** Coloured disc with a soft halo, tinted by the toast's type via --toast-accent. */
 function Glyph({ children }: { children: ReactNode }) {
   return (
@@ -62,16 +95,20 @@ function Glyph({ children }: { children: ReactNode }) {
 
 /**
  * App-wide toast host. Dark card, slide in from the right, dismissable by the X or a
- * swipe, with a timer bar showing how long is left. Sits top-right, clear of the
- * notch/Dynamic Island in the mobile app, and steps left of any open side drawer.
+ * swipe up or right, with a timer bar showing how long is left. Sits top-right, clear
+ * of the notch/Dynamic Island in the mobile app, and steps left of any open side drawer.
  */
 const Toaster = () => {
   const drawerInset = useSideDrawerInset();
+  useToastTouchGuard();
 
   return (
     <Sonner
       className="toaster group"
       position="top-right"
+      // Up (off the top edge) or right (the way it came in). Explicit rather than
+      // sonner's position-derived default so a position change cannot silently drop one.
+      swipeDirections={["top", "right"]}
       expand
       closeButton
       gap={10}
