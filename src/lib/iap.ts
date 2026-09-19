@@ -24,16 +24,25 @@ export function iapAvailable(): boolean {
   return billingSurface() === "store";
 }
 
-type PurchasesPlugin = typeof import("@revenuecat/purchases-capacitor").Purchases;
+type PurchasesModule = typeof import("@revenuecat/purchases-capacitor");
+type PurchasesPlugin = PurchasesModule["Purchases"];
 
-let pluginPromise: Promise<PurchasesPlugin> | undefined;
+let modulePromise: Promise<PurchasesModule> | undefined;
 let configuredFor: string | undefined;
 
-async function purchases(): Promise<PurchasesPlugin> {
-  if (!pluginPromise) {
-    pluginPromise = import("@revenuecat/purchases-capacitor").then((m) => m.Purchases);
+/**
+ * Loads the plugin once. Returns it wrapped in an object on purpose: a Capacitor
+ * plugin is a Proxy that turns *every* property read into a native call, so
+ * resolving a Promise with it (or returning it from an async function) makes the
+ * Promise machinery read `.then` and the bridge throws
+ * `"Purchases.then()" is not implemented on ios` (same trap as appleSignInPlugin).
+ */
+async function purchases(): Promise<{ plugin: PurchasesPlugin }> {
+  if (!modulePromise) {
+    modulePromise = import("@revenuecat/purchases-capacitor");
   }
-  return pluginPromise;
+  const { Purchases } = await modulePromise;
+  return { plugin: Purchases };
 }
 
 /**
@@ -46,7 +55,7 @@ export async function configureIap(appUserId: string): Promise<void> {
   if (!iapAvailable()) return;
   const apiKey = revenueCatApiKey();
   if (!apiKey) return;
-  const Purchases = await purchases();
+  const { plugin: Purchases } = await purchases();
   if (!configuredFor) {
     await Purchases.configure({ apiKey, appUserID: appUserId });
     configuredFor = appUserId;
@@ -62,7 +71,7 @@ export async function configureIap(appUserId: string): Promise<void> {
 export async function resetIap(): Promise<void> {
   if (!configuredFor) return;
   try {
-    const Purchases = await purchases();
+    const { plugin: Purchases } = await purchases();
     await Purchases.logOut();
   } catch {
     // Already anonymous, or the SDK was never configured in this session.
@@ -93,7 +102,7 @@ export type IapProduct = {
  */
 export async function loadIapProducts(config: AppStoreConfig): Promise<IapProduct[]> {
   if (!iapAvailable()) return [];
-  const Purchases = await purchases();
+  const { plugin: Purchases } = await purchases();
   const ids = config.products.map((p) => p.productId);
   const { products } = await Purchases.getProducts({ productIdentifiers: ids });
   const byId = new Map(config.products.map((p) => [p.productId, p]));
@@ -126,7 +135,7 @@ export type IapPurchaseResult =
 /** Runs the StoreKit payment sheet for one product. */
 export async function purchaseIapProduct(item: IapProduct): Promise<IapPurchaseResult> {
   if (!iapAvailable()) return { status: "error", message: "Purchases are not available here." };
-  const Purchases = await purchases();
+  const { plugin: Purchases } = await purchases();
   try {
     const { customerInfo } = await Purchases.purchaseStoreProduct({ product: item.store });
     return { status: "purchased", customerInfo };
@@ -139,7 +148,7 @@ export async function purchaseIapProduct(item: IapProduct): Promise<IapPurchaseR
 /** Re-syncs receipts already on this Apple ID (new device, reinstall, second owner). */
 export async function restoreIapPurchases(): Promise<IapPurchaseResult> {
   if (!iapAvailable()) return { status: "error", message: "Purchases are not available here." };
-  const Purchases = await purchases();
+  const { plugin: Purchases } = await purchases();
   try {
     const { customerInfo } = await Purchases.restorePurchases();
     return { status: "purchased", customerInfo };
@@ -156,7 +165,7 @@ export async function iapManagementUrl(): Promise<string> {
   const fallback = "https://apps.apple.com/account/subscriptions";
   if (!iapAvailable()) return fallback;
   try {
-    const Purchases = await purchases();
+    const { plugin: Purchases } = await purchases();
     const { customerInfo } = await Purchases.getCustomerInfo();
     return customerInfo.managementURL ?? fallback;
   } catch {
@@ -194,6 +203,9 @@ function purchaseErrorMessage(err: unknown): string {
     return "Purchases are restricted on this device.";
   if (/already (purchased|subscribed)|already owns/i.test(raw))
     return "You already have this. Try Restore purchases.";
+  // RevenueCat code 11: the build's public SDK key is wrong or missing — ours to fix, not theirs.
+  if (/credentials|invalid api key/i.test(raw))
+    return "Purchases aren't available in this build. Please update the app or contact support.";
   return raw || "The purchase didn't go through. Nothing was charged.";
 }
 

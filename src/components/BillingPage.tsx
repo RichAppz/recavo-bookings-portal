@@ -476,6 +476,20 @@ function planTitle(item: IapProduct): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
+/** StoreKit says this Apple ID gets a free introductory period on the product. */
+function isFreeIntro(item: IapProduct): boolean {
+  return Boolean(item.introOffer) && /^[^\d]*0+([.,]0+)?[^\d]*$/.test(item.introOffer!.priceString);
+}
+
+/** "P14D" → "14 days", "P1W" → "1 week", "P1M" → "1 month", "P1Y" → "1 year". */
+function describeIsoPeriod(iso: string): string {
+  const m = /^P(\d+)([DWMY])$/.exec(iso);
+  if (!m) return iso;
+  const n = Number(m[1]);
+  const unit = { D: "day", W: "week", M: "month", Y: "year" }[m[2] as "D" | "W" | "M" | "Y"];
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
 /**
  * Billing in the iOS app: plans, bolt-ons and text bundles bought through
  * StoreKit (App Store Review Guideline 3.1.1). Every price on this screen is
@@ -535,9 +549,12 @@ function StoreBillingPage() {
   }
 
   const trialLine = (item: IapProduct) =>
-    item.introOffer && item.introOffer.priceString.replace(/[^\d]/g, "") === "000"
-      ? `${item.introOffer.cycles > 1 ? `${item.introOffer.cycles} × ` : ""}${item.introOffer.period.replace(/^P/, "").toLowerCase()} free, then `
+    isFreeIntro(item)
+      ? `${item.introOffer!.cycles > 1 ? `${item.introOffer!.cycles} × ` : ""}${describeIsoPeriod(item.introOffer!.period)} free, then `
       : "";
+  // Only promise a trial StoreKit actually offers this Apple ID: eligibility is the
+  // store's call (used trials, no intro offer configured, other storefront).
+  const anyTrial = planItems.some(isFreeIntro);
 
   return (
     <div className="space-y-6">
@@ -546,7 +563,9 @@ function StoreBillingPage() {
           <p className="text-sm text-muted-foreground">
             {subscriptionAccessState(current) === "ended"
               ? "Your subscription has ended. Choose a plan to reopen the console."
-              : "Choose a plan to start your 14-day free trial. Billed through your Apple ID; cancel any time in Settings before the trial ends and you won’t be charged."}
+              : anyTrial
+                ? "Choose a plan to start your free trial. Billed through your Apple ID; cancel any time in Settings before the trial ends and you won’t be charged."
+                : "Choose a plan. Billed through your Apple ID; cancel any time in Settings › Apple ID › Subscriptions."}
           </p>
         </div>
       ) : null}
