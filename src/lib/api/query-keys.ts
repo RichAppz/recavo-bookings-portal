@@ -1,6 +1,7 @@
 /** Hierarchical React Query keys, namespaced by businessId for tenant switches. */
 export const queryKeys = {
   me: () => ["me"] as const,
+  accountDeletionPreview: () => ["me", "deletion-preview"] as const,
   myBusinesses: () => ["me", "businesses"] as const,
 
   biz: (businessId: string) => ["biz", businessId] as const,
