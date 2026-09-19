@@ -1,6 +1,23 @@
 import { useMemo } from "react";
-import { useLocationsList, useStaffList } from "@/lib/api/hooks";
+import { useLocationsList, useStaffList, useSubscription } from "@/lib/api/hooks";
 import type { Location, Staff } from "@/lib/api/types";
+
+/**
+ * True when the plan seats one staff member (Solo). The owner *is* the team, so
+ * team-management UI — the Staff menu item, the team list, invites — is noise;
+ * their own availability is still edited on `/staff`, reached from setup and
+ * the dashboard rather than the menu. Unknown plan (still loading, no
+ * subscription yet) is treated as a team so nothing is hidden by mistake.
+ */
+export function useSoloPlan(): boolean {
+  const subscription = useSubscription();
+  const plan = subscription.data?.plan;
+  if (!plan) return false;
+  // The view carries the stored plan row: a versioned code (`solo_v1`) and the
+  // seat limit under `staff.active` (older seeds: `staff`).
+  const seats = plan.limits?.["staff.active"] ?? plan.limits?.["staff"];
+  return /^solo(_|$)/.test(plan.code) || seats === 1;
+}
 
 /**
  * One-person, one-place businesses should never be asked to choose the only

@@ -71,7 +71,7 @@ import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
 import { localDay, segmentOn } from "@/lib/working-days";
-import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { useSoleLocation, useSoleStaff, useSoloPlan } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -159,6 +159,8 @@ function Overview() {
     enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL),
   });
   const addOnRequests = upsellSummary.data?.requested ?? 0;
+  // On Solo the Staff menu item is hidden; this task is the owner's way to their hours.
+  const soloPlan = useSoloPlan();
   const todays = useBookings({ ...todayRange(), enabled: true });
   const scheduled = (todays.data?.bookings ?? [])
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
@@ -473,7 +475,9 @@ function Overview() {
                 },
                 {
                   icon: AlertTriangle,
-                  text: "Confirm staff availability is up to date",
+                  text: soloPlan
+                    ? "Confirm your availability is up to date"
+                    : "Confirm staff availability is up to date",
                   to: "/staff" as const,
                   tone: "warning",
                 },

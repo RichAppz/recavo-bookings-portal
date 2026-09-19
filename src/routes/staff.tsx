@@ -46,7 +46,8 @@ import {
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
 import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
-import { useSoleLocation } from "@/lib/sole";
+import { useSoleLocation, useSoloPlan } from "@/lib/sole";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -108,6 +109,10 @@ function StaffPage() {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [inviting, setInviting] = useState(false);
   const [staffDialog, setStaffDialog] = useState<"create" | Staff | null>(null);
+  // One seat: this page is the owner's own availability, not a team roster. The
+  // menu doesn't link here on Solo (setup and the dashboard do), so it reads as
+  // "your hours" — no list, no invites, no headcount.
+  const solo = useSoloPlan();
 
   const list = staff.data ?? [];
   const selectedId = selected ?? list[0]?.id ?? null;
@@ -116,31 +121,44 @@ function StaffPage() {
   return (
     <>
       <PageHeader
-        title="Staff"
-        description="Who works where, what they deliver and when they're available."
+        title={solo ? "Your availability" : "Staff"}
+        description={
+          solo
+            ? "Your working hours, time off and the services you deliver."
+            : "Who works where, what they deliver and when they're available."
+        }
         actions={
           <>
             <Button variant="outline" onClick={() => setQuick("block")}>
               <CalendarOff className="size-4" /> Block time
             </Button>
-            <Button variant="outline" onClick={() => setInviting(true)}>
-              Invite by email
-            </Button>
-            <Button onClick={() => setStaffDialog("create")}>
-              <Plus className="size-4" /> Add staff
-            </Button>
+            {solo ? null : (
+              <>
+                <Button variant="outline" onClick={() => setInviting(true)}>
+                  Invite by email
+                </Button>
+                <Button onClick={() => setStaffDialog("create")}>
+                  <Plus className="size-4" /> Add staff
+                </Button>
+              </>
+            )}
           </>
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-        <StatCard label="Team members" value={String(list.length)} />
-        <StatCard label="Active" value={String(list.filter((s) => s.status === "active").length)} />
-        <StatCard
-          label="Pending invitations"
-          value={String(list.filter((s) => s.status === "invited").length)}
-        />
-      </div>
+      {solo ? null : (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+          <StatCard label="Team members" value={String(list.length)} />
+          <StatCard
+            label="Active"
+            value={String(list.filter((s) => s.status === "active").length)}
+          />
+          <StatCard
+            label="Pending invitations"
+            value={String(list.filter((s) => s.status === "invited").length)}
+          />
+        </div>
+      )}
 
       {staff.isLoading ? (
         <CardsGhost count={2} className="h-[320px]" />
@@ -156,43 +174,53 @@ function StaffPage() {
         />
       ) : list.length === 0 ? (
         <EmptyState
-          title="No staff yet"
-          description="Add your first team member to start assigning bookings."
-          action={<Button onClick={() => setStaffDialog("create")}>Add staff</Button>}
+          title={solo ? "Set up your availability" : "No staff yet"}
+          description={
+            solo
+              ? "Add yourself with your working hours so sessions can be booked."
+              : "Add your first team member to start assigning bookings."
+          }
+          action={
+            <Button onClick={() => setStaffDialog("create")}>
+              {solo ? "Add your details" : "Add staff"}
+            </Button>
+          }
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-          <SectionCard title="Team" bodyClassName="p-0">
-            <ul className="divide-y">
-              {list.map((m) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => setSelected(m.id)}
-                    className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-                      m.id === selectedId ? "bg-primary-soft" : "hover:bg-secondary/60"
-                    }`}
-                  >
-                    <span className="relative shrink-0">
-                      <PersonAvatar name={m.displayName} size={40} />
-                      {m.calendarColour ? (
-                        <span
-                          className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background"
-                          style={{ backgroundColor: m.calendarColour }}
-                        />
-                      ) : null}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{m.displayName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {m.title ?? "Team member"}
+        <div className={cn("grid gap-5", !solo && "lg:grid-cols-[320px_1fr]")}>
+          {solo ? null : (
+            <SectionCard title="Team" bodyClassName="p-0">
+              <ul className="divide-y">
+                {list.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => setSelected(m.id)}
+                      className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                        m.id === selectedId ? "bg-primary-soft" : "hover:bg-secondary/60"
+                      }`}
+                    >
+                      <span className="relative shrink-0">
+                        <PersonAvatar name={m.displayName} size={40} />
+                        {m.calendarColour ? (
+                          <span
+                            className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background"
+                            style={{ backgroundColor: m.calendarColour }}
+                          />
+                        ) : null}
                       </span>
-                    </span>
-                    {m.status !== "active" ? <StatusBadge status={m.status} /> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{m.displayName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {m.title ?? "Team member"}
+                        </span>
+                      </span>
+                      {m.status !== "active" ? <StatusBadge status={m.status} /> : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
 
           {member ? (
             <div className="space-y-5">
