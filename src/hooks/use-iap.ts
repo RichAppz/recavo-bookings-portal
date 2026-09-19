@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { CustomerInfo } from "@revenuecat/purchases-capacitor";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAppStoreConfig, useAppStoreReconcile, useBusinessId } from "@/lib/api/hooks";
@@ -76,11 +77,13 @@ export function useIapPurchase() {
   const [state, setState] = useState<IapFlowState>("idle");
 
   const settle = useCallback(
-    async (successTitle: string) => {
+    async (successTitle: string, deferred?: { title: string; description: string }) => {
       setState("reconciling");
       try {
         const result = await reconcile.mutateAsync();
-        toast.success(successTitle);
+        if (deferred)
+          toast.info(deferred.title, { description: deferred.description, duration: 8000 });
+        else toast.success(successTitle);
         return result;
       } catch (err) {
         // Paid but not yet reflected: the webhook will land it. Say so plainly.
@@ -110,7 +113,7 @@ export function useIapPurchase() {
         toast.error(result.message);
         return null;
       }
-      return settle(successTitle);
+      return settle(successTitle, deferredPlanChange(item, result.customerInfo));
     },
     [settle],
   );
@@ -128,4 +131,36 @@ export function useIapPurchase() {
   }, [settle]);
 
   return { state, busy: state !== "idle", purchase, restore };
+}
+
+/**
+ * Apple applies a plan change immediately only when it is an upgrade within the
+ * subscription group; a downgrade (or a crossgrade to a different period) is
+ * scheduled for the next renewal, and the payment sheet says "Starting on …".
+ * StoreKit still reports success, but the new product is not active yet, so
+ * "Switched to Business" would be a lie. Detect that and say what really
+ * happened; RevenueCat's webhook will move the plan over when Apple does.
+ */
+function deferredPlanChange(
+  item: IapProduct,
+  customerInfo: CustomerInfo,
+): { title: string; description: string } | undefined {
+  if (item.product.kind !== "plan") return undefined;
+  if (customerInfo.activeSubscriptions.includes(item.productId)) return undefined;
+  const currentPlan = customerInfo.activeSubscriptions.find((id) => /\.plan\./.test(id));
+  if (!currentPlan) return undefined;
+  const expiry = customerInfo.allExpirationDates?.[currentPlan];
+  const when = expiry
+    ? `on ${new Date(expiry).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+    : "at the end of your current billing period";
+  return {
+    title: `${planTitle(item)} starts ${when}`,
+    description:
+      "Apple keeps your current plan until then, so nothing changes yet. You can review or cancel the switch under Manage subscription.",
+  };
+}
+
+function planTitle(item: IapProduct): string {
+  const plan = item.product.plan;
+  return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : item.store.title;
 }
