@@ -38,6 +38,7 @@ import {
   MAX_EVENT_DAYS,
   rangeFromTaps,
 } from "@/lib/event-dates";
+import { defaultEventColour } from "@/lib/calendar-settings";
 import { addDays, isoDate, parseIso } from "@/lib/format";
 import { useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -103,7 +104,9 @@ export function EventModal({
   const [from, setFrom] = useState("09:00");
   const [to, setTo] = useState("10:00");
   const [allDay, setAllDay] = useState(false);
-  const [colour, setColour] = useState(DEFAULT_EVENT_COLOUR);
+  // New events start in the business's chosen colour (Settings / the calendar legend).
+  const startColour = defaultEventColour(tenant.configuration);
+  const [colour, setColour] = useState(startColour);
   const [notes, setNotes] = useState("");
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -142,9 +145,9 @@ export function EventModal({
     setFrom(start);
     setTo(addMinutesToTime(start, 60));
     setAllDay(false);
-    setColour(DEFAULT_EVENT_COLOUR);
+    setColour(startColour);
     setNotes("");
-  }, [open, block, defaultDate, defaultTime, defaultStaffId]);
+  }, [open, block, defaultDate, defaultTime, defaultStaffId, startColour]);
 
   // A one-person business: pick them silently and drop the field.
   const soleStaff = useSoleStaff();
@@ -401,7 +404,11 @@ export function EventModal({
           <div className="grid gap-2">
             <Label>Colour</Label>
             <div className="flex flex-wrap items-center gap-2">
-              {EVENT_COLOURS.map((c) => (
+              {/* The first swatch is the business's default, so "put it back" is one tap. */}
+              {[
+                { value: startColour, label: "Default" },
+                ...EVENT_COLOURS.filter((c) => c.value !== startColour),
+              ].map((c) => (
                 <button
                   key={c.value}
                   type="button"

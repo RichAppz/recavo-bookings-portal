@@ -15,12 +15,18 @@ export function PageHeader({
   onDismissDescription?: () => void;
   actions?: ReactNode;
 }) {
+  // On a phone the title and its actions share one row (the description drops
+  // beneath both) so the page's content starts a row higher; from `sm` up the
+  // wrapper becomes a real block again with the description under the title and
+  // the actions bottom-aligned to the right, as before.
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:flex-nowrap sm:items-end sm:gap-4">
+      <div className="contents sm:block sm:min-w-0">
+        <h1 className="order-1 min-w-0 text-xl font-semibold tracking-tight sm:text-[28px]">
+          {title}
+        </h1>
         {description ? (
-          <p className="mt-1 flex max-w-2xl items-start gap-2 text-sm text-muted-foreground">
+          <p className="order-3 flex max-w-2xl basis-full items-start gap-2 text-sm text-muted-foreground sm:mt-1 sm:basis-auto">
             <span>{description}</span>
             {onDismissDescription ? (
               <button
@@ -36,7 +42,9 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="order-2 flex flex-wrap items-center gap-2 sm:order-none">{actions}</div>
+      ) : null}
     </div>
   );
 }

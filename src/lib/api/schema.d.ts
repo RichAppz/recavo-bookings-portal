@@ -2347,7 +2347,155 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete the authenticated user’s account
+         * @description Self-serve account deletion (App Store guideline 5.1.1(v)). Deletes the sign-in identity, closes every business the caller is the only owner of through the normal closure workflow (export window, Stripe cancellation, retention anonymisation), suspends their other memberships, revokes sessions and scrubs all personal data from the user record. App Store subscriptions are not cancelled by this call — the user must cancel them in iOS Settings. Irreversible.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        confirm: "DELETE";
+                    };
+                };
+            };
+            responses: {
+                /** @description The account is deleted and the session cookie cleared */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date-time */
+                            deletedAt: string;
+                            closingBusinesses: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                appleSubscription: boolean;
+                            }[];
+                            leavingBusinessIds: string[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -2495,6 +2643,163 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/me/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview what deleting the account will do
+         * @description Lists the businesses that will be closed (the caller is their only owner) and the businesses the caller will simply leave. Drive the confirmation dialog from this.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Consequences of deleting the account */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Businesses solely owned by the user; deleting the account closes them. */
+                            closingBusinesses: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                appleSubscription: boolean;
+                            }[];
+                            /** @description Businesses the user only belongs to; they lose their membership. */
+                            leavingBusinessIds: string[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/public/businesses/by-slug/{slug}": {
@@ -8744,13 +9049,16 @@ export interface paths {
                             dueDays?: number;
                             footerNote?: string | null;
                         };
-                        /** @description Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only. */
+                        /** @description Console calendar settings. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). `eventColour` is the default for new events (null = slate). `publicHolidays` picks which UK holiday set the calendar marks, or null for none. Staff-only. */
                         calendar?: {
                             paymentColours?: {
                                 paid?: string | null;
                                 partial?: string | null;
                                 unpaid?: string | null;
                             };
+                            eventColour?: string | null;
+                            /** @enum {string|null} */
+                            publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
                         };
                         legalAddress?: {
                             line1?: string;
@@ -19583,7 +19891,7 @@ export interface paths {
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up. */
                         priceMinor?: number;
                         /**
-                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
                          * @default false
                          */
                         dropIn?: boolean;
@@ -19800,7 +20108,7 @@ export interface paths {
                         /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
                         priceMinor?: number;
                         /**
-                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
                          * @default false
                          */
                         dropIn?: boolean;
@@ -28713,6 +29021,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -29085,6 +29398,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -29280,6 +29598,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -30048,6 +30371,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -30179,6 +30507,383 @@ export interface paths {
                     content: {
                         "application/problem+json": components["schemas"]["ProblemDetails"];
                     };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/subscription/iap/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * App Store In-App Purchase config
+         * @description RevenueCat App User ID for this business plus the App Store product catalogue (product id → plan/interval, add-on or SMS bundle). Member-readable. Prices are never returned — the app reads them from StoreKit.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description IAP configuration */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            appUserId: string;
+                            reconcileEnabled: boolean;
+                            products: {
+                                productId: string;
+                                /** @enum {string} */
+                                kind: "plan" | "addon" | "sms";
+                                /** @enum {string} */
+                                plan?: "solo" | "business" | "growth";
+                                /** @enum {string} */
+                                interval?: "month" | "year";
+                                addonKey?: string;
+                                bundleKey?: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/subscription/iap/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile App Store purchases
+         * @description Pulls the RevenueCat subscriber snapshot for this business and projects it onto the subscription, add-on entitlements and SMS credit ledger. Called by the iOS app after a purchase or restore; idempotent and rate-limited. Requires billing.manage. Returns 409 when the business holds a live Stripe subscription and an App Store plan was bought.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Subscription projection after reconcile */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Current non-terminal subscription projection. Stripe / grace identifiers are included only when the actor holds billing.manage. */
+                            subscription: {
+                                /** Format: uuid */
+                                id?: string;
+                                /** Format: uuid */
+                                businessId?: string;
+                                /** Format: uuid */
+                                planId?: string;
+                                /** @enum {string} */
+                                status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
+                                /** @enum {string} */
+                                accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
+                                planVersion?: string | null;
+                                /** Format: date-time */
+                                currentPeriodStart?: string | null;
+                                /** Format: date-time */
+                                currentPeriodEnd?: string | null;
+                                /** Format: date-time */
+                                trialStart?: string | null;
+                                /** Format: date-time */
+                                trialEnd?: string | null;
+                                cancelAtPeriodEnd?: boolean;
+                                /** @enum {string} */
+                                limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
+                                stripeSubscriptionId?: string | null;
+                                stripeCustomerId?: string | null;
+                                stripePriceId?: string | null;
+                                /** Format: date-time */
+                                graceStartedAt?: string | null;
+                                /** Format: date-time */
+                                graceEndsAt?: string | null;
+                            } | null;
+                            plan: Record<string, never> | null;
+                            /** @description Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-524/526). Example keys: `reminders.sms`, `custom_records.images`. */
+                            features: {
+                                [key: string]: boolean;
+                            };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
+                            /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
+                            addons: {
+                                /** @example invoicing */
+                                key: string;
+                                /** @example invoicing */
+                                featureKey: string;
+                                /** @example 800 */
+                                unitAmountMinor: number;
+                                /** @example GBP */
+                                currency: string;
+                                /** @enum {string} */
+                                interval: "month" | "year";
+                                /**
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @enum {string}
+                                 */
+                                status: "included" | "active" | "available";
+                            }[];
+                        } & {
+                            billingBypass?: boolean;
+                            iap?: {
+                                planProjected?: boolean;
+                                addonsActive?: string[];
+                                smsCredited?: number;
+                            };
+                            smsCredits?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Business is billed by Stripe */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description App Store billing is not configured */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
                 /** @description Rate limited */
                 429: {
@@ -30405,6 +31110,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -30613,6 +31323,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -31027,6 +31742,11 @@ export interface paths {
                                     status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                     /** @enum {string} */
                                     accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                    /**
+                                     * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                     * @enum {string}
+                                     */
+                                    provider?: "stripe" | "apple";
                                     planVersion?: string | null;
                                     /** Format: date-time */
                                     currentPeriodStart?: string | null;
@@ -31155,6 +31875,162 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/webhooks/revenuecat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RevenueCat webhook (App Store In-App Purchase)
+         * @description Public endpoint verified by the shared secret RevenueCat sends in the Authorization header; no bearer auth. Deliveries are recorded in the provider-event inbox and projected by a durable job.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    Authorization: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Acknowledged */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
                 };
                 /** @description Rate limited (RATE_LIMITED) */
                 429: {
@@ -44269,13 +45145,16 @@ export interface components {
                 dueDays?: number;
                 footerNote?: string | null;
             };
-            /** @description Console calendar colours. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). Staff-only. */
+            /** @description Console calendar settings. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). `eventColour` is the default for new events (null = slate). `publicHolidays` picks which UK holiday set the calendar marks, or null for none. Staff-only. */
             calendar?: {
                 paymentColours?: {
                     paid?: string | null;
                     partial?: string | null;
                     unpaid?: string | null;
                 };
+                eventColour?: string | null;
+                /** @enum {string|null} */
+                publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
             };
             legalAddress?: {
                 line1?: string;
