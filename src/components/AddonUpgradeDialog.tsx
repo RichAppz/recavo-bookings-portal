@@ -158,8 +158,11 @@ export function AddonUpgradeDialog({
   } else {
     body = (
       <>
-        Your plan doesn’t include {copy.noun}. Add the bolt-on for {price} — prorated onto your
-        current bill — to {copy.pitch}. Or move to {copy.includedIn}, which includes it.
+        Your plan doesn’t include {copy.noun}. Add the bolt-on for {price}
+        {surface === "store"
+          ? ", billed through your Apple ID and cancellable any time in Settings, "
+          : " — prorated onto your current bill — "}
+        to {copy.pitch}. Or move to {copy.includedIn}, which includes it.
       </>
     );
     actions = (
