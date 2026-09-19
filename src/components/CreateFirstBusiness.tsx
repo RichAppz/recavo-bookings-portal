@@ -233,7 +233,10 @@ export function CreateFirstBusiness({
                 placeholder="ABCD-EFGH"
               />
               <p className="text-xs text-muted-foreground">
-                You&apos;ll get the normal 14-day trial. Leave this blank if nobody referred you.
+                {isNativeApp()
+                  ? "Your plan and price don’t change."
+                  : "You’ll get the normal 14-day trial."}{" "}
+                Leave this blank if nobody referred you.
               </p>
             </div>
 

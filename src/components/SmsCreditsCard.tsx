@@ -10,7 +10,8 @@ import {
 import { isBillingBlocked } from "@/lib/billing/access";
 import { bundleLabel, smsCreditsLevel } from "@/lib/billing/sms-credits";
 import { formatInTz, formatMoney } from "@/lib/format";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
+import { billingSurface } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -36,11 +37,18 @@ export function SmsCreditsCard({ className }: { className?: string }) {
   const tz = tenant.business?.defaultTimezone ?? "Europe/London";
 
   const current = subscription.data?.subscription ?? null;
-  // Bundles are sold on the web only; the store apps show the balance and
-  // nothing about buying (see saasPurchasesAllowedInApp).
-  const sellsHere = saasPurchasesAllowedInApp();
+  // Bundles are consumables, not part of the plan, so they sell on every surface
+  // that can sell at all: Stripe Checkout on the web, StoreKit in the iOS app
+  // (at the App Store's price), nothing in a store app without In-App Purchase.
+  const surface = billingSurface();
+  const sellsHere = surface !== "none";
+  const iap = useIapProducts();
+  const iapFlow = useIapPurchase();
+  const storeItem =
+    surface === "store" ? iap.products.find((p) => p.product.kind === "sms") : undefined;
   const canBuy =
     sellsHere &&
+    (surface === "web" || Boolean(storeItem)) &&
     canManageSaasBilling({
       can: tenant.can,
       roleKeys: tenant.roleKeys,
@@ -49,12 +57,22 @@ export function SmsCreditsCard({ className }: { className?: string }) {
 
   const data = credits.data;
   const level = smsCreditsLevel(data);
+  const label = data
+    ? storeItem
+      ? `${data.bundle.credits} texts (${storeItem.priceString})`
+      : bundleLabel(data.bundle)
+    : "";
 
   const buy = async () => {
     if (!data) return;
+    if (storeItem) {
+      await iapFlow.purchase(storeItem, `${data.bundle.credits} texts added`);
+      return;
+    }
     const result = await checkout.mutateAsync({ bundle: data.bundle.key });
     if (result.checkoutUrl) void openHostedFlow(result.checkoutUrl);
   };
+  const buying = checkout.isPending || iapFlow.busy;
 
   if (credits.isLoading || !data) {
     return (
@@ -106,12 +124,18 @@ export function SmsCreditsCard({ className }: { className?: string }) {
             </div>
           </div>
           {canBuy ? (
-            <Button disabled={checkout.isPending} onClick={() => void buy()}>
-              {checkout.isPending ? "Opening checkout…" : `Buy ${bundleLabel(data.bundle)}`}
+            <Button disabled={buying} onClick={() => void buy()}>
+              {iapFlow.state === "purchasing"
+                ? "Waiting for App Store…"
+                : iapFlow.state === "reconciling"
+                  ? "Adding credits…"
+                  : checkout.isPending
+                    ? "Opening checkout…"
+                    : `Buy ${label}`}
             </Button>
-          ) : sellsHere ? (
+          ) : sellsHere && (surface === "web" || storeItem) ? (
             <p className="text-xs text-muted-foreground">
-              Ask the business owner to buy more — {bundleLabel(data.bundle)} a bundle.
+              Ask the business owner to buy more — {label} a bundle.
             </p>
           ) : null}
         </div>

@@ -264,7 +264,7 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
                 <>
                   {" "}
                   <Link to="/billing/sms-credits" className="underline underline-offset-2">
-                    {/* The store apps show a balance page there, never a purchase. */}
+                    {/* A store app that cannot sell shows a balance page there, never a purchase. */}
                     {smsCredits.level === "empty" && saasPurchasesAllowedInApp()
                       ? "Buy texts"
                       : "Text credits"}

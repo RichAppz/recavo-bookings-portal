@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { useAddSubscriptionAddon, useSubscription } from "@/lib/api/hooks";
 import type { SubscriptionAddon } from "@/lib/api/hooks";
-import { isBillingBlocked } from "@/lib/billing/access";
+import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
+import { isBillingBlocked, subscriptionManagedHere } from "@/lib/billing/access";
 import { formatMoney } from "@/lib/format";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { billingSurface } from "@/lib/native";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
@@ -75,10 +76,32 @@ export function AddonUpgradeDialog({
     roleKeys: tenant.roleKeys,
     blocked,
   });
-  const price = addon
-    ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
-    : copy.fallbackPrice;
-  const canBuyHere = live && addon?.status === "available" && canManage;
+  // Where we are decides both the price shown and how the bolt-on is bought:
+  // Stripe on the web, StoreKit in the iOS app (with the App Store's own price),
+  // nothing in a store app that cannot sell. And a subscription is only ever
+  // changed where it is billed, so the other surface just points across.
+  const surface = billingSurface();
+  const iap = useIapProducts();
+  const iapFlow = useIapPurchase();
+  const storeItem =
+    surface === "store"
+      ? iap.products.find((p) => p.product.kind === "addon" && p.product.addonKey === addonKey)
+      : undefined;
+  const price =
+    surface === "store"
+      ? storeItem
+        ? `${storeItem.priceString}/month`
+        : copy.fallbackPrice
+      : addon
+        ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
+        : copy.fallbackPrice;
+  const managedHere = subscriptionManagedHere(current, surface);
+  const canBuyHere =
+    live &&
+    addon?.status === "available" &&
+    canManage &&
+    managedHere &&
+    (surface === "web" || Boolean(storeItem));
   const Icon = copy.icon;
 
   const goToBilling = () => {
@@ -88,11 +111,26 @@ export function AddonUpgradeDialog({
 
   let body: ReactNode;
   let actions: ReactNode;
-  const sellsHere = saasPurchasesAllowedInApp();
+  const sellsHere = surface !== "none";
   if (!sellsHere) {
-    // Bolt-ons are sold on the web only. In the store apps the dialog may only
-    // say the feature is missing: no price, no add button, no pointer to plans.
+    // A store app with no In-App Purchase may only say the feature is missing:
+    // no price, no add button, no pointer to plans (App Store 3.1.3).
     body = <>{sentence(copy.noun)} isn’t included on this workspace’s plan.</>;
+    actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
+  } else if (live && !managedHere) {
+    body =
+      surface === "web" ? (
+        <>
+          {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
+          through the App Store, so add the {copy.noun} bolt-on from Billing in the Recavo iPhone
+          app.
+        </>
+      ) : (
+        <>
+          {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
+          on the website, so add the {copy.noun} bolt-on from Billing there.
+        </>
+      );
     actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
   } else if (!canManage) {
     body = (
@@ -120,8 +158,11 @@ export function AddonUpgradeDialog({
   } else {
     body = (
       <>
-        Your plan doesn’t include {copy.noun}. Add the bolt-on for {price} — prorated onto your
-        current bill — to {copy.pitch}. Or move to {copy.includedIn}, which includes it.
+        Your plan doesn’t include {copy.noun}. Add the bolt-on for {price}
+        {surface === "store"
+          ? ", billed through your Apple ID and cancellable any time in Settings, "
+          : " — prorated onto your current bill — "}
+        to {copy.pitch}. Or move to {copy.includedIn}, which includes it.
       </>
     );
     actions = (
@@ -129,7 +170,23 @@ export function AddonUpgradeDialog({
         <Button variant="outline" onClick={goToBilling}>
           See plans
         </Button>
-        {canBuyHere ? (
+        {canBuyHere && surface === "store" && storeItem ? (
+          <Button
+            disabled={iapFlow.busy}
+            onClick={async () => {
+              const view = await iapFlow.purchase(storeItem, `${sentence(copy.noun)} added`);
+              if (!view) return;
+              onOpenChange(false);
+              if (view.features?.[featureKey]) onEnabled?.();
+            }}
+          >
+            {iapFlow.state === "purchasing"
+              ? "Waiting for App Store…"
+              : iapFlow.state === "reconciling"
+                ? "Activating…"
+                : `${copy.addLabel} · ${price}`}
+          </Button>
+        ) : canBuyHere ? (
           <Button
             disabled={addAddon.isPending}
             onClick={async () => {

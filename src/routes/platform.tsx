@@ -38,7 +38,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { billingSurface } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useCancelPlatformBillingImmediate,
@@ -163,8 +163,8 @@ function PlatformContent() {
         )}
       </SectionCard>
 
-      {/* Prices and Stripe Checkout: web only (saasPurchasesAllowedInApp). */}
-      {!saasPurchasesAllowedInApp() ? null : (
+      {/* Stripe prices and Checkout: web only — the store apps sell at App Store prices. */}
+      {billingSurface() !== "web" ? null : (
         <SectionCard title="Plan catalogue" bodyClassName="p-0">
           {plans.isLoading ? (
             <TableGhost rows={4} />

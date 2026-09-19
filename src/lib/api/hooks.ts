@@ -3853,6 +3853,8 @@ export type BusinessSubscription = {
     | "incomplete_expired"
     | "paused";
   accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+  /** Who bills it: Stripe (web Checkout) or Apple (App Store In-App Purchase). */
+  provider?: "stripe" | "apple";
   planVersion?: string | null;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
@@ -3927,6 +3929,72 @@ export function useSubscription() {
     queryFn: async () => {
       const res = await api.get<SubscriptionView>(`/api/v1/businesses/${businessId}/subscription`);
       return res.data;
+    },
+  });
+}
+
+export type AppStoreProductKind = "plan" | "addon" | "sms";
+
+export type AppStoreProduct = {
+  productId: string;
+  kind: AppStoreProductKind;
+  plan?: "solo" | "business" | "growth";
+  interval?: "month" | "year";
+  addonKey?: string;
+  bundleKey?: string;
+};
+
+/** What the iOS app needs before it can sell through StoreKit (see src/lib/iap.ts). */
+export type AppStoreConfig = {
+  /** RevenueCat App User ID to log in as before purchasing for this business. */
+  appUserId: string;
+  products: AppStoreProduct[];
+  /** The API can pull the subscriber snapshot (REVENUECAT_SECRET_API_KEY set). */
+  reconcileEnabled: boolean;
+};
+
+export function useAppStoreConfig(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.appStoreConfig(businessId),
+    enabled: enabled && Boolean(businessId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const res = await api.get<AppStoreConfig>(
+        `/api/v1/businesses/${businessId}/subscription/iap/config`,
+      );
+      return res.data;
+    },
+  });
+}
+
+export type AppStoreReconcileResult = SubscriptionView & {
+  iap: { planProjected: boolean; addonsActive: string[]; smsCredited: number };
+  smsCredits: SmsCredits;
+};
+
+/**
+ * After a StoreKit purchase or restore: ask the API to pull the RevenueCat
+ * snapshot and project it, then seed the caches with what came back so the
+ * console unlocks without waiting for the webhook.
+ */
+export function useAppStoreReconcile() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<AppStoreReconcileResult, Error, void>({
+    mutationFn: async () => {
+      const res = await api.post<AppStoreReconcileResult>(
+        `/api/v1/businesses/${businessId}/subscription/iap/reconcile`,
+        {},
+      );
+      return res.data;
+    },
+    onSuccess: (result) => {
+      const { iap: _iap, smsCredits, ...view } = result;
+      qc.setQueryData(queryKeys.subscription(businessId), view);
+      qc.setQueryData(queryKeys.smsCredits(businessId), smsCredits);
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.smsCredits(businessId) });
     },
   });
 }

@@ -140,7 +140,7 @@ function InvoicesPage() {
         }
       />
 
-      {/* The bolt-on is sold on the web only, so the store apps skip this upsell. */}
+      {/* Only where the bolt-on can be bought (web or iOS In-App Purchase). */}
       {entitled === false && canManage && saasPurchasesAllowedInApp() ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed bg-primary-soft/40 px-4 py-3 text-sm">
           <div className="flex items-start gap-3">

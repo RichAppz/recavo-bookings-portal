@@ -250,7 +250,7 @@ function Overview() {
               }
               description="Revenue, attendance and occupancy reporting isn't included on your current plan."
               action={
-                // Plans are sold on the web only; no pointer to them in the store apps.
+                // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
                 saasPurchasesAllowedInApp() ? (
                   <Button variant="outline" asChild>
                     <Link to="/settings" search={{ tab: "billing" }}>

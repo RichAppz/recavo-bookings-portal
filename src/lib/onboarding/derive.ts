@@ -48,7 +48,7 @@ const STEP_META: Record<
   },
   saas_subscription: {
     title: "Choose your Recavo plan",
-    description: "Start a 14-day trial so Recavo can bill your workspace.",
+    description: "Pick the plan that fits your workspace.",
     required: false,
     href: "/settings?tab=billing",
   },

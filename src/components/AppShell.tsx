@@ -264,10 +264,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const portalLink = usePortalLink(noStaffBusiness);
   const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
   const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
-  // Recavo plans are sold on the web only. In the store apps nothing may create
-  // a business (it would need a plan the app cannot sell) or point at the plan
-  // chooser; see saasPurchasesAllowedInApp. Rendered client-side after the
-  // tenant query resolves, so reading the Capacitor bridge here is safe.
+  // Creating a business ends at the plan chooser, so it is only offered where a
+  // plan can be bought: the web (Stripe) and the iOS app (In-App Purchase). A
+  // store app that cannot sell shows a plain notice instead; see
+  // saasPurchasesAllowedInApp. Rendered client-side after the tenant query
+  // resolves, so reading the Capacitor bridge here is safe.
   const canStartBusinessHere = saasPurchasesAllowedInApp();
   // A platform billing_bypass (demo / review / comp accounts) grants paid access
   // with no Stripe subscription, so it must not send the console to the plan chooser.
@@ -305,8 +306,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     const onCustomerHost =
       !isNativeApp() && typeof window !== "undefined" && isCustomerHost(window.location.hostname);
     if (!onCustomerHost) {
-      // In the store apps the setup form would end at a plan the app cannot
-      // sell, so they get a plain notice instead (saasPurchasesAllowedInApp).
+      // Without a way to buy a plan the setup form would dead-end, so those
+      // surfaces get a plain notice instead (saasPurchasesAllowedInApp).
       if (!canStartBusinessHere) {
         return <NoBusinessInApp />;
       }

@@ -30,7 +30,7 @@ export function smsChannelNote(credits: SmsCredits | undefined): string {
     case "unlimited":
       return "Texts are included in your plan.";
     case "empty":
-      // Bundles are sold on the web only; the store apps must not suggest buying.
+      // Only suggest buying where bundles can be bought (see saasPurchasesAllowedInApp).
       return saasPurchasesAllowedInApp()
         ? "You have no text credits left — anything set to SMS is currently sent by email until you buy a bundle."
         : "You have no text credits left — anything set to SMS is currently sent by email.";
