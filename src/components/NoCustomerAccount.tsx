@@ -17,7 +17,7 @@ export function NoCustomerAccount() {
   const staffHost = typeof window === "undefined" ? null : staffHostFor(window.location.hostname);
 
   return (
-    <div className="screen-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="w-full max-w-md space-y-6">
         <div className="flex justify-center">
           <Wordmark />

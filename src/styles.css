@@ -336,6 +336,60 @@
 @utility pb-safe-* {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(--value(integer)));
 }
+/* Horizontal insets. Zero on most phones in portrait, but not always: a notched
+   iPhone in landscape has one on each side, and the iPhone Duo puts its status bar
+   and sensor housing in a column down the right edge, so `safe-area-inset-right`
+   is ~84px the whole height of the screen in portrait. Apple's own apps keep that
+   column clear; so do we. */
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility pl-safe-* {
+  padding-left: calc(env(safe-area-inset-left, 0px) + --spacing(--value(integer)));
+}
+@utility pr-safe-* {
+  padding-right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
+@utility px-safe-* {
+  padding-left: calc(env(safe-area-inset-left, 0px) + --spacing(--value(integer)));
+  padding-right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
+/* Sidebar column: its fixed width plus whatever the left inset is, so the content
+   column (`pl-sidebar`) and the sidebar itself (`w-sidebar`) agree. */
+@utility w-sidebar {
+  width: calc(264px + env(safe-area-inset-left, 0px));
+}
+@utility pl-sidebar {
+  padding-left: calc(264px + env(safe-area-inset-left, 0px));
+}
+/* A centred modal: full width of, and centred within, the safe box rather than
+   the screen (translate-x-[-50%] then lands it in the middle of the safe area). */
+@utility w-safe-full {
+  width: calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+}
+@utility left-safe-center {
+  left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2);
+}
+/* Toasts on phones: sonner sizes a toast as 100% minus twice the *left* mobile
+   offset, so an asymmetric right inset (iPhone Duo) would push it under the
+   sensor column. Size it from both offsets instead; the offsets themselves are
+   set in ui/sonner.tsx. */
+@media (max-width: 600px) {
+  [data-sonner-toaster][data-x-position] [data-sonner-toast] {
+    width: calc(100% - var(--mobile-offset-left) - var(--mobile-offset-right));
+  }
+}
+/* Right-anchored controls (a close button) that must sit inside the inset. */
+@utility right-safe-* {
+  right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
 /* Full-viewport centred card (setup, invite, error, loading screens). `safe`
    alignment falls back to the start when the card is taller than the viewport,
    so nothing is clipped off the top; the padding keeps it clear of the notch and

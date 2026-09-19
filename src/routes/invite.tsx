@@ -86,7 +86,7 @@ function InvitePage() {
 
 function Centered({ children }: { children: ReactNode }) {
   return (
-    <div className="screen-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="w-full max-w-md space-y-4 text-center">
         <div className="flex justify-center">
           <Wordmark />

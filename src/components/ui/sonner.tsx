@@ -115,9 +115,13 @@ const Toaster = () => {
       duration={TOAST_DURATION_MS}
       offset={{
         top: "calc(env(safe-area-inset-top, 0px) + 24px)",
-        right: drawerInset + EDGE_GAP,
+        right: `calc(env(safe-area-inset-right, 0px) + ${drawerInset + EDGE_GAP}px)`,
       }}
-      mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+      mobileOffset={{
+        top: "calc(env(safe-area-inset-top, 0px) + 16px)",
+        right: "calc(env(safe-area-inset-right, 0px) + 16px)",
+        left: "calc(env(safe-area-inset-left, 0px) + 16px)",
+      }}
       icons={{
         success: (
           <Glyph>

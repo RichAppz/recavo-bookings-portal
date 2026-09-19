@@ -69,10 +69,10 @@ function SlugBookingPage() {
 function ResolvingPage() {
   return (
     <main className="min-h-screen bg-background">
-      <header className="pt-safe flex min-h-16 items-center px-4 sm:border-b sm:px-6">
+      <header className="pt-safe px-safe-4 sm:px-safe-6 flex min-h-16 items-center sm:border-b">
         <Wordmark />
       </header>
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+      <div className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl py-4 sm:py-8">
         <PageGhost />
       </div>
     </main>
@@ -86,7 +86,7 @@ function ResolvingPage() {
  */
 function NoSuchPage() {
   return (
-    <main className="screen-center bg-background px-4">
+    <main className="screen-center bg-background px-safe-4">
       <div className="max-w-md text-center">
         <Wordmark />
         <h1 className="mt-6 text-lg font-semibold">This booking page isn't available</h1>

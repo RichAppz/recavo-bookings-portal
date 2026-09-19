@@ -263,7 +263,7 @@ function Shell({
 }) {
   return (
     <main className="min-h-screen bg-background">
-      <header className="pt-safe border-b bg-nav text-nav-foreground">
+      <header className="pt-safe px-safe border-b bg-nav text-nav-foreground">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-4">
           {business?.branding.logoUrl ? (
             <img
@@ -284,7 +284,9 @@ function Shell({
           </div>
         </div>
       </header>
-      <div className="pb-safe mx-auto w-full max-w-3xl p-4 sm:p-8">{children}</div>
+      <div className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-3xl pt-4 pb-safe-4 sm:pt-8 sm:pb-safe-8">
+        {children}
+      </div>
     </main>
   );
 }

@@ -21,7 +21,7 @@ export function NativeReturnGate({ children }: { children: ReactNode }) {
   if (!link) return children;
 
   return (
-    <div className="screen-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="w-full max-w-sm space-y-6 text-center">
         <div className="flex justify-center">
           <Wordmark />

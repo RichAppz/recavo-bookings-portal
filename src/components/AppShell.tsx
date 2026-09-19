@@ -306,10 +306,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!portalLink.isFetched || portalBusinesses.isLoading) {
       return (
         <div className="min-h-screen bg-background">
-          <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
+          <header className="pt-safe px-safe-4 sm:px-safe-6 sticky top-0 z-30 flex min-h-16 items-center bg-background/85 backdrop-blur sm:border-b">
             <Wordmark />
           </header>
-          <main className="mx-auto w-full max-w-5xl px-4 pt-4 pb-safe-12 sm:p-8">
+          <main className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl pt-4 pb-safe-12 sm:p-8">
             <PageGhost />
           </main>
         </div>
@@ -352,7 +352,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (billingLocked && onBilling) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center justify-between bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
+        <header className="pt-safe px-safe-4 sm:px-safe-6 sticky top-0 z-30 flex min-h-16 items-center justify-between bg-background/85 backdrop-blur sm:border-b">
           <Wordmark />
           <div className="flex items-center gap-1">
             <DeleteAccountDialog
@@ -367,7 +367,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl space-y-6 px-4 pt-4 pb-safe-12 sm:p-8">
+        <main className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl space-y-6 pt-4 pb-safe-12 sm:p-8">
           {page}
         </main>
       </div>
@@ -385,7 +385,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside
         className={cn(
-          "pt-safe pb-safe fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
+          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
           mobileNav ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -585,9 +585,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:pl-[264px]">
+      <div className="lg:pl-sidebar">
         <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-          <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+          <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -741,7 +741,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 px-4 pt-4 pb-safe-12 sm:p-6">
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
           {accessPending ? null : <BillingBanner />}
           {page}
         </main>
