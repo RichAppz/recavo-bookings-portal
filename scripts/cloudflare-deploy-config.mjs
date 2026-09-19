@@ -15,6 +15,11 @@
  *
  *   node scripts/cloudflare-deploy-config.mjs staging preflight
  *
+ * After the build it reads the bundle back and refuses to deploy one that is
+ * wired to the wrong Supabase/API (leaked VITE_*) or compiled with React's
+ * development JSX transform (inherited NODE_ENV≠production) — both produce a
+ * clean-looking `vite build` and a dead site.
+ *
  * `custom_domain: true` is what makes Cloudflare create and manage the DNS
  * record itself. These hostnames must match `src/lib/hosts.ts` — a wrong pair
  * here steals DNS from the live staging/production names.
@@ -114,13 +119,43 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * A `NODE_ENV=development` left in the shell is just as destructive as a leaked
+ * `VITE_*`, and quieter: `vite build --mode production` keeps whatever NODE_ENV
+ * it inherits, so @vitejs/plugin-react emits the *development* JSX transform
+ * (`jsxDEV` from react/jsx-dev-runtime). The build exits 0, the Supabase/API
+ * checks below pass, and production React has no `jsxDEV` — every SSR render
+ * throws "jsxDEV is not a function" and every page is a 500. That took
+ * production down on 2026-09-19 (version cfb58db0). `deploy:*` now pins
+ * NODE_ENV=production for the build; this is the read-back that refuses to ship
+ * a dev-transformed bundle produced by any other route.
+ */
+function assertBundleIsProductionTransform(devRuntimeFiles) {
+  if (devRuntimeFiles.length === 0) return;
+  fail([
+    `Refusing to deploy ${targetName}: the bundle was built with React's development JSX transform.`,
+    `  ${devRuntimeFiles.length} file(s) import react/jsx-dev-runtime, e.g.`,
+    ...devRuntimeFiles.slice(0, 5).map((f) => `    ${f}`),
+    `  Production React does not export jsxDEV, so every server render would throw and`,
+    `  every page would be a 500. This happens when NODE_ENV is set to anything other`,
+    `  than "production" in the shell that runs vite build (NODE_ENV=${process.env.NODE_ENV ?? "unset"} here).`,
+    `  Rebuild with: NODE_ENV=production npm run deploy:${targetName}`,
+  ]);
+}
+
 function assertBundleMatchesTarget() {
   const { expectedSupabase, expectedApi } = assertEnvFileComplete();
 
   const supabaseRefs = new Set();
   const apiHosts = new Set();
+  const devRuntimeFiles = [];
   for (const file of walk(".output")) {
     const source = readFileSync(file, "utf8");
+    // The dev transform imports "react/jsx-dev-runtime" (bundled as
+    // `import_jsx_dev_runtime.jsxDEV`). A production bundle never names that
+    // module; the only `jsxDEV` a good build contains is the string inside
+    // hast-util-to-jsx-runtime's own option handling, which is not an import.
+    if (/jsx-dev-runtime/.test(source)) devRuntimeFiles.push(file);
     // Real project refs are 20 lowercase letters; this skips library placeholders
     // such as https://xyzcompany.supabase.co.
     for (const m of source.matchAll(/https:\/\/[a-z]{20}\.supabase\.co/g)) supabaseRefs.add(m[0]);
@@ -131,6 +166,11 @@ function assertBundleMatchesTarget() {
       apiHosts.add(m[0]);
     }
   }
+
+  // Checked first: a dev-transformed bundle is broken regardless of which
+  // backend it points at, and its cause (NODE_ENV) is distinct from the
+  // VITE_* leak the host comparison below is about.
+  assertBundleIsProductionTransform(devRuntimeFiles);
 
   // The allow-list for each target is exactly its env file's API. An empty set
   // is as wrong as a foreign host: `import.meta.env.VITE_API_BASE_URL` is
