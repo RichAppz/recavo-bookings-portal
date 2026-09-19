@@ -74,7 +74,7 @@ function ReferralsPage() {
         <div className="space-y-6">
           <SectionCard
             title="Your code"
-            description="Share this with another PT. They enter it when they create their Recavo business."
+            description="Share this with another business — a personal trainer, a detailer, anyone who takes bookings. They enter it when they create their Recavo business."
             action={
               <div className="flex flex-wrap gap-2">
                 <Button
