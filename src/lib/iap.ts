@@ -89,7 +89,7 @@ export type IapProduct = {
   productId: string;
   product: AppStoreProduct;
   store: PurchasesStoreProduct;
-  /** e.g. "£24.99" */
+  /** e.g. "£22.99" */
   priceString: string;
   /** Free trial / intro offer StoreKit says this user is eligible for, if any. */
   introOffer: { priceString: string; period: string; cycles: number } | null;
