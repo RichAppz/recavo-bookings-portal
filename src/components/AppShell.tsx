@@ -83,6 +83,7 @@ import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { useLiveUpdates } from "@/lib/live/use-live-updates";
+import { useSoloPlan } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 
 function pluralizeTerm(term: string) {
@@ -257,6 +258,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Group sessions are a PT concept — a detailer works one car at a time — so
   // that quick action is hidden for the car-detailing vertical.
   const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  // A Solo plan seats one person — the owner, who already has a staff record —
+  // so there is no team to manage and the Staff item is dropped from the menu.
+  const soloPlan = useSoloPlan();
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
   // Adopt guest purchases before asking what this account owns, or someone who
@@ -399,7 +403,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     // (vehicles for detailing); everyone else never sees the item.
                     (item.to !== "/vehicles" || hasLinkedRecords) &&
                     // Consumables are a detailing concept (coatings, pads, chemicals).
-                    (item.to !== "/consumables" || isCarDetailing),
+                    (item.to !== "/consumables" || isCarDetailing) &&
+                    // One-seat plans have no team to manage.
+                    (item.to !== "/staff" || !soloPlan),
                 );
                 if (items.length === 0) return null;
                 return (
