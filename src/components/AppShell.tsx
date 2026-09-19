@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DeleteAccountDialog } from "@/components/DeleteAccountSection";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -337,9 +338,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="min-h-screen bg-background">
         <header className="pt-safe sticky top-0 z-30 flex min-h-16 items-center justify-between bg-background/85 px-4 backdrop-blur sm:border-b sm:px-6">
           <Wordmark />
-          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-            <LogOut className="size-4" /> Sign out
-          </Button>
+          <div className="flex items-center gap-1">
+            <DeleteAccountDialog
+              trigger={
+                <Button variant="ghost" size="sm" className="text-muted-foreground">
+                  Delete account
+                </Button>
+              }
+            />
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <LogOut className="size-4" /> Sign out
+            </Button>
+          </div>
         </header>
         <main className="mx-auto w-full max-w-5xl space-y-6 px-4 pt-4 pb-safe-12 sm:p-8">
           {page}

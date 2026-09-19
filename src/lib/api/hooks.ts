@@ -3180,6 +3180,55 @@ export function useUpdateMe() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Account deletion (App Store guideline 5.1.1(v))
+// ---------------------------------------------------------------------------
+
+export type ClosingBusinessSummary = {
+  id: string;
+  name: string;
+  /** Live App Store subscription RECAVO cannot cancel — the user must, in iOS Settings. */
+  appleSubscription: boolean;
+};
+
+export type AccountDeletionPreview = {
+  /** Businesses the user is the only owner of; deleting the account closes them. */
+  closingBusinesses: ClosingBusinessSummary[];
+  /** Businesses the user merely belongs to; they only lose their membership. */
+  leavingBusinessIds: string[];
+};
+
+export type AccountDeletionResult = AccountDeletionPreview & { deletedAt: string };
+
+export function useAccountDeletionPreview(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.accountDeletionPreview(),
+    enabled,
+    staleTime: 0,
+    queryFn: async () => {
+      const res = await api.get<AccountDeletionPreview>("/api/v1/me/deletion-preview");
+      return res.data;
+    },
+  });
+}
+
+/**
+ * Irreversible. The API clears the session cookie; the caller is responsible for
+ * tearing down the local session afterwards (`signOut`).
+ */
+export function useDeleteAccount() {
+  return useMutation<AccountDeletionResult, Error, void>({
+    mutationFn: async () => {
+      const res = await request<AccountDeletionResult>({
+        method: "DELETE",
+        path: "/api/v1/me",
+        body: { confirm: "DELETE" },
+      });
+      return res.data;
+    },
+  });
+}
+
 export function useUpdateMembership() {
   const businessId = useBusinessId();
   const qc = useQueryClient();

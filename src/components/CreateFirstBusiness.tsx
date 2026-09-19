@@ -17,6 +17,7 @@ import {
   readPendingReferral,
 } from "@/lib/auth/pending-referral";
 import { Button } from "@/components/ui/button";
+import { DeleteAccountDialog } from "@/components/DeleteAccountSection";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BusinessDetailsFields } from "@/components/BusinessDetailsFields";
@@ -245,14 +246,17 @@ export function CreateFirstBusiness({
             </Button>
           </form>
 
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="text-sm text-muted-foreground hover:underline"
-            >
+          <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
+            <button type="button" onClick={() => void signOut()} className="hover:underline">
               Sign out
             </button>
+            <DeleteAccountDialog
+              trigger={
+                <button type="button" className="hover:underline">
+                  Delete account
+                </button>
+              }
+            />
           </div>
         </div>
       </div>
