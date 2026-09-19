@@ -9060,6 +9060,10 @@ export interface paths {
                             /** @enum {string|null} */
                             publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
                         };
+                        /** @description Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only. */
+                        navigation?: {
+                            hidden?: ("waitlist" | "consumables" | "packages" | "offer_links" | "follow_ups" | "records" | "staff" | "messages" | "invoices" | "reports" | "referrals")[];
+                        };
                         legalAddress?: {
                             line1?: string;
                             line2?: string | null;
@@ -45155,6 +45159,10 @@ export interface components {
                 eventColour?: string | null;
                 /** @enum {string|null} */
                 publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
+            };
+            /** @description Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only. */
+            navigation?: {
+                hidden?: ("waitlist" | "consumables" | "packages" | "offer_links" | "follow_ups" | "records" | "staff" | "messages" | "invoices" | "reports" | "referrals")[];
             };
             legalAddress?: {
                 line1?: string;

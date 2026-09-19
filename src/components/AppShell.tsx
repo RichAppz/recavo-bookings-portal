@@ -83,6 +83,8 @@ import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { useLiveUpdates } from "@/lib/live/use-live-updates";
+import { hiddenNavFrom, navFeatureForPath } from "@/lib/nav-features";
+import { markSessionLanded } from "@/lib/session-landing";
 import { useSoloPlan } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 
@@ -242,6 +244,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   useLiveUpdates();
 
   useEffect(() => setMobileNav(false), [pathname]);
+  // Once a real page has rendered, later visits to `/` are the Overview link,
+  // not the app opening — see the home route.
+  const accessPending = tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
+  useEffect(() => {
+    if (!accessPending) markSessionLanded();
+  }, [accessPending]);
 
   const searchQuery = useCustomers({ search: search.trim(), enabled: search.trim().length > 1 });
   const results = search.trim().length > 1 ? (searchQuery.data?.items ?? []).slice(0, 5) : [];
@@ -261,6 +269,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A Solo plan seats one person — the owner, who already has a staff record —
   // so there is no team to manage and the Staff item is dropped from the menu.
   const soloPlan = useSoloPlan();
+  // Items the business switched off under Settings → Configuration → Menu.
+  const hiddenNav = hiddenNavFrom(tenant.configuration);
+  const isHiddenByBusiness = (to: string) => {
+    const feature = navFeatureForPath(to);
+    return feature !== undefined && hiddenNav.has(feature);
+  };
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
   // Adopt guest purchases before asking what this account owns, or someone who
@@ -328,8 +342,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     // the wrong question — they are mid-claim, or their link has yet to redeem.
     return <NoCustomerAccount />;
   }
-
-  const accessPending = tenant.isLoading || (Boolean(tenant.businessId) && subscription.isLoading);
 
   if (!accessPending && billingLocked && !onBilling && !onPlatform) {
     return <Navigate to="/billing" replace />;
@@ -405,7 +417,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                     // Consumables are a detailing concept (coatings, pads, chemicals).
                     (item.to !== "/consumables" || isCarDetailing) &&
                     // One-seat plans have no team to manage.
-                    (item.to !== "/staff" || !soloPlan),
+                    (item.to !== "/staff" || !soloPlan) &&
+                    !isHiddenByBusiness(item.to),
                 );
                 if (items.length === 0) return null;
                 return (

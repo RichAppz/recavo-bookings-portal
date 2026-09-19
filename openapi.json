@@ -5642,6 +5642,31 @@
               }
             }
           },
+          "navigation": {
+            "type": "object",
+            "description": "Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only.",
+            "properties": {
+              "hidden": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "waitlist",
+                    "consumables",
+                    "packages",
+                    "offer_links",
+                    "follow_ups",
+                    "records",
+                    "staff",
+                    "messages",
+                    "invoices",
+                    "reports",
+                    "referrals"
+                  ]
+                }
+              }
+            }
+          },
           "legalAddress": {
             "type": [
               "object",
@@ -19984,6 +20009,31 @@
                           "northern-ireland",
                           null
                         ]
+                      }
+                    }
+                  },
+                  "navigation": {
+                    "type": "object",
+                    "description": "Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only.",
+                    "properties": {
+                      "hidden": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "waitlist",
+                            "consumables",
+                            "packages",
+                            "offer_links",
+                            "follow_ups",
+                            "records",
+                            "staff",
+                            "messages",
+                            "invoices",
+                            "reports",
+                            "referrals"
+                          ]
+                        }
                       }
                     }
                   },
