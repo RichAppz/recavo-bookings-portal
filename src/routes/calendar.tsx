@@ -7,18 +7,25 @@ import {
   ChevronRight,
   Clock,
   Hourglass,
+  Landmark,
   MoreHorizontal,
   Palette,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
-import { CalendarColoursDialog } from "@/components/CalendarColoursSetting";
+import { CalendarColoursDialog, PublicHolidaysSelect } from "@/components/CalendarColoursSetting";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
+import {
+  defaultEventColour,
+  eventColourFor,
+  publicHolidayRegionFrom,
+} from "@/lib/calendar-settings";
 import { summariseBookings } from "@/lib/calendar-stats";
+import { usePublicHolidays, type PublicHoliday } from "@/lib/public-holidays";
 import { useSoleStaff } from "@/lib/sole";
-import { DEFAULT_EVENT_COLOUR, EventModal } from "@/components/EventModal";
+import { EventModal } from "@/components/EventModal";
 import { Marquee } from "@/components/Marquee";
 import { ServiceFilterMenuItems } from "@/components/ServiceFilterSelect";
 import { PageHeader } from "@/components/ui-bits";
@@ -31,6 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -201,6 +209,13 @@ function eventChipStyle(colour: string): CSSProperties {
   };
 }
 
+/**
+ * A bank holiday is a note about the day, not something on the diary: a quiet
+ * dashed outline in the muted text colour, never a tint that competes with jobs.
+ */
+const HOLIDAY_CHIP =
+  "pointer-events-none flex min-w-0 items-center gap-1 overflow-hidden rounded border border-dashed border-muted-foreground/50 bg-background/60 px-1.5 py-0.5 text-[11px] leading-tight text-muted-foreground";
+
 /** Snap a click's Y offset on a day column to the nearest quarter hour, as HH:MM. */
 function timeAtOffset(offsetY: number): string {
   const minutes = START_HOUR * 60 + Math.floor((offsetY / HOUR_HEIGHT) * 4) * 15;
@@ -277,6 +292,18 @@ function CalendarPage() {
     isCarDetailing ? DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE : DEFAULT_MONTH_BAR_FIELDS,
   );
   const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
+  // Long bar labels slide so nothing is lost on a narrow cell; some people would
+  // rather they sat still. Per device, like the other view preferences.
+  const [marquee, setMarquee] = useStoredState<"on" | "off">(prefKey("marquee"), "on", [
+    "on",
+    "off",
+  ]);
+  const sliding = marquee === "on";
+  // Events: hand-picked colours are kept, the stock slate follows the business default.
+  const eventColour = (colour: string) => eventColourFor(colour, tenant.configuration);
+  const legendEventColour = defaultEventColour(tenant.configuration);
+  const holidayRegion = publicHolidayRegionFrom(tenant.configuration);
+  const publicHolidays = usePublicHolidays(holidayRegion);
   const toggleMonthBar = (field: MonthBarField) => {
     const next = new Set(monthBar);
     if (next.has(field)) next.delete(field);
@@ -553,7 +580,31 @@ function CalendarPage() {
   const bookedMinor = useMemo(() => summariseBookings(statsBookings).bookedMinor, [statsBookings]);
   const currency = tenant.business?.currency ?? statsBookings[0]?.currency ?? "GBP";
 
-  type MonthEntry = { kind: "booking"; item: Booking } | { kind: "event"; item: CalendarBlock };
+  /** A bank holiday shaped like anything else on the grid: it holds one local day. */
+  type HolidayItem = PublicHoliday & {
+    id: string;
+    start: string;
+    end: string;
+    occupiedDays: string[];
+  };
+  const holidayItems = useMemo<HolidayItem[]>(() => {
+    const from = isoDate(rangeStart);
+    const to = isoDate(rangeEnd);
+    return publicHolidays.holidays
+      .filter((h) => from <= h.date && h.date < to)
+      .map((h) => ({
+        ...h,
+        id: `holiday-${h.date}`,
+        start: `${h.date}T00:00:00.000Z`,
+        end: `${h.date}T23:59:00.000Z`,
+        occupiedDays: [h.date],
+      }));
+  }, [publicHolidays.holidays, rangeStart, rangeEnd]);
+
+  type MonthEntry =
+    | { kind: "booking"; item: Booking }
+    | { kind: "event"; item: CalendarBlock }
+    | { kind: "holiday"; item: HolidayItem };
   type PlacedItem = {
     entry: MonthEntry;
     /** First and last column (0–6) the item occupies within this week. */
@@ -592,9 +643,12 @@ function CalendarPage() {
         continuesAfter: last > isos[run.endCol]!,
       }));
     });
+    // A holiday is about the day itself, so it sits above whatever is booked on it.
+    const rank = (e: MonthEntry) => (e.kind === "holiday" ? 0 : 1);
     spans.sort(
       (a, b) =>
         a.startCol - b.startCol ||
+        rank(a.entry) - rank(b.entry) ||
         b.endCol - b.startCol - (a.endCol - a.startCol) ||
         a.entry.item.start.localeCompare(b.entry.item.start),
     );
@@ -609,6 +663,7 @@ function CalendarPage() {
   };
   const placeMonthItems = (weekIsos: string[]) =>
     placeItems(weekIsos, [
+      ...holidayItems.map((item) => ({ kind: "holiday" as const, item })),
       ...filtered.map((item) => ({ kind: "booking" as const, item })),
       ...events.map((item) => ({ kind: "event" as const, item })),
     ]);
@@ -619,6 +674,7 @@ function CalendarPage() {
     view === "month"
       ? []
       : placeItems(allDayIsos, [
+          ...holidayItems.map((item) => ({ kind: "holiday" as const, item })),
           ...filtered.filter((b) => b.allDay).map((item) => ({ kind: "booking" as const, item })),
           ...events.filter(isAllDay).map((item) => ({ kind: "event" as const, item })),
         ]);
@@ -635,21 +691,26 @@ function CalendarPage() {
         }
         onDismissDescription={() => setIntroHidden("yes")}
         actions={
+          // Sized down on a phone so both fit beside the title on one row.
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
+              className="h-8 px-2.5 text-xs sm:h-9 sm:px-4 sm:text-sm"
               onClick={() => openAddEvent(view === "day" ? isoDate(anchor) : undefined)}
             >
               <Clock className="size-4" /> Add event
             </Button>
-            <Button onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>
+            <Button
+              className="h-8 px-2.5 text-xs sm:h-9 sm:px-4 sm:text-sm"
+              onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}
+            >
               <CalendarPlus className="size-4" /> Add {bookingLabel.toLowerCase()}
             </Button>
           </div>
         }
       />
 
-      <div className="surface-card flex flex-wrap items-center gap-3 p-3">
+      <div className="surface-card flex flex-wrap items-center gap-2 p-2 sm:gap-3 sm:p-3">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous">
             <ChevronLeft className="size-4" />
@@ -662,12 +723,14 @@ function CalendarPage() {
           </Button>
         </div>
         {/* Today has 12px of internal padding, so the visual gap Today → label is
-            gap-3 + px-3 = 24px; match it label → total with gap-6. */}
-        <p className="flex items-baseline gap-6 text-sm font-semibold">
-          <span>{range}</span>
+            gap-3 + px-3 = 24px; match it label → total with gap-6. On a phone the
+            label takes what is left of the nav row and the total waits for `sm`,
+            so the toolbar is two rows, not three. */}
+        <p className="flex min-w-0 flex-1 items-baseline gap-6 text-sm font-semibold sm:flex-none">
+          <span className="truncate">{range}</span>
           {!bookings.isLoading && bookedMinor > 0 ? (
             <span
-              className="font-medium text-muted-foreground tabular-nums"
+              className="hidden font-medium text-muted-foreground tabular-nums sm:inline"
               aria-label={`${formatMoney(bookedMinor, currency)} booked in this range`}
             >
               {formatMoney(bookedMinor, currency)}
@@ -870,7 +933,7 @@ function CalendarPage() {
                       className={cn(
                         // The card draws its own edge, so the grid drops the borders
                         // that would otherwise double up along the right and bottom.
-                        "group relative min-h-[116px] border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0",
+                        "group relative min-h-[96px] border-r border-b p-1 [&:nth-child(7n)]:border-r-0 sm:min-h-[116px] sm:p-1.5",
                         weekIdx === weeks.length - 1 && "border-b-0",
                         outside && "bg-muted/30",
                       )}
@@ -905,7 +968,7 @@ function CalendarPage() {
                         <button
                           type="button"
                           onClick={() => openDay(day)}
-                          className="absolute bottom-1 left-1.5 cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                          className="absolute bottom-0.5 left-1 cursor-pointer px-1 text-left text-[11px] text-muted-foreground hover:text-foreground hover:underline sm:bottom-1 sm:left-1.5"
                         >
                           +{hidden} more
                         </button>
@@ -917,7 +980,7 @@ function CalendarPage() {
                 {/* The bars: same seven columns as the cells beneath, so a span of
                     n columns lines up exactly with the days it covers. */}
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-8 grid grid-cols-7 gap-y-0.5"
+                  className="pointer-events-none absolute inset-x-0 top-7 grid grid-cols-7 gap-y-0.5 sm:top-8"
                   style={{ gridAutoRows: `${MONTH_LANE_HEIGHT}px` }}
                 >
                   {placed
@@ -931,9 +994,25 @@ function CalendarPage() {
                       // A bar that carries on past the row edge runs right to it, unrounded,
                       // so it visibly continues into the next (or previous) week.
                       const edges = cn(
-                        continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-1.5",
-                        continuesAfter ? "mr-0 rounded-r-none" : "mr-1.5",
+                        continuesBefore ? "ml-0 rounded-l-none border-l-0" : "ml-0.5 sm:ml-1.5",
+                        continuesAfter ? "mr-0 rounded-r-none" : "mr-0.5 sm:mr-1.5",
                       );
+                      if (entry.kind === "holiday") {
+                        const h = entry.item;
+                        return (
+                          <div
+                            key={h.id}
+                            role="note"
+                            aria-label={`Bank holiday: ${h.title}`}
+                            title={h.notes ? `${h.title} — ${h.notes}` : h.title}
+                            style={style}
+                            className={cn(HOLIDAY_CHIP, "mx-0.5 sm:mx-1.5")}
+                          >
+                            <Landmark className="size-3 shrink-0" aria-hidden />
+                            <span className="truncate">{h.title}</span>
+                          </div>
+                        );
+                      }
                       if (entry.kind === "event") {
                         const ev = entry.item;
                         const allDay = isAllDay(ev);
@@ -942,16 +1021,16 @@ function CalendarPage() {
                             key={`${ev.id}-${startCol}`}
                             type="button"
                             onClick={() => openEvent(ev)}
-                            style={{ ...style, ...eventChipStyle(ev.colour) }}
+                            style={{ ...style, ...eventChipStyle(eventColour(ev.colour)) }}
                             aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
                               isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
                             }`}
                             className={cn(
-                              "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                              "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded border-l-[3px] px-1 py-0.5 text-left text-[11px] leading-tight sm:px-1.5",
                               edges,
                             )}
                           >
-                            <Marquee>
+                            <Marquee animate={sliding}>
                               {continuesBefore ? (
                                 <span
                                   className="text-muted-foreground"
@@ -1000,7 +1079,7 @@ function CalendarPage() {
                           )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}`}
                           style={{ ...style, ...payment.style }}
                           className={cn(
-                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1.5 py-0.5 text-left text-[11px] leading-tight",
+                            "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] leading-tight sm:px-1.5",
                             payment.className,
                             edges,
                             cancelled && "opacity-45 line-through",
@@ -1009,7 +1088,7 @@ function CalendarPage() {
                           {showLift ? <LiftTag /> : null}
                           {/* The label slides if it is wider than the bar, so a one-day
                               cell still shows everything that was switched on. */}
-                          <Marquee>
+                          <Marquee animate={sliding}>
                             {continuesBefore ? (
                               <span className="opacity-75" aria-label="Continues from earlier">
                                 ↳
@@ -1087,6 +1166,25 @@ function CalendarPage() {
                   >
                     {allDayPlaced.map((p) => {
                       const { startCol, endCol, lane, continuesBefore, continuesAfter } = p;
+                      if (p.entry.kind === "holiday") {
+                        const h = p.entry.item;
+                        return (
+                          <div
+                            key={h.id}
+                            role="note"
+                            aria-label={`Bank holiday: ${h.title}`}
+                            title={h.notes ? `${h.title} — ${h.notes}` : h.title}
+                            style={{
+                              gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
+                              gridRow: lane + 1,
+                            }}
+                            className={cn(HOLIDAY_CHIP, "mx-1")}
+                          >
+                            <Landmark className="size-3 shrink-0" aria-hidden />
+                            <span className="truncate">{h.title}</span>
+                          </div>
+                        );
+                      }
                       if (p.entry.kind === "event") {
                         const ev = p.entry.item;
                         const owner = staff.data?.find((s) => s.id === ev.staffId);
@@ -1100,7 +1198,7 @@ function CalendarPage() {
                               isMultiDay(ev) ? `, until ${endLabel(ev)}` : ""
                             }`}
                             style={{
-                              ...eventChipStyle(ev.colour),
+                              ...eventChipStyle(eventColour(ev.colour)),
                               gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
                               gridRow: lane + 1,
                             }}
@@ -1230,7 +1328,11 @@ function CalendarPage() {
                           type="button"
                           onClick={() => openEvent(ev)}
                           className="absolute inset-x-1 z-10 cursor-pointer overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left"
-                          style={{ ...eventChipStyle(ev.colour), top: box.top, height: box.height }}
+                          style={{
+                            ...eventChipStyle(eventColour(ev.colour)),
+                            top: box.top,
+                            height: box.height,
+                          }}
                         >
                           <p className="truncate text-[11px] font-semibold">
                             {box.startsToday ? timeLabel(ev.start) : "↳"} {ev.title}
@@ -1312,8 +1414,10 @@ function CalendarPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-4">
+      {/* Legend on the left; the calendar's own settings (holidays, colours, label
+          motion) on the right, where they are found without opening Settings. */}
+      <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-medium">Payment:</span>
           {PAYMENT_LEGEND.map(({ tone, label }) => {
             const dot = paymentDotStyle(tone, paymentColours);
@@ -1325,12 +1429,18 @@ function CalendarPage() {
             );
           })}
           <span className="flex items-center gap-2">
-            <span
-              className="size-2.5 rounded-sm"
-              style={{ backgroundColor: DEFAULT_EVENT_COLOUR }}
-            />
+            <span className="size-2.5 rounded-sm" style={{ backgroundColor: legendEventColour }} />
             Event (own colour, hatched)
           </span>
+          {holidayRegion ? (
+            <span className="flex items-center gap-2">
+              <span className="size-2.5 rounded-sm border border-dashed border-muted-foreground/60" />
+              Bank holiday
+              {publicHolidays.isError ? (
+                <span className="text-warning-foreground">(couldn't load from gov.uk)</span>
+              ) : null}
+            </span>
+          ) : null}
           {tenant.can(PERMISSIONS.BUSINESS_UPDATE) ? (
             <button
               type="button"
@@ -1341,6 +1451,23 @@ function CalendarPage() {
               Change colours
             </button>
           ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:shrink-0 sm:justify-end">
+          {tenant.can(PERMISSIONS.BUSINESS_UPDATE) || holidayRegion ? (
+            <span className="flex items-center gap-2">
+              <Landmark className="size-3" aria-hidden />
+              <PublicHolidaysSelect size="sm" />
+            </span>
+          ) : null}
+          <label className="flex cursor-pointer items-center gap-2">
+            <Switch
+              checked={sliding}
+              onCheckedChange={(on) => setMarquee(on ? "on" : "off")}
+              aria-label="Scroll long labels"
+              className="h-4 w-7 [&>span]:size-3 [&>span]:data-[state=checked]:translate-x-3"
+            />
+            Scroll long labels
+          </label>
         </div>
       </div>
 

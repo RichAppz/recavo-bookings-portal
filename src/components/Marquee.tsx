@@ -8,9 +8,18 @@ import { cn } from "@/lib/utils";
  *
  * Nothing moves while the content fits. Speed scales with how far there is to
  * travel so long labels don't race; `prefers-reduced-motion` turns the slide off
- * (via `motion-safe:`) and the text simply clips.
+ * (via `motion-safe:`) and the text simply clips. `animate={false}` does the same
+ * on request — some people find the movement distracting on a busy month.
  */
-export function Marquee({ children, className }: { children: ReactNode; className?: string }) {
+export function Marquee({
+  children,
+  className,
+  animate = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  animate?: boolean;
+}) {
   const outer = useRef<HTMLSpanElement>(null);
   const inner = useRef<HTMLSpanElement>(null);
   const [overflow, setOverflow] = useState(0);
@@ -18,23 +27,23 @@ export function Marquee({ children, className }: { children: ReactNode; classNam
   useLayoutEffect(() => {
     const o = outer.current;
     const i = inner.current;
-    if (!o || !i) return;
+    if (!o || !i || !animate) return;
     const measure = () => setOverflow(Math.max(0, i.scrollWidth - o.clientWidth));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(o);
     ro.observe(i);
     return () => ro.disconnect();
-  }, [children]);
+  }, [children, animate]);
 
-  const style: CSSProperties | undefined =
-    overflow > 0
-      ? ({
-          "--marquee-shift": `-${overflow + 6}px`,
-          // ~30px/s, but never so short it flickers.
-          "--marquee-duration": `${Math.max(4, overflow / 30)}s`,
-        } as CSSProperties)
-      : undefined;
+  const sliding = animate && overflow > 0;
+  const style: CSSProperties | undefined = sliding
+    ? ({
+        "--marquee-shift": `-${overflow + 6}px`,
+        // ~30px/s, but never so short it flickers.
+        "--marquee-duration": `${Math.max(4, overflow / 30)}s`,
+      } as CSSProperties)
+    : undefined;
 
   return (
     <span ref={outer} className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap", className)}>
@@ -43,7 +52,7 @@ export function Marquee({ children, className }: { children: ReactNode; classNam
         style={style}
         className={cn(
           "inline-flex items-center gap-1.5 will-change-transform",
-          overflow > 0 && "motion-safe:animate-marquee",
+          sliding && "motion-safe:animate-marquee",
         )}
       >
         {children}
