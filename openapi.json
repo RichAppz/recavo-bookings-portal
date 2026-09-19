@@ -5623,6 +5623,31 @@
               }
             }
           },
+          "navigation": {
+            "type": "object",
+            "description": "Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only.",
+            "properties": {
+              "hidden": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "waitlist",
+                    "consumables",
+                    "packages",
+                    "offer_links",
+                    "follow_ups",
+                    "records",
+                    "staff",
+                    "messages",
+                    "invoices",
+                    "reports",
+                    "referrals"
+                  ]
+                }
+              }
+            }
+          },
           "legalAddress": {
             "type": [
               "object",
@@ -10292,6 +10317,464 @@
                   "properties": {
                     "user": {
                       "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete the authenticated user’s account",
+        "description": "Self-serve account deletion (App Store guideline 5.1.1(v)). Deletes the sign-in identity, closes every business the caller is the only owner of through the normal closure workflow (export window, Stripe cancellation, retention anonymisation), suspends their other memberships, revokes sessions and scrubs all personal data from the user record. App Store subscriptions are not cancelled by this call — the user must cancel them in iOS Settings. Irreversible.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "confirm"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "enum": [
+                      "DELETE"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account is deleted and the session cookie cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deletedAt",
+                    "closingBusinesses",
+                    "leavingBusinessIds"
+                  ],
+                  "properties": {
+                    "deletedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "closingBusinesses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "appleSubscription"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "appleSubscription": {
+                            "type": "boolean",
+                            "description": "True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions."
+                          }
+                        }
+                      }
+                    },
+                    "leavingBusinessIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/deletion-preview": {
+      "get": {
+        "summary": "Preview what deleting the account will do",
+        "description": "Lists the businesses that will be closed (the caller is their only owner) and the businesses the caller will simply leave. Drive the confirmation dialog from this.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consequences of deleting the account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "closingBusinesses",
+                    "leavingBusinessIds"
+                  ],
+                  "properties": {
+                    "closingBusinesses": {
+                      "type": "array",
+                      "description": "Businesses solely owned by the user; deleting the account closes them.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "appleSubscription"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "appleSubscription": {
+                            "type": "boolean",
+                            "description": "True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions."
+                          }
+                        }
+                      }
+                    },
+                    "leavingBusinessIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "description": "Businesses the user only belongs to; they lose their membership."
                     }
                   }
                 }
@@ -19487,6 +19970,31 @@
                             ],
                             "pattern": "^#[0-9a-f]{6}$"
                           }
+                        }
+                      }
+                    }
+                  },
+                  "navigation": {
+                    "type": "object",
+                    "description": "Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only.",
+                    "properties": {
+                      "hidden": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "waitlist",
+                            "consumables",
+                            "packages",
+                            "offer_links",
+                            "follow_ups",
+                            "records",
+                            "staff",
+                            "messages",
+                            "invoices",
+                            "reports",
+                            "referrals"
+                          ]
                         }
                       }
                     }
@@ -36200,7 +36708,7 @@
                   "dropIn": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
+                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
                   },
                   "clientLift": {
                     "type": [
@@ -36876,7 +37384,7 @@
                   "dropIn": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other and calendar blocks always block. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
+                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
                   },
                   "clientLift": {
                     "type": [
@@ -50063,6 +50571,14 @@
                             "ended"
                           ]
                         },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
+                        },
                         "planVersion": {
                           "type": "string",
                           "nullable": true
@@ -50679,6 +51195,14 @@
                             "ended"
                           ]
                         },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
+                        },
                         "planVersion": {
                           "type": "string",
                           "nullable": true
@@ -51060,6 +51584,14 @@
                             "restricted",
                             "ended"
                           ]
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
                         },
                         "planVersion": {
                           "type": "string",
@@ -52355,6 +52887,14 @@
                             "ended"
                           ]
                         },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
+                        },
                         "planVersion": {
                           "type": "string",
                           "nullable": true
@@ -52596,6 +53136,636 @@
                 }
               }
             },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/subscription/iap/config": {
+      "get": {
+        "summary": "App Store In-App Purchase config",
+        "description": "RevenueCat App User ID for this business plus the App Store product catalogue (product id → plan/interval, add-on or SMS bundle). Member-readable. Prices are never returned — the app reads them from StoreKit.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "IAP configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "appUserId",
+                    "products",
+                    "reconcileEnabled"
+                  ],
+                  "properties": {
+                    "appUserId": {
+                      "type": "string"
+                    },
+                    "reconcileEnabled": {
+                      "type": "boolean"
+                    },
+                    "products": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "productId",
+                          "kind"
+                        ],
+                        "properties": {
+                          "productId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "plan",
+                              "addon",
+                              "sms"
+                            ]
+                          },
+                          "plan": {
+                            "type": "string",
+                            "enum": [
+                              "solo",
+                              "business",
+                              "growth"
+                            ]
+                          },
+                          "interval": {
+                            "type": "string",
+                            "enum": [
+                              "month",
+                              "year"
+                            ]
+                          },
+                          "addonKey": {
+                            "type": "string"
+                          },
+                          "bundleKey": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/subscription/iap/reconcile": {
+      "post": {
+        "summary": "Reconcile App Store purchases",
+        "description": "Pulls the RevenueCat subscriber snapshot for this business and projects it onto the subscription, add-on entitlements and SMS credit ledger. Called by the iOS app after a purchase or restore; idempotent and rate-limited. Requires billing.manage. Returns 409 when the business holds a live Stripe subscription and an App Store plan was bought.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription projection after reconcile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "subscription",
+                        "plan",
+                        "features",
+                        "addons"
+                      ],
+                      "properties": {
+                        "subscription": {
+                          "nullable": true,
+                          "type": "object",
+                          "description": "Current non-terminal subscription projection. Stripe / grace identifiers are included only when the actor holds billing.manage.",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "businessId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "planId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "trialing",
+                                "active",
+                                "past_due",
+                                "cancelled",
+                                "unpaid",
+                                "incomplete",
+                                "incomplete_expired",
+                                "paused"
+                              ]
+                            },
+                            "accessState": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "pending",
+                                "trial",
+                                "entitled",
+                                "grace",
+                                "restricted",
+                                "ended"
+                              ]
+                            },
+                            "provider": {
+                              "type": "string",
+                              "enum": [
+                                "stripe",
+                                "apple"
+                              ],
+                              "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
+                            },
+                            "planVersion": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currentPeriodStart": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            },
+                            "trialStart": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            },
+                            "trialEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            },
+                            "cancelAtPeriodEnd": {
+                              "type": "boolean"
+                            },
+                            "limitCompliance": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "over_limit",
+                                "grace_over_limit"
+                              ]
+                            },
+                            "stripeSubscriptionId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "stripeCustomerId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "stripePriceId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "graceStartedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            },
+                            "graceEndsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "plan": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "features": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "boolean"
+                          },
+                          "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-524/526). Example keys: `reminders.sms`, `custom_records.images`."
+                        },
+                        "billingBypass": {
+                          "type": "boolean",
+                          "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                        },
+                        "addons": {
+                          "type": "array",
+                          "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "key",
+                              "featureKey",
+                              "unitAmountMinor",
+                              "currency",
+                              "interval",
+                              "status"
+                            ],
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "example": "invoicing"
+                              },
+                              "featureKey": {
+                                "type": "string",
+                                "example": "invoicing"
+                              },
+                              "unitAmountMinor": {
+                                "type": "integer",
+                                "example": 800
+                              },
+                              "currency": {
+                                "type": "string",
+                                "example": "GBP"
+                              },
+                              "interval": {
+                                "type": "string",
+                                "enum": [
+                                  "month",
+                                  "year"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "included",
+                                  "active",
+                                  "available"
+                                ],
+                                "description": "`included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}."
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "billingBypass": {
+                          "type": "boolean"
+                        },
+                        "iap": {
+                          "type": "object",
+                          "properties": {
+                            "planProjected": {
+                              "type": "boolean"
+                            },
+                            "addonsActive": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "smsCredited": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "smsCredits": {
+                          "type": "object",
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Business is billed by Stripe",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "App Store billing is not configured",
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -52920,6 +54090,14 @@
                             "restricted",
                             "ended"
                           ]
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
                         },
                         "planVersion": {
                           "type": "string",
@@ -53292,6 +54470,14 @@
                             "restricted",
                             "ended"
                           ]
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "stripe",
+                            "apple"
+                          ],
+                          "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
                         },
                         "planVersion": {
                           "type": "string",
@@ -54080,6 +55266,14 @@
                                 "ended"
                               ]
                             },
+                            "provider": {
+                              "type": "string",
+                              "enum": [
+                                "stripe",
+                                "apple"
+                              ],
+                              "description": "Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses."
+                            },
                             "planVersion": {
                               "type": "string",
                               "nullable": true
@@ -54309,6 +55503,204 @@
           },
           "422": {
             "description": "Unpaid invoice blocks credit-generating change (use portal)",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/webhooks/revenuecat": {
+      "post": {
+        "summary": "RevenueCat webhook (App Store In-App Purchase)",
+        "description": "Public endpoint verified by the shared secret RevenueCat sends in the Authorization header; no bearer auth. Deliveries are recorded in the provider-event inbox and projected by a durable job.",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "RevenueCat event."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Operation result envelope."
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"

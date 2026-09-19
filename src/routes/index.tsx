@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
   BadgePoundSterling,
@@ -43,7 +43,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui-bits";
-import { StatsGhost, TableGhost } from "@/components/ghost";
+import { PageGhost, StatsGhost, TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -58,6 +58,7 @@ import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   useBookings,
+  useBusinessOnboarding,
   useCalendarBlocks,
   useCustomer,
   useDashboard,
@@ -71,6 +72,7 @@ import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
 import { localDay, segmentOn } from "@/lib/working-days";
+import { isSessionEntry } from "@/lib/session-landing";
 import { useSoleLocation, useSoleStaff, useSoloPlan } from "@/lib/sole";
 
 export const Route = createFileRoute("/")({
@@ -93,7 +95,7 @@ export const Route = createFileRoute("/")({
   component: () => (
     <RequireAuth>
       <AppShell>
-        <Overview />
+        <Home />
       </AppShell>
     </RequireAuth>
   ),
@@ -139,6 +141,26 @@ function isPlanGated(error: unknown): boolean {
 }
 
 const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
+
+/**
+ * Once setup is done the working view is the calendar, so that is where the app
+ * opens. While the checklist is still in progress the Overview (which hosts it)
+ * stays the landing page.
+ */
+function Home() {
+  // Captured on first render, before the shell marks the session as landed.
+  const [entry] = useState(isSessionEntry);
+  const onboarding = useBusinessOnboarding();
+
+  if (entry) {
+    if (onboarding.isLoading) return <PageGhost />;
+    const status = onboarding.data?.status;
+    if (status === "complete" || status === "dismissed") {
+      return <Navigate to="/calendar" replace />;
+    }
+  }
+  return <Overview />;
+}
 
 function Overview() {
   const tenant = useTenant();

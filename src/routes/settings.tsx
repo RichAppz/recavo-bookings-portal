@@ -10,6 +10,7 @@ import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
 import { CalendarColoursSetting } from "@/components/CalendarColoursSetting";
+import { MenuVisibilitySetting } from "@/components/MenuVisibilitySetting";
 import { MessageTemplatesSetting } from "@/components/MessageTemplatesSetting";
 import { InvoicingSetting } from "@/components/InvoicingSetting";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
@@ -890,6 +891,7 @@ function ConfigurationTab() {
           </div>
         </SectionCard>
         <CalendarColoursSetting />
+        <MenuVisibilitySetting />
       </div>
       <div className="grid gap-5">
         <SectionCard title="Booking rules">
