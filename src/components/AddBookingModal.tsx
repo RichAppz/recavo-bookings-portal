@@ -650,10 +650,17 @@ export function AddBookingModal({
   // "All day" from the slot grid: one tap instead of switching tabs and ticking
   // the box. The end-date effect above fills in the last day from the job length.
   const pickAllDay = () => {
+    // Already booking around the hold: stay a drop-in, just without a time.
+    if (dropIn) armDropIn.current = true;
     setScheduling("custom");
     setAllDay(true);
     setSlotKey(null);
     setEndTouched(false);
+  };
+  // The fast path on a held day: "sometime that day", no time to pick.
+  const pickAllDayDropIn = () => {
+    armDropIn.current = true;
+    pickAllDay();
   };
   const hoursWarning = useMemo(() => {
     if (scheduling !== "custom" || allDay || !customWindow || !customStaff) return null;
@@ -661,17 +668,18 @@ export function AddBookingModal({
   }, [scheduling, allDay, customWindow, customStaff, locationId, timezone]);
 
   // All-day jobs the new booking would sit beside: the whole day for a slot pick,
-  // the exact window for a hand-set time. Filtered to the chosen staff member —
-  // someone else's all-day job never blocked this one anyway.
+  // the exact window for a hand-set time or an all-day span. Filtered to the chosen
+  // staff member — someone else's all-day job never blocked this one anyway. An
+  // all-day booking onto a held day is an untimed drop-in ("sometime that day").
   const holdWindow =
-    scheduling === "custom" && !allDay && customWindow
+    scheduling === "custom" && customWindow
       ? customWindow
       : { start: dayStart.toISOString(), end: dayEnd.toISOString() };
   const holdStaffId = scheduling === "custom" ? customStaffId : staffId !== "all" ? staffId : null;
   const holds = useMemo(
-    () => (validDate && !allDay ? allDayHolds(diaryBookings, holdWindow, holdStaffId) : []),
+    () => (validDate ? allDayHolds(diaryBookings, holdWindow, holdStaffId) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [validDate, allDay, diaryBookings, holdWindow.start, holdWindow.end, holdStaffId],
+    [validDate, diaryBookings, holdWindow.start, holdWindow.end, holdStaffId],
   );
   // Name the client as the directory knows them; the booking's own lead attendee is
   // the fallback (and is often just the "Lead" placeholder on staff-made bookings).
@@ -738,7 +746,9 @@ export function AddBookingModal({
   );
   const overlapNote = timedOverlapNote(timedOverlaps, timezone);
   // A "yes" to sharing the day is about *this* day, this person and this kind of
-  // booking; change any of them and it is asked again.
+  // booking; change any of them and it is asked again. (The last day is not in the
+  // list: it follows the start on its own when the kind changes, and `sendDropIn`
+  // drops the flag anyway once nothing is left to share with.)
   // …except when the switch itself was "book it as a drop-in instead", which
   // arms the next reset to land on yes.
   const armDropIn = useRef(false);
@@ -749,12 +759,12 @@ export function AddBookingModal({
       return;
     }
     setDropIn(false);
-  }, [date, endDate, staffId, scheduling, allDay]);
+  }, [date, staffId, scheduling, allDay]);
   // Sent when staff have said the two kinds of work may share the day. A slot picked
   // from a drop-in quote always carries it; a hand-set window only while there is
   // still something on the diary to share with.
   const sendDropIn =
-    dropIn && (scheduling === "slot" || (allDay ? timedOnDay.length > 0 : holds.length > 0));
+    dropIn && (scheduling === "slot" || holds.length > 0 || (allDay && timedOnDay.length > 0));
 
   // The API sums the booked services' deposits unless staff override it here.
   const defaultDepositMinor = configuredDepositMinor(
@@ -1683,10 +1693,13 @@ export function AddBookingModal({
                         </div>
                       )
                     ) : null}
-                    {!allDay && holds.length > 0 ? (
+                    {holds.length > 0 ? (
                       dropIn ? (
                         <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
-                          {holdNote}. Booked as a drop-in alongside it.{" "}
+                          {holdNote}.{" "}
+                          {allDay
+                            ? "Booked as a drop-in on the same day — no set time."
+                            : "Booked as a drop-in alongside it."}{" "}
                           <button
                             type="button"
                             className="underline underline-offset-4"
@@ -1730,16 +1743,28 @@ export function AddBookingModal({
                             (timed jobs and events still block). */}
                         {holds.length > 0 && !dropIn ? (
                           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
-                            <span className="text-muted-foreground">{holdNote}.</span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => setDropIn(true)}
-                            >
-                              Squeeze in a drop-in
-                            </Button>
+                            <span className="text-muted-foreground">
+                              {holdNote}. Squeeze in a drop-in?
+                            </span>
+                            <span className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={pickAllDayDropIn}
+                              >
+                                Any time that day
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => setDropIn(true)}
+                              >
+                                Pick a time
+                              </Button>
+                            </span>
                           </div>
                         ) : dropIn ? (
                           <p className="text-xs text-muted-foreground">

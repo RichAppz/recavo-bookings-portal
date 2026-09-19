@@ -217,7 +217,7 @@ export function overrideCopy(newBookingAllDay: boolean): { title: string; body: 
   return newBookingAllDay
     ? {
         title: "Book the whole day anyway?",
-        body: "There is already timed work or an event on this day. Booking anyway keeps both — the all-day job and what is already there will sit side by side on the calendar.",
+        body: "This day already has work on it — an all-day job, timed work or an event. Booking anyway keeps both side by side on the calendar; this job has no set time, so it fits around what is there.",
       }
     : {
         title: "Squeeze in as a drop-in?",

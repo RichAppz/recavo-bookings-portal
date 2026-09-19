@@ -2155,14 +2155,18 @@ function RescheduleDialog({
     () => (diary.data?.bookings ?? []).filter((b) => b.id !== booking.id),
     [diary.data, booking.id],
   );
+  // All-day jobs on the target day(s). An all-day booking landing on one becomes
+  // an untimed drop-in — it shares the day rather than being refused.
   const holdWindow =
-    mode === "custom" && !booking.allDay && customStart
-      ? {
-          start: customStart,
-          end: new Date(new Date(customStart).getTime() + lengthMinutes * 60_000).toISOString(),
-        }
+    mode === "custom" && customStart
+      ? booking.allDay
+        ? { start: customStart, end: spanEnd.toISOString() }
+        : {
+            start: customStart,
+            end: new Date(new Date(customStart).getTime() + lengthMinutes * 60_000).toISOString(),
+          }
       : { start: dayStart.toISOString(), end: dayEnd.toISOString() };
-  const holds = booking.allDay ? [] : allDayHolds(others, holdWindow, customStaffId);
+  const holds = allDayHolds(others, holdWindow, customStaffId);
   const holdNote = heldAllDayNote(holds.map((b) => describeHold(b)));
   const timedOnDay =
     booking.allDay && customStart
@@ -2170,7 +2174,7 @@ function RescheduleDialog({
       : [];
   const timedNote = timedClashNote(timedOnDay, timezone);
   const sendDropIn =
-    dropIn && (mode === "slot" || (booking.allDay ? timedOnDay.length > 0 : holds.length > 0));
+    dropIn && (mode === "slot" || holds.length > 0 || (booking.allDay && timedOnDay.length > 0));
 
   const move = async (body: Record<string, unknown>): Promise<boolean> => {
     try {
@@ -2349,10 +2353,13 @@ function RescheduleDialog({
                   </div>
                 )
               ) : null}
-              {!booking.allDay && holds.length > 0 ? (
+              {holds.length > 0 ? (
                 dropIn ? (
                   <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
-                    {holdNote}. Moved in as a drop-in alongside it.{" "}
+                    {holdNote}.{" "}
+                    {booking.allDay
+                      ? "Moved in as a drop-in on the same day — no set time."
+                      : "Moved in as a drop-in alongside it."}{" "}
                     <button
                       type="button"
                       className="underline underline-offset-4"
