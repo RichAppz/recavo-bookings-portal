@@ -491,6 +491,17 @@ function CalendarPage() {
       : view === "day"
         ? ukDateLong(isoDate(anchor))
         : `${ukDateLong(isoDate(days[0]))} – ${ukDateLong(isoDate(days[6]))}`;
+  // A phone has room for the range or the weekday names, not both, and the grid
+  // already shows the weekdays — so the week label drops them ("21 – 27 Sept",
+  // "28 Sept – 4 Oct") rather than clipping to "Mon 21 Sept – S…".
+  const rangeCompact = (() => {
+    if (view !== "week") return range;
+    const [a, z] = [days[0], days[6]];
+    const dayMonth = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return a.getMonth() === z.getMonth()
+      ? `${a.getDate()} – ${dayMonth(z)}`
+      : `${dayMonth(a)} – ${dayMonth(z)}`;
+  })();
 
   const minutesOf = (iso: string, tz: string) => {
     const parts = new Intl.DateTimeFormat("en-GB", {
@@ -727,9 +738,11 @@ function CalendarPage() {
             label takes what is left of the nav row, so the toolbar is two rows, not
             three; the total stays visible on every width (it is the number the owner
             checks most) and is `shrink-0` so it is the range label that truncates,
-            never the money. */}
-        <p className="flex min-w-0 flex-1 items-baseline gap-6 text-sm font-semibold sm:flex-none">
-          <span className="truncate">{range}</span>
+            never the money. The gap closes up on a phone so "September 2026" fits
+            beside the total at 390px instead of clipping to "September 2…". */}
+        <p className="flex min-w-0 flex-1 items-baseline gap-3 text-sm font-semibold sm:flex-none sm:gap-6">
+          <span className="truncate sm:hidden">{rangeCompact}</span>
+          <span className="hidden truncate sm:inline">{range}</span>
           {!bookings.isLoading && bookedMinor > 0 ? (
             <span
               className="shrink-0 font-medium text-muted-foreground tabular-nums"
