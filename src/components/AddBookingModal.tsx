@@ -463,14 +463,17 @@ export function AddBookingModal({
     });
   };
   const setLinePrice = (id: string, value: string | null) => {
-    setLinePrices((prev) => {
-      if (value === null) {
+    if (value === null) {
+      // Reverting a row to list is not an edit: tabbing through an untouched row's
+      // price (which blurs at the list price) must not wipe a typed total or discount.
+      setLinePrices((prev) => {
         if (!(id in prev)) return prev;
         const { [id]: _dropped, ...rest } = prev;
         return rest;
-      }
-      return { ...prev, [id]: value };
-    });
+      });
+      return;
+    }
+    setLinePrices((prev) => ({ ...prev, [id]: value }));
     setPriceInput(null);
     setDiscount(null);
   };
@@ -998,7 +1001,9 @@ export function AddBookingModal({
     }
     if (priceInvalid) {
       toast.error("Check the price", {
-        description: "Enter an amount, or reset to the list price.",
+        description: lineInvalid
+          ? "One of the service prices isn't an amount — fix it, or clear it to use the list price."
+          : "Enter an amount, or reset to the list price.",
       });
       return;
     }
