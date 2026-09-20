@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "./booking-price.ts";
+import {
+  adjustmentLabel,
+  bookingPriceBreakdown,
+  formatAdjustment,
+  linePriceMinor,
+} from "./booking-price.ts";
 
 const fmt = (minor: number) => `£${(minor / 100).toFixed(2)}`;
 
@@ -127,5 +132,23 @@ describe("adjustment row text", () => {
     assert.equal(adjustmentLabel(5_000), "Surcharge");
     assert.equal(formatAdjustment(-14_500, fmt), "−£145.00");
     assert.equal(formatAdjustment(5_000, fmt), "+£50.00");
+  });
+});
+
+describe("linePriceMinor", () => {
+  it("is undefined for an untouched row", () => {
+    assert.equal(linePriceMinor(undefined), undefined);
+  });
+
+  it("parses a typed amount into minor units", () => {
+    assert.equal(linePriceMinor("650"), 65_000);
+    assert.equal(linePriceMinor("£1,200.50"), 120_050);
+    assert.equal(linePriceMinor("0"), 0);
+  });
+
+  it("is null for anything that is not a non-negative amount", () => {
+    assert.equal(linePriceMinor(""), null);
+    assert.equal(linePriceMinor("abc"), null);
+    assert.equal(linePriceMinor("-5"), null);
   });
 });

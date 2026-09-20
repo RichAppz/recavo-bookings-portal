@@ -9,6 +9,8 @@
  * show no discount row and still read "Adjusted from £x" via the snapshot price.
  */
 
+import { parseMoneyToMinor } from "./format.ts";
+
 type PriceLine = {
   serviceId: string;
   position: number;
@@ -100,4 +102,19 @@ export function formatAdjustment(
 ): string {
   const sign = adjustmentMinor < 0 ? "−" : "+";
   return `${sign}${formatAmount(Math.abs(adjustmentMinor))}`;
+}
+
+/**
+ * What a price staff typed on a service row of the Add booking form is worth:
+ * `undefined` = untouched (the list price applies), `null` = typed but not an amount,
+ * else the amount in minor units. Negative prices are not amounts.
+ */
+export function linePriceMinor(input: string | undefined): number | null | undefined {
+  if (input === undefined) return undefined;
+  try {
+    const minor = parseMoneyToMinor(input);
+    return minor >= 0 ? minor : null;
+  } catch {
+    return null;
+  }
 }

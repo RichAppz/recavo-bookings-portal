@@ -5,6 +5,7 @@ import { QuickAddServiceDialog } from "@/components/QuickAddServiceDialog";
 import { Badge } from "@/components/ui/badge";
 import { BottomSheet, BottomSheetContent, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Command,
   CommandGroup,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useIsPhone } from "@/hooks/use-media-query";
 import type { CatalogueService } from "@/lib/api/types";
+import { linePriceMinor } from "@/lib/booking-price";
 import { formatDuration, formatMoney } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
@@ -46,10 +48,19 @@ export function ServiceMultiPicker({
   singleReason,
   id,
   pairingPrices,
+  linePrices,
+  onLinePriceChange,
 }: {
   services: CatalogueService[];
   value: PickedService[];
   onChange: (next: PickedService[]) => void;
+  /**
+   * Staff-typed price per picked service (major units, as typed), keyed by service id.
+   * With `onLinePriceChange` the price on each row becomes editable; the row shows the
+   * catalogue price struck through beside it once it differs. Without, prices are read-only.
+   */
+  linePrices?: Readonly<Record<string, string>>;
+  onLinePriceChange?: (serviceId: string, value: string | null) => void;
   /** False when only one service may be booked (group sessions, paying by credit). */
   multi: boolean;
   /** Why only one can be picked, shown when someone clicks a second. */
@@ -128,7 +139,12 @@ export function ServiceMultiPicker({
     }
     return s.basePriceMinor;
   };
-  const total = picked.reduce((sum, p, idx) => sum + priceOf(p, idx), 0);
+  /** The row's price as it will be charged: a valid staff-typed price, else the list price. */
+  const chargedOf = (p: PickedService, idx: number): number => {
+    const typed = linePriceMinor(linePrices?.[p.serviceId]);
+    return typeof typed === "number" ? typed : priceOf(p, idx);
+  };
+  const total = picked.reduce((sum, p, idx) => sum + chargedOf(p, idx), 0);
   const minutes = picked.reduce((sum, p) => {
     const s = byId.get(p.serviceId)!;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
@@ -360,14 +376,50 @@ export function ServiceMultiPicker({
                     </SelectContent>
                   </Select>
                 ) : null}
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatMoney(priceOf(p, idx), s.currency)}
-                  {idx > 0 && priceOf(p, idx) !== (v?.priceMinor ?? s.basePriceMinor) ? (
-                    <span className="ml-1 line-through opacity-70">
-                      {formatMoney(v?.priceMinor ?? s.basePriceMinor, s.currency)}
-                    </span>
-                  ) : null}
-                </span>
+                {onLinePriceChange ? (
+                  // Editable: the price this service is charged at on this job. Typing sets
+                  // the booking total (the API keeps every line at list and records the
+                  // difference as a discount line); clearing the field puts the list back.
+                  (() => {
+                    const typed = linePrices?.[p.serviceId];
+                    const typedMinor = linePriceMinor(typed);
+                    const listMinor = priceOf(p, idx);
+                    return (
+                      <span className="flex items-center gap-1.5">
+                        {typeof typedMinor === "number" && typedMinor !== listMinor ? (
+                          <span className="text-xs text-muted-foreground line-through opacity-70 tabular-nums">
+                            {formatMoney(listMinor, s.currency)}
+                          </span>
+                        ) : null}
+                        <Input
+                          inputMode="decimal"
+                          className="h-8 w-24 text-right text-xs tabular-nums"
+                          aria-label={`${s.name} price`}
+                          aria-invalid={typedMinor === null}
+                          value={typed ?? (listMinor / 100).toFixed(2)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => onLinePriceChange(p.serviceId, e.target.value)}
+                          onBlur={(e) => {
+                            // Emptied, or typed back to list: the row is untouched again.
+                            const minor = linePriceMinor(e.target.value);
+                            if (e.target.value.trim() === "" || minor === listMinor) {
+                              onLinePriceChange(p.serviceId, null);
+                            }
+                          }}
+                        />
+                      </span>
+                    );
+                  })()
+                ) : (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatMoney(priceOf(p, idx), s.currency)}
+                    {idx > 0 && priceOf(p, idx) !== (v?.priceMinor ?? s.basePriceMinor) ? (
+                      <span className="ml-1 line-through opacity-70">
+                        {formatMoney(v?.priceMinor ?? s.basePriceMinor, s.currency)}
+                      </span>
+                    ) : null}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => toggle(s)}
