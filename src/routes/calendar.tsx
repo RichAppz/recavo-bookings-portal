@@ -724,13 +724,15 @@ function CalendarPage() {
         </div>
         {/* Today has 12px of internal padding, so the visual gap Today → label is
             gap-3 + px-3 = 24px; match it label → total with gap-6. On a phone the
-            label takes what is left of the nav row and the total waits for `sm`,
-            so the toolbar is two rows, not three. */}
+            label takes what is left of the nav row, so the toolbar is two rows, not
+            three; the total stays visible on every width (it is the number the owner
+            checks most) and is `shrink-0` so it is the range label that truncates,
+            never the money. */}
         <p className="flex min-w-0 flex-1 items-baseline gap-6 text-sm font-semibold sm:flex-none">
           <span className="truncate">{range}</span>
           {!bookings.isLoading && bookedMinor > 0 ? (
             <span
-              className="hidden font-medium text-muted-foreground tabular-nums sm:inline"
+              className="shrink-0 font-medium text-muted-foreground tabular-nums"
               aria-label={`${formatMoney(bookedMinor, currency)} booked in this range`}
             >
               {formatMoney(bookedMinor, currency)}
