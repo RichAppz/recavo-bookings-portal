@@ -96,7 +96,7 @@ import {
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
+import { adjustmentLabel, formatAdjustment, linePriceMinor } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
@@ -298,6 +298,11 @@ export function AddBookingModal({
   const [additional, setAdditional] = useState<
     Array<{ serviceId: string; variantId: string | null }>
   >([]);
+  // Per-service prices staff typed on the picked rows (major units, as typed), keyed by
+  // service id. They set the booking total the same way the Price field does — the API
+  // takes one total and records the difference from list as a discount line — so a row
+  // edit clears the typed total / discount and vice versa; the last touched wins.
+  const [linePrices, setLinePrices] = useState<Record<string, string>>({});
 
   const services = useServices();
   const staff = useStaffList();
@@ -450,6 +455,24 @@ export function AddBookingModal({
     setVariantId(main?.variantId ?? "none");
     setAdditional(rest);
     setSlotKey(null);
+    // A price typed on a row leaves with the row.
+    setLinePrices((prev) => {
+      const keep = new Set(next.map((p) => p.serviceId));
+      const kept = Object.fromEntries(Object.entries(prev).filter(([id]) => keep.has(id)));
+      return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
+    });
+  };
+  const setLinePrice = (id: string, value: string | null) => {
+    setLinePrices((prev) => {
+      if (value === null) {
+        if (!(id in prev)) return prev;
+        const { [id]: _dropped, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [id]: value };
+    });
+    setPriceInput(null);
+    setDiscount(null);
   };
   // A date input reports "" while someone is part-way through typing a date;
   // an invalid Date would throw on toISOString and take the page down.
@@ -520,14 +543,16 @@ export function AddBookingModal({
       ),
     [suggestions.data],
   );
-  const additionalTotalMinor = additional.reduce((sum, a) => {
+  /** List price of one additional service, as the API will charge it. */
+  const additionalListMinor = (a: { serviceId: string; variantId: string | null }): number => {
     const s = serviceById.get(a.serviceId);
-    if (!s) return sum;
+    if (!s) return 0;
     const variant = a.variantId ? s.variants.find((v) => v.id === a.variantId) : undefined;
-    if (variant?.priceMinor != null) return sum + variant.priceMinor;
+    if (variant?.priceMinor != null) return variant.priceMinor;
     // Paired add-ons are charged at the pairing price (upsells), as the API will.
-    return sum + (pairingPrices.get(a.serviceId) ?? s.basePriceMinor);
-  }, 0);
+    return pairingPrices.get(a.serviceId) ?? s.basePriceMinor;
+  };
+  const additionalTotalMinor = additional.reduce((sum, a) => sum + additionalListMinor(a), 0);
   const primaryMinor =
     selectedSlot?.priceMinor ??
     (service
@@ -536,12 +561,22 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
+  // Per-row prices: each row is charged at what staff typed (when valid), else list;
+  // their sum is the booking total those edits imply.
+  const lineTotalMinor = picked.reduce((sum, p, idx) => {
+    const typed = linePriceMinor(linePrices[p.serviceId]);
+    if (typeof typed === "number") return sum + typed;
+    return sum + (idx === 0 ? primaryMinor : additionalListMinor(p));
+  }, 0);
+  const linePricesTouched = picked.some((p) => linePrices[p.serviceId] !== undefined);
+  const lineInvalid = picked.some((p) => linePriceMinor(linePrices[p.serviceId]) === null);
+
   // Price override (RECA-532): every service keeps its list price and the API records
   // the difference as a discount line, so any total from zero up is valid.
   const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
   const discountInvalid =
     discount !== null && discount.value.trim() !== "" && discountMinor === null;
-  const priceOverridden = priceInput !== null || discountMinor !== null;
+  const priceOverridden = priceInput !== null || discountMinor !== null || linePricesTouched;
   const overridePriceMinor: number | null = (() => {
     if (priceInput !== null) {
       try {
@@ -552,6 +587,7 @@ export function AddBookingModal({
       }
     }
     if (discountMinor !== null) return rolledTotalMinor - discountMinor;
+    if (linePricesTouched) return lineInvalid ? null : lineTotalMinor;
     return null;
   })();
   const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
@@ -871,6 +907,7 @@ export function AddBookingModal({
     setDepositInput(null);
     setPriceInput(null);
     setDiscount(null);
+    setLinePrices({});
     setScheduling("slot");
     setAllDay(false);
     setDropIn(false);
@@ -1079,6 +1116,7 @@ export function AddBookingModal({
     lift.needed ||
     priceInput !== null ||
     discount !== null ||
+    Object.keys(linePrices).length > 0 ||
     depositInput !== null ||
     paymentMethod !== "none";
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -1298,6 +1336,8 @@ export function AddBookingModal({
                   value={picked}
                   onChange={setPicked}
                   pairingPrices={pairingPrices}
+                  linePrices={linePrices}
+                  onLinePriceChange={setLinePrice}
                   multi={!service || multiAllowed}
                   singleReason={
                     paymentMethod === "credit"
@@ -1417,6 +1457,7 @@ export function AddBookingModal({
                         onClick={() => {
                           setPriceInput(null);
                           setDiscount(null);
+                          setLinePrices({});
                         }}
                       >
                         List {formatMoney(rolledTotalMinor, service.currency)} · reset
@@ -1434,6 +1475,7 @@ export function AddBookingModal({
                     onChange={(e) => {
                       setPriceInput(e.target.value);
                       setDiscount(null);
+                      setLinePrices({});
                     }}
                     aria-invalid={priceInvalid}
                   />
@@ -1451,6 +1493,7 @@ export function AddBookingModal({
                       value={discount?.value ?? ""}
                       onChange={(e) => {
                         setPriceInput(null);
+                        setLinePrices({});
                         setDiscount(
                           e.target.value.trim() === ""
                             ? null
@@ -1463,6 +1506,7 @@ export function AddBookingModal({
                       value={discount?.mode ?? "percent"}
                       onValueChange={(mode) => {
                         setPriceInput(null);
+                        setLinePrices({});
                         setDiscount({
                           mode: mode as Discount["mode"],
                           value: discount?.value ?? "",
@@ -1491,7 +1535,9 @@ export function AddBookingModal({
                         ? discount!.mode === "percent"
                           ? "Enter a percentage between 0 and 100."
                           : `Enter an amount up to ${formatMoney(rolledTotalMinor, service.currency)}.`
-                        : "Enter an amount, or reset to the list price."}
+                        : lineInvalid
+                          ? "One of the service prices isn't an amount — fix it, or clear it to use the list price."
+                          : "Enter an amount, or reset to the list price."}
                     </p>
                   ) : priceChanged ? (
                     <p className="text-xs text-muted-foreground">
