@@ -24,6 +24,7 @@ const coating = {
   variantName: null,
   durationMinutes: 480,
   priceMinor: 40_000,
+  listPriceMinor: 40_000,
   currency: "GBP",
 };
 const level1 = {
@@ -33,6 +34,7 @@ const level1 = {
   variantName: "M",
   durationMinutes: 480,
   priceMinor: 44_500,
+  listPriceMinor: 44_500,
   currency: "GBP",
 };
 
@@ -55,7 +57,7 @@ describe("bookingPriceBreakdown", () => {
     assert.equal(b.listPriceMinor, 84_500);
     assert.equal(b.adjustmentMinor, -14_500);
     assert.equal(b.totalMinor, 70_000);
-    assert.equal(b.legacyFolded, false);
+    assert.equal(b.hasRepricedLine, false);
     assert.equal(b.hasBreakdown, true);
   });
 
@@ -70,7 +72,7 @@ describe("bookingPriceBreakdown", () => {
     assert.equal(b.hasBreakdown, true);
   });
 
-  it("renders a booking whose discount was folded into the primary as-is, without a discount row", () => {
+  it("shows a re-priced service at its price, with the list beside it and no discount row", () => {
     const b = bookingPriceBreakdown({
       priceMinor: 70_000,
       adjustmentMinor: 0,
@@ -79,13 +81,46 @@ describe("bookingPriceBreakdown", () => {
       serviceSnapshot: snapshot,
     });
     assert.deepEqual(
-      b.lines.map((l) => l.priceMinor),
-      [25_500, 44_500],
+      b.lines.map((l) => [l.priceMinor, l.listPriceMinor]),
+      [
+        [25_500, 40_000],
+        [44_500, 44_500],
+      ],
     );
     assert.equal(b.adjustmentMinor, 0);
-    assert.equal(b.legacyFolded, true);
-    // "Adjusted from £845.00" is still derivable from the snapshot price.
+    assert.equal(b.hasRepricedLine, true);
+    // "Adjusted from £845.00" quotes the list total.
     assert.equal(b.listPriceMinor, 84_500);
+  });
+
+  it("takes the primary's list from the snapshot when the API predates per-line list prices", () => {
+    const { listPriceMinor: _l1, ...coatingNoList } = coating;
+    const { listPriceMinor: _l2, ...level1NoList } = level1;
+    const b = bookingPriceBreakdown({
+      priceMinor: 70_000,
+      adjustmentMinor: 0,
+      currency: "GBP",
+      lineItems: [{ ...coatingNoList, priceMinor: 25_500 }, level1NoList],
+      serviceSnapshot: snapshot,
+    });
+    assert.deepEqual(
+      b.lines.map((l) => l.listPriceMinor),
+      [40_000, 44_500],
+    );
+    assert.equal(b.hasRepricedLine, true);
+  });
+
+  it("itemises a single service priced above list: the price, with list struck through", () => {
+    const b = bookingPriceBreakdown({
+      priceMinor: 45_000,
+      adjustmentMinor: 0,
+      currency: "GBP",
+      lineItems: [{ ...coating, priceMinor: 45_000 }],
+      serviceSnapshot: snapshot,
+    });
+    assert.equal(b.hasBreakdown, true);
+    assert.equal(b.hasRepricedLine, true);
+    assert.equal(b.adjustmentMinor, 0);
   });
 
   it("a single service at list has nothing to itemise", () => {
@@ -97,7 +132,7 @@ describe("bookingPriceBreakdown", () => {
       serviceSnapshot: snapshot,
     });
     assert.equal(b.hasBreakdown, false);
-    assert.equal(b.legacyFolded, false);
+    assert.equal(b.hasRepricedLine, false);
     assert.equal(b.listPriceMinor, 40_000);
   });
 
@@ -127,9 +162,9 @@ describe("bookingPriceBreakdown", () => {
 });
 
 describe("adjustment row text", () => {
-  it("labels and signs discounts and surcharges", () => {
+  it("labels and signs discounts and whole-job price adjustments as the invoice does", () => {
     assert.equal(adjustmentLabel(-14_500), "Discount");
-    assert.equal(adjustmentLabel(5_000), "Surcharge");
+    assert.equal(adjustmentLabel(5_000), "Price adjustment");
     assert.equal(formatAdjustment(-14_500, fmt), "−£145.00");
     assert.equal(formatAdjustment(5_000, fmt), "+£50.00");
   });

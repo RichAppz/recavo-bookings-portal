@@ -212,7 +212,7 @@
           },
           "overridable": {
             "type": "boolean",
-            "description": "BOOKING_CONFLICT only: true when every clash is an all-day job in the way of a timed booking (or a timed job in the way of an all-day one), so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise."
+            "description": "BOOKING_CONFLICT only: true when nothing in the way is a hard clash (two timed jobs, or a calendar block) — an all-day job in the way of a timed booking, or anything but a whole-day block in the way of an all-day one — so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise."
           }
         }
       },
@@ -595,7 +595,7 @@
           },
           "lineItems": {
             "type": "array",
-            "description": "Every service on this booking, `position`-ordered (RECA-516), each at its catalogue price. Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `priceMinor` is the sum of these lines plus `adjustmentMinor` — render the lines, then a Discount row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone.",
+            "description": "Every service on this booking, `position`-ordered (RECA-516), each at the price it was booked at (`priceMinor`) with the price it was booked from (`listPriceMinor`). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `booking.priceMinor` is the sum of these lines plus `adjustmentMinor` — render each line (list struck through where it differs), then a Discount / Price adjustment row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone.",
             "items": {
               "type": "object",
               "required": [
@@ -606,6 +606,7 @@
                 "variantName",
                 "durationMinutes",
                 "priceMinor",
+                "listPriceMinor",
                 "currency",
                 "position"
               ],
@@ -637,7 +638,12 @@
                   "type": "integer"
                 },
                 "priceMinor": {
-                  "type": "integer"
+                  "type": "integer",
+                  "description": "What this line is charged at. Equals `listPriceMinor` unless staff priced the line themselves when booking — then this is the price and the list is shown struck through."
+                },
+                "listPriceMinor": {
+                  "type": "integer",
+                  "description": "The price the line was booked from: the variant/catalogue price, or the pairing price for a plain add-on. Σ listPriceMinor is the catalogue total (\"Adjusted from £x\")."
                 },
                 "currency": {
                   "type": "string",
@@ -689,7 +695,7 @@
           },
           "dropIn": {
             "type": "boolean",
-            "description": "Staff confirmed this booking shares its day with the other kind of work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked over timed work. Show a \"Drop-in\" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings."
+            "description": "Staff confirmed this booking shares its day with other work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked onto a day that already has work (an untimed drop-in — \"sometime that day\"). Show a \"Drop-in\" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings."
           },
           "segments": {
             "type": "array",
@@ -784,7 +790,7 @@
           },
           "adjustmentMinor": {
             "type": "integer",
-            "description": "Staff price adjustment on top of the catalogue lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a \"Discount −£x\" row), positive = surcharge, 0 = priced at list. Bookings priced before this field existed carry the difference inside the primary line item instead (its priceMinor differs from serviceSnapshot.priceMinor) and read as 0 here."
+            "description": "Whole-job adjustment on top of the lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a \"Discount −£x\" row), positive = surcharge (\"Price adjustment +£x\"), 0 = the job costs what its lines add up to. A service staff re-priced is *not* here: its own `priceMinor` differs from its `listPriceMinor` and it is shown as that price, so a job of £85 + £400-instead-of-£450 has an adjustment of 0."
           },
           "depositMinor": {
             "type": [
@@ -36641,9 +36647,19 @@
                             "null"
                           ],
                           "format": "uuid"
+                        },
+                        "priceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Staff price for this line — a cheaper or dearer service, not a discount; the line keeps its catalogue/pairing price on `listPriceMinor`. Omitted = that list price."
                         }
                       }
                     }
+                  },
+                  "servicePriceMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Staff price for the primary service line (`serviceId`); omitted = its catalogue price. Same semantics as `additionalServices[].priceMinor`."
                   },
                   "locationId": {
                     "type": "string",
@@ -36741,12 +36757,12 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up."
+                    "description": "Staff-set total for the whole job (RECA-532). Every line keeps its list price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount / Price adjustment line on the booking and its invoice. To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor` instead. May be any amount from 0 up."
                   },
                   "dropIn": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
+                    "description": "Staff confirmed this booking may share its day with other work: a timed job squeezed in beside an all-day one (a \"drop-in\"), or an all-day job booked onto a day that already has an all-day job, timed work or a calendar block taking part of the day (an untimed drop-in with no set time). Overlap protection then ignores those clashes — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes."
                   },
                   "clientLift": {
                     "type": [
@@ -37317,9 +37333,19 @@
                             "null"
                           ],
                           "format": "uuid"
+                        },
+                        "priceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Staff price for this line (not a discount); omitted = its catalogue/pairing price."
                         }
                       }
                     }
+                  },
+                  "servicePriceMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Staff price for the primary service line; omitted = its catalogue price."
                   },
                   "locationId": {
                     "type": "string",
@@ -37417,7 +37443,7 @@
                   "priceMinor": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot."
+                    "description": "Staff-set total for the whole job (RECA-532). Every line keeps its list price and the difference is `booking.adjustmentMinor` (a Discount / Price adjustment line). To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor`."
                   },
                   "dropIn": {
                     "type": "boolean",
@@ -38914,9 +38940,25 @@
                             "null"
                           ],
                           "format": "uuid"
+                        },
+                        "priceMinor": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "description": "Staff price for this line: a number re-prices it, `null` puts it back to its list price, omitted keeps what it has (list when the services change)."
                         }
                       }
                     }
+                  },
+                  "servicePriceMinor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "description": "Staff price for the primary line: a number re-prices it, `null` puts it back to its catalogue price, omitted keeps what it has."
                   },
                   "staffId": {
                     "type": "string",
@@ -38944,7 +38986,7 @@
                       "null"
                     ],
                     "minimum": 0,
-                    "description": "Staff total for the job. A number overrides the catalogue total (the line items stay at list and the difference becomes `adjustmentMinor`); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change)."
+                    "description": "Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change)."
                   },
                   "paymentMethod": {
                     "type": "string",
