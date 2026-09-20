@@ -367,7 +367,7 @@ export function validateLineDrafts(
     ) {
       rowErrors.quantity = `Whole number 1–${INVOICE_LINE_LIMITS.quantityMax.toLocaleString("en-GB")}`;
     }
-    // Negative is a discount line (the API generates one for a staff-priced booking);
+    // Negative is a discount line (the API generates one for a job priced below its lines);
     // the API refuses a document that totals below zero.
     const priceText = draft.unitPrice.replace(/[^0-9.-]/g, "").trim();
     const price = priceText === "" ? NaN : Number(priceText);

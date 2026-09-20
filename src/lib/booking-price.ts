@@ -3,10 +3,11 @@
  * the edit form and any receipt-style view all agree with each other and with
  * the API's invoice lines.
  *
- * The API keeps every service line at its catalogue price and puts a staff price
- * on `priceMinor`; the gap is `adjustmentMinor` (negative = discount). Bookings
- * priced before that existed folded the gap into the primary line instead, so they
- * show no discount row and still read "Adjusted from £x" via the snapshot price.
+ * Each service line carries what it is charged at (`priceMinor`) and what it was
+ * booked from (`listPriceMinor`): staff pricing a service differently is a cheaper or
+ * dearer service, shown as its price with the list struck through — not a discount.
+ * The booking's `adjustmentMinor` (its price minus the sum of the lines) is the
+ * whole-job adjustment: a discount, or a staff total for the job.
  */
 
 import { parseMoneyToMinor } from "./format.ts";
@@ -18,8 +19,12 @@ type PriceLine = {
   variantName: string | null;
   durationMinutes: number;
   priceMinor: number;
+  /** Older API builds omit this; the line is then taken to be at list. */
+  listPriceMinor?: number;
   currency: string;
 };
+
+export type PriceBreakdownLine = PriceLine & { listPriceMinor: number };
 
 export type PriceBreakdownInput = {
   priceMinor: number;
@@ -38,26 +43,31 @@ export type PriceBreakdownInput = {
 };
 
 export type PriceBreakdown = {
-  /** Service lines in position order, each at the price it was booked at. */
-  lines: PriceLine[];
+  /** Service lines in position order, each at the price it was booked at, with its list. */
+  lines: PriceBreakdownLine[];
   /** Catalogue total the job was priced from (what "Adjusted from £x" quotes). */
   listPriceMinor: number;
-  /** `priceMinor − Σ lines`: negative = discount row, positive = surcharge row, 0 = none. */
+  /** `priceMinor − Σ lines`: negative = discount row, positive = adjustment row, 0 = none. */
   adjustmentMinor: number;
   totalMinor: number;
-  /**
-   * The discount was folded into the primary line by an older API (its price differs
-   * from the snapshot's). Shown as-is: lines as booked, no discount row.
-   */
-  legacyFolded: boolean;
-  /** Whether there is anything beyond a single line to itemise. */
+  /** Some line is charged at other than its list price. */
+  hasRepricedLine: boolean;
+  /** Whether there is anything beyond a single line at list to itemise. */
   hasBreakdown: boolean;
 };
 
 export function bookingPriceBreakdown(booking: PriceBreakdownInput): PriceBreakdown {
-  const lines: PriceLine[] =
+  const lines: PriceBreakdownLine[] =
     booking.lineItems && booking.lineItems.length > 0
-      ? [...booking.lineItems].sort((a, b) => a.position - b.position)
+      ? [...booking.lineItems]
+          .sort((a, b) => a.position - b.position)
+          .map((li, idx) => ({
+            ...li,
+            // The primary's catalogue price also lives on the snapshot, which covers
+            // bookings from an API that did not yet record a list per line.
+            listPriceMinor:
+              li.listPriceMinor ?? (idx === 0 ? booking.serviceSnapshot.priceMinor : li.priceMinor),
+          }))
       : [
           {
             serviceId: booking.serviceSnapshot.serviceId,
@@ -66,30 +76,30 @@ export function bookingPriceBreakdown(booking: PriceBreakdownInput): PriceBreakd
             variantName: booking.serviceSnapshot.variantName,
             durationMinutes: booking.serviceSnapshot.durationMinutes,
             priceMinor: booking.serviceSnapshot.priceMinor,
+            listPriceMinor: booking.serviceSnapshot.priceMinor,
             currency: booking.serviceSnapshot.currency,
           },
         ];
   const linesMinor = lines.reduce((sum, li) => sum + li.priceMinor, 0);
   const adjustmentMinor = booking.adjustmentMinor ?? booking.priceMinor - linesMinor;
-  // The primary's catalogue price lives on the snapshot; additional services never
-  // carried an override, so this is the list total under both the old and new model.
-  const listPriceMinor =
-    booking.serviceSnapshot.priceMinor + lines.slice(1).reduce((sum, li) => sum + li.priceMinor, 0);
-  const legacyFolded =
-    adjustmentMinor === 0 && (lines[0]?.priceMinor ?? 0) !== booking.serviceSnapshot.priceMinor;
+  const listPriceMinor = lines.reduce((sum, li) => sum + li.listPriceMinor, 0);
+  const hasRepricedLine = lines.some((li) => li.priceMinor !== li.listPriceMinor);
   return {
     lines,
     listPriceMinor,
     adjustmentMinor,
     totalMinor: booking.priceMinor,
-    legacyFolded,
-    hasBreakdown: lines.length > 1 || adjustmentMinor !== 0,
+    hasRepricedLine,
+    hasBreakdown: lines.length > 1 || adjustmentMinor !== 0 || hasRepricedLine,
   };
 }
 
-/** Row label for a non-zero adjustment: what staff took off, or added on. */
+/**
+ * Row label for a non-zero whole-job adjustment: what staff took off the job, or added
+ * to it. Matches the line the API prints on the invoice.
+ */
 export function adjustmentLabel(adjustmentMinor: number): string {
-  return adjustmentMinor < 0 ? "Discount" : "Surcharge";
+  return adjustmentMinor < 0 ? "Discount" : "Price adjustment";
 }
 
 /**

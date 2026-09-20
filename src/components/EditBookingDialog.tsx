@@ -57,7 +57,7 @@ import {
   sameClientLift,
   type ClientLiftDraft,
 } from "@/lib/client-lift";
-import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
+import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
   formatBookingWhen,
@@ -175,12 +175,14 @@ export function EditBookingDialog({
         .map((li) => (li.variantName ? `${li.name} · ${li.variantName}` : li.name)),
     [booking.lineItems],
   );
-  // Catalogue total the job was priced from: the primary's snapshot price plus the
-  // additional items, which never carry an override (RECA-532).
-  const snapshotListMinor =
-    booking.serviceSnapshot.priceMinor +
-    (booking.lineItems ?? []).slice(1).reduce((sum, li) => sum + li.priceMinor, 0);
+  // Catalogue total the job was priced from: every line's list price (RECA-532). The
+  // price differs from it when staff priced a service, or the job, differently.
+  const breakdown = bookingPriceBreakdown(booking);
+  const snapshotListMinor = breakdown.listPriceMinor;
   const originallyOverridden = booking.priceMinor !== snapshotListMinor;
+  // Priced per service, with no whole-job discount: setting a total here would replace
+  // that with a Discount / Price adjustment line, so say so before it happens.
+  const pricedPerService = breakdown.hasRepricedLine && breakdown.adjustmentMinor === 0;
   const paidMinor = booking.paidMinor ?? 0;
   const credit = booking.paymentMethod === "credit";
   // Once money has changed hands the booking belongs to whoever paid (the API 409s).
@@ -1127,6 +1129,14 @@ export function EditBookingDialog({
                     {formatMoney(paidMinor, currency)} paid so far —{" "}
                     {formatMoney(Math.max(0, effectiveTotalMinor - paidMinor), currency)} would be
                     outstanding.
+                  </p>
+                ) : pricedPerService &&
+                  !servicesChanged &&
+                  effectiveTotalMinor === booking.priceMinor ? (
+                  <p className="text-xs text-muted-foreground">
+                    Priced per service (list {formatMoney(rolledTotalMinor, currency)}). A different
+                    total here puts the services back to list and records the difference as a
+                    discount or price adjustment line.
                   </p>
                 ) : effectiveTotalMinor !== rolledTotalMinor ? (
                   <p className="text-xs text-muted-foreground">

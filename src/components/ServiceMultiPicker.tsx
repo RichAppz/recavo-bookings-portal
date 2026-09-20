@@ -377,9 +377,9 @@ export function ServiceMultiPicker({
                   </Select>
                 ) : null}
                 {onLinePriceChange ? (
-                  // Editable: the price this service is charged at on this job. Typing sets
-                  // the booking total (the API keeps every line at list and records the
-                  // difference as a discount line); clearing the field puts the list back.
+                  // Editable: the price this service is charged at on this job. It is sent
+                  // as this line's own price — a cheaper or dearer service, not a discount —
+                  // and shows with the list struck through; clearing puts the list back.
                   (() => {
                     const typed = linePrices?.[p.serviceId];
                     const typedMinor = linePriceMinor(typed);

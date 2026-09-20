@@ -19854,7 +19854,11 @@ export interface paths {
                             serviceId: string;
                             /** Format: uuid */
                             variantId?: string | null;
+                            /** @description Staff price for this line — a cheaper or dearer service, not a discount; the line keeps its catalogue/pairing price on `listPriceMinor`. Omitted = that list price. */
+                            priceMinor?: number;
                         }[];
+                        /** @description Staff price for the primary service line (`serviceId`); omitted = its catalogue price. Same semantics as `additionalServices[].priceMinor`. */
+                        servicePriceMinor?: number;
                         /** Format: uuid */
                         locationId: string;
                         /** Format: uuid */
@@ -19892,10 +19896,10 @@ export interface paths {
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
                         allDay?: boolean;
-                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Every line item keeps its catalogue price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount line on the booking and its invoice. May be any amount from 0 up. */
+                        /** @description Staff-set total for the whole job (RECA-532). Every line keeps its list price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount / Price adjustment line on the booking and its invoice. To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor` instead. May be any amount from 0 up. */
                         priceMinor?: number;
                         /**
-                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @description Staff confirmed this booking may share its day with other work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked onto a day that already has an all-day job, timed work or a calendar block taking part of the day (an untimed drop-in with no set time). Overlap protection then ignores those clashes — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
                          * @default false
                          */
                         dropIn?: boolean;
@@ -20077,7 +20081,11 @@ export interface paths {
                             serviceId: string;
                             /** Format: uuid */
                             variantId?: string | null;
+                            /** @description Staff price for this line (not a discount); omitted = its catalogue/pairing price. */
+                            priceMinor?: number;
                         }[];
+                        /** @description Staff price for the primary service line; omitted = its catalogue price. */
+                        servicePriceMinor?: number;
                         /** Format: uuid */
                         locationId: string;
                         /** Format: uuid */
@@ -20109,7 +20117,7 @@ export interface paths {
                         end?: string;
                         /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
                         allDay?: boolean;
-                        /** @description Staff-set total for the job (RECA-532), replacing the catalogue total. Applied to the primary line item so `booking.priceMinor` still equals the sum of lineItems; additional services keep their catalogue prices. The catalogue price remains on serviceSnapshot. */
+                        /** @description Staff-set total for the whole job (RECA-532). Every line keeps its list price and the difference is `booking.adjustmentMinor` (a Discount / Price adjustment line). To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor`. */
                         priceMinor?: number;
                         /**
                          * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
@@ -21383,7 +21391,11 @@ export interface paths {
                             serviceId: string;
                             /** Format: uuid */
                             variantId?: string | null;
+                            /** @description Staff price for this line: a number re-prices it, `null` puts it back to its list price, omitted keeps what it has (list when the services change). */
+                            priceMinor?: number | null;
                         }[];
+                        /** @description Staff price for the primary line: a number re-prices it, `null` puts it back to its catalogue price, omitted keeps what it has. */
+                        servicePriceMinor?: number | null;
                         /** Format: uuid */
                         staffId?: string;
                         /** Format: uuid */
@@ -21395,7 +21407,7 @@ export interface paths {
                          * @description Only while nothing has been paid. The vehicle must belong to the new client.
                          */
                         leadCustomerId?: string;
-                        /** @description Staff total for the job. A number overrides the catalogue total (the line items stay at list and the difference becomes `adjustmentMinor`); `null` puts it back to the catalogue; omitted keeps the current price (catalogue when the services change). */
+                        /** @description Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change). */
                         priceMinor?: number | null;
                         /**
                          * @description Confirmed bookings only; to or from `credit` is not allowed.
@@ -43596,7 +43608,7 @@ export interface components {
             errors: components["schemas"]["FieldError"][];
             /** @description BOOKING_CONFLICT only: the diary entries the booking clashed with. Each has `bookingId`, `kind` (`booking` | `block`), `reference`, `allDay`, `start`, `end`, `serviceName` and `customerName` (nullable where unknown). */
             conflicts?: components["schemas"]["BookingConflict"][];
-            /** @description BOOKING_CONFLICT only: true when every clash is an all-day job in the way of a timed booking (or a timed job in the way of an all-day one), so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise. */
+            /** @description BOOKING_CONFLICT only: true when nothing in the way is a hard clash (two timed jobs, or a calendar block) — an all-day job in the way of a timed booking, or anything but a whole-day block in the way of an all-day one — so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise. */
             overridable?: boolean;
         };
         /** @description Opaque cursor for the next page, or null when the list is exhausted. Pass as `cursor` on the subsequent request. */
@@ -43692,7 +43704,7 @@ export interface components {
             businessId: string;
             reference: string;
             serviceSnapshot: components["schemas"]["ServiceSnapshot"];
-            /** @description Every service on this booking, `position`-ordered (RECA-516), each at its catalogue price. Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `priceMinor` is the sum of these lines plus `adjustmentMinor` — render the lines, then a Discount row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone. */
+            /** @description Every service on this booking, `position`-ordered (RECA-516), each at the price it was booked at (`priceMinor`) with the price it was booked from (`listPriceMinor`). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `booking.priceMinor` is the sum of these lines plus `adjustmentMinor` — render each line (list struck through where it differs), then a Discount / Price adjustment row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone. */
             lineItems: {
                 /** Format: uuid */
                 serviceId: string;
@@ -43702,7 +43714,10 @@ export interface components {
                 variantId: string | null;
                 variantName: string | null;
                 durationMinutes: number;
+                /** @description What this line is charged at. Equals `listPriceMinor` unless staff priced the line themselves when booking — then this is the price and the list is shown struck through. */
                 priceMinor: number;
+                /** @description The price the line was booked from: the variant/catalogue price, or the pairing price for a plain add-on. Σ listPriceMinor is the catalogue total ("Adjusted from £x"). */
+                listPriceMinor: number;
                 /** @example GBP */
                 currency: string;
                 position: number;
@@ -43723,7 +43738,7 @@ export interface components {
             end: string;
             /** @description Staff marked this an all-day job (RECA-532): start/end are local midnights at the location (end exclusive). Show the date(s) and "All day" rather than times. */
             allDay: boolean;
-            /** @description Staff confirmed this booking shares its day with the other kind of work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked over timed work. Show a "Drop-in" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings. */
+            /** @description Staff confirmed this booking shares its day with other work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked onto a day that already has work (an untimed drop-in — "sometime that day"). Show a "Drop-in" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings. */
             dropIn: boolean;
             /** @description The time the job actually holds, one UTC interval per working day it occupies, in order. Jobs of a day or more follow the staff member’s working days (else the location’s opening hours): a three-day job started on a Thursday is Thu, Fri and Mon, so the weekend stays free for other work. `start` is the first segment’s start and `end` the last one’s end. Draw the job on these days only — never as one bar from start to end. A job under a day, or a booking made before segments existed, is a single `[start, end)` segment. */
             segments: {
@@ -43757,7 +43772,7 @@ export interface components {
             seatCount: number;
             /** @description What the client pays for the whole job — the authoritative total that payments, deposits and the outstanding balance work from. Σ lineItems[].priceMinor + adjustmentMinor. */
             priceMinor: number;
-            /** @description Staff price adjustment on top of the catalogue lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a "Discount −£x" row), positive = surcharge, 0 = priced at list. Bookings priced before this field existed carry the difference inside the primary line item instead (its priceMinor differs from serviceSnapshot.priceMinor) and read as 0 here. */
+            /** @description Whole-job adjustment on top of the lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a "Discount −£x" row), positive = surcharge ("Price adjustment +£x"), 0 = the job costs what its lines add up to. A service staff re-priced is *not* here: its own `priceMinor` differs from its `listPriceMinor` and it is shown as that price, so a job of £85 + £400-instead-of-£450 has an adjustment of 0. */
             adjustmentMinor: number;
             /** @description Deposit securing the booking (RECA-523), snapshotted at create from the services’ configured deposits or a staff override. Null = no deposit: the booking is paid in full up front. Only ever set strictly between 0 and priceMinor. */
             depositMinor?: number | null;

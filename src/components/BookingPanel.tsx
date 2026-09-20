@@ -249,8 +249,9 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
-  // Services at list, the staff discount (if any) and the total (RECA-532). The list
-  // price differs from priceMinor only when staff adjusted it.
+  // Each service at what it was booked at (with its list), the whole-job discount or
+  // adjustment (if any) and the total (RECA-532). The list total differs from
+  // priceMinor only when staff priced a service or the job differently.
   const breakdown = booking ? bookingPriceBreakdown(booking) : null;
   const listPriceMinor = breakdown?.listPriceMinor ?? null;
   // The work itself, not the diary it blocks: an all-day booking of a 2-hour coating
@@ -1057,11 +1058,16 @@ export function BookingPanel({
                       label="Amount"
                       value={formatMoney(booking.priceMinor, booking.currency)}
                       hint={
-                        listPriceMinor !== null && listPriceMinor !== booking.priceMinor
-                          ? listPriceMinor > booking.priceMinor
-                            ? `${formatMoney(listPriceMinor - booking.priceMinor, booking.currency)} discount`
-                            : `${formatMoney(booking.priceMinor - listPriceMinor, booking.currency)} added to the list price`
-                          : undefined
+                        // A discount is only ever the whole-job adjustment; a service
+                        // staff priced differently is just a different list total.
+                        breakdown && breakdown.adjustmentMinor !== 0
+                          ? `${adjustmentLabel(breakdown.adjustmentMinor)} ${formatAdjustment(
+                              breakdown.adjustmentMinor,
+                              (m) => formatMoney(m, booking.currency),
+                            )}`
+                          : listPriceMinor !== null && listPriceMinor !== booking.priceMinor
+                            ? `List ${formatMoney(listPriceMinor, booking.currency)}`
+                            : undefined
                       }
                     />
                     {settlement && settlement.depositMinor != null ? (
@@ -1152,7 +1158,12 @@ export function BookingPanel({
                                   · {formatDuration(lineItemJobMinutes(booking, li))}
                                 </span>
                               </span>
-                              <span className="tabular-nums">
+                              <span className="flex items-center gap-1.5 tabular-nums">
+                                {li.priceMinor !== li.listPriceMinor ? (
+                                  <span className="text-xs text-muted-foreground line-through opacity-70">
+                                    {formatMoney(li.listPriceMinor, li.currency)}
+                                  </span>
+                                ) : null}
                                 {formatMoney(li.priceMinor, li.currency)}
                               </span>
                             </li>

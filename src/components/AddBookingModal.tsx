@@ -299,9 +299,10 @@ export function AddBookingModal({
     Array<{ serviceId: string; variantId: string | null }>
   >([]);
   // Per-service prices staff typed on the picked rows (major units, as typed), keyed by
-  // service id. They set the booking total the same way the Price field does — the API
-  // takes one total and records the difference from list as a discount line — so a row
-  // edit clears the typed total / discount and vice versa; the last touched wins.
+  // service id. Each re-prices that service — sent as the line's own price, so the
+  // booking shows it at that price with the list beside it, not as a discount. They
+  // and the whole-job Price / Discount are alternatives (the API measures a job total
+  // from list), so a row edit clears those and vice versa; the last touched wins.
   const [linePrices, setLinePrices] = useState<Record<string, string>>({});
 
   const services = useServices();
@@ -574,8 +575,9 @@ export function AddBookingModal({
   const linePricesTouched = picked.some((p) => linePrices[p.serviceId] !== undefined);
   const lineInvalid = picked.some((p) => linePriceMinor(linePrices[p.serviceId]) === null);
 
-  // Price override (RECA-532): every service keeps its list price and the API records
-  // the difference as a discount line, so any total from zero up is valid.
+  // Whole-job price (RECA-532): every service keeps its list price and the API records
+  // the difference as a discount (or price adjustment) line, so any total from zero up
+  // is valid. Row prices are the other route: the lines themselves change.
   const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
   const discountInvalid =
     discount !== null && discount.value.trim() !== "" && discountMinor === null;
@@ -596,6 +598,20 @@ export function AddBookingModal({
   const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
   const effectiveTotalMinor = overridePriceMinor ?? rolledTotalMinor;
   const priceChanged = overridePriceMinor !== null && overridePriceMinor !== rolledTotalMinor;
+  // Row prices go to the API per line (`servicePriceMinor` for the primary,
+  // `additionalServices[].priceMinor` for the rest); a typed total / discount goes as
+  // the job's `priceMinor`. Never both — one clears the other above.
+  const typedLinePrice = (serviceId: string, listMinor: number): number | undefined => {
+    const typed = linePriceMinor(linePrices[serviceId]);
+    return typeof typed === "number" && typed !== listMinor ? typed : undefined;
+  };
+  const primaryLinePrice = service ? typedLinePrice(service.id, primaryMinor) : undefined;
+  // Rows priced away from list — the total may still equal the list (£+10 here, £−10
+  // there), so this is not the same as the total having changed.
+  const linesRepriced =
+    primaryLinePrice !== undefined ||
+    additional.some((a) => typedLinePrice(a.serviceId, additionalListMinor(a)) !== undefined);
+  const sendJobPrice = priceChanged && !linePricesTouched;
 
   // Catalogue length of the whole job — the default end when staff set the time.
   const catalogueDurationMinutes = (() => {
@@ -1069,12 +1085,17 @@ export function AddBookingModal({
       ...(variantId !== "none" ? { variantId } : {}),
       ...(additional.length > 0
         ? {
-            additionalServices: additional.map((a) => ({
-              serviceId: a.serviceId,
-              ...(a.variantId ? { variantId: a.variantId } : {}),
-            })),
+            additionalServices: additional.map((a) => {
+              const priceMinor = typedLinePrice(a.serviceId, additionalListMinor(a));
+              return {
+                serviceId: a.serviceId,
+                ...(a.variantId ? { variantId: a.variantId } : {}),
+                ...(priceMinor !== undefined ? { priceMinor } : {}),
+              };
+            }),
           }
         : {}),
+      ...(primaryLinePrice !== undefined ? { servicePriceMinor: primaryLinePrice } : {}),
       locationId,
       ...(scheduling === "custom" && customWindow && customStaffId
         ? {
@@ -1084,7 +1105,7 @@ export function AddBookingModal({
             ...(allDay ? { allDay: true } : {}),
           }
         : { staffId: selectedSlot!.staffId, start: selectedSlot!.start }),
-      ...(priceChanged ? { priceMinor: overridePriceMinor } : {}),
+      ...(sendJobPrice ? { priceMinor: overridePriceMinor } : {}),
       ...(sendDropIn ? { dropIn: true } : {}),
       leadCustomerId: customerId,
       ...(recordId ? { linkedRecordId: recordId } : {}),
@@ -1543,6 +1564,12 @@ export function AddBookingModal({
                         : lineInvalid
                           ? "One of the service prices isn't an amount — fix it, or clear it to use the list price."
                           : "Enter an amount, or reset to the list price."}
+                    </p>
+                  ) : linesRepriced ? (
+                    <p className="text-xs text-muted-foreground">
+                      Priced per service — each is booked at the price shown on its row, with the{" "}
+                      {formatMoney(rolledTotalMinor, service.currency)} list total beside it.
+                      Nothing is recorded as a discount.
                     </p>
                   ) : priceChanged ? (
                     <p className="text-xs text-muted-foreground">
