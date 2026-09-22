@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { PersonAvatar, SectionCard } from "@/components/ui-bits";
 import {
@@ -85,6 +86,8 @@ export function PackageLinksCard({ slug }: { slug: string }) {
     const n = link.customerIds.length;
     // Assigned from the client profile; shown here so the PT can see a link is in use.
     if (n > 0) items.push(`sent to ${n} ${n === 1 ? "client" : "clients"}`);
+    // Older API builds predate the flag; a link without it shows the full page.
+    if (link.showFullCatalogue === false) items.push("private — no link to your full page");
     return items.join(" · ");
   };
 
@@ -344,6 +347,9 @@ function CreateLinkDialog({
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [packageIds, setPackageIds] = useState<string[]>([]);
   const [clients, setClients] = useState<Customer[]>([]);
+  // Whether the page offers "Looking for something else? See everything … offers".
+  // On by default: most links are a shortcut, not a wall.
+  const [showFullCatalogue, setShowFullCatalogue] = useState(true);
   // Paused items would show nothing on the page, so they are not offered here.
   const serviceChoices = services.filter((s) => s.active);
   const packageChoices = packages.filter((p) => p.active);
@@ -355,6 +361,7 @@ function CreateLinkDialog({
       setServiceIds([]);
       setPackageIds([]);
       setClients([]);
+      setShowFullCatalogue(true);
     }
   }, [open]);
 
@@ -378,6 +385,7 @@ function CreateLinkDialog({
         serviceIds,
         packageIds,
         customerIds: clients.map((c) => c.id),
+        showFullCatalogue,
       });
       // Straight to the clipboard: the next thing the PT does is paste it into a message.
       copyLink(
@@ -463,6 +471,23 @@ function CreateLinkDialog({
               Tick things in the order you want them shown. You can mix {nouns.pluralLower} and
               packages, or pick just one kind.
             </p>
+          )}
+
+          {nothingToShare ? null : (
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border p-3">
+              <span className="grid gap-0.5 text-sm">
+                <span className="font-medium">Link to your full booking page</span>
+                <span className="text-xs text-muted-foreground">
+                  Adds “Looking for something else? See everything you offer” under the offer.
+                  Switch off to keep clients to just what this link names.
+                </span>
+              </span>
+              <Switch
+                checked={showFullCatalogue}
+                onCheckedChange={setShowFullCatalogue}
+                aria-label="Link to your full booking page"
+              />
+            </label>
           )}
 
           {nothingToShare ? null : (

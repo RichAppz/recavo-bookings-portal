@@ -3780,6 +3780,8 @@ export interface paths {
                             link: {
                                 code: string;
                                 name: string;
+                                /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
+                                showFullCatalogue: boolean;
                             };
                             services: components["schemas"]["CatalogueService"][];
                             packages: {
@@ -6778,6 +6780,8 @@ export interface paths {
                                 link: {
                                     code: string;
                                     name: string;
+                                    /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
+                                    showFullCatalogue: boolean;
                                 };
                                 services: components["schemas"]["CatalogueService"][];
                                 packages: {
@@ -23537,6 +23541,11 @@ export interface paths {
                         serviceIds?: string[];
                         packageIds?: string[];
                         customerIds?: string[];
+                        /**
+                         * @description Offer visitors a way out to the full booking page ("Looking for something else?"). Omit or true = shown; false keeps the offer private.
+                         * @default true
+                         */
+                        showFullCatalogue?: boolean;
                     };
                 };
             };
@@ -45312,6 +45321,8 @@ export interface components {
             packageIds: string[];
             /** @description Customers this link has been handed to; it appears under Offers in their portal. Assignment does not restrict who can open the link. */
             customerIds: string[];
+            /** @description Whether the booking page opened through this link offers the visitor a way out to everything the business sells ("Looking for something else?"). False keeps a private offer private: the visitor sees only what the link names. */
+            showFullCatalogue: boolean;
             /** Format: date-time */
             revokedAt: string | null;
             /** Format: date-time */
