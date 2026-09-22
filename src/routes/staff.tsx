@@ -45,7 +45,14 @@ import {
   useUpdateStaff,
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
-import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
+import {
+  formatDuration,
+  formatInTz,
+  minutesToTime,
+  parseTimeInput,
+  timeToMinutes,
+  ukDate,
+} from "@/lib/format";
 import { useSoleLocation, useSoloPlan } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -749,8 +756,10 @@ function StaffDialog({
             ) : (
               <div className="space-y-2 pb-2">
                 {workingRules.map((r, i) => (
+                  // Positional key on purpose: see WeeklyWindowsEditor — a value-derived
+                  // key remounts the focused time input mid-edit and crashes Safari.
                   <div
-                    key={`${r.dayOfWeek}-${r.startMinute}-${i}`}
+                    key={i}
                     className="flex flex-wrap items-end gap-2 rounded-lg border border-border/70 bg-card p-2.5"
                   >
                     <div className="grid w-28 gap-1">
@@ -776,9 +785,10 @@ function StaffDialog({
                       <Input
                         type="time"
                         value={minutesToTime(r.startMinute)}
-                        onChange={(e) =>
-                          updateWorkingRule(i, { startMinute: timeToMinutes(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          const mins = parseTimeInput(e.target.value);
+                          if (mins !== null) updateWorkingRule(i, { startMinute: mins });
+                        }}
                       />
                     </div>
                     <div className="grid w-28 gap-1">
@@ -786,9 +796,10 @@ function StaffDialog({
                       <Input
                         type="time"
                         value={minutesToTime(r.endMinute)}
-                        onChange={(e) =>
-                          updateWorkingRule(i, { endMinute: timeToMinutes(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          const mins = parseTimeInput(e.target.value);
+                          if (mins !== null) updateWorkingRule(i, { endMinute: mins });
+                        }}
                       />
                     </div>
                     {soleLocation ? null : (

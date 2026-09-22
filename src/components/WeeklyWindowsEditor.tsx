@@ -14,7 +14,7 @@ import {
   sameWindows,
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
-import { minutesToTime, timeToMinutes } from "@/lib/format";
+import { minutesToTime, parseTimeInput, timeToMinutes } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 const DEFAULT_START = timeToMinutes("09:00");
@@ -64,6 +64,11 @@ export function WeeklyWindowsEditor({
   const updateWindow = (index: number, patch: Partial<AvailabilityWindow>) => {
     onChange(windows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
+  // Ignore the incomplete values a browser emits mid-edit rather than storing NaN.
+  const updateTime = (index: number, field: "startMinute" | "endMinute", value: string) => {
+    const mins = parseTimeInput(value);
+    if (mins !== null) updateWindow(index, { [field]: mins });
+  };
 
   const removeWindow = (index: number) => {
     onChange(windows.filter((_, i) => i !== index));
@@ -109,8 +114,11 @@ export function WeeklyWindowsEditor({
           </div>
           <div className="divide-y divide-border/70">
             {windows.map((row, i) => (
+              // Keyed by position, never by value: a key that changes as the time is
+              // typed remounts the focused <input type="time">, which crashes Safari's
+              // page process (WebKit) and loses focus everywhere else.
               <div
-                key={`${row.dayOfWeek}-${row.startMinute}-${i}`}
+                key={i}
                 className="grid grid-cols-[1fr_1fr_1fr_2.25rem] items-center gap-2 px-2.5 py-2"
               >
                 <Select
@@ -132,13 +140,13 @@ export function WeeklyWindowsEditor({
                   type="time"
                   aria-label="From"
                   value={minutesToTime(row.startMinute)}
-                  onChange={(e) => updateWindow(i, { startMinute: timeToMinutes(e.target.value) })}
+                  onChange={(e) => updateTime(i, "startMinute", e.target.value)}
                 />
                 <Input
                   type="time"
                   aria-label="To"
                   value={minutesToTime(row.endMinute)}
-                  onChange={(e) => updateWindow(i, { endMinute: timeToMinutes(e.target.value) })}
+                  onChange={(e) => updateTime(i, "endMinute", e.target.value)}
                 />
                 <Button
                   type="button"
