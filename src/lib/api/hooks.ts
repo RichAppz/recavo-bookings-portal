@@ -2409,6 +2409,8 @@ export function useCreatePackageLink() {
       packageIds: string[];
       /** Hand the link to these clients as it is created. */
       customerIds?: string[];
+      /** Offer the visitor a way out to the full booking page. Default true. */
+      showFullCatalogue?: boolean;
     }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
@@ -4990,7 +4992,8 @@ export function usePublicPackages(businessId: string | undefined) {
 
 /** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
 export type PublicPackageLink = {
-  link: { code: string; name: string };
+  /** `showFullCatalogue` is absent from API builds before it existed; treat as shown. */
+  link: { code: string; name: string; showFullCatalogue?: boolean };
   services: PublicService[];
   packages: PublicPackage[];
 };

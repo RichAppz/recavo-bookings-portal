@@ -1252,7 +1252,9 @@ export function BookingFlow({
               </div>
             ) : null}
 
-            {offerActive && onLeaveOffer ? (
+            {/* The way out to the full page is the link's choice: a private offer
+                keeps the visitor to what it names (RECA offer links). */}
+            {offerActive && onLeaveOffer && (offer.data?.link.showFullCatalogue ?? true) ? (
               <p className="pt-2 text-sm text-muted-foreground">
                 Looking for something else?{" "}
                 <button

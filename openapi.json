@@ -6101,6 +6101,7 @@
           "serviceIds",
           "packageIds",
           "customerIds",
+          "showFullCatalogue",
           "revokedAt",
           "createdAt",
           "updatedAt"
@@ -6145,6 +6146,10 @@
               "format": "uuid"
             },
             "description": "Customers this link has been handed to; it appears under Offers in their portal. Assignment does not restrict who can open the link."
+          },
+          "showFullCatalogue": {
+            "type": "boolean",
+            "description": "Whether the booking page opened through this link offers the visitor a way out to everything the business sells (\"Looking for something else?\"). False keeps a private offer private: the visitor sees only what the link names."
           },
           "revokedAt": {
             "type": [
@@ -12424,7 +12429,8 @@
                       "type": "object",
                       "required": [
                         "code",
-                        "name"
+                        "name",
+                        "showFullCatalogue"
                       ],
                       "properties": {
                         "code": {
@@ -12432,6 +12438,10 @@
                         },
                         "name": {
                           "type": "string"
+                        },
+                        "showFullCatalogue": {
+                          "type": "boolean",
+                          "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
                         }
                       }
                     },
@@ -16744,7 +16754,8 @@
                             "type": "object",
                             "required": [
                               "code",
-                              "name"
+                              "name",
+                              "showFullCatalogue"
                             ],
                             "properties": {
                               "code": {
@@ -16752,6 +16763,10 @@
                               },
                               "name": {
                                 "type": "string"
+                              },
+                              "showFullCatalogue": {
+                                "type": "boolean",
+                                "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
                               }
                             }
                           },
@@ -42484,6 +42499,11 @@
                       "type": "string",
                       "format": "uuid"
                     }
+                  },
+                  "showFullCatalogue": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Offer visitors a way out to the full booking page (\"Looking for something else?\"). Omit or true = shown; false keeps the offer private."
                   }
                 }
               }
