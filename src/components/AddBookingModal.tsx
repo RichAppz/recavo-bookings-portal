@@ -74,19 +74,19 @@ import {
   type TimedEntry,
 } from "@/lib/drop-in";
 import {
-  addDays,
   formatDuration,
   formatDurationLong,
   formatInTz,
   formatMoney,
-  isoDate,
-  localDateTimeToIso,
-  parseIso,
+  isoDateInTz,
   parseMoneyToMinor,
   spansDays,
+  timeInTz,
+  zonedDateTimeToIso,
 } from "@/lib/format";
 import { outsideWorkingHours } from "@/lib/working-hours";
 import {
+  addDaysIso,
   formatWorkingSpan,
   layoutExplicitWindow,
   layoutWorkingDuration,
@@ -177,18 +177,23 @@ export function AddBookingModal({
   }) => void;
 }) {
   const tenant = useTenant();
+  // Every date and time staff type here is the business's wall clock — what the
+  // calendar draws and what the API lays the job out in — never the device's.
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [serviceId, setServiceId] = useState("");
   const [variantId, setVariantId] = useState<string>("none");
   const [staffId, setStaffId] = useState("all");
   const [locationId, setLocationId] = useState("");
-  const [date, setDate] = useState(defaultDate ?? isoDate(new Date()));
+  const [date, setDate] = useState(defaultDate ?? isoDateInTz(new Date().toISOString(), timezone));
   const [slotKey, setSlotKey] = useState<string | null>(null);
   // Staff either pick from the availability quote ("slot") or set the window
   // themselves ("custom") — start/end, or whole days (RECA-532).
   const [scheduling, setScheduling] = useState<"slot" | "custom">("slot");
   const [startTime, setStartTime] = useState("09:00");
-  const [endDate, setEndDate] = useState(defaultDate ?? isoDate(new Date()));
+  const [endDate, setEndDate] = useState(
+    defaultDate ?? isoDateInTz(new Date().toISOString(), timezone),
+  );
   const [endTime, setEndTime] = useState("10:00");
   // Once the end has been edited by hand it stops following start + service length.
   const [endTouched, setEndTouched] = useState(false);
@@ -215,8 +220,9 @@ export function AddBookingModal({
   // profile) and differ between opens, so apply them each time it opens.
   useEffect(() => {
     if (!open) return;
-    setDate(defaultDate ?? isoDate(new Date()));
-    setEndDate(defaultDate ?? isoDate(new Date()));
+    const today = isoDateInTz(new Date().toISOString(), timezone);
+    setDate(defaultDate ?? today);
+    setEndDate(defaultDate ?? today);
     setEndTouched(false);
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
@@ -235,6 +241,7 @@ export function AddBookingModal({
     defaultCustomerId,
     defaultServiceId,
     defaultLinkedRecordId,
+    timezone,
   ]);
   // A detailer who is paid after the job should not have to pick that every time, so
   // the up-front / after-the-job choice sticks per business.
@@ -480,8 +487,9 @@ export function AddBookingModal({
   };
   // A date input reports "" while someone is part-way through typing a date;
   // an invalid Date would throw on toISOString and take the page down.
-  const dayStart = new Date(`${date}T00:00:00.000Z`);
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(dayStart.getTime());
+  const dayStartIso = zonedDateTimeToIso(date, "00:00", timezone);
+  const dayStart = dayStartIso ? new Date(dayStartIso) : new Date(NaN);
+  const validDate = !Number.isNaN(dayStart.getTime());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
   const availability = useAvailability({
@@ -510,7 +518,8 @@ export function AddBookingModal({
   // pick can warn about the timed work it would share the day with.
   const diaryEnd = (() => {
     if (allDay && scheduling === "custom" && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      const last = new Date(`${endDate}T00:00:00.000Z`);
+      const lastIso = zonedDateTimeToIso(endDate, "00:00", timezone);
+      const last = lastIso ? new Date(lastIso) : new Date(NaN);
       if (!Number.isNaN(last.getTime()) && last.getTime() >= dayStart.getTime()) {
         return new Date(last.getTime() + 24 * 60 * 60 * 1000);
       }
@@ -536,7 +545,6 @@ export function AddBookingModal({
   const diaryEvents = useMemo(() => diaryBlocks.data ?? [], [diaryBlocks.data]);
 
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
-  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
 
   const pairingPrices = useMemo(
     () =>
@@ -647,8 +655,8 @@ export function AddBookingModal({
   useEffect(() => {
     if (scheduling !== "custom" || endTouched || !validDate) return;
     const startIso = allDay
-      ? localDateTimeToIso(date, "00:00")
-      : localDateTimeToIso(date, startTime);
+      ? zonedDateTimeToIso(date, "00:00", timezone)
+      : zonedDateTimeToIso(date, startTime, timezone);
     if (!startIso) return;
     const layout = layoutWorkingDuration(
       startIso,
@@ -663,9 +671,8 @@ export function AddBookingModal({
       setEndDate(layout.occupiedDays[layout.occupiedDays.length - 1] ?? date);
       return;
     }
-    const end = new Date(layout.end);
-    setEndDate(isoDate(end));
-    setEndTime(`${`${end.getHours()}`.padStart(2, "0")}:${`${end.getMinutes()}`.padStart(2, "0")}`);
+    setEndDate(isoDateInTz(layout.end, timezone));
+    setEndTime(timeInTz(layout.end, timezone));
   }, [
     scheduling,
     endTouched,
@@ -678,8 +685,8 @@ export function AddBookingModal({
     timezone,
   ]);
 
-  // The staff-set window as ISO instants (browser-local wall clock, like events). For
-  // all-day the server snaps to local midnights at the location; we send day bounds.
+  // The staff-set window as ISO instants (the business's wall clock). For all-day
+  // the server snaps to local midnights at the location; we send day bounds.
   // `minutes` is what the API will store as the job's length: the days between start
   // and end that aren't worked stay free and don't count.
   const customWindow = useMemo<{
@@ -689,12 +696,14 @@ export function AddBookingModal({
     layout: WorkingLayout;
   } | null>(() => {
     if (scheduling !== "custom") return null;
-    const start = allDay ? localDateTimeToIso(date, "00:00") : localDateTimeToIso(date, startTime);
+    const start = allDay
+      ? zonedDateTimeToIso(date, "00:00", timezone)
+      : zonedDateTimeToIso(date, startTime, timezone);
     const end = allDay
       ? /^\d{4}-\d{2}-\d{2}$/.test(endDate)
-        ? localDateTimeToIso(isoDate(addDays(parseIso(endDate), 1)), "00:00")
+        ? zonedDateTimeToIso(addDaysIso(endDate, 1), "00:00", timezone)
         : null
-      : localDateTimeToIso(endDate, endTime);
+      : zonedDateTimeToIso(endDate, endTime, timezone);
     if (!start || !end) return null;
     if (new Date(end).getTime() <= new Date(start).getTime()) return null;
     const layout = layoutExplicitWindow(start, end, workingSchedule, timezone, { allDay });

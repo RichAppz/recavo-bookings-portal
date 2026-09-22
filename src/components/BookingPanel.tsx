@@ -139,11 +139,12 @@ import {
   formatBookingWhen,
   formatDuration,
   formatDurationLong,
-  localDateTimeToIso,
   formatInTz,
   formatMoney,
-  isoDate,
+  isoDateInTz,
   parseMoneyToMinor,
+  timeInTz,
+  zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -2076,7 +2077,9 @@ function RescheduleDialog({
   rescheduleAction: ReturnType<typeof useBookingAction>;
 }) {
   const [staffId, setStaffId] = useState(booking.staffId);
-  const [date, setDate] = useState(isoDate(new Date(booking.start)));
+  // Dates and times here are the business's wall clock — what the calendar shows and
+  // what the API snaps all-day jobs to — not the phone's, which may be abroad.
+  const [date, setDate] = useState(isoDateInTz(booking.start, timezone));
   const [slotStart, setSlotStart] = useState<string | null>(null);
   const tenant = useTenant();
   const staffNoun = tenant.terminology.staff || "Staff member";
@@ -2094,10 +2097,7 @@ function RescheduleDialog({
     (booking.lineItems?.[0]?.durationMinutes ?? booking.serviceSnapshot.durationMinutes) !==
       booking.serviceSnapshot.durationMinutes;
   const [mode, setMode] = useState<"slot" | "custom">(customLength ? "custom" : "slot");
-  const [time, setTime] = useState(() => {
-    const d = new Date(booking.start);
-    return `${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`;
-  });
+  const [time, setTime] = useState(() => timeInTz(booking.start, timezone));
   // Staff said the moved job may share its new day with the other kind of work
   // (see AddBookingModal). A booking that is already a drop-in keeps that on the
   // server unless told otherwise, so this only needs asking for the new day.
@@ -2110,24 +2110,24 @@ function RescheduleDialog({
   useEffect(() => {
     if (open) {
       setStaffId(booking.staffId);
-      setDate(isoDate(new Date(booking.start)));
+      setDate(isoDateInTz(booking.start, timezone));
       setSlotStart(null);
       setDropIn(false);
       setOverride(null);
       setMode(customLength ? "custom" : "slot");
-      const d = new Date(booking.start);
-      setTime(`${`${d.getHours()}`.padStart(2, "0")}:${`${d.getMinutes()}`.padStart(2, "0")}`);
+      setTime(timeInTz(booking.start, timezone));
     }
-  }, [open, booking.id, booking.staffId, booking.start, customLength]);
+  }, [open, booking.id, booking.staffId, booking.start, customLength, timezone]);
   useEffect(() => {
     setDropIn(false);
   }, [date, staffId, mode]);
 
   const customStart = booking.allDay
-    ? localDateTimeToIso(date, "00:00")
-    : localDateTimeToIso(date, time);
+    ? zonedDateTimeToIso(date, "00:00", timezone)
+    : zonedDateTimeToIso(date, time, timezone);
 
-  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayStartIso = zonedDateTimeToIso(date, "00:00", timezone);
+  const dayStart = dayStartIso ? new Date(dayStartIso) : new Date(NaN);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
   const availability = useAvailability({
@@ -2140,7 +2140,7 @@ function RescheduleDialog({
     // Same half-hour grid as the Add booking form: staff may move a job to any
     // time the day has room for, not just back-to-back from opening.
     granularityMinutes: 30,
-    enabled: open && mode === "slot",
+    enabled: open && mode === "slot" && !Number.isNaN(dayStart.getTime()),
   });
 
   const slots = useMemo(

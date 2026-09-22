@@ -64,9 +64,10 @@ import {
   formatDurationLong,
   formatInTz,
   formatMoney,
-  isoDate,
-  localDateTimeToIso,
+  isoDateInTz,
   parseMoneyToMinor,
+  timeInTz,
+  zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -86,15 +87,18 @@ function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** Date/time inputs for a booking's current window (browser-local, like RescheduleDialog). */
-function whenFields(booking: { start: string; end: string }) {
-  const start = new Date(booking.start);
+/**
+ * Date/time inputs for a booking's current window, in the business's zone — the same
+ * clock the calendar draws it on and the API snaps all-day jobs to. Reading it on the
+ * phone's clock instead put a job's "13 Oct" on the 12th for staff abroad.
+ */
+function whenFields(booking: { start: string; end: string }, timeZone: string) {
   // `end` is exclusive: the last day is the one containing the minute before it.
-  const last = new Date(new Date(booking.end).getTime() - 60_000);
+  const last = new Date(new Date(booking.end).getTime() - 60_000).toISOString();
   return {
-    date: isoDate(start),
-    time: `${`${start.getHours()}`.padStart(2, "0")}:${`${start.getMinutes()}`.padStart(2, "0")}`,
-    lastDay: isoDate(last),
+    date: isoDateInTz(booking.start, timeZone),
+    time: timeInTz(booking.start, timeZone),
+    lastDay: isoDateInTz(last, timeZone),
   };
 }
 
@@ -256,10 +260,10 @@ export function EditBookingDialog({
   const afterDiscard = useRef<() => void>(() => undefined);
 
   // ---- When: a quiet fix to the diary (not a reschedule) ------------------------------
-  // Browser-local wall clock, like RescheduleDialog. All-day jobs edit first/last day;
-  // timed jobs edit date + start and keep their length.
+  // Wall clock at the business (like RescheduleDialog). All-day jobs edit first/last
+  // day; timed jobs edit date + start and keep their length.
   const correctTime = useCorrectBookingTime();
-  const whenOriginal = whenFields(booking);
+  const whenOriginal = whenFields(booking, timezone);
   const [whenOpen, setWhenOpen] = useState(false);
   const [whenDate, setWhenDate] = useState(whenOriginal.date);
   const [whenTime, setWhenTime] = useState(whenOriginal.time);
@@ -426,9 +430,9 @@ export function EditBookingDialog({
     ? whenDate !== whenOriginal.date || whenLastDay !== whenOriginal.lastDay
     : whenDate !== whenOriginal.date || whenTime !== whenOriginal.time;
   const whenStartIso = booking.allDay
-    ? localDateTimeToIso(whenDate, "00:00")
-    : localDateTimeToIso(whenDate, whenTime);
-  const whenLastDayIso = booking.allDay ? localDateTimeToIso(whenLastDay, "12:00") : null;
+    ? zonedDateTimeToIso(whenDate, "00:00", timezone)
+    : zonedDateTimeToIso(whenDate, whenTime, timezone);
+  const whenLastDayIso = booking.allDay ? zonedDateTimeToIso(whenLastDay, "12:00", timezone) : null;
   const whenEndIso = (() => {
     if (!whenStartIso) return null;
     if (!booking.allDay) {
@@ -436,7 +440,7 @@ export function EditBookingDialog({
         allDay: false,
       }).end;
     }
-    const lastMidnight = localDateTimeToIso(whenLastDay, "00:00");
+    const lastMidnight = zonedDateTimeToIso(whenLastDay, "00:00", timezone);
     if (!lastMidnight) return null;
     const end = new Date(lastMidnight).getTime() + DAY_MS;
     return end > new Date(whenStartIso).getTime() ? new Date(end).toISOString() : null;
@@ -692,7 +696,7 @@ export function EditBookingDialog({
         });
         version = fixed.version;
         // The fix is saved; don't send it again if the PATCH below fails.
-        resetWhen(whenFields(fixed));
+        resetWhen(whenFields(fixed, timezone));
         setWhenOpen(false);
         if (!amendDirty) toast.success("Date corrected — the client wasn't told");
       } catch {

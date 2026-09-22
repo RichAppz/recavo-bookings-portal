@@ -1,3 +1,5 @@
+import { wallToUtc } from "./working-days.ts";
+
 export const gbp = (value: number, opts: { decimals?: boolean } = {}) =>
   new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -180,6 +182,37 @@ export function localDateTimeToIso(date: string, time: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
   const d = new Date(`${date}T${time}:00`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Wall-clock `YYYY-MM-DD` + `HH:MM` *at the business* (`timeZone`) → ISO instant, or
+ * null if unparsable. Staff type dates in the business's day, and the calendar and
+ * the API both work in that zone — so a phone abroad (or a laptop on a different
+ * clock) must not shift "13 Oct" onto the 12th by reading it in its own zone.
+ */
+export function zonedDateTimeToIso(date: string, time: string, timeZone: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const [h, m] = time.split(":").map(Number);
+  const d = wallToUtc(date, h! * 60 + m!, timeZone);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** `YYYY-MM-DD` of an instant as seen in `timeZone`. */
+export function isoDateInTz(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
+}
+
+/** `HH:MM` (24-hour) of an instant as seen in `timeZone`. */
+export function timeInTz(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  }).formatToParts(new Date(iso));
+  const h = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const m = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return `${h}:${m}`;
 }
 
 /** Format time-only in a timezone. */
