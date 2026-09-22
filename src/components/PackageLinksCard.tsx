@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Link2, Plus, Trash2, Users, X } from "lucide-react";
+import { Copy, ExternalLink, Link2, Plus, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -49,7 +49,11 @@ function packageLinkUrl(slug: string, code: string): string {
 
 function copyLink(url: string, message = "Link copied") {
   void navigator.clipboard.writeText(url);
-  toast.success(message, { description: url.replace(/^https?:\/\//, "") });
+  toast.success(message, {
+    description: url.replace(/^https?:\/\//, ""),
+    // The natural next step after copying is to see what the client will see.
+    action: { label: "Preview", onClick: () => window.open(url, "_blank", "noreferrer") },
+  });
 }
 
 /** "Session" for PT, "Service" for detailing — the same trick the Sessions page uses. */
@@ -130,7 +134,19 @@ export function PackageLinksCard({ slug }: { slug: string }) {
                     {url.replace(/^https?:\/\//, "")}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {/* Opens the booking page exactly as a client following the link sees it —
+                      the customer hostname, narrowed to this link's sessions and packages. */}
+                  <Button size="sm" variant="outline" asChild>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Preview ${link.name}`}
+                    >
+                      <ExternalLink className="size-4" /> Preview
+                    </a>
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => setSharing(link)}>
                     <Users className="size-4" /> Clients
                     {link.customerIds.length > 0 ? ` (${link.customerIds.length})` : null}
