@@ -302,6 +302,20 @@ export const timeToMinutes = (time: string) => {
   return h * 60 + m;
 };
 
+/**
+ * Minutes since midnight from an `<input type="time">` value, or null while the
+ * value is incomplete. Safari and Firefox emit "" (and Safari partial strings) as
+ * each segment is edited; treating those as a change would write NaN into state.
+ */
+export const parseTimeInput = (value: string): number | null => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (h > 23 || m > 59) return null;
+  return h * 60 + m;
+};
+
 export const endTime = (start: string, duration: number) =>
   minutesToTime(timeToMinutes(start) + duration);
 
