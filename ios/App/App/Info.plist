@@ -36,6 +36,13 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- WKWebView presents UIImagePickerController (including Camera) for
+	     <input type="file" accept="image/*">. iOS kills the process if these
+	     strings are missing — Apple review hit that on iPad (Guideline 2.1). -->
+	<key>NSCameraUsageDescription</key>
+	<string>RECAVO uses the camera so you can photograph clients, vehicles and completed work, and set your business logo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>RECAVO uses your photo library so you can attach existing photos of clients, vehicles and completed work, and set your business logo.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
