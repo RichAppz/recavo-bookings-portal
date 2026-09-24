@@ -9,6 +9,7 @@ import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
 import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
 import { businessIdPendingCardReturn } from "@/components/BookingFlow";
 import { CalendarDayBooker } from "@/components/CalendarDayBooker";
+import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,14 @@ import {
   isSettledPaymentState,
 } from "@/lib/booking-payment";
 import { describeClientLiftForCustomer } from "@/lib/client-lift";
-import { formatAllDaySpan, formatDuration, formatInTz, formatMoney, isoDate } from "@/lib/format";
+import {
+  formatAllDaySpan,
+  formatDuration,
+  formatInTz,
+  formatMoney,
+  isoDate,
+  isoDateInTz,
+} from "@/lib/format";
 import { isMultiDay } from "@/lib/working-days";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -306,20 +314,31 @@ function AccountContent({
             selected={calDay}
             onSelectedChange={setCalDay}
             emptyHint="Nothing booked on this day."
+            hideSelectedList
             aside={
-              <CalendarDayBooker
-                date={calDay}
-                studios={studios}
-                credits={usable}
-                onBookPaid={(paid) =>
-                  openBooking(paid.studio, {
-                    date: paid.date,
-                    serviceId: paid.serviceId,
-                    locationId: paid.locationId,
-                    slot: paid.slot,
-                  })
-                }
-              />
+              <>
+                <CalendarDayManage
+                  date={calDay}
+                  bookings={live}
+                  solo={solo}
+                  onPay={(booking) => void payNow(booking)}
+                  payingId={payingId}
+                  payments={history}
+                />
+                <CalendarDayBooker
+                  date={calDay}
+                  studios={studios}
+                  credits={usable}
+                  onBookPaid={(paid) =>
+                    openBooking(paid.studio, {
+                      date: paid.date,
+                      serviceId: paid.serviceId,
+                      locationId: paid.locationId,
+                      slot: paid.slot,
+                    })
+                  }
+                />
+              </>
             }
           />
         ) : view === "offers" ? (
@@ -380,6 +399,60 @@ function AccountContent({
         }}
       />
     </>
+  );
+}
+
+/** Bookings on the selected calendar day, with Move / Cancel for the ones still open. */
+function CalendarDayManage({
+  date,
+  bookings,
+  solo,
+  onPay,
+  payingId,
+  payments,
+}: {
+  date: string;
+  bookings: FromStudio<Booking>[];
+  solo: boolean;
+  onPay: (booking: FromStudio<Booking>) => void;
+  payingId: string | null;
+  payments: FromStudio<Payment>[];
+}) {
+  const onDay = bookings.filter((b) => isoDateInTz(b.start, b.timezone) === date);
+  if (onDay.length === 0) return null;
+  return (
+    <ul className="space-y-3">
+      {onDay.map((b) => {
+        const needsPay = bookingNeedsPayment(b, payments);
+        return (
+          <li key={b.id} className="rounded-xl border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {b.allDay ? "All day" : formatInTz(b.start, b.timezone, { timeStyle: "short" })}
+                  {solo ? "" : ` · ${b.studio.tradingName}`}
+                </p>
+              </div>
+              <StatusBadge status={b.status} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {needsPay ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={payingId === b.id}
+                  onClick={() => onPay(b)}
+                >
+                  {payingId === b.id ? "Starting…" : "Pay now"}
+                </Button>
+              ) : null}
+              <ClientBookingActions booking={b} businessId={b.studio.id} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -542,12 +615,7 @@ function Overview({
                         </p>
                       ) : null}
                     </div>
-                    <div
-                      className={cn(
-                        "shrink-0 items-center gap-2",
-                        needsPay ? "flex" : "hidden sm:flex",
-                      )}
-                    >
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       {needsPay ? (
                         <Button
                           variant="outline"
@@ -558,6 +626,7 @@ function Overview({
                           {payingId === b.id ? "Starting…" : "Pay now"}
                         </Button>
                       ) : null}
+                      <ClientBookingActions booking={b} businessId={b.studio.id} />
                       <StatusBadge status={b.status} className="hidden sm:inline-flex" />
                     </div>
                   </li>

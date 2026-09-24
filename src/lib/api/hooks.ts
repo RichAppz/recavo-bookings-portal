@@ -5394,6 +5394,8 @@ export function useCancelPortalBooking(businessId: string | undefined) {
     ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
+      // A timely credit cancel puts the session back on the customer's balance.
+      void qc.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId ?? "") });
     },
     onError: (err) => toastApiError(err),
   });
@@ -5418,7 +5420,11 @@ export function useReschedulePortalBooking(businessId: string | undefined) {
         queryKey: queryKeys.portalBooking(businessId ?? "", vars.bookingId),
       });
     },
-    onError: (err) => toastApiError(err),
+    onError: (err) => {
+      // The dialog refreshes slots and explains a clash; don't toast it twice.
+      if (err instanceof ApiError && (err.code === "BOOKING_CONFLICT" || err.isConflict)) return;
+      toastApiError(err);
+    },
   });
 }
 
