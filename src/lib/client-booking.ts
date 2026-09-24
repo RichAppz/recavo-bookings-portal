@@ -1,10 +1,14 @@
-/** The booking fields these helpers read — kept structural so unit tests need no path alias. */
+/**
+ * The booking fields these helpers read. Structural (not the `Booking` schema type)
+ * because the portal API sends the customer a slimmer booking than staff get:
+ * `lineItems`, `allDay` and the snapshot's cancellation policy may be absent.
+ */
 export type ClientChangeableBooking = {
   status: string;
-  allDay: boolean;
+  allDay?: boolean | null;
   start: string;
-  serviceSnapshot: { cancellationPolicy: { windowHours: number } };
-  lineItems: readonly { serviceId: string }[];
+  serviceSnapshot?: { cancellationPolicy?: { windowHours?: number | null } | null } | null;
+  lineItems?: readonly { serviceId: string }[] | null;
 };
 
 const MOVEABLE = new Set(["held", "awaiting_payment", "confirmed"]);
@@ -12,7 +16,7 @@ const MOVEABLE = new Set(["held", "awaiting_payment", "confirmed"]);
 /** The same statuses the portal reschedule API will accept. */
 export function canClientMoveBooking(booking: ClientChangeableBooking, now = Date.now()): boolean {
   if (!MOVEABLE.has(booking.status)) return false;
-  if (booking.allDay) return false;
+  if (booking.allDay === true) return false;
   return Date.parse(booking.start) > now;
 }
 
@@ -25,8 +29,10 @@ export function canClientCancelBooking(
   return Date.parse(booking.start) > now;
 }
 
+/** Hours of notice the studio asks for; 0 when the payload carries no policy. */
 export function clientCancelWindowHours(booking: ClientChangeableBooking): number {
-  return booking.serviceSnapshot.cancellationPolicy.windowHours;
+  const hours = booking.serviceSnapshot?.cancellationPolicy?.windowHours;
+  return typeof hours === "number" && Number.isFinite(hours) ? hours : 0;
 }
 
 /** Instant after which a customer cancel is late (credit stays spent). */
@@ -44,7 +50,7 @@ export function isWithinClientCancelWindow(
 
 /** Extra services on the job; public availability must size the new slot for all of them. */
 export function bookingAdditionalServiceIds(booking: ClientChangeableBooking): string[] {
-  return booking.lineItems.slice(1).map((line) => line.serviceId);
+  return (booking.lineItems ?? []).slice(1).map((line) => line.serviceId);
 }
 
 /** Calendar day `YYYY-MM-DD` plus whole days, staying on the calendar (not the device clock). */

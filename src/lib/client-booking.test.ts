@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addCalendarDays,
+  bookingAdditionalServiceIds,
   canClientCancelBooking,
   canClientMoveBooking,
   clientCancelDeadlineIso,
+  clientCancelWindowHours,
   isWithinClientCancelWindow,
 } from "./client-booking.ts";
 
@@ -47,6 +49,16 @@ describe("client booking change window", () => {
     assert.equal(clientCancelDeadlineIso(b), "2026-10-12T09:00:00.000Z");
     assert.equal(isWithinClientCancelWindow(b, Date.parse("2026-10-12T08:59:00.000Z")), true);
     assert.equal(isWithinClientCancelWindow(b, Date.parse("2026-10-12T09:00:00.000Z")), false);
+  });
+
+  it("copes with the slimmer booking the portal API sends a customer", () => {
+    // No lineItems, allDay or cancellation policy on the payload — must not throw.
+    const slim = { status: "confirmed", start: "2026-10-13T09:00:00.000Z" };
+    const now = Date.parse("2026-10-01T00:00:00.000Z");
+    assert.equal(canClientMoveBooking(slim, now), true);
+    assert.equal(canClientCancelBooking(slim, now), true);
+    assert.equal(clientCancelWindowHours(slim), 0);
+    assert.deepEqual(bookingAdditionalServiceIds(slim), []);
   });
 
   it("adds calendar days without shifting the month on UTC", () => {
