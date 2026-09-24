@@ -48,6 +48,8 @@ export type BookingConsumablesUsage = schemas["BookingConsumablesUsage"];
 /** Body of `PUT …/consumables` on a service or booking — replaces the list. */
 export type ConsumableUsageInput = { consumableId: string; quantity: number; note?: string | null };
 export type Booking = schemas["Booking"];
+export type SupportRequest = schemas["SupportRequest"];
+export type SupportRequestCategory = SupportRequest["category"];
 /** Staff-side "event" on the diary (dentist, school run) that keeps jobs off the slot (RECA-531). */
 export type CalendarBlock = schemas["CalendarBlock"];
 /** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */
