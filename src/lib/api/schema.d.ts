@@ -30216,7 +30216,7 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
@@ -30429,7 +30429,7 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
@@ -33745,7 +33745,7 @@ export interface paths {
         get?: never;
         /**
          * Switch an add-on on or off for a business (platform admin)
-         * @description The only way to activate platform-only add-ons such as `sms_unlimited` (unlimited texts, £12/month). Adds or removes the Stripe subscription item and the local entitlement exactly as the self-serve route does, so the business is billed from its next invoice and the portal shows it as active. Needs a live Stripe-billed subscription (422 otherwise; 409 when the tier already bundles the feature). Idempotent. Audited as `saas.addon_added` / `saas.addon_removed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         * @description The only way to activate platform-only add-ons such as `sms_unlimited` (unlimited texts, £10/month). Adds or removes the Stripe subscription item and the local entitlement exactly as the self-serve route does, so the business is billed from its next invoice and the portal shows it as active. Needs a live Stripe-billed subscription (422 otherwise; 409 when the tier already bundles the feature). Idempotent. Audited as `saas.addon_added` / `saas.addon_removed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
          */
         put: {
             parameters: {
@@ -33753,7 +33753,7 @@ export interface paths {
                 header?: never;
                 path: {
                     id: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
