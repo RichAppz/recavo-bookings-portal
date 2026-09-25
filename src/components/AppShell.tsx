@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteAccountDialog } from "@/components/DeleteAccountSection";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PersonAvatar } from "@/components/ui-bits";
+import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
@@ -66,7 +66,6 @@ import { PageGhost } from "@/components/ghost";
 import { NoBusinessInApp } from "@/components/NoBusinessInApp";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import {
-  useCustomers,
   useLinkedRecordDefinition,
   useMarkNotificationRead,
   useNotifications,
@@ -75,7 +74,7 @@ import {
   useSubscription,
   useWaitlistSummary,
 } from "@/lib/api/hooks";
-import { customerDisplayName, userDisplayName } from "@/lib/api/types";
+import { userDisplayName } from "@/lib/api/types";
 import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
 import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
@@ -240,7 +239,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
-  const [search, setSearch] = useState("");
   const subscription = useSubscription();
   // Staff-only push channel: credits, message history, bookings refresh as the API records them.
   useLiveUpdates();
@@ -252,9 +250,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!accessPending) markSessionLanded();
   }, [accessPending]);
-
-  const searchQuery = useCustomers({ search: search.trim(), enabled: search.trim().length > 1 });
-  const results = search.trim().length > 1 ? (searchQuery.data?.items ?? []).slice(0, 5) : [];
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
@@ -277,6 +272,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     const feature = navFeatureForPath(to);
     return feature !== undefined && hiddenNav.has(feature);
   };
+  // One answer to "what can this person see?" for both the sidebar and ⌘K search.
+  const visibleNav = NAV.map((group) => ({
+    heading: group.heading,
+    items: group.items.filter(
+      (item) =>
+        item.anyOf.some((p) => tenant.can(p)) &&
+        // The record list only exists for businesses with a schema
+        // (vehicles for detailing); everyone else never sees the item.
+        (item.to !== "/vehicles" || hasLinkedRecords) &&
+        // Consumables are a detailing concept (coatings, pads, chemicals).
+        (item.to !== "/consumables" || isCarDetailing) &&
+        // One-seat plans have no team to manage.
+        (item.to !== "/staff" || !soloPlan) &&
+        !isHiddenByBusiness(item.to),
+    ),
+  }));
+  const searchablePages: SearchablePage[] = visibleNav.flatMap((group) =>
+    group.items.map((item) => ({
+      to: item.to,
+      label: navLabel(item.to, item.label, tenant.terminology),
+      icon: item.icon,
+    })),
+  );
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
   // Adopt guest purchases before asking what this account owns, or someone who
@@ -409,19 +427,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             ? Array.from({ length: 8 }, (_, i) => (
                 <div key={i} className="h-10 animate-pulse rounded-xl bg-sidebar-accent/70" />
               ))
-            : NAV.map((group) => {
-                const items = group.items.filter(
-                  (item) =>
-                    item.anyOf.some((p) => tenant.can(p)) &&
-                    // The record list only exists for businesses with a schema
-                    // (vehicles for detailing); everyone else never sees the item.
-                    (item.to !== "/vehicles" || hasLinkedRecords) &&
-                    // Consumables are a detailing concept (coatings, pads, chemicals).
-                    (item.to !== "/consumables" || isCarDetailing) &&
-                    // One-seat plans have no team to manage.
-                    (item.to !== "/staff" || !soloPlan) &&
-                    !isHiddenByBusiness(item.to),
-                );
+            : visibleNav.map((group) => {
+                const { items } = group;
                 if (items.length === 0) return null;
                 return (
                   <div key={group.heading} className="pt-3 first:pt-1">
@@ -612,31 +619,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               }}
             />
 
-            <div className="relative hidden max-w-sm flex-1 md:block">
-              <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search clients"
-                className="bg-card pl-9"
-              />
-              {results.length > 0 ? (
-                <div className="surface-card absolute top-full left-0 z-40 mt-2 w-full overflow-hidden p-1">
-                  {results.map((c) => (
-                    <Link
-                      key={c.id}
-                      to="/clients/$clientId"
-                      params={{ clientId: c.id }}
-                      onClick={() => setSearch("")}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-secondary"
-                    >
-                      <PersonAvatar name={customerDisplayName(c)} size={28} />
-                      {customerDisplayName(c)}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <GlobalSearch pages={searchablePages} />
 
             <div className="ml-auto flex items-center gap-2">
               {/* A location filter only means something once there is more than one. */}
