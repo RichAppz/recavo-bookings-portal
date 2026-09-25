@@ -3966,8 +3966,6 @@ export type SubscriptionAddon = {
   currency: string;
   interval: "month" | "year";
   status: "included" | "active" | "available";
-  /** Only RECAVO switches it on or off (unlimited texts); we show the state and point at support. */
-  platformOnly?: boolean;
 };
 
 /**

@@ -29909,12 +29909,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -30216,7 +30214,7 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
@@ -30299,12 +30297,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -30429,7 +30425,7 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
@@ -30512,12 +30508,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -31298,12 +31292,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -31680,12 +31672,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         } & {
                             billingBypass?: boolean;
@@ -32063,12 +32053,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -32289,12 +32277,10 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
-                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -32721,12 +32707,10 @@ export interface paths {
                                     /** @enum {string} */
                                     interval: "month" | "year";
                                     /**
-                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
+                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                      * @enum {string}
                                      */
                                     status: "included" | "active" | "available";
-                                    /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
-                                    platformOnly: boolean;
                                 }[];
                             };
                         };
@@ -33744,8 +33728,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Switch an add-on on or off for a business (platform admin)
-         * @description The only way to activate platform-only add-ons such as `sms_unlimited` (unlimited texts, £10/month). Adds or removes the Stripe subscription item and the local entitlement exactly as the self-serve route does, so the business is billed from its next invoice and the portal shows it as active. Needs a live Stripe-billed subscription (422 otherwise; 409 when the tier already bundles the feature). Idempotent. Audited as `saas.addon_added` / `saas.addon_removed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         * Offer (or withdraw) an invitation-only add-on to a business (platform admin)
+         * @description Makes `sms_unlimited` (unlimited texts, £10/month) available to one business: it then appears on their Billing page with the usual Add button and they subscribe (and can remove it) themselves through the self-serve add-on routes. Offering bills nothing and grants nothing. Withdrawing hides it again for a business that has not bought it; one that has keeps it until they remove it. 422 for add-ons that are always available (`invoicing`, `upsells`). Idempotent. Audited as `saas.addon_offered` / `saas.addon_offer_withdrawn` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
          */
         put: {
             parameters: {
@@ -33753,7 +33737,7 @@ export interface paths {
                 header?: never;
                 path: {
                     id: string;
-                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
                     addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
@@ -33761,13 +33745,13 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        enabled: boolean;
+                        offered: boolean;
                         reason: string;
                     };
                 };
             };
             responses: {
-                /** @description Add-on state after the change */
+                /** @description Offer and purchase state after the change */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -33777,6 +33761,7 @@ export interface paths {
                         "application/json": {
                             addon: {
                                 key: string;
+                                offered: boolean;
                                 /** @enum {string} */
                                 status: "included" | "active" | "available";
                             };
@@ -49424,8 +49409,10 @@ export interface components {
             /** @description Catalogue list price per month. */
             unitAmountMinor: number;
             currency: string;
-            /** @description Switched only from the console via PUT …/addons/{addonKey}. */
-            platformOnly: boolean;
+            /** @description The business only sees and can buy this add-on once offered via PUT …/addons/{addonKey}. */
+            byInvitation: boolean;
+            /** @description Whether this business has been offered the add-on (always true for add-ons that are not by invitation). */
+            offered: boolean;
             /**
              * @description `included` — bundled in the tier; `active` — bought as a bolt-on (or granted); `available` — not held.
              * @enum {string}

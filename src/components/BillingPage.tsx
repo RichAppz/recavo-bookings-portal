@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -224,7 +223,7 @@ type AddonCopy = {
   included: (planName: string) => string;
   /** Held via the bolt-on. */
   active: (price: string) => string;
-  /** Purchasable (or, for platform-only add-ons, how to ask for it). */
+  /** Purchasable. */
   available: (price: string) => string;
   removeTitle: string;
   removeBody: string;
@@ -279,9 +278,10 @@ const ADDON_COPY: Record<string, AddonCopy> = {
     active: (price) =>
       `Active · ${price}. Every reminder and confirmation set to text goes out with no cap; your prepaid credits are kept, not spent.`,
     available: (price) =>
-      `Send as many texts as you like for a flat ${price} instead of buying bundles. Arranged with us — message support and we'll switch it on.`,
+      `Offered to you by RECAVO: send as many texts as you like for a flat ${price} instead of buying bundles. Any credits you hold are kept, not spent.`,
     removeTitle: "Remove unlimited texts?",
-    removeBody: "Texts go back to using prepaid credits.",
+    removeBody:
+      "Texts go back to drawing on your prepaid credits (sent by email when they run out). You can add it again while it is on offer.",
     keepLabel: "Keep unlimited texts",
     addedTitle: "Unlimited texts added",
     removedTitle: "Unlimited texts removed",
@@ -364,19 +364,6 @@ function AddonsCard({
               <div className="flex items-center gap-2">
                 {addon.status === "included" ? (
                   <StatusBadge status="active" />
-                ) : addon.platformOnly ? (
-                  addon.status === "active" ? (
-                    <>
-                      <StatusBadge status="active" />
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link to="/support">Change</Link>
-                      </Button>
-                    </>
-                  ) : (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to="/support">Ask us</Link>
-                    </Button>
-                  )
                 ) : !managedHere ? (
                   addon.status === "active" ? (
                     <StatusBadge status="active" />
