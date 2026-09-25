@@ -35,6 +35,7 @@ import {
   runNativeAppleSignIn,
   runNativeOAuth,
 } from "@/lib/native";
+import { emailReturnUrl } from "@/lib/auth/email-redirect";
 import { toast } from "sonner";
 import { toastDuration } from "@/lib/toast";
 
@@ -880,10 +881,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * `emailRedirectTo` matters when the sign-up carries something the confirmation
-   * has to come back to, such as a purchase claim token. Left unset, Supabase
-   * sends the user to the project's site root and that context is lost.
+   * Where the emailed link comes back to. Callers override it when the sign-up
+   * carries something the confirmation has to return to (a purchase claim token);
+   * otherwise it is the origin and page the person is on right now, never the
+   * project's Site URL — see {@link emailReturnUrl}. On the native app the link
+   * goes through the same https bounce page as OAuth so it reopens the app.
    */
+  const emailRedirectFor = (override?: string): string | undefined => {
+    if (override) return override;
+    if (typeof window === "undefined") return undefined;
+    return isNativeApp() ? nativeAuthRedirectUrl() : emailReturnUrl();
+  };
+
   const signUp = useCallback(
     async (
       email: string,
@@ -892,9 +901,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       emailRedirectTo?: string,
     ) => {
       const supabase = getSupabase();
+      const redirect = emailRedirectFor(emailRedirectTo);
       const options = {
         ...(metadata ? { data: metadata } : {}),
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
+        ...(redirect ? { emailRedirectTo: redirect } : {}),
       };
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -927,7 +937,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resendSignUpCode = useCallback(async (email: string) => {
     authLog("resendSignUpCode: resend(signup)");
     const supabase = getSupabase();
-    const { error } = await supabase.auth.resend({ type: "signup", email });
+    const redirect = emailRedirectFor();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      ...(redirect ? { options: { emailRedirectTo: redirect } } : {}),
+    });
     if (error) {
       authLog("resendSignUpCode error", error);
       throw error;
@@ -948,9 +963,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendEmailCode = useCallback(async (email: string) => {
     authLog("sendEmailCode: signInWithOtp");
     const supabase = getSupabase();
+    const redirect = emailRedirectFor();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, ...(redirect ? { emailRedirectTo: redirect } : {}) },
     });
     if (error) {
       authLog("sendEmailCode error", error);
