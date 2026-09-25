@@ -436,7 +436,8 @@ function DiscountBanner({
         </p>
         <p className="text-emerald-800/90 dark:text-emerald-200/80">
           {discount.label ? `${discount.label}. ` : ""}
-          Plan prices below are list prices; the discount is taken off each invoice.
+          Plan prices shown on this page are before the discount; it comes off each invoice
+          automatically.
         </p>
       </div>
     </div>
