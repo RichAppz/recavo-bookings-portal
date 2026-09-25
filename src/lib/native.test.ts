@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { billingSurface, saasPurchasesAllowedInApp } from "./native.ts";
+import {
+  billingSurface,
+  clientPlatform,
+  clientPlatformFor,
+  saasPurchasesAllowedInApp,
+} from "./native.ts";
 
 describe("billingSurface", () => {
   it("is the web (Stripe) in a browser tab whatever the store readiness", () => {
@@ -37,5 +42,26 @@ describe("saasPurchasesAllowedInApp", () => {
 
   it("defaults to the browser when no Capacitor bridge is present", () => {
     assert.equal(saasPurchasesAllowedInApp(), true);
+  });
+});
+
+describe("clientPlatformFor", () => {
+  it("names the app platform when running inside the Capacitor shell", () => {
+    assert.equal(clientPlatformFor(true, "ios"), "ios");
+    assert.equal(clientPlatformFor(true, "android"), "android");
+  });
+
+  it("is the web in a browser tab, whatever Capacitor's web fallback reports", () => {
+    assert.equal(clientPlatformFor(false, "web"), "web");
+    assert.equal(clientPlatformFor(false, undefined), "web");
+    assert.equal(clientPlatformFor(false, "ios"), "web");
+  });
+
+  it("falls back to web for a native platform it does not know", () => {
+    assert.equal(clientPlatformFor(true, "electron"), "web");
+  });
+
+  it("sends nothing during the server render, where there is no device", () => {
+    assert.equal(clientPlatform(), undefined);
   });
 });

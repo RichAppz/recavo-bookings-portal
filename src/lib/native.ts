@@ -48,6 +48,29 @@ export function isNativeIOS(): boolean {
   return isNativeApp() && capacitor()?.getPlatform?.() === "ios";
 }
 
+export type ClientPlatform = "web" | "ios" | "android";
+
+/** Header every API request carries so the API can tell the apps from a browser tab. */
+export const CLIENT_PLATFORM_HEADER = "X-Recavo-Client";
+
+/**
+ * Which surface this bundle is running on. The API records it against the
+ * user and business at sign-up and on each request (internal console shows
+ * "signed up on iOS app", "last used on web"). Purely a product signal;
+ * nothing authorises on it. Undefined during SSR, where there is no device to
+ * speak for, so the server render sends no header.
+ */
+export function clientPlatform(): ClientPlatform | undefined {
+  if (typeof window === "undefined") return undefined;
+  return clientPlatformFor(isNativeApp(), capacitor()?.getPlatform?.());
+}
+
+/** The rule behind {@link clientPlatform}, separated so it can be unit-tested. */
+export function clientPlatformFor(native: boolean, platform: string | undefined): ClientPlatform {
+  if (native && (platform === "ios" || platform === "android")) return platform;
+  return "web";
+}
+
 /**
  * RevenueCat *public* SDK key for the Apple app (starts `appl_`). Public by
  * design — it identifies the app, it does not authorise anything. Set per

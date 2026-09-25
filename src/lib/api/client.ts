@@ -2,6 +2,7 @@ import { ApiError, parseProblemDetails } from "./errors";
 import { getAccessToken } from "./token";
 import { buildQueryString, type QueryValue } from "./query-string";
 import { filenameFromDisposition } from "./content-disposition";
+import { CLIENT_PLATFORM_HEADER, clientPlatform } from "../native";
 
 export type { QueryValue };
 export { buildQueryString };
@@ -145,6 +146,10 @@ async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promi
     Accept: mode === "blob" ? "*/*" : "application/json",
     ...extraHeaders,
   };
+  // Tell the API whether this is the website or one of the apps; it records the
+  // surface at sign-up and on each request for the internal console.
+  const platform = clientPlatform();
+  if (platform) headers[CLIENT_PLATFORM_HEADER] = platform;
 
   // A Blob/File body is sent as-is (e.g. the branding logo upload takes raw image
   // bytes); everything else is JSON.
