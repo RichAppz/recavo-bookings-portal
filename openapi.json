@@ -51451,6 +51451,37 @@
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
                         },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
+                        },
                         "limitCompliance": {
                           "type": "string",
                           "enum": [
@@ -52075,6 +52106,37 @@
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
                         },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
+                        },
                         "limitCompliance": {
                           "type": "string",
                           "enum": [
@@ -52464,6 +52526,37 @@
                         },
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
+                        },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
                         },
                         "limitCompliance": {
                           "type": "string",
@@ -53767,6 +53860,37 @@
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
                         },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
+                        },
                         "limitCompliance": {
                           "type": "string",
                           "enum": [
@@ -54373,6 +54497,37 @@
                             "cancelAtPeriodEnd": {
                               "type": "boolean"
                             },
+                            "discount": {
+                              "type": "object",
+                              "nullable": true,
+                              "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                              "required": [
+                                "label",
+                                "percentOff",
+                                "amountOffMinor",
+                                "endsAt"
+                              ],
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "percentOff": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "amountOffMinor": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true,
+                                  "description": "When the discount stops applying; null for open-ended."
+                                }
+                              }
+                            },
                             "limitCompliance": {
                               "type": "string",
                               "enum": [
@@ -54971,6 +55126,37 @@
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
                         },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
+                        },
                         "limitCompliance": {
                           "type": "string",
                           "enum": [
@@ -55350,6 +55536,37 @@
                         },
                         "cancelAtPeriodEnd": {
                           "type": "boolean"
+                        },
+                        "discount": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                          "required": [
+                            "label",
+                            "percentOff",
+                            "amountOffMinor",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "percentOff": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "amountOffMinor": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true,
+                              "description": "When the discount stops applying; null for open-ended."
+                            }
+                          }
                         },
                         "limitCompliance": {
                           "type": "string",
@@ -56145,6 +56362,37 @@
                             },
                             "cancelAtPeriodEnd": {
                               "type": "boolean"
+                            },
+                            "discount": {
+                              "type": "object",
+                              "nullable": true,
+                              "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                              "required": [
+                                "label",
+                                "percentOff",
+                                "amountOffMinor",
+                                "endsAt"
+                              ],
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "percentOff": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "amountOffMinor": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true,
+                                  "description": "When the discount stops applying; null for open-ended."
+                                }
+                              }
                             },
                             "limitCompliance": {
                               "type": "string",

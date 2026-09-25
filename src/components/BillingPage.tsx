@@ -36,6 +36,7 @@ import {
   useSubscriptionChangePreview,
   type BusinessSubscription,
   type SubscriptionAddon,
+  type SubscriptionDiscount,
 } from "@/lib/api/hooks";
 import type {
   PublicCataloguePlan,
@@ -398,6 +399,50 @@ function AddonsCard({
   );
 }
 
+/**
+ * "You're on a discount" strip at the top of Billing. The API mirrors the coupon
+ * on the Stripe subscription (partner referral programme) as
+ * `subscription.discount`; the plan cards below still show list prices, so this
+ * is the one place the saving is spelled out. Renders nothing at list price.
+ */
+function DiscountBanner({
+  discount,
+  tz,
+}: {
+  discount: SubscriptionDiscount | null | undefined;
+  tz: string;
+}) {
+  if (!discount) return null;
+  const saving =
+    discount.percentOff != null
+      ? `${discount.percentOff}% off`
+      : discount.amountOffMinor != null
+        ? `${formatMoney(discount.amountOffMinor)} off`
+        : null;
+  if (!saving && !discount.label) return null;
+  const until = discount.endsAt
+    ? ` until ${formatInTz(discount.endsAt, tz, { dateStyle: "long" })}`
+    : "";
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100"
+    >
+      <Sparkles className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="space-y-0.5">
+        <p className="font-medium">
+          Discount applied{saving ? `: ${saving}` : ""}
+          {until}
+        </p>
+        <p className="text-emerald-800/90 dark:text-emerald-200/80">
+          {discount.label ? `${discount.label}. ` : ""}
+          Plan prices below are list prices; the discount is taken off each invoice.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function BillingPage() {
   // Three surfaces (see billingSurface): the web sells through Stripe, the iOS
   // app through In-App Purchase, and a store app that cannot sell shows plan
@@ -558,6 +603,7 @@ function StoreBillingPage() {
 
   return (
     <div className="space-y-6">
+      {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
       {blocked ? (
         <div className="max-w-2xl">
           <p className="text-sm text-muted-foreground">
@@ -963,6 +1009,7 @@ function WebBillingPage() {
 
   return (
     <div className="space-y-6">
+      {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
       {/* Once a plan is in place the current-plan card carries the state; this line
             is only needed while the console is still locked. */}
       {blocked ? (

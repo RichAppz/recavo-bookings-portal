@@ -3912,9 +3912,22 @@ export type BusinessSubscription = {
   trialStart?: string | null;
   trialEnd?: string | null;
   cancelAtPeriodEnd?: boolean;
+  /**
+   * Coupon on the Stripe subscription (partner referral programme); null at
+   * list price. No coupon id is exposed to members.
+   */
+  discount?: SubscriptionDiscount | null;
   limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
   graceStartedAt?: string | null;
   graceEndsAt?: string | null;
+};
+
+export type SubscriptionDiscount = {
+  label: string | null;
+  percentOff: number | null;
+  amountOffMinor: number | null;
+  /** When the discount stops applying; null for open-ended. */
+  endsAt: string | null;
 };
 
 export function usePlans() {

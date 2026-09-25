@@ -29065,6 +29065,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -29442,6 +29453,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -29642,6 +29664,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -30415,6 +30448,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -30784,6 +30828,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -31154,6 +31209,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -31367,6 +31433,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -31786,6 +31863,17 @@ export interface paths {
                                     /** Format: date-time */
                                     trialEnd?: string | null;
                                     cancelAtPeriodEnd?: boolean;
+                                    /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                    discount?: {
+                                        label: string | null;
+                                        percentOff: number | null;
+                                        amountOffMinor: number | null;
+                                        /**
+                                         * Format: date-time
+                                         * @description When the discount stops applying; null for open-ended.
+                                         */
+                                        endsAt: string | null;
+                                    } | null;
                                     /** @enum {string} */
                                     limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                     stripeSubscriptionId?: string | null;
