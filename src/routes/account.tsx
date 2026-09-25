@@ -1,7 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { CalendarClock, CalendarDays, Gift, Receipt, Store, Ticket, Wallet } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  Gift,
+  Hourglass,
+  Receipt,
+  Store,
+  Ticket,
+  Wallet,
+} from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
@@ -306,6 +315,7 @@ function AccountContent({
             studios={studios}
             upcoming={upcoming}
             usable={usable}
+            pendingRequests={pendingRequests}
             history={history}
             sessions={sessions}
             loading={bookings.isPending}
@@ -473,6 +483,7 @@ function Overview({
   studios,
   upcoming,
   usable,
+  pendingRequests,
   history,
   sessions,
   loading,
@@ -484,6 +495,7 @@ function Overview({
   studios: PortalBusinessSummary[];
   upcoming: FromStudio<Booking>[];
   usable: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
   history: FromStudio<Payment>[];
   sessions: CalendarSession[];
   loading: boolean;
@@ -503,6 +515,8 @@ function Overview({
 
   return (
     <>
+      <PendingPackageRequests requests={pendingRequests} solo={solo} />
+
       {/* Explicit `grid-cols-1` (minmax(0, 1fr)) on every phone-width grid: a bare
           `grid` sizes its single implicit column to the widest item's min-content, and
           with a nowrap (`truncate`) name inside, that can be wider than the screen. The
@@ -534,7 +548,9 @@ function Overview({
           hint={
             usable[0]
               ? `Next expires ${formatInTz(usable[0].expiresAt, "Europe/London", { day: "numeric", month: "short" })}`
-              : "No prepaid credits"
+              : pendingRequests.length > 0
+                ? `${pendingRequests.length} package ${pendingRequests.length === 1 ? "request" : "requests"} awaiting confirmation`
+                : "No prepaid credits"
           }
           icon={<Ticket className="size-4.5" />}
         />
@@ -782,6 +798,58 @@ function Offers({
   );
 }
 
+/**
+ * Packages the customer has asked for that the studio has not confirmed yet. Shown on
+ * the Overview and above Credits so "I sent it, they haven't confirmed" is visible
+ * wherever they land rather than only once the credits appear.
+ */
+function PendingPackageRequests({
+  requests,
+  solo,
+}: {
+  requests: FromStudio<PortalPackageRequest>[];
+  solo: boolean;
+}) {
+  if (requests.length === 0) return null;
+  return (
+    <div className="surface-card space-y-3 border-warning/40 bg-warning-soft/40 p-5 text-sm">
+      <div className="flex items-center gap-2">
+        <Hourglass className="size-4 text-warning-foreground" />
+        <p className="font-medium">
+          {requests.length === 1
+            ? "Package request sent — waiting on the studio"
+            : `${requests.length} package requests sent — waiting on the studio`}
+        </p>
+      </div>
+      <ul className="space-y-1.5">
+        {requests.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span>
+              <span className="font-medium">{r.packageName}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                · {r.creditsIssued} {r.creditsIssued === 1 ? "credit" : "credits"} ·{" "}
+                {formatMoney(r.amountMinor, r.currency)}
+                {solo ? "" : ` · ${r.studio.tradingName}`}
+              </span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Sent {formatInTz(r.createdAt, "Europe/London", { day: "numeric", month: "short" })}
+              {" · "}
+              <StatusBadge status="pending" />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        {solo
+          ? "The studio will confirm once payment is arranged; your credits appear here as soon as they do."
+          : "Each studio confirms once payment is arranged; your credits appear here as soon as they do."}
+      </p>
+    </div>
+  );
+}
+
 function Credits({
   credits,
   pendingRequests,
@@ -797,24 +865,7 @@ function Credits({
 }) {
   // A package asked for but not yet confirmed by the studio: shown above the credits
   // so the customer knows why they have not appeared yet.
-  const waiting =
-    pendingRequests.length > 0 ? (
-      <div className="surface-card space-y-2 p-5 text-sm">
-        <p className="font-medium">Waiting on the studio</p>
-        <ul className="space-y-1 text-muted-foreground">
-          {pendingRequests.map((r) => (
-            <li key={r.id}>
-              {r.packageName} · {r.creditsIssued} {r.creditsIssued === 1 ? "credit" : "credits"} ·{" "}
-              {formatMoney(r.amountMinor, r.currency)}
-              {solo ? "" : ` · ${r.studio.tradingName}`}
-            </li>
-          ))}
-        </ul>
-        <p className="text-xs text-muted-foreground">
-          They'll confirm once payment is arranged and the credits will appear here.
-        </p>
-      </div>
-    ) : null;
+  const waiting = <PendingPackageRequests requests={pendingRequests} solo={solo} />;
 
   if (credits.length === 0) {
     return (
