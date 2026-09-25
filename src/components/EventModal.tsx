@@ -89,6 +89,8 @@ export function EventModal({
   defaultStaffId?: string;
 }) {
   const tenant = useTenant();
+  // Dates are the business's, whatever zone the phone happens to be in.
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const staff = useStaffList();
   const create = useCreateCalendarBlock();
   const update = useUpdateCalendarBlock();
@@ -124,7 +126,7 @@ export function EventModal({
     setPickerOpen(false);
     setPicking("start");
     if (block) {
-      const dates = eventDatesFromInterval(block.start, block.end);
+      const dates = eventDatesFromInterval(block.start, block.end, timezone);
       setTitle(block.title);
       setStaffId(block.staffId);
       setStartDate(dates.startDate);
@@ -165,7 +167,8 @@ export function EventModal({
   const multiDay = isMultiDay(startDate, endDate);
   const wholeDays = allDay || multiDay;
   const spanDays = eventSpanDays(startDate, endDate);
-  const interval = () => eventInterval({ startDate, endDate, allDay: wholeDays, from, to });
+  const interval = () =>
+    eventInterval({ startDate, endDate, allDay: wholeDays, from, to }, timezone);
 
   const valid = title.trim().length > 0 && staffId.length > 0 && interval() !== null;
 
