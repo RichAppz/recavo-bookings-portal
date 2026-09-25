@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { z } from "zod";
 import { Clock, Eye, EyeOff, Plus, Ticket, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { PackageLinksCard } from "@/components/PackageLinksCard";
+import { PackageRequestsCard } from "@/components/PackageRequestsCard";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -64,7 +66,13 @@ function usePackageTerms() {
   return { bookingLower, bookingPlural, serviceLower, namePlaceholder };
 }
 
+/** `?request=<id>` scrolls to that package request — the owner's email links here. */
+const searchSchema = z.object({
+  request: z.string().min(1).optional(),
+});
+
 export const Route = createFileRoute("/packages")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Packages — RECAVO" },
@@ -100,6 +108,7 @@ function PackagesPage() {
   const [quick, setQuick] = useState<QuickAction>(null);
   const terms = usePackageTerms();
   const tenant = useTenant();
+  const search = Route.useSearch();
 
   return (
     <>
@@ -117,6 +126,8 @@ function PackagesPage() {
           </>
         }
       />
+
+      <PackageRequestsCard highlightId={search.request} creditNoun={terms.bookingPlural} />
 
       {packages.isLoading ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

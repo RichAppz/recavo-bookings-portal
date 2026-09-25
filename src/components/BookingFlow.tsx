@@ -14,6 +14,7 @@ import { BookingCheckout, type BookingContact } from "@/components/BookingChecko
 import { JoinWaitlistSheet } from "@/components/JoinWaitlistSheet";
 import {
   useBuyPublicPackage,
+  useRequestPublicPackage,
   useConfirmPublicBooking,
   useCreatePublicBookingHold,
   usePublicAvailability,
@@ -29,6 +30,7 @@ import {
   type PublicBusinessProfile,
   type PublicPackage,
   type PublicPackagePayment,
+  type PublicPackageRequestReceipt,
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/query-keys";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -349,7 +351,14 @@ export function BookingFlow({
   const offerGone = Boolean(offerCode) && offer.isError;
   const offerLoading = Boolean(offerCode) && offer.isPending;
   const visibleServices = offerActive ? (offer.data?.services ?? []) : (services.data ?? []);
-  const visiblePackages = offerActive ? (offer.data?.packages ?? []) : (packages.data ?? []);
+  const visiblePackages = offerActive
+    ? (offer.data?.packages ?? [])
+    : (packages.data?.packages ?? []);
+  // No card processing at this business: a package is asked for, not bought. Read from
+  // whichever catalogue the visitor is looking at; older API builds omit the flag.
+  const packageRequestMode =
+    (offerActive ? offer.data?.onlinePaymentAvailable : packages.data?.onlinePaymentAvailable) ===
+    false;
   // Only sent to the API while the link is live; a dead code is simply not mentioned.
   const linkCode = offerActive ? offerCode : null;
 
@@ -368,7 +377,7 @@ export function BookingFlow({
   // and after card authentication the page may resume before the link has resolved.
   const chosenPackage =
     offer.data?.packages.find((p) => p.id === packageId) ??
-    packages.data?.find((p) => p.id === packageId) ??
+    packages.data?.packages.find((p) => p.id === packageId) ??
     null;
 
   const dayStart = new Date(`${date}T00:00:00.000Z`);
@@ -405,8 +414,12 @@ export function BookingFlow({
   const confirmMutation = useConfirmPublicBooking(businessId);
   const paymentMutation = useStartPublicBookingPayment(businessId);
   const buyPackage = useBuyPublicPackage(businessId);
+  const requestPackage = useRequestPublicPackage(businessId);
   const [packagePayment, setPackagePayment] = useState<PublicPackagePayment | null>(null);
   const [packageBought, setPackageBought] = useState(false);
+  // The receipt for a package *request* (no card processing at this business): the
+  // business confirms it and arranges payment, so there is nothing to pay here.
+  const [packageRequest, setPackageRequest] = useState<PublicPackageRequestReceipt | null>(null);
   const [payment, setPayment] = useState<PublicBookingPayment | null>(null);
   const [settling, setSettling] = useState(false);
   const [payMethod, setPayMethod] = useState<PayMethod>("card");
@@ -542,6 +555,12 @@ export function BookingFlow({
   const submitPackageDetails = async () => {
     if (!chosenPackage) return;
     setFieldErrors({});
+    // Nothing to set up when the business cannot take cards: Review shows what will be
+    // asked for and the request itself is sent from there.
+    if (packageRequestMode) {
+      setStep(STEP_REVIEW);
+      return;
+    }
     try {
       setPackagePayment(
         await buyPackage.mutateAsync({
@@ -557,7 +576,42 @@ export function BookingFlow({
       setStep(STEP_REVIEW);
     } catch (err) {
       toast.error(
-        err instanceof ApiError ? err.title : "We couldn't start the payment. Please try again.",
+        err instanceof ApiError
+          ? (err.detail ?? err.title)
+          : "We couldn't start the payment. Please try again.",
+      );
+    }
+  };
+
+  /** Sends the package request; the business confirms it from their Packages page. */
+  const submitPackageRequest = async () => {
+    if (!chosenPackage) return;
+    try {
+      const receipt = await requestPackage.mutateAsync({
+        packageId: chosenPackage.id,
+        linkCode,
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || null,
+        email: email.trim(),
+        phone: phone.trim() || null,
+        marketingConsent,
+        notes: notes.trim() || null,
+      });
+      setPackageRequest(receipt);
+      if (
+        goToDashboardIfSignedIn(
+          "Request sent",
+          `${receipt.request.packageName} is waiting for the studio to confirm.`,
+        )
+      ) {
+        return;
+      }
+      setStep(STEP_DONE);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? (err.detail ?? err.title)
+          : "We couldn't send your request. Please try again.",
       );
     }
   };
@@ -1333,9 +1387,13 @@ export function BookingFlow({
                   <p className="text-xs text-destructive">{fieldErrors.phone}</p>
                 ) : null}
               </div>
-              {!isPackage ? (
+              {!isPackage || packageRequestMode ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="b-notes">Anything we should know? (optional)</Label>
+                  <Label htmlFor="b-notes">
+                    {isPackage
+                      ? "Anything to tell them, e.g. how you'd like to pay? (optional)"
+                      : "Anything we should know? (optional)"}
+                  </Label>
                   <Textarea
                     id="b-notes"
                     value={notes}
@@ -1393,7 +1451,9 @@ export function BookingFlow({
               {isPackage
                 ? buyPackage.isPending
                   ? "Setting up secure payment…"
-                  : "Continue"
+                  : packageRequestMode
+                    ? "Review request"
+                    : "Continue"
                 : holdMutation.isPending
                   ? "Holding your slot…"
                   : "Continue"}
@@ -1401,7 +1461,34 @@ export function BookingFlow({
           </section>
         ) : null}
 
-        {step === STEP_REVIEW && isPackage && chosenPackage ? (
+        {step === STEP_REVIEW && isPackage && chosenPackage && packageRequestMode ? (
+          <section className="space-y-4">
+            <Back onClick={() => setStep(STEP_DETAILS)} />
+            <h1 className="text-2xl font-semibold tracking-tight">Review your request</h1>
+            <p className="text-sm text-muted-foreground">
+              {studioName ?? "The studio"} doesn't take card payments online, so nothing is charged
+              now. They'll confirm your request and arrange payment with you, and your credits
+              appear once they do.
+            </p>
+            <PackageSummary pkg={chosenPackage} />
+            {notes.trim() ? (
+              <div className="surface-card p-5 text-left text-sm">
+                <p className="text-muted-foreground">Your note</p>
+                <p className="mt-1 whitespace-pre-wrap">{notes.trim()}</p>
+              </div>
+            ) : null}
+            <Button
+              size="xl"
+              className="w-full"
+              disabled={requestPackage.isPending}
+              onClick={() => void submitPackageRequest()}
+            >
+              {requestPackage.isPending ? "Sending…" : "Send request"}
+            </Button>
+          </section>
+        ) : null}
+
+        {step === STEP_REVIEW && isPackage && chosenPackage && !packageRequestMode ? (
           <section className="space-y-4">
             <Back onClick={() => setStep(STEP_DETAILS)} />
             <h1 className="text-2xl font-semibold tracking-tight">Review &amp; pay</h1>
@@ -1523,6 +1610,39 @@ export function BookingFlow({
                     </Button>
                   </>
                 )}
+              </>
+            )}
+          </section>
+        ) : null}
+
+        {step === STEP_DONE && isPackage && packageRequest && chosenPackage ? (
+          <section className="space-y-4 text-center">
+            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
+              <Check className="size-7" />
+            </span>
+            <h1 className="text-2xl font-semibold tracking-tight">Request sent</h1>
+            <p className="text-sm text-muted-foreground">
+              {studioName ?? "The studio"} has your request for {packageRequest.request.packageName}
+              . They'll be in touch to arrange payment and confirm it, and your{" "}
+              {packageRequest.request.creditsIssued} credits will appear on your account as soon as
+              they do. We've sent a copy to {email.trim() || "your inbox"}.
+            </p>
+            <PackageSummary pkg={chosenPackage} />
+            {hasPortalHere ? (
+              <Button size="xl" className="w-full" asChild>
+                <Link to="/account">Go to my dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button size="xl" className="w-full" asChild>
+                  <Link to="/claim/$token" params={{ token: packageRequest.claimToken }}>
+                    Set up my account
+                  </Link>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Takes a moment, and lets you see the request and book your sessions once it's
+                  confirmed. The same link is in your email.
+                </p>
               </>
             )}
           </section>

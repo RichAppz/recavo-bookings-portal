@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { CalendarClock, CalendarDays, Gift, Receipt, Store, Ticket, Wallet } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
@@ -30,6 +30,7 @@ import {
   type FromStudio,
   type PortalBusinessSummary,
   type PortalCredit,
+  type PortalPackageRequest,
   type PublicBookingPayment,
   type PublicPackageLink,
 } from "@/lib/api/hooks";
@@ -183,7 +184,11 @@ function AccountContent({
   studios: PortalBusinessSummary[];
 }) {
   const { user } = useAuth();
-  const { bookings, credits, payments } = usePortalAcrossStudios(studios);
+  const { bookings, credits, payments, packageRequests } = usePortalAcrossStudios(studios);
+  const pendingRequests = useMemo(
+    () => (packageRequests.data ?? []).filter((r) => r.status === "pending"),
+    [packageRequests.data],
+  );
   const offers = usePortalPackageLinksAcrossStudios(studios);
   const startPayment = useStartPortalBookingPayment(undefined);
   const syncPayment = useSyncPortalBookingPayment();
@@ -346,6 +351,7 @@ function AccountContent({
         ) : view === "credits" ? (
           <Credits
             credits={usable}
+            pendingRequests={pendingRequests}
             studios={studios}
             solo={solo}
             onBook={(studio) => openBooking(studio)}
@@ -778,49 +784,82 @@ function Offers({
 
 function Credits({
   credits,
+  pendingRequests,
   studios,
   solo,
   onBook,
 }: {
   credits: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
   studios: PortalBusinessSummary[];
   solo: boolean;
   onBook: (studio: PortalBusinessSummary) => void;
 }) {
+  // A package asked for but not yet confirmed by the studio: shown above the credits
+  // so the customer knows why they have not appeared yet.
+  const waiting =
+    pendingRequests.length > 0 ? (
+      <div className="surface-card space-y-2 p-5 text-sm">
+        <p className="font-medium">Waiting on the studio</p>
+        <ul className="space-y-1 text-muted-foreground">
+          {pendingRequests.map((r) => (
+            <li key={r.id}>
+              {r.packageName} · {r.creditsIssued} {r.creditsIssued === 1 ? "credit" : "credits"} ·{" "}
+              {formatMoney(r.amountMinor, r.currency)}
+              {solo ? "" : ` · ${r.studio.tradingName}`}
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          They'll confirm once payment is arranged and the credits will appear here.
+        </p>
+      </div>
+    ) : null;
+
   if (credits.length === 0) {
     return (
-      <EmptyState
-        icon={<Ticket className="size-5" />}
-        title="No prepaid credits"
-        description="Buy a package and your credits land here, ready to book."
-        action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
-      />
+      <div className="space-y-4">
+        {waiting}
+        <EmptyState
+          icon={<Ticket className="size-5" />}
+          title="No prepaid credits"
+          description={
+            pendingRequests.length > 0
+              ? "Your credits land here as soon as the studio confirms your request."
+              : "Buy a package and your credits land here, ready to book."
+          }
+          action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {credits.map((c) => (
-        <div key={c.id} className="surface-card flex flex-col gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-3xl font-semibold tracking-tight tabular-nums">{c.available}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                of {c.unitsIssued} {c.unitsIssued === 1 ? "credit" : "credits"} left
-              </p>
+    <div className="space-y-4">
+      {waiting}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {credits.map((c) => (
+          <div key={c.id} className="surface-card flex flex-col gap-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-3xl font-semibold tracking-tight tabular-nums">{c.available}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  of {c.unitsIssued} {c.unitsIssued === 1 ? "credit" : "credits"} left
+                </p>
+              </div>
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <Ticket className="size-4.5" />
+              </span>
             </div>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
-              <Ticket className="size-4.5" />
-            </span>
+            <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
+              {solo ? null : <p className="truncate font-medium">{c.studio.tradingName}</p>}
+              <p>Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}</p>
+              {c.reserved > 0 ? <p>{c.reserved} held against a pending booking</p> : null}
+            </div>
+            <BookWithCredit studio={c.studio} full />
           </div>
-          <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
-            {solo ? null : <p className="truncate font-medium">{c.studio.tradingName}</p>}
-            <p>Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}</p>
-            {c.reserved > 0 ? <p>{c.reserved} held against a pending booking</p> : null}
-          </div>
-          <BookWithCredit studio={c.studio} full />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

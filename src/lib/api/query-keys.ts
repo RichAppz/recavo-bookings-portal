@@ -101,6 +101,8 @@ export const queryKeys = {
   package: (businessId: string, packageId: string) =>
     ["biz", businessId, "packages", packageId] as const,
   packageLinks: (businessId: string) => ["biz", businessId, "package-links"] as const,
+  packageRequests: (businessId: string, status: string) =>
+    ["biz", businessId, "package-requests", status] as const,
   entitlements: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "entitlements", filters ?? {}] as const,
   creditLedger: (businessId: string, filters?: Record<string, unknown>) =>
@@ -201,6 +203,8 @@ export const queryKeys = {
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
+  portalPackageRequests: (businessId: string) =>
+    ["portal", businessId, "package-requests"] as const,
   portalPackageLinks: (businessId: string) => ["portal", businessId, "package-links"] as const,
   portalLinkedRecords: (businessId: string) => ["portal", businessId, "linked-records"] as const,
   portalInvoices: (businessId: string) => ["portal", businessId, "invoices"] as const,

@@ -4996,26 +4996,36 @@ export type PublicPackage = {
   validity: { kind: "calendar_months" | "days"; amount: number };
 };
 
+/**
+ * What the public page can do with a package. `onlinePaymentAvailable` is false when
+ * the business has no card processing (no Stripe account connected); the page then
+ * offers a request the business confirms instead of a checkout that would fail.
+ * Absent from API builds before it existed; treat as available.
+ */
+export type PublicPackageCatalogue = {
+  packages: PublicPackage[];
+  onlinePaymentAvailable?: boolean;
+};
+
 export function usePublicPackages(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.publicPackages(businessId ?? ""),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ packages: PublicPackage[] }>(
+      const res = await api.get<PublicPackageCatalogue>(
         `/api/v1/public/businesses/${businessId}/packages`,
         { public: true },
       );
-      return res.data.packages;
+      return res.data;
     },
   });
 }
 
 /** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
-export type PublicPackageLink = {
+export type PublicPackageLink = PublicPackageCatalogue & {
   /** `showFullCatalogue` is absent from API builds before it existed; treat as shown. */
   link: { code: string; name: string; showFullCatalogue?: boolean };
   services: PublicService[];
-  packages: PublicPackage[];
 };
 
 /**
@@ -5089,6 +5099,150 @@ export function useBuyPublicPackage(businessId: string | undefined) {
         return res.data;
       },
     ),
+  });
+}
+
+export type PackageRequestStatus = "pending" | "confirmed" | "declined";
+
+/** What the public page gets back after asking for a package the business must confirm. */
+export type PublicPackageRequestReceipt = {
+  request: {
+    id: string;
+    status: PackageRequestStatus;
+    packageName: string;
+    creditsIssued: number;
+    amountMinor: number;
+    currency: string;
+  };
+  /** Same as a purchase: the way into a portal account for the customer this created. */
+  claimToken: string;
+};
+
+/**
+ * The no-card-processing sibling of `useBuyPublicPackage`: the visitor asks for the
+ * package, the business confirms it (issuing the credits, payment arranged between
+ * them) or declines. The API refuses this whenever card payment is available.
+ */
+export function useRequestPublicPackage(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: {
+          packageId: string;
+          linkCode?: string | null;
+          firstName: string;
+          lastName?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          marketingConsent?: boolean;
+          notes?: string | null;
+        },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<PublicPackageRequestReceipt>(
+          `/api/v1/public/businesses/${businessId}/package-requests`,
+          vars,
+          { public: true, idempotencyKey },
+        );
+        return res.data;
+      },
+    ),
+  });
+}
+
+/** A package request as staff see it. */
+export type PackageRequest = {
+  id: string;
+  businessId: string;
+  customerId: string;
+  packageId: string;
+  packageName: string;
+  creditsIssued: number;
+  priceMinor: number;
+  currency: string;
+  linkCode: string | null;
+  notesCustomer: string | null;
+  status: PackageRequestStatus;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+  entitlementId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function usePackageRequests(status?: PackageRequestStatus) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.packageRequests(businessId, status ?? "all"),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const qs = status ? `?status=${status}` : "";
+      const res = await api.get<{ requests: PackageRequest[] }>(
+        `/api/v1/businesses/${businessId}/package-requests${qs}`,
+      );
+      return res.data.requests;
+    },
+  });
+}
+
+function usePackageRequestResolution(action: "confirm" | "decline") {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { requestId: string; note?: string | null }, idempotencyKey: string) => {
+        const res = await api.post<{ request: PackageRequest }>(
+          `/api/v1/businesses/${businessId}/package-requests/${vars.requestId}/${action}`,
+          { note: vars.note ?? null },
+          { idempotencyKey },
+        );
+        return res.data.request;
+      },
+    ),
+    onSuccess: (request: PackageRequest) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "package-requests"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.customer(businessId, request.customerId) });
+      void qc.invalidateQueries({
+        queryKey: queryKeys.entitlements(businessId, { customerId: request.customerId }),
+      });
+    },
+  });
+}
+
+/** Issues the credits and marks the request confirmed; payment is the business's affair. */
+export function useConfirmPackageRequest() {
+  return usePackageRequestResolution("confirm");
+}
+
+/** Turns the request down; the note, if any, is sent to the customer. */
+export function useDeclinePackageRequest() {
+  return usePackageRequestResolution("decline");
+}
+
+/** The customer's own package requests, for the account's Credits view. */
+export type PortalPackageRequest = {
+  id: string;
+  status: PackageRequestStatus;
+  packageName: string;
+  creditsIssued: number;
+  amountMinor: number;
+  currency: string;
+  resolutionNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export function usePortalPackageRequests(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalPackageRequests(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ requests: PortalPackageRequest[] }>(
+        `/api/v1/portal/package-requests?businessId=${businessId}`,
+      );
+      return res.data.requests;
+    },
   });
 }
 
@@ -5645,7 +5799,23 @@ export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefi
     combine: (results) => combineByStudio(results, list),
   });
 
-  return { bookings, credits, payments };
+  // Packages asked for while a studio had no card processing; a pending one is why
+  // the Credits view may be empty even though the customer "bought" something.
+  const packageRequests = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPackageRequests(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ requests: PortalPackageRequest[] }>(
+          "/api/v1/portal/package-requests",
+          { query: { businessId: studio.id } },
+        );
+        return res.data.requests;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
+  return { bookings, credits, payments, packageRequests };
 }
 
 function combineByStudio<T>(
