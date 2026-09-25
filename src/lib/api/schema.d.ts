@@ -8744,7 +8744,11 @@ export interface paths {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            referral: components["schemas"]["ReferralProgramView"];
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -33426,6 +33430,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/businesses/{id}/referral-program": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Switch a business between referral programmes (platform admin)
+         * @description Moves the business’s referral code onto `standard` or `partner`. Mints the code if the business has none yet. Existing attributions keep the programme they were created under; only new sign-ups with the code follow the new programme. Audited as `referral.program_changed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+                         * @enum {string}
+                         */
+                        program: "standard" | "partner";
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated referral block */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            referral: components["schemas"]["PlatformBusinessReferral"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/platform/usage/summary": {
         parameters: {
             query?: never;
@@ -46945,6 +47110,21 @@ export interface components {
                 lastBookingAt: string | null;
             };
             openSupportRequests: number;
+            referral: components["schemas"]["PlatformBusinessReferral"];
+        };
+        /** @description Which referral programme this business’s code is on and how it has performed. */
+        PlatformBusinessReferral: {
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /** @description Display form (ABCD-EFGH); null until the business has a code. */
+            code: string | null;
+            attributedCount: number;
+            convertedCount: number;
+            /** Format: date-time */
+            programChangedAt: string | null;
         };
         PlatformBusinessDetail: components["schemas"]["PlatformBusinessSummary"] & {
             members: {
@@ -46974,6 +47154,22 @@ export interface components {
                 dismissedAt: string | null;
                 skippedSteps: string[];
             } | null;
+        };
+        ReferralProgramView: {
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /** @description Display form, e.g. ABCD-EFGH. */
+            code: string;
+            sharePath: string;
+            stats: {
+                attributedCount: number;
+                convertedCount: number;
+                pendingRewardCount: number;
+                rewardedCount: number;
+            };
         };
         /** @description Platform-wide totals and 12-week series for the internal dashboard. */
         PlatformUsageSummary: {

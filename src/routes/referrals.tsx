@@ -44,9 +44,31 @@ async function copyText(value: string, success: string) {
   }
 }
 
+const COPY = {
+  standard: {
+    header:
+      "When they pay after their 14-day trial, you get one free month. Monthly plans: next invoice is free. Annual plans: renewal moves by one month.",
+    code: "Share this with another business — a personal trainer, a detailer, anyone who takes bookings. They enter it when they create their Recavo business.",
+    pendingLabel: "Pending reward",
+    pendingHint: "Free month still being applied",
+    rewardedLabel: "Rewarded",
+    rewardedHint: "Free months applied to your plan",
+  },
+  partner: {
+    header:
+      "You're on the partner programme: the businesses you refer get the discount. Monthly plans: 20% off for their first six months. Annual plans: 10% off their first year.",
+    code: "Share this with the businesses you work with. They enter it when they create their Recavo business and the discount is applied at checkout — nothing for them to claim.",
+    pendingLabel: "Awaiting payment",
+    pendingHint: "Signed up, not yet paid",
+    rewardedLabel: "Discount applied",
+    rewardedHint: "Businesses paying at the partner rate",
+  },
+} as const;
+
 function ReferralsPage() {
   const program = useReferralProgram();
   const shareUrl = program.data ? absoluteShareUrl(program.data.sharePath) : "";
+  const copy = COPY[program.data?.program === "partner" ? "partner" : "standard"];
 
   return (
     <Can
@@ -58,10 +80,7 @@ function ReferralsPage() {
         />
       }
     >
-      <PageHeader
-        title="Referrals"
-        description="When they pay after their 14-day trial, you get one free month. Monthly plans: next invoice is free. Annual plans: renewal moves by one month."
-      />
+      <PageHeader title="Referrals" description={copy.header} />
 
       {program.isLoading ? (
         <StatsGhost />
@@ -74,7 +93,7 @@ function ReferralsPage() {
         <div className="space-y-6">
           <SectionCard
             title="Your code"
-            description="Share this with another business — a personal trainer, a detailer, anyone who takes bookings. They enter it when they create their Recavo business."
+            description={copy.code}
             action={
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -117,15 +136,19 @@ function ReferralsPage() {
               icon={<Receipt className="size-4.5" />}
             />
             <StatCard
-              label="Pending reward"
-              value={String(program.data.stats.pendingRewardCount)}
-              hint="Free month still being applied"
+              label={copy.pendingLabel}
+              value={String(
+                program.data.program === "partner"
+                  ? program.data.stats.attributedCount - program.data.stats.convertedCount
+                  : program.data.stats.pendingRewardCount,
+              )}
+              hint={copy.pendingHint}
               icon={<Clock className="size-4.5" />}
             />
             <StatCard
-              label="Rewarded"
+              label={copy.rewardedLabel}
               value={String(program.data.stats.rewardedCount)}
-              hint="Free months applied to your plan"
+              hint={copy.rewardedHint}
               icon={<BadgeCheck className="size-4.5" />}
             />
           </div>

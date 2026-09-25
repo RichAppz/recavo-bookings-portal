@@ -7539,7 +7539,8 @@
           "owner",
           "billing",
           "usage",
-          "openSupportRequests"
+          "openSupportRequests",
+          "referral"
         ],
         "properties": {
           "id": {
@@ -7717,6 +7718,50 @@
           },
           "openSupportRequests": {
             "type": "integer"
+          },
+          "referral": {
+            "$ref": "#/components/schemas/PlatformBusinessReferral"
+          }
+        }
+      },
+      "PlatformBusinessReferral": {
+        "type": "object",
+        "description": "Which referral programme this business’s code is on and how it has performed.",
+        "required": [
+          "program",
+          "code",
+          "attributedCount",
+          "convertedCount",
+          "programChangedAt"
+        ],
+        "properties": {
+          "program": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "partner"
+            ],
+            "description": "`standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice."
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display form (ABCD-EFGH); null until the business has a code."
+          },
+          "attributedCount": {
+            "type": "integer"
+          },
+          "convertedCount": {
+            "type": "integer"
+          },
+          "programChangedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -7851,6 +7896,55 @@
             }
           }
         ]
+      },
+      "ReferralProgramView": {
+        "type": "object",
+        "required": [
+          "program",
+          "code",
+          "sharePath",
+          "stats"
+        ],
+        "properties": {
+          "program": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "partner"
+            ],
+            "description": "`standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice."
+          },
+          "code": {
+            "type": "string",
+            "description": "Display form, e.g. ABCD-EFGH."
+          },
+          "sharePath": {
+            "type": "string"
+          },
+          "stats": {
+            "type": "object",
+            "required": [
+              "attributedCount",
+              "convertedCount",
+              "pendingRewardCount",
+              "rewardedCount"
+            ],
+            "properties": {
+              "attributedCount": {
+                "type": "integer"
+              },
+              "convertedCount": {
+                "type": "integer"
+              },
+              "pendingRewardCount": {
+                "type": "integer"
+              },
+              "rewardedCount": {
+                "type": "integer"
+              }
+            }
+          }
+        }
       },
       "PlatformUsageSummary": {
         "type": "object",
@@ -20128,6 +20222,21 @@
         "responses": {
           "200": {
             "description": "Referral program view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "referral"
+                  ],
+                  "properties": {
+                    "referral": {
+                      "$ref": "#/components/schemas/ReferralProgramView"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -58105,6 +58214,233 @@
                   "properties": {
                     "business": {
                       "$ref": "#/components/schemas/PlatformBusinessDetail"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platform/businesses/{id}/referral-program": {
+      "patch": {
+        "summary": "Switch a business between referral programmes (platform admin)",
+        "description": "Moves the business’s referral code onto `standard` or `partner`. Mints the code if the business has none yet. Existing attributions keep the programme they were created under; only new sign-ups with the code follow the new programme. Audited as `referral.program_changed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "program",
+                  "reason"
+                ],
+                "properties": {
+                  "program": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "partner"
+                    ],
+                    "description": "`standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated referral block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "referral"
+                  ],
+                  "properties": {
+                    "referral": {
+                      "$ref": "#/components/schemas/PlatformBusinessReferral"
                     }
                   }
                 }

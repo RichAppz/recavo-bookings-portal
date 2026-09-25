@@ -4097,7 +4097,14 @@ export type ReferralStats = {
   rewardedCount: number;
 };
 
+/**
+ * `standard`: you earn a free month per converted referee. `partner`: switched on per
+ * business by RECAVO; you earn nothing and the businesses you refer get the discount.
+ */
+export type ReferralProgramKind = "standard" | "partner";
+
 export type ReferralProgram = {
+  program: ReferralProgramKind;
   code: string;
   sharePath: string;
   stats: ReferralStats;
