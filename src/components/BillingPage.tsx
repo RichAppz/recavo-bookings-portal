@@ -1,6 +1,15 @@
+import { Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, Check, ExternalLink, FileText, RotateCcw, Sparkles } from "lucide-react";
+import {
+  ArrowDown,
+  Check,
+  ExternalLink,
+  FileText,
+  MessageSquareText,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { PageGhost } from "@/components/ghost";
 import { SmsCreditsCard } from "@/components/SmsCreditsCard";
@@ -215,7 +224,7 @@ type AddonCopy = {
   included: (planName: string) => string;
   /** Held via the bolt-on. */
   active: (price: string) => string;
-  /** Purchasable. */
+  /** Purchasable (or, for platform-only add-ons, how to ask for it). */
   available: (price: string) => string;
   removeTitle: string;
   removeBody: string;
@@ -261,6 +270,21 @@ const ADDON_COPY: Record<string, AddonCopy> = {
     keepLabel: "Keep upsells",
     addedTitle: "Upsells added",
     removedTitle: "Upsells removed",
+  },
+  sms_unlimited: {
+    name: "Unlimited texts",
+    icon: MessageSquareText,
+    included: (plan) =>
+      `Included in ${plan}. Every text goes out with no cap and nothing to top up.`,
+    active: (price) =>
+      `Active · ${price}. Every reminder and confirmation set to text goes out with no cap; your prepaid credits are kept, not spent.`,
+    available: (price) =>
+      `Send as many texts as you like for a flat ${price} instead of buying bundles. Arranged with us — message support and we'll switch it on.`,
+    removeTitle: "Remove unlimited texts?",
+    removeBody: "Texts go back to using prepaid credits.",
+    keepLabel: "Keep unlimited texts",
+    addedTitle: "Unlimited texts added",
+    removedTitle: "Unlimited texts removed",
   },
 };
 
@@ -340,6 +364,19 @@ function AddonsCard({
               <div className="flex items-center gap-2">
                 {addon.status === "included" ? (
                   <StatusBadge status="active" />
+                ) : addon.platformOnly ? (
+                  addon.status === "active" ? (
+                    <>
+                      <StatusBadge status="active" />
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link to="/support">Change</Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/support">Ask us</Link>
+                    </Button>
+                  )
                 ) : !managedHere ? (
                   addon.status === "active" ? (
                     <StatusBadge status="active" />

@@ -93,8 +93,11 @@ export function SmsCreditsCard({ className }: { className?: string }) {
         <div className="flex items-start gap-3 text-sm">
           <MessageSquareText className="mt-0.5 size-5 shrink-0 text-primary" />
           <p>
-            Texts are included in your plan — reminders and confirmations set to SMS always go by
-            text, with nothing to top up.
+            Texts are unlimited on this account — reminders and confirmations set to SMS always go
+            by text, with nothing to top up.{" "}
+            {data.balance > 0
+              ? `Your ${data.balance.toLocaleString("en-GB")} prepaid credits are kept, not spent.`
+              : ""}
           </p>
         </div>
       </SectionCard>

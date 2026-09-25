@@ -29909,10 +29909,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -30214,8 +30216,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020). */
-                    addonKey: "invoicing";
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
             };
@@ -30297,10 +30299,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -30425,8 +30429,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `invoicing` (£8/month). Texts are not an add-on: see /sms-credits (prepaid bundles, ADR 0020). */
-                    addonKey: "invoicing";
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
             };
@@ -30508,10 +30512,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -31292,10 +31298,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -31672,10 +31680,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         } & {
                             billingBypass?: boolean;
@@ -32053,10 +32063,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -32277,10 +32289,12 @@ export interface paths {
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
+                                /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                platformOnly: boolean;
                             }[];
                         };
                     };
@@ -32707,10 +32721,12 @@ export interface paths {
                                     /** @enum {string} */
                                     interval: "month" | "year";
                                     /**
-                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey} (unless `platformOnly`).
                                      * @enum {string}
                                      */
                                     status: "included" | "active" | "available";
+                                    /** @description Only RECAVO switches this add-on on or off (e.g. unlimited texts). Show the state and point at support; the self-serve routes refuse it. */
+                                    platformOnly: boolean;
                                 }[];
                             };
                         };
@@ -33714,6 +33730,169 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/addons/{addonKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch an add-on on or off for a business (platform admin)
+         * @description The only way to activate platform-only add-ons such as `sms_unlimited` (unlimited texts, £12/month). Adds or removes the Stripe subscription item and the local entitlement exactly as the self-serve route does, so the business is billed from its next invoice and the portal shows it as active. Needs a live Stripe-billed subscription (422 otherwise; 409 when the tier already bundles the feature). Idempotent. Audited as `saas.addon_added` / `saas.addon_removed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£12/month, unlimited texts) is platform-only — RECAVO switches it on from the internal console; the self-serve routes answer 403 for it. Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Add-on state after the change */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            addon: {
+                                key: string;
+                                /** @enum {string} */
+                                status: "included" | "active" | "available";
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -49223,6 +49402,14 @@ export interface components {
                 purchasedTotal: number;
                 consumedTotal: number;
             } | null;
+            /** @description Messages the platform delivered for this business, however they were paid for (credits, Growth, unlimited bolt-on). Counts from notification deliveries. */
+            messages: {
+                smsSent: number;
+                smsSent30d: number;
+                smsFailed: number;
+                emailSent: number;
+                emailSent30d: number;
+            };
             onboarding: {
                 /** Format: date-time */
                 dismissedAt: string | null;
@@ -49237,6 +49424,8 @@ export interface components {
             /** @description Catalogue list price per month. */
             unitAmountMinor: number;
             currency: string;
+            /** @description Switched only from the console via PUT …/addons/{addonKey}. */
+            platformOnly: boolean;
             /**
              * @description `included` — bundled in the tier; `active` — bought as a bolt-on (or granted); `available` — not held.
              * @enum {string}
