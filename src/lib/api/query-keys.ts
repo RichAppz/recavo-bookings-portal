@@ -103,6 +103,9 @@ export const queryKeys = {
   packageLinks: (businessId: string) => ["biz", businessId, "package-links"] as const,
   packageRequests: (businessId: string, status: string) =>
     ["biz", businessId, "package-requests", status] as const,
+  supportRequests: (businessId: string) => ["biz", businessId, "support-requests"] as const,
+  supportRequest: (businessId: string, requestId: string) =>
+    ["biz", businessId, "support-requests", requestId] as const,
   entitlements: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "entitlements", filters ?? {}] as const,
   creditLedger: (businessId: string, filters?: Record<string, unknown>) =>

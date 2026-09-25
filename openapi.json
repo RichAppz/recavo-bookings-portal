@@ -6278,6 +6278,115 @@
           }
         }
       },
+      "PackageRequest": {
+        "type": "object",
+        "description": "A package a visitor asked for while the business could not take card payment online. Pending until staff confirm (credits issued; payment arranged offline) or decline it.",
+        "required": [
+          "id",
+          "businessId",
+          "customerId",
+          "packageId",
+          "packageName",
+          "creditsIssued",
+          "priceMinor",
+          "currency",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "Package name at the time of the request."
+          },
+          "creditsIssued": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "priceMinor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "linkCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notesCustomer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Note the customer left for the business."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "declined"
+            ]
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolvedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Staff user who confirmed or declined."
+          },
+          "resolutionNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Credits issued on confirmation."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreditBalance": {
         "type": "object",
         "description": "Balance derived from the append-only credit ledger. `available` is spendable.",
@@ -7442,11 +7551,70 @@
             ],
             "format": "date-time"
           },
+          "lastMessageAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the latest reply was posted; null until someone replies."
+          },
+          "lastMessageBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "user",
+              "platform",
+              null
+            ],
+            "description": "Which side replied last. `user` = the business is waiting on RECAVO; `platform` = RECAVO is waiting on the business."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           },
           "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SupportMessage": {
+        "type": "object",
+        "description": "A reply on a support request. The opening message is the request body itself; these follow it, oldest first.",
+        "required": [
+          "id",
+          "authorType",
+          "authorId",
+          "body",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorType": {
+            "type": "string",
+            "enum": [
+              "user",
+              "platform"
+            ]
+          },
+          "authorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Only populated for platform admins; the business sees null."
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -7535,9 +7703,13 @@
           "industryTemplateKey",
           "status",
           "onboardingState",
+          "accountKind",
+          "accountKindChangedAt",
           "createdAt",
+          "signupClient",
           "owner",
           "billing",
+          "revenue",
           "usage",
           "openSupportRequests",
           "referral"
@@ -7565,9 +7737,38 @@
           "onboardingState": {
             "type": "string"
           },
+          "accountKind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "test"
+            ],
+            "description": "Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant."
+          },
+          "accountKindChangedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When an operator last changed accountKind; null when never touched."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "signupClient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "web",
+              "ios",
+              "android",
+              null
+            ],
+            "description": "Surface the business signed up on (the one that created it, else the one its owner's account was created from). Null for accounts that predate the X-Recavo-Client header."
           },
           "owner": {
             "type": [
@@ -7576,7 +7777,8 @@
             ],
             "required": [
               "email",
-              "displayName"
+              "displayName",
+              "lastClient"
             ],
             "properties": {
               "email": {
@@ -7587,6 +7789,19 @@
                   "string",
                   "null"
                 ]
+              },
+              "lastClient": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "web",
+                  "ios",
+                  "android",
+                  null
+                ],
+                "description": "Surface of the owner's most recent authenticated request."
               }
             }
           },
@@ -7603,7 +7818,8 @@
               "interval",
               "trialEnd",
               "currentPeriodEnd",
-              "cancelAtPeriodEnd"
+              "cancelAtPeriodEnd",
+              "addons"
             ],
             "properties": {
               "accessState": {
@@ -7686,8 +7902,18 @@
               },
               "cancelAtPeriodEnd": {
                 "type": "boolean"
+              },
+              "addons": {
+                "type": "array",
+                "description": "Every sellable bolt-on and where this business stands on it.",
+                "items": {
+                  "$ref": "#/components/schemas/PlatformBusinessAddon"
+                }
               }
             }
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/PlatformBusinessRevenue"
           },
           "usage": {
             "type": "object",
@@ -7774,11 +8000,38 @@
             "type": "object",
             "required": [
               "members",
+              "payments",
+              "referred",
+              "referredBy",
               "usageDetail",
               "smsCredits",
               "onboarding"
             ],
             "properties": {
+              "referred": {
+                "type": "array",
+                "description": "Businesses that signed up with this one’s code, newest first.",
+                "items": {
+                  "$ref": "#/components/schemas/PlatformReferredBusiness"
+                }
+              },
+              "referredBy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PlatformReferredBy"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "payments": {
+                "type": "array",
+                "description": "Payment history, newest first, capped at 60.",
+                "items": {
+                  "$ref": "#/components/schemas/PlatformBusinessPayment"
+                }
+              },
               "members": {
                 "type": "array",
                 "items": {
@@ -7789,7 +8042,9 @@
                     "displayName",
                     "roleKeys",
                     "status",
-                    "joinedAt"
+                    "joinedAt",
+                    "lastLoginAt",
+                    "lastClient"
                   ],
                   "properties": {
                     "userId": {
@@ -7820,6 +8075,25 @@
                         "null"
                       ],
                       "format": "date-time"
+                    },
+                    "lastLoginAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastClient": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "web",
+                        "ios",
+                        "android",
+                        null
+                      ]
                     }
                   }
                 }
@@ -7897,6 +8171,844 @@
           }
         ]
       },
+      "PlatformBusinessAddon": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "unitAmountMinor",
+          "currency",
+          "status"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "invoicing"
+          },
+          "name": {
+            "type": "string",
+            "example": "Invoicing"
+          },
+          "unitAmountMinor": {
+            "type": "integer",
+            "description": "Catalogue list price per month."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "included",
+              "active",
+              "available"
+            ],
+            "description": "`included` — bundled in the tier; `active` — bought as a bolt-on (or granted); `available` — not held."
+          }
+        }
+      },
+      "PlatformReferredBusiness": {
+        "type": "object",
+        "description": "A business that signed up with this one’s referral code.",
+        "required": [
+          "attributionId",
+          "businessId",
+          "tradingName",
+          "slug",
+          "accountKind",
+          "accessState",
+          "program",
+          "status",
+          "signedUpAt",
+          "convertedAt",
+          "rewardKind",
+          "rewardedAt",
+          "applyError",
+          "refereeDiscountAppliedAt"
+        ],
+        "properties": {
+          "attributionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tradingName": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "accountKind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "test"
+            ],
+            "description": "Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant."
+          },
+          "accessState": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "trial",
+              "entitled",
+              "grace",
+              "restricted",
+              "ended"
+            ]
+          },
+          "program": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "partner"
+            ],
+            "description": "`standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "attributed",
+              "converted",
+              "reward_pending",
+              "rewarded",
+              "apply_failed"
+            ],
+            "description": "`attributed` — signed up with the code, not yet paid; `converted` — first paid invoice after trial; `reward_pending` / `rewarded` / `apply_failed` — referrer reward lifecycle (standard programme)."
+          },
+          "signedUpAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "convertedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rewardKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "coupon_once",
+              "period_shift",
+              "referee_discount",
+              null
+            ]
+          },
+          "rewardedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "applyError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refereeDiscountAppliedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformReferredBy": {
+        "type": "object",
+        "description": "The business whose code this one signed up with.",
+        "required": [
+          "attributionId",
+          "businessId",
+          "tradingName",
+          "slug",
+          "code",
+          "program",
+          "status",
+          "signedUpAt",
+          "convertedAt"
+        ],
+        "properties": {
+          "attributionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tradingName": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Display form, e.g. ABCD-EFGH."
+          },
+          "program": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "partner"
+            ],
+            "description": "`standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "attributed",
+              "converted",
+              "reward_pending",
+              "rewarded",
+              "apply_failed"
+            ],
+            "description": "`attributed` — signed up with the code, not yet paid; `converted` — first paid invoice after trial; `reward_pending` / `rewarded` / `apply_failed` — referrer reward lifecycle (standard programme)."
+          },
+          "signedUpAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "convertedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformBusinessUsage": {
+        "type": "object",
+        "description": "How much of the product one business uses, as counts across every module. Read by the internal console business page. Aggregates only: no names, bodies or contact details.",
+        "required": [
+          "businessId",
+          "generatedAt",
+          "currency",
+          "team",
+          "catalogue",
+          "clients",
+          "sessions",
+          "packages",
+          "clientPayments",
+          "invoices",
+          "comms",
+          "engagement",
+          "series"
+        ],
+        "properties": {
+          "businessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "team": {
+            "type": "object",
+            "required": [
+              "membersActive",
+              "invitationsPending",
+              "staffActive",
+              "staffTotal",
+              "locationsActive",
+              "locationsTotal",
+              "lastSeenAt"
+            ],
+            "properties": {
+              "membersActive": {
+                "type": "integer"
+              },
+              "invitationsPending": {
+                "type": "integer"
+              },
+              "staffActive": {
+                "type": "integer"
+              },
+              "staffTotal": {
+                "type": "integer"
+              },
+              "locationsActive": {
+                "type": "integer"
+              },
+              "locationsTotal": {
+                "type": "integer"
+              },
+              "lastSeenAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          "catalogue": {
+            "type": "object",
+            "required": [
+              "servicesActive",
+              "servicesPublic",
+              "servicesTotal",
+              "packagesActive",
+              "packagesTotal",
+              "resourcesActive",
+              "consumablesActive",
+              "policyDocumentsPublished",
+              "customFieldDefinitions"
+            ],
+            "properties": {
+              "servicesActive": {
+                "type": "integer"
+              },
+              "servicesPublic": {
+                "type": "integer"
+              },
+              "servicesTotal": {
+                "type": "integer"
+              },
+              "packagesActive": {
+                "type": "integer"
+              },
+              "packagesTotal": {
+                "type": "integer"
+              },
+              "resourcesActive": {
+                "type": "integer"
+              },
+              "consumablesActive": {
+                "type": "integer"
+              },
+              "policyDocumentsPublished": {
+                "type": "integer"
+              },
+              "customFieldDefinitions": {
+                "type": "integer"
+              }
+            }
+          },
+          "clients": {
+            "type": "object",
+            "required": [
+              "total",
+              "active",
+              "archived",
+              "new30d",
+              "booked90d",
+              "withLogin",
+              "withEmail",
+              "withPhone",
+              "linkedRecords",
+              "notes"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "active": {
+                "type": "integer"
+              },
+              "archived": {
+                "type": "integer"
+              },
+              "new30d": {
+                "type": "integer"
+              },
+              "booked90d": {
+                "type": "integer"
+              },
+              "withLogin": {
+                "type": "integer"
+              },
+              "withEmail": {
+                "type": "integer"
+              },
+              "withPhone": {
+                "type": "integer"
+              },
+              "linkedRecords": {
+                "type": "integer"
+              },
+              "notes": {
+                "type": "integer"
+              }
+            }
+          },
+          "sessions": {
+            "type": "object",
+            "description": "Bookings, in customer-facing terms.",
+            "required": [
+              "total",
+              "upcoming",
+              "last7d",
+              "last30d",
+              "completed",
+              "cancelled",
+              "noShows",
+              "attended",
+              "group",
+              "attendeesTotal",
+              "byStatus",
+              "bySource",
+              "firstAt",
+              "lastAt",
+              "nextAt",
+              "bookedValueMinor"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "upcoming": {
+                "type": "integer"
+              },
+              "last7d": {
+                "type": "integer"
+              },
+              "last30d": {
+                "type": "integer"
+              },
+              "completed": {
+                "type": "integer"
+              },
+              "cancelled": {
+                "type": "integer"
+              },
+              "noShows": {
+                "type": "integer"
+              },
+              "attended": {
+                "type": "integer"
+              },
+              "group": {
+                "type": "integer"
+              },
+              "attendeesTotal": {
+                "type": "integer"
+              },
+              "byStatus": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "bySource": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "firstAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "lastAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "nextAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "bookedValueMinor": {
+                "type": "integer"
+              }
+            }
+          },
+          "packages": {
+            "type": "object",
+            "required": [
+              "purchasesTotal",
+              "purchases30d",
+              "salesMinor",
+              "creditsIssued",
+              "creditsConsumed",
+              "creditsAvailable",
+              "holders"
+            ],
+            "properties": {
+              "purchasesTotal": {
+                "type": "integer"
+              },
+              "purchases30d": {
+                "type": "integer"
+              },
+              "salesMinor": {
+                "type": "integer"
+              },
+              "creditsIssued": {
+                "type": "integer"
+              },
+              "creditsConsumed": {
+                "type": "integer"
+              },
+              "creditsAvailable": {
+                "type": "integer"
+              },
+              "holders": {
+                "type": "integer"
+              }
+            }
+          },
+          "clientPayments": {
+            "type": "object",
+            "description": "Money the business takes from its own clients through Stripe Connect.",
+            "required": [
+              "connectState",
+              "chargesEnabled",
+              "payoutsEnabled",
+              "succeededCount",
+              "succeededMinor",
+              "last30dMinor",
+              "refundsCount",
+              "refundedMinor",
+              "failedCount",
+              "byState"
+            ],
+            "properties": {
+              "connectState": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "chargesEnabled": {
+                "type": "boolean"
+              },
+              "payoutsEnabled": {
+                "type": "boolean"
+              },
+              "succeededCount": {
+                "type": "integer"
+              },
+              "succeededMinor": {
+                "type": "integer"
+              },
+              "last30dMinor": {
+                "type": "integer"
+              },
+              "refundsCount": {
+                "type": "integer"
+              },
+              "refundedMinor": {
+                "type": "integer"
+              },
+              "failedCount": {
+                "type": "integer"
+              },
+              "byState": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "invoices": {
+            "type": "object",
+            "required": [
+              "total",
+              "byStatus",
+              "invoicedMinor",
+              "paidMinor",
+              "outstandingMinor"
+            ],
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "byStatus": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "invoicedMinor": {
+                "type": "integer"
+              },
+              "paidMinor": {
+                "type": "integer"
+              },
+              "outstandingMinor": {
+                "type": "integer"
+              }
+            }
+          },
+          "comms": {
+            "type": "object",
+            "required": [
+              "conversations",
+              "messagesTotal",
+              "messagesFromStaff",
+              "messagesFromCustomers",
+              "messages30d",
+              "deliveriesByChannel",
+              "deliveries30d"
+            ],
+            "properties": {
+              "conversations": {
+                "type": "integer"
+              },
+              "messagesTotal": {
+                "type": "integer"
+              },
+              "messagesFromStaff": {
+                "type": "integer"
+              },
+              "messagesFromCustomers": {
+                "type": "integer"
+              },
+              "messages30d": {
+                "type": "integer"
+              },
+              "deliveriesByChannel": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "sent",
+                    "failed"
+                  ],
+                  "properties": {
+                    "sent": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "deliveries30d": {
+                "type": "integer"
+              }
+            }
+          },
+          "engagement": {
+            "type": "object",
+            "required": [
+              "waitlistWaiting",
+              "waitlistTotal",
+              "waitlistBooked",
+              "followUpsOpen",
+              "followUpsTotal",
+              "upsellOffers",
+              "upsellAccepted",
+              "calendarBlocks",
+              "filesCount",
+              "filesBytes",
+              "policyAcceptances"
+            ],
+            "properties": {
+              "waitlistWaiting": {
+                "type": "integer"
+              },
+              "waitlistTotal": {
+                "type": "integer"
+              },
+              "waitlistBooked": {
+                "type": "integer"
+              },
+              "followUpsOpen": {
+                "type": "integer"
+              },
+              "followUpsTotal": {
+                "type": "integer"
+              },
+              "upsellOffers": {
+                "type": "integer"
+              },
+              "upsellAccepted": {
+                "type": "integer"
+              },
+              "calendarBlocks": {
+                "type": "integer"
+              },
+              "filesCount": {
+                "type": "integer"
+              },
+              "filesBytes": {
+                "type": "integer"
+              },
+              "policyAcceptances": {
+                "type": "integer"
+              }
+            }
+          },
+          "series": {
+            "type": "object",
+            "required": [
+              "sessionsByWeek",
+              "newClientsByWeek"
+            ],
+            "properties": {
+              "sessionsByWeek": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "weekStart",
+                    "count"
+                  ],
+                  "properties": {
+                    "weekStart": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "ISO Monday the week starts on."
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              },
+              "newClientsByWeek": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "weekStart",
+                    "count"
+                  ],
+                  "properties": {
+                    "weekStart": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "ISO Monday the week starts on."
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PlatformBusinessRevenue": {
+        "type": "object",
+        "description": "What the business has paid us, net of refunds, from the revenue ledger (saas_revenue_events: Stripe charges + App Store purchases). Minor units.",
+        "required": [
+          "lifetimeMinor",
+          "last12mMinor",
+          "currency",
+          "paymentsCount",
+          "firstPaidAt",
+          "lastPaidAt"
+        ],
+        "properties": {
+          "lifetimeMinor": {
+            "type": "integer",
+            "description": "Lifetime value."
+          },
+          "last12mMinor": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null until the first payment."
+          },
+          "paymentsCount": {
+            "type": "integer"
+          },
+          "firstPaidAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastPaidAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PlatformBusinessPayment": {
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "amountMinor",
+          "refundedMinor",
+          "currency",
+          "description",
+          "occurredAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "stripe",
+              "apple"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "subscription",
+              "one_off"
+            ],
+            "description": "`subscription` — plan / bolt-on invoice; `one_off` — SMS bundle or other single payment."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "description": "Gross, before refunds."
+          },
+          "refundedMinor": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ReferralProgramView": {
         "type": "object",
         "required": [
@@ -7953,6 +9065,7 @@
           "generatedAt",
           "businesses",
           "bookings",
+          "revenue",
           "support",
           "series"
         ],
@@ -7963,8 +9076,10 @@
           },
           "businesses": {
             "type": "object",
+            "description": "Test accounts are excluded from every business and booking figure; `testAccounts` is how many were left out.",
             "required": [
               "total",
+              "testAccounts",
               "byAccessState",
               "createdLast7d",
               "createdLast30d",
@@ -7972,6 +9087,10 @@
             ],
             "properties": {
               "total": {
+                "type": "integer",
+                "description": "Customer accounts only."
+              },
+              "testAccounts": {
                 "type": "integer"
               },
               "byAccessState": {
@@ -8040,6 +9159,42 @@
               }
             }
           },
+          "revenue": {
+            "type": "object",
+            "description": "Money from customer accounts, net of refunds, minor units in `currency`. MRR is the normalised monthly run-rate of paying subscriptions (yearly ÷ 12) plus their bought bolt-ons at catalogue price.",
+            "required": [
+              "currency",
+              "lifetimeMinor",
+              "last30dMinor",
+              "last7dMinor",
+              "mrrMinor",
+              "payingBusinesses",
+              "subscribedBusinesses"
+            ],
+            "properties": {
+              "currency": {
+                "type": "string"
+              },
+              "lifetimeMinor": {
+                "type": "integer"
+              },
+              "last30dMinor": {
+                "type": "integer"
+              },
+              "last7dMinor": {
+                "type": "integer"
+              },
+              "mrrMinor": {
+                "type": "integer"
+              },
+              "payingBusinesses": {
+                "type": "integer"
+              },
+              "subscribedBusinesses": {
+                "type": "integer"
+              }
+            }
+          },
           "support": {
             "type": "object",
             "required": [
@@ -8063,7 +9218,8 @@
             "type": "object",
             "required": [
               "signupsByWeek",
-              "bookingsByWeek"
+              "bookingsByWeek",
+              "revenueByWeek"
             ],
             "properties": {
               "signupsByWeek": {
@@ -8105,6 +9261,27 @@
                     }
                   }
                 }
+              },
+              "revenueByWeek": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "weekStart",
+                    "count"
+                  ],
+                  "properties": {
+                    "weekStart": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "ISO Monday the week starts on."
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "description": "`count` is net revenue in minor units for that week."
               }
             }
           }
@@ -12890,9 +14067,307 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "packages"
+                    "packages",
+                    "onlinePaymentAvailable"
                   ],
                   "properties": {
+                    "packages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "priceMinor",
+                          "currency",
+                          "creditsIssued",
+                          "validity"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "priceMinor": {
+                            "type": "integer"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "creditsIssued": {
+                            "type": "integer"
+                          },
+                          "eligibleServiceIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            }
+                          },
+                          "validity": {
+                            "type": "object",
+                            "required": [
+                              "kind",
+                              "amount"
+                            ],
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "calendar_months",
+                                  "days"
+                                ]
+                              },
+                              "amount": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "onlinePaymentAvailable": {
+                      "type": "boolean",
+                      "description": "Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for."
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/businesses/{businessId}/package-links/{code}": {
+      "get": {
+        "summary": "Resolve a shared package link",
+        "description": "The sessions and packages a visitor holding this link may choose from, in the order the business picked, whether or not they are on the general public page. 404 for an unknown or revoked code, so the booking page can fall back to its ordinary listing.",
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Link with its sessions and packages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "link",
+                    "services",
+                    "packages",
+                    "onlinePaymentAvailable"
+                  ],
+                  "properties": {
+                    "onlinePaymentAvailable": {
+                      "type": "boolean",
+                      "description": "Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for."
+                    },
+                    "link": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "name",
+                        "showFullCatalogue"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "showFullCatalogue": {
+                          "type": "boolean",
+                          "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
+                        }
+                      }
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogueService"
+                      }
+                    },
                     "packages": {
                       "type": "array",
                       "items": {
@@ -13119,10 +14594,10 @@
         }
       }
     },
-    "/api/v1/public/businesses/{businessId}/package-links/{code}": {
-      "get": {
-        "summary": "Resolve a shared package link",
-        "description": "The sessions and packages a visitor holding this link may choose from, in the order the business picked, whether or not they are on the general public page. 404 for an unknown or revoked code, so the booking page can fall back to its ordinary listing.",
+    "/api/v1/public/businesses/{businessId}/package-requests": {
+      "post": {
+        "summary": "Ask for a package the business cannot sell online",
+        "description": "For businesses without card processing: records the visitor as a lead customer and a pending package request the business confirms (credits issued, payment arranged between them) or declines from Packages. Refused with 422 when the business does take card payment, so it cannot be used to skip checkout. Same package visibility rules as the checkout endpoint.",
         "parameters": [
           {
             "name": "businessId",
@@ -13134,119 +14609,66 @@
             }
           },
           {
-            "name": "code",
-            "in": "path",
+            "name": "Idempotency-Key",
+            "in": "header",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Link with its sessions and packages",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "link",
-                    "services",
-                    "packages"
-                  ],
-                  "properties": {
-                    "link": {
-                      "type": "object",
-                      "required": [
-                        "code",
-                        "name",
-                        "showFullCatalogue"
-                      ],
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "showFullCatalogue": {
-                          "type": "boolean",
-                          "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
-                        }
-                      }
-                    },
-                    "services": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/CatalogueService"
-                      }
-                    },
-                    "packages": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "id",
-                          "name",
-                          "priceMinor",
-                          "currency",
-                          "creditsIssued",
-                          "validity"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "description": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "priceMinor": {
-                            "type": "integer"
-                          },
-                          "currency": {
-                            "type": "string"
-                          },
-                          "creditsIssued": {
-                            "type": "integer"
-                          },
-                          "eligibleServiceIds": {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "format": "uuid"
-                            }
-                          },
-                          "validity": {
-                            "type": "object",
-                            "required": [
-                              "kind",
-                              "amount"
-                            ],
-                            "properties": {
-                              "kind": {
-                                "type": "string",
-                                "enum": [
-                                  "calendar_months",
-                                  "days"
-                                ]
-                              },
-                              "amount": {
-                                "type": "integer"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "packageId",
+                  "firstName"
+                ],
+                "properties": {
+                  "packageId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "linkCode": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "email": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "marketingConsent": {
+                    "type": "boolean"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000,
+                    "description": "Optional note to the business, e.g. how they would like to pay."
                   }
                 }
               }
-            },
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -13254,7 +14676,60 @@
             }
           },
           "201": {
-            "description": "Created",
+            "description": "The pending request and a claim token for portal access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "claimToken"
+                  ],
+                  "properties": {
+                    "request": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status",
+                        "packageName",
+                        "creditsIssued",
+                        "amountMinor",
+                        "currency"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "confirmed",
+                            "declined"
+                          ]
+                        },
+                        "packageName": {
+                          "type": "string"
+                        },
+                        "creditsIssued": {
+                          "type": "integer"
+                        },
+                        "amountMinor": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "claimToken": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -17477,9 +18952,14 @@
                         "required": [
                           "link",
                           "services",
-                          "packages"
+                          "packages",
+                          "onlinePaymentAvailable"
                         ],
                         "properties": {
+                          "onlinePaymentAvailable": {
+                            "type": "boolean",
+                            "description": "Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for."
+                          },
                           "link": {
                             "type": "object",
                             "required": [
@@ -17739,6 +19219,190 @@
       "get": {
         "summary": "List own package credits",
         "description": "Credit entitlements and remaining balances for the authorised linked customer. An empty eligibleServiceIds means the credits are valid for any service.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/package-requests": {
+      "get": {
+        "summary": "List own package requests",
+        "description": "Packages the authorised linked customer asked for while the business had no card processing. A pending request explains why no credits have appeared yet; a declined one carries the business’s note when they left one.",
         "security": [
           {
             "bearerAuth": []
@@ -44514,6 +46178,692 @@
         }
       }
     },
+    "/api/v1/businesses/{businessId}/package-requests": {
+      "get": {
+        "summary": "List package requests",
+        "description": "Packages customers asked for while the business had no card processing, newest first. Filter by status; pending ones need a decision.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "confirmed",
+                "declined"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Package requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "requests"
+                  ],
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PackageRequest"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/package-requests/{requestId}/confirm": {
+      "post": {
+        "summary": "Confirm a package request",
+        "description": "Issues the package credits to the customer as a staff sale (payment is arranged between business and customer) and marks the request confirmed. The customer gets the purchase receipt with a portal link. Idempotent: confirming again returns the same entitlement. 409 if the request was already declined.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000,
+                    "description": "Kept on the request. On a decline it is also sent to the customer; on a confirm it is for the business’s own records."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed request and the issued entitlement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "entitlement"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/PackageRequest"
+                    },
+                    "entitlement": {
+                      "$ref": "#/components/schemas/Entitlement"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/package-requests/{requestId}/decline": {
+      "post": {
+        "summary": "Decline a package request",
+        "description": "Marks the request declined and tells the customer, including the note when given. Idempotent on an already-declined request; 409 if it was already confirmed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000,
+                    "description": "Kept on the request. On a decline it is also sent to the customer; on a confirm it is for the business’s own records."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Declined request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/PackageRequest"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{businessId}/customers/{customerId}/credits": {
       "get": {
         "summary": "Get a customer’s credit entitlements + balances",
@@ -58205,7 +60555,7 @@
     "/api/v1/platform/businesses": {
       "get": {
         "summary": "Business directory (platform admin)",
-        "description": "Every business, newest first, with owner, billing and usage. `search` matches trading/legal name, slug or owner email. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "description": "Every business, newest first, with owner, billing and usage. `search` matches trading/legal name, slug or owner email. Test accounts are hidden unless `accountKind` is `test` or `all`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
         "security": [
           {
             "bearerAuth": []
@@ -58234,6 +60584,20 @@
                 "grace",
                 "restricted",
                 "ended"
+              ]
+            }
+          },
+          {
+            "name": "accountKind",
+            "in": "query",
+            "required": false,
+            "description": "Defaults to `customer`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "customer",
+                "test",
+                "all"
               ]
             }
           },
@@ -58627,6 +60991,402 @@
         }
       }
     },
+    "/api/v1/platform/businesses/{id}/usage": {
+      "get": {
+        "summary": "Usage counts for one business across every module (platform admin)",
+        "description": "Team, catalogue, clients, sessions (bookings), packages and credits, client payments through Connect, invoices, messaging and notification deliveries, engagement features, plus 12-week series. Counts only. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Business usage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "usage"
+                  ],
+                  "properties": {
+                    "usage": {
+                      "$ref": "#/components/schemas/PlatformBusinessUsage"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platform/businesses/{id}/onboarding": {
+      "get": {
+        "summary": "Setup checklist progress for one business (platform admin)",
+        "description": "The same derived “Get set up” checklist the portal shows the owner — ordered steps, required/optional, completion, `percentComplete` over required steps and overall `status` — read by the internal console. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Onboarding progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "onboarding"
+                  ],
+                  "properties": {
+                    "onboarding": {
+                      "$ref": "#/components/schemas/BusinessOnboarding"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/platform/businesses/{id}/referral-program": {
       "patch": {
         "summary": "Switch a business between referral programmes (platform admin)",
@@ -58689,6 +61449,448 @@
                   "properties": {
                     "referral": {
                       "$ref": "#/components/schemas/PlatformBusinessReferral"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platform/businesses/{id}/account-kind": {
+      "patch": {
+        "summary": "Mark a business as a test account, or back to a customer (platform admin)",
+        "description": "Operator label only: `test` hides the business from the default directory listing and drops it from usage metrics; nothing changes for the tenant, its billing or its data. Re-applying the current kind is a no-op. Audited as `business.account_kind_changed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accountKind",
+                  "reason"
+                ],
+                "properties": {
+                  "accountKind": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "test"
+                    ],
+                    "description": "Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated label",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accountKind",
+                    "accountKindChangedAt"
+                  ],
+                  "properties": {
+                    "accountKind": {
+                      "type": "string",
+                      "enum": [
+                        "customer",
+                        "test"
+                      ],
+                      "description": "Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant."
+                    },
+                    "accountKindChangedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platform/revenue/sync": {
+      "post": {
+        "summary": "Re-mirror Stripe charges into the revenue ledger (platform admin)",
+        "description": "Lists every Stripe Customer’s succeeded charges and upserts them into `saas_revenue_events`. Idempotent and safe to repeat; the ledger is also refreshed automatically on every paid invoice and SMS bundle checkout, so this is the backfill / belt-and-braces button. Audited as `saas.revenue_synced`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "businesses",
+                    "charges",
+                    "failed",
+                    "stripeConfigured"
+                  ],
+                  "properties": {
+                    "businesses": {
+                      "type": "integer",
+                      "description": "Customers attempted."
+                    },
+                    "charges": {
+                      "type": "integer",
+                      "description": "Charges written (inserted or refreshed)."
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "description": "Customers whose Stripe read failed."
+                    },
+                    "stripeConfigured": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -59255,7 +62457,7 @@
     },
     "/api/v1/platform/support-requests/{id}": {
       "get": {
-        "summary": "One support request (platform admin)",
+        "summary": "One support request with its thread (platform admin)",
         "security": [
           {
             "bearerAuth": []
@@ -59274,17 +62476,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Support request",
+            "description": "Support request and thread",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "required": [
-                    "request"
+                    "request",
+                    "messages"
                   ],
                   "properties": {
                     "request": {
                       "$ref": "#/components/schemas/PlatformSupportRequest"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SupportMessage"
+                      }
                     }
                   }
                 }
@@ -59521,6 +62730,228 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/platform/support-requests/{id}/messages": {
+      "post": {
+        "summary": "Reply to a support request (platform admin)",
+        "description": "Posts a reply as RECAVO. The member of staff who raised the request is emailed (and sees it in their bell feed) with a link to the thread. An open request moves to in_progress; a resolved one stays resolved. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Reply posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "message"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/PlatformSupportRequest"
+                    },
+                    "message": {
+                      "$ref": "#/components/schemas/SupportMessage"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -73574,6 +77005,451 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/support-requests/{requestId}": {
+      "get": {
+        "summary": "One of this business’s support requests, with its thread",
+        "description": "The request plus every reply so far, oldest first. 404 for another business’s.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Support request and thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "messages"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/SupportRequest"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SupportMessage"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/support-requests/{requestId}/messages": {
+      "post": {
+        "summary": "Reply on a support request",
+        "description": "Adds a message from the business side. Replying to a resolved request reopens it (status back to open, resolvedAt cleared). Rate limited like raising a request.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Reply posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "message"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/SupportRequest"
+                    },
+                    "message": {
+                      "$ref": "#/components/schemas/SupportMessage"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"

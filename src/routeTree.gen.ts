@@ -48,6 +48,8 @@ import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
 import { Route as OffersTokenRouteImport } from './routes/offers.$token'
+import { Route as SupportIndexRouteImport } from './routes/support.index'
+import { Route as SupportRequestIdRouteImport } from './routes/support.$requestId'
 import { Route as BillingSmsCreditsIndexRouteImport } from './routes/billing.sms-credits.index'
 import { Route as BillingSmsCreditsCancelRouteImport } from './routes/billing.sms-credits.cancel'
 import { Route as BillingSmsCreditsSuccessRouteImport } from './routes/billing.sms-credits.success'
@@ -249,6 +251,16 @@ const OffersTokenRoute = OffersTokenRouteImport.update({
   path: '/offers/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SupportIndexRoute = SupportIndexRouteImport.update({
+  id: '/support/',
+  path: '/support/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRequestIdRoute = SupportRequestIdRouteImport.update({
+  id: '/support/$requestId',
+  path: '/support/$requestId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BillingSmsCreditsIndexRoute = BillingSmsCreditsIndexRouteImport.update({
   id: '/sms-credits/',
   path: '/sms-credits/',
@@ -314,9 +326,11 @@ export interface FileRoutesByFullPath {
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/offers/$token': typeof OffersTokenRoute
+  '/support/$requestId': typeof SupportRequestIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/support/': typeof SupportIndexRoute
   '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -359,9 +373,11 @@ export interface FileRoutesByTo {
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/offers/$token': typeof OffersTokenRoute
+  '/support/$requestId': typeof SupportRequestIdRoute
   '/billing': typeof BillingIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/invoices': typeof InvoicesIndexRoute
+  '/support': typeof SupportIndexRoute
   '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -406,9 +422,11 @@ export interface FileRoutesById {
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/offers/$token': typeof OffersTokenRoute
+  '/support/$requestId': typeof SupportRequestIdRoute
   '/billing/': typeof BillingIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/support/': typeof SupportIndexRoute
   '/billing/sms-credits/cancel': typeof BillingSmsCreditsCancelRoute
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
@@ -454,9 +472,11 @@ export interface FileRouteTypes {
     | '/clients/import'
     | '/invoices/$invoiceId'
     | '/offers/$token'
+    | '/support/$requestId'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
+    | '/support/'
     | '/billing/sms-credits/cancel'
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
@@ -499,9 +519,11 @@ export interface FileRouteTypes {
     | '/clients/import'
     | '/invoices/$invoiceId'
     | '/offers/$token'
+    | '/support/$requestId'
     | '/billing'
     | '/clients'
     | '/invoices'
+    | '/support'
     | '/billing/sms-credits/cancel'
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
@@ -545,9 +567,11 @@ export interface FileRouteTypes {
     | '/clients/import'
     | '/invoices/$invoiceId'
     | '/offers/$token'
+    | '/support/$requestId'
     | '/billing/'
     | '/clients/'
     | '/invoices/'
+    | '/support/'
     | '/billing/sms-credits/cancel'
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
@@ -589,8 +613,10 @@ export interface RootRouteChildren {
   ClientsImportRoute: typeof ClientsImportRoute
   InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
   OffersTokenRoute: typeof OffersTokenRoute
+  SupportRequestIdRoute: typeof SupportRequestIdRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
+  SupportIndexRoute: typeof SupportIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -868,6 +894,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OffersTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/support/': {
+      id: '/support/'
+      path: '/support'
+      fullPath: '/support/'
+      preLoaderRoute: typeof SupportIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support/$requestId': {
+      id: '/support/$requestId'
+      path: '/support/$requestId'
+      fullPath: '/support/$requestId'
+      preLoaderRoute: typeof SupportRequestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/billing/sms-credits/': {
       id: '/billing/sms-credits/'
       path: '/sms-credits'
@@ -976,8 +1016,10 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsImportRoute: ClientsImportRoute,
   InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
   OffersTokenRoute: OffersTokenRoute,
+  SupportRequestIdRoute: SupportRequestIdRoute,
   ClientsIndexRoute: ClientsIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
+  SupportIndexRoute: SupportIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

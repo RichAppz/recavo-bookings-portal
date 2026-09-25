@@ -54,7 +54,6 @@ import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
-import { ContactSupportDialog } from "@/components/ContactSupportDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner, TrialPill } from "@/components/BillingBanner";
@@ -235,7 +234,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // null = closed; an object (possibly empty) = open with those fields prefilled.
   const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [addBusinessOpen, setAddBusinessOpen] = useState(false);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [quick, setQuick] = useState<QuickAction>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [setupOpenRequest, setSetupOpenRequest] = useState(0);
@@ -579,8 +577,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
               </DropdownMenuItem>
               {tenant.businessId ? (
-                <DropdownMenuItem onClick={() => setSupportOpen(true)}>
-                  <LifeBuoy className="size-4" /> Contact support
+                <DropdownMenuItem asChild>
+                  <Link to="/support">
+                    <LifeBuoy className="size-4" /> Contact support
+                  </Link>
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
@@ -753,7 +753,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         defaults={waitlistDefaults ?? undefined}
       />
       <AddBusinessDialog open={addBusinessOpen} onOpenChange={setAddBusinessOpen} />
-      <ContactSupportDialog open={supportOpen} onOpenChange={setSupportOpen} />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} />
       <DemoTour open={tourOpen} onOpenChange={setTourOpen} />
       <OnboardingChecklist openRequest={setupOpenRequest} onOpenTour={() => setTourOpen(true)} />

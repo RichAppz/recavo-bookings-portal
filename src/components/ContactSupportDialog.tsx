@@ -20,22 +20,26 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SUPPORT_CATEGORIES, useCreateSupportRequest } from "@/lib/api/support";
-import type { SupportRequestCategory } from "@/lib/api/types";
+import type { SupportRequest, SupportRequestCategory } from "@/lib/api/types";
 
 const SUBJECT_MAX = 200;
 const BODY_MAX = 5000;
 
 /**
- * "Contact support" from the account menu. Posts to the business's support-requests
+ * "New request" on the Support page. Posts to the business's support-requests
  * endpoint so the message shows up as a ticket in the RECAVO internal console,
- * tagged with who raised it and which business they were working in.
+ * tagged with who raised it and which business they were working in. Replies come
+ * back as a thread on /support/$id and by email.
  */
 export function ContactSupportDialog({
   open,
   onOpenChange,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called with the new request after a successful send (the page opens the thread). */
+  onCreated?: (request: SupportRequest) => void;
 }) {
   const [category, setCategory] = useState<SupportRequestCategory>("question");
   const [subject, setSubject] = useState("");
@@ -71,8 +75,8 @@ export function ContactSupportDialog({
         <DialogHeader>
           <DialogTitle>Contact support</DialogTitle>
           <DialogDescription>
-            Tell us what you need and we'll get back to you by email. We can see which business
-            you're writing from, so there's no need to include that.
+            Tell us what you need. We'll reply here and by email. We can see which business you're
+            writing from, so there's no need to include that.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -83,11 +87,12 @@ export function ContactSupportDialog({
             create.mutate(
               { category, subject: subject.trim(), body: body.trim() },
               {
-                onSuccess: () => {
+                onSuccess: (request) => {
                   toast.success("Message sent", {
-                    description: "We've got it and will reply by email.",
+                    description: "We've got it. You'll see our reply here and by email.",
                   });
                   close();
+                  onCreated?.(request);
                 },
               },
             );
