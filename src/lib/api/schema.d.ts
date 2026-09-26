@@ -21748,7 +21748,7 @@ export interface paths {
                         /** @description Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change). */
                         priceMinor?: number | null;
                         /**
-                         * @description Confirmed bookings only; to or from `credit` is not allowed.
+                         * @description Confirmed bookings, or a pay-by-bank booking still `awaiting_payment` with nothing received — switching that one to `none` / `pay_later` confirms it on the spot (the customer no longer has to transfer anything to secure it) and, with `notify`, sends the confirmation or payment request for the new method via `booking.confirmed`. To or from `credit` is not allowed; other unconfirmed states answer 409.
                          * @enum {string}
                          */
                         paymentMethod?: "none" | "bank_transfer" | "pay_later";

@@ -191,7 +191,13 @@ export function EditBookingDialog({
   const credit = booking.paymentMethod === "credit";
   // Once money has changed hands the booking belongs to whoever paid (the API 409s).
   const clientLocked = credit || paidMinor > 0;
-  const paymentEditable = booking.status === "confirmed" && !credit;
+  // A pay-by-bank booking still waiting for the money can be moved to another way of
+  // paying — the API confirms it on the spot, nothing recorded as paid.
+  const bankPending =
+    booking.status === "awaiting_payment" &&
+    booking.paymentMethod === "bank_transfer" &&
+    paidMinor === 0;
+  const paymentEditable = (booking.status === "confirmed" || bankPending) && !credit;
   // The job's length is its line items, not start → end: a 3-day job that skips a
   // weekend is 3 days, and the API lays it over working days again after an edit.
   const currentMinutes = bookingJobMinutes(booking);
@@ -239,6 +245,7 @@ export function EditBookingDialog({
   const [paymentMethod, setPaymentMethod] = useState<Booking["paymentMethod"]>(
     booking.paymentMethod,
   );
+  const leavesBankPending = bankPending && paymentMethod !== "bank_transfer";
   const [notes, setNotes] = useState(booking.notesInternal ?? "");
   // Automotive only: the run home/to the station once the car has been dropped off.
   const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
@@ -591,6 +598,9 @@ export function EditBookingDialog({
         : notifyChannels[0] === "sms"
           ? "text"
           : "email";
+    if (leavesBankPending) {
+      return `${selectedCustomer ? customerDisplayName(selectedCustomer) : "The client"} gets a fresh ${paymentMethod === "none" ? "payment request" : "confirmation"} by ${by} for the new way of paying — replacing the “transfer to confirm” message.`;
+    }
     return `${selectedCustomer ? customerDisplayName(selectedCustomer) : "The client"} gets the booking confirmation again by ${by}, with the new details.`;
   })();
 
@@ -1197,7 +1207,18 @@ export function EditBookingDialog({
                   </div>
                 </div>
               )}
-              {paymentEditable && paymentMethod !== booking.paymentMethod ? (
+              {leavesBankPending ? (
+                <p className="text-xs text-muted-foreground">
+                  The booking is confirmed straight away — no bank transfer needed to secure it.{" "}
+                  {paymentMethod === "pay_later"
+                    ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                      ? `The ${formatMoney(booking.depositMinor, currency)} deposit is requested; the balance is taken when the job is done.`
+                      : "Take payment when the job is done."
+                    : "The client is sent a payment request for the balance."}{" "}
+                  Tick “Send the client the updated details” below so they know not to transfer
+                  anything.
+                </p>
+              ) : paymentEditable && paymentMethod !== booking.paymentMethod ? (
                 <p className="text-xs text-muted-foreground">
                   {paymentMethod === "pay_later"
                     ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor

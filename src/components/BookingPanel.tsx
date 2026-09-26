@@ -1279,18 +1279,27 @@ export function BookingPanel({
                         account, then mark it received.
                         {settlement.depositMinor != null
                           ? ` The remaining ${formatMoney(settlement.priceMinor - settlement.depositMinor, booking.currency)} is collected later.`
-                          : ""}
+                          : ""}{" "}
+                        Chose bank transfer by mistake, or paying on the day instead? Change how
+                        it's paid and the booking confirms straight away.
                       </p>
                       {bankPending ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={markReceived.isPending}
-                          onClick={() => setConfirmReceived(true)}
-                        >
-                          <Landmark className="size-4" />
-                          Mark received
-                        </Button>
+                        <div className="flex shrink-0 flex-col gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={markReceived.isPending}
+                            onClick={() => setConfirmReceived(true)}
+                          >
+                            <Landmark className="size-4" />
+                            Mark received
+                          </Button>
+                          {!isFinal ? (
+                            <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
+                              Change how it's paid
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   ) : settlement ? (

@@ -41458,7 +41458,7 @@
                       "bank_transfer",
                       "pay_later"
                     ],
-                    "description": "Confirmed bookings only; to or from `credit` is not allowed."
+                    "description": "Confirmed bookings, or a pay-by-bank booking still `awaiting_payment` with nothing received — switching that one to `none` / `pay_later` confirms it on the spot (the customer no longer has to transfer anything to secure it) and, with `notify`, sends the confirmation or payment request for the new method via `booking.confirmed`. To or from `credit` is not allowed; other unconfirmed states answer 409."
                   },
                   "notesInternal": {
                     "type": [
