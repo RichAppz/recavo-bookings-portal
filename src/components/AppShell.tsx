@@ -27,6 +27,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sparkles,
   Users,
   UserRound,
   X,
@@ -60,6 +61,7 @@ import { BillingBanner, TrialPill } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
+import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoBusinessInApp } from "@/components/NoBusinessInApp";
@@ -286,13 +288,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         !isHiddenByBusiness(item.to),
     ),
   }));
-  const searchablePages: SearchablePage[] = visibleNav.flatMap((group) =>
-    group.items.map((item) => ({
-      to: item.to,
-      label: navLabel(item.to, item.label, tenant.terminology),
-      icon: item.icon,
-    })),
-  );
+  const searchablePages: SearchablePage[] = [
+    ...visibleNav.flatMap((group) =>
+      group.items.map((item) => ({
+        to: item.to,
+        label: navLabel(item.to, item.label, tenant.terminology),
+        icon: item.icon,
+      })),
+    ),
+    { to: "/whats-new", label: "What's new", icon: Sparkles },
+  ];
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
   // Adopt guest purchases before asking what this account owns, or someone who
@@ -491,6 +496,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }}
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
+          <WhatsNewNavLink onClick={() => setMobileNav(false)} />
           {/* Help centre is hidden until it's hooked up to real help content. The
               demo tour it opened is still reachable from the setup checklist. */}
           {SHOW_HELP_CENTRE ? (
