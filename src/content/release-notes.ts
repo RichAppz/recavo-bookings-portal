@@ -6,6 +6,27 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-09-27",
+    title: "Overview in your own words, and only the cards you want",
+    items: [
+      {
+        kind: "improved",
+        text: "The Overview now talks your trade: automotive businesses see jobs, completed work and how full the diary is, rather than sessions, attendance and seats.",
+        where: "Overview",
+      },
+      {
+        kind: "new",
+        text: "Hide any card you never look at with the eye icon in its corner, and bring it back from the eye menu next to the date range. Your choice is remembered on this device.",
+        where: "Overview",
+      },
+      {
+        kind: "fixed",
+        text: "The text-credits alert now says “run out” at zero instead of “running low”, and is cleared automatically the moment you buy more.",
+        where: "Notifications",
+      },
+    ],
+  },
+  {
     date: "2026-09-26",
     title: "Works offline, change how a booking is paid, find a client's jobs faster",
     items: [

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 
@@ -177,6 +177,7 @@ export function SectionCard({
   title,
   description,
   action,
+  onHide,
   children,
   className,
   bodyClassName,
@@ -184,6 +185,8 @@ export function SectionCard({
   title?: string;
   description?: string;
   action?: ReactNode;
+  /** When set, an eye icon lets the person hide this card (the page decides where it comes back). */
+  onHide?: () => void;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -198,7 +201,22 @@ export function SectionCard({
               <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
             ) : null}
           </div>
-          {action}
+          {action || onHide ? (
+            <div className="flex items-center gap-1">
+              {action}
+              {onHide ? (
+                <button
+                  type="button"
+                  onClick={onHide}
+                  aria-label={`Hide ${title}`}
+                  title="Hide this card"
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <EyeOff className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </header>
       ) : null}
       <div className={cn("min-w-0 p-4 sm:p-5", bodyClassName)}>{children}</div>
