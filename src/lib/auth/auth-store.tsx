@@ -28,6 +28,8 @@ import {
 } from "@/lib/auth/pending-profile";
 import { resetIap } from "@/lib/iap";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import { clearPersistedQueries } from "@/lib/offline/persist";
+import { forgetMe, recallMe, rememberMe } from "@/lib/auth/last-known-me";
 import {
   isNativeApp,
   isNativeIOS,
@@ -524,6 +526,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(me);
         setStatus("authenticated");
         loadedForUserIdRef.current = userId;
+        if (userId) rememberMe(userId, me);
         authLog("bootstrap complete → authenticated", { userId });
         void refreshMfaStatus();
         void queryClient.invalidateQueries({ queryKey: queryKeys.me() });
@@ -537,6 +540,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setMfaEnrolled(false);
           setMfaStatusReady(true);
           setStatus("unauthenticated");
+          return;
+        }
+        // No network but a local session and a profile from last time: open
+        // offline on the saved data. The next successful request (Supabase's
+        // TOKEN_REFRESHED, or the retry below) re-runs this bootstrap properly.
+        const remembered = userId ? recallMe(userId) : null;
+        if (remembered && err instanceof ApiError && err.status === 0) {
+          authLog("bootstrap: /me unreachable → authenticated from last-known profile", {
+            userId,
+          });
+          setUser(remembered);
+          setStatus("authenticated");
+          loadedForUserIdRef.current = null; // so the next session event re-confirms
+          setMfaStatusReady(true);
           return;
         }
         authLog("bootstrap: /me failed (network/timeout) → unauthenticated", err);
@@ -1002,6 +1019,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeRecoveryFlag(false);
     setPasswordRecovery(false);
     queryClient.clear();
+    void clearPersistedQueries();
+    forgetMe();
     // Detach the store SDK from the business so the next sign-in cannot see its receipts.
     void resetIap();
 

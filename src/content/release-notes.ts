@@ -7,8 +7,22 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-09-26",
-    title: "Change how a booking is paid, and find a client's jobs faster",
+    title: "Works offline, change how a booking is paid, find a client's jobs faster",
     items: [
+      {
+        kind: "new",
+        text: "No signal? The app still opens. Every page you've visited, plus today's and tomorrow's jobs with their clients, vehicles and payments, are kept on your phone and shown from the saved copy.",
+        where: "Everywhere — look for the “Offline — showing saved data” pill",
+      },
+      {
+        kind: "new",
+        text: "Mark a job done or a no-show, record cash, and confirm a bank transfer without signal. They're saved on the device and sent the moment you're back online; the booking shows “Waiting for signal” until then.",
+        where: "Bookings → open a job",
+      },
+      {
+        kind: "improved",
+        text: "When a new version ships you get a “Reload” prompt instead of a half-updated app.",
+      },
       {
         kind: "new",
         text: "Picked bank transfer by mistake, or the client will pay on the day? Open the booking and change how it's paid — it confirms straight away and the client gets a fresh confirmation instead of the “transfer to confirm” text.",

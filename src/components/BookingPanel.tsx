@@ -6,6 +6,7 @@ import {
   CarFront,
   Pencil,
   CheckCircle2,
+  CloudOff,
   ChevronRight,
   CreditCard,
   Landmark,
@@ -86,8 +87,6 @@ import {
   useDeleteBooking,
   useLinkedRecord,
   useLocationsList,
-  useMarkBankTransferReceived,
-  useRecordBookingPayment,
   useResendBookingMessage,
   useSendBookingReminder,
   useSendPaymentReminder,
@@ -101,6 +100,7 @@ import {
   type RecordPaymentMethod,
   type ResendChannel,
 } from "@/lib/api/hooks";
+import { toastQueued, useBookingQueued, useOutbox } from "@/lib/offline/outbox";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import type { BookingConflict } from "@/lib/api/errors";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
@@ -215,8 +215,9 @@ export function BookingPanel({
   const attendanceAction = useBookingAction("attendance");
   const takePayment = useTakeBookingPayment();
   const syncPayment = useSyncBookingPayment();
-  const markReceived = useMarkBankTransferReceived();
-  const recordPayment = useRecordBookingPayment();
+  const outbox = useOutbox();
+  const queuedChange = useBookingQueued(bookingId ?? undefined);
+  const [busy, setBusy] = useState<null | "received" | "payment">(null);
   const resend = useResendBookingMessage();
   const paymentReminder = useSendPaymentReminder();
   const bookingReminder = useSendBookingReminder();
@@ -594,10 +595,43 @@ export function BookingPanel({
     ? Date.now() < new Date(cancelDeadlineIso).getTime()
     : true;
 
+  /** Query keys the on-the-job outbox actions refresh once the API has them. */
+  const bookingKeys = (id: string) => [
+    ["biz", businessId, "bookings"],
+    queryKeys.booking(businessId, id),
+    queryKeys.bookingHistory(businessId, id),
+    queryKeys.invoicesAll(businessId),
+  ];
+
   const run = async (action: typeof confirmAction, body?: Record<string, unknown>) => {
     if (!booking) return;
     try {
-      await action.mutateAsync({ bookingId: booking.id, ifMatch: booking.version, body });
+      if (action === attendanceAction) {
+        // Attendance works without signal: queued on the device and sent later.
+        const attended = body?.attended === true;
+        const outcome = await outbox({
+          label: attended
+            ? `Marked ${customerName}'s job done`
+            : `Marked ${customerName} as a no-show`,
+          path: `/api/v1/businesses/${businessId}/bookings/${booking.id}/attendance`,
+          body: body ?? {},
+          ifMatch: booking.version,
+          invalidate: bookingKeys(booking.id),
+          booking: {
+            businessId,
+            bookingId: booking.id,
+            patch: attended
+              ? { attendanceStatus: "attended", status: "completed" }
+              : { attendanceStatus: "no_show", status: "no_show" },
+          },
+        });
+        if (outcome.queued) {
+          toastQueued(attended ? "Job marked done" : "No-show recorded");
+          return;
+        }
+      } else {
+        await action.mutateAsync({ bookingId: booking.id, ifMatch: booking.version, body });
+      }
       // Marking attended completes the job, and the outbox worker may then issue
       // an invoice a second or two later. It isn't in the attendance response, so
       // poll the job's invoices a couple of times to surface it (ADR 0019 §7).
@@ -618,8 +652,20 @@ export function BookingPanel({
 
   const submitMarkReceived = async () => {
     if (!booking) return;
+    setBusy("received");
     try {
-      await markReceived.mutateAsync({ bookingId: booking.id });
+      const outcome = await outbox({
+        label: `Bank transfer received for ${customerName}`,
+        path: `/api/v1/businesses/${businessId}/bookings/${booking.id}/bank-transfer-received`,
+        body: {},
+        invalidate: bookingKeys(booking.id),
+        booking: { businessId, bookingId: booking.id, patch: { status: "confirmed" } },
+      });
+      if (outcome.queued) {
+        toastQueued("Money received — booking confirmed");
+        setConfirmReceived(false);
+        return;
+      }
       toast.success(
         settlement?.depositMinor != null
           ? "Deposit received — booking confirmed"
@@ -637,6 +683,8 @@ export function BookingPanel({
         return;
       }
       toastApiError(err);
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -824,6 +872,14 @@ export function BookingPanel({
                 {/* Only once marked: an "Unknown" pill before then just restates the
                     untouched attendance row in the footer. */}
                 {attendanceMarked ? <StatusBadge status={booking.attendanceStatus} /> : null}
+                {queuedChange ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground"
+                    title="Saved on this device; sent to RECAVO as soon as you're back online"
+                  >
+                    <CloudOff className="size-3" aria-hidden /> Waiting for signal
+                  </span>
+                ) : null}
                 {/* Staff squeezed this in beside an all-day job (or booked the all-day
                     job over timed work) — the calendar shows both on the same day. */}
                 {booking.dropIn ? (
@@ -1288,7 +1344,7 @@ export function BookingPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={markReceived.isPending}
+                            disabled={busy === "received"}
                             onClick={() => setConfirmReceived(true)}
                           >
                             <Landmark className="size-4" />
@@ -1468,10 +1524,7 @@ export function BookingPanel({
                   </div>
                 ) : null}
                 {bankPending ? (
-                  <Button
-                    disabled={markReceived.isPending}
-                    onClick={() => setConfirmReceived(true)}
-                  >
+                  <Button disabled={busy === "received"} onClick={() => setConfirmReceived(true)}>
                     <Landmark className="size-4" /> Mark bank transfer received
                   </Button>
                 ) : showConfirm ? (
@@ -1625,13 +1678,13 @@ export function BookingPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>Not yet</AlertDialogCancel>
             <AlertDialogAction
-              disabled={markReceived.isPending}
+              disabled={busy === "received"}
               onClick={(e) => {
                 e.preventDefault();
                 void submitMarkReceived();
               }}
             >
-              {markReceived.isPending ? "Confirming…" : "Money received"}
+              {busy === "received" ? "Confirming…" : "Money received"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1648,10 +1701,26 @@ export function BookingPanel({
           currency={booking.currency}
           outstandingMinor={settlement.outstandingMinor}
           depositOwedMinor={recordIntent === "deposit" ? depositOwedMinor : undefined}
-          pending={recordPayment.isPending}
+          pending={busy === "payment"}
           onSubmit={async (amountMinor, method) => {
+            setBusy("payment");
             try {
-              await recordPayment.mutateAsync({ bookingId: booking.id, amountMinor, method });
+              const outcome = await outbox({
+                label: `Recorded ${formatMoney(amountMinor, booking.currency)} from ${customerName}`,
+                path: `/api/v1/businesses/${businessId}/bookings/${booking.id}/record-payment`,
+                body: { amountMinor, method },
+                invalidate: bookingKeys(booking.id),
+                booking: {
+                  businessId,
+                  bookingId: booking.id,
+                  patch: { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
+                },
+              });
+              if (outcome.queued) {
+                toastQueued(`Recorded ${formatMoney(amountMinor, booking.currency)}`);
+                setRecordOpen(false);
+                return;
+              }
               toast.success(
                 amountMinor >= settlement.outstandingMinor
                   ? "Payment recorded — paid in full"
@@ -1670,6 +1739,8 @@ export function BookingPanel({
                 return;
               }
               toastApiError(err);
+            } finally {
+              setBusy(null);
             }
           }}
         />

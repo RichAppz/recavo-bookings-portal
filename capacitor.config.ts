@@ -60,6 +60,13 @@ const config: CapacitorConfig = {
     // round trip inside the app.
     allowNavigation: ["*.stripe.com"],
   },
+  ios: {
+    // Turns on App-Bound Domains (Info.plist → WKAppBoundDomains) so the WebView
+    // can run our service worker and open offline. Navigating to a domain outside
+    // that list fails outright; everything third-party already goes via the
+    // system browser sheet.
+    limitsNavigationsToAppBoundDomains: true,
+  },
 };
 
 export default config;

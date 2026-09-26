@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 import { TableGhost } from "@/components/ghost";
 import { api, ApiError, queryKeys } from "@/lib/api";
@@ -75,6 +75,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     () => (readStored(LOCATION_KEY) as string | "all") || "all",
   );
 
+  const restoring = useIsRestoring();
   const businessesQuery = useQuery({
     queryKey: queryKeys.myBusinesses(),
     enabled: status === "authenticated",
@@ -215,13 +216,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       setCurrentLocationId,
       configuration,
       switchBusiness,
+      // While the persisted cache is being read back from the device the queries
+      // are neither loading nor loaded — treat that as loading, or a cold start
+      // flashes "set up your first business" before the saved data lands.
       isLoading:
+        restoring ||
         businessesQuery.isLoading ||
         (!!activeBusinessId &&
           (businessQuery.isLoading || locationsQuery.isLoading || configurationQuery.isLoading)),
       terminology,
     }),
     [
+      restoring,
       businesses,
       activeBusinessId,
       businessQuery.data,

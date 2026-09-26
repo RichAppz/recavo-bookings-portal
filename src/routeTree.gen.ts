@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SlugRouteImport } from './routes/$slug'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AppShellRouteImport } from './routes/app-shell'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as BookingsRouteImport } from './routes/bookings'
@@ -70,6 +71,11 @@ const SlugRoute = SlugRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppShellRoute = AppShellRouteImport.update({
+  id: '/app-shell',
+  path: '/app-shell',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingRoute = BillingRouteImport.update({
@@ -299,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
   '/account': typeof AccountRoute
+  '/app-shell': typeof AppShellRoute
   '/billing': typeof BillingRouteWithChildren
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
@@ -348,6 +355,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
   '/account': typeof AccountRoute
+  '/app-shell': typeof AppShellRoute
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$slug': typeof SlugRoute
   '/account': typeof AccountRoute
+  '/app-shell': typeof AppShellRoute
   '/billing': typeof BillingRouteWithChildren
   '/book': typeof BookRoute
   '/bookings': typeof BookingsRoute
@@ -448,6 +457,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$slug'
     | '/account'
+    | '/app-shell'
     | '/billing'
     | '/book'
     | '/bookings'
@@ -497,6 +507,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$slug'
     | '/account'
+    | '/app-shell'
     | '/book'
     | '/bookings'
     | '/calendar'
@@ -545,6 +556,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$slug'
     | '/account'
+    | '/app-shell'
     | '/billing'
     | '/book'
     | '/bookings'
@@ -595,6 +607,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SlugRoute: typeof SlugRoute
   AccountRoute: typeof AccountRoute
+  AppShellRoute: typeof AppShellRoute
   BillingRoute: typeof BillingRouteWithChildren
   BookRoute: typeof BookRoute
   BookingsRoute: typeof BookingsRoute
@@ -653,6 +666,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app-shell': {
+      id: '/app-shell'
+      path: '/app-shell'
+      fullPath: '/app-shell'
+      preLoaderRoute: typeof AppShellRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing': {
@@ -1006,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SlugRoute: SlugRoute,
   AccountRoute: AccountRoute,
+  AppShellRoute: AppShellRoute,
   BillingRoute: BillingRouteWithChildren,
   BookRoute: BookRoute,
   BookingsRoute: BookingsRoute,

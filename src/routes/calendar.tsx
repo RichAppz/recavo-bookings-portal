@@ -12,6 +12,7 @@ import {
   Palette,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SavedCopyNotice } from "@/components/SavedCopyNotice";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { CalendarColoursDialog, PublicHolidaysSelect } from "@/components/CalendarColoursSetting";
@@ -911,6 +912,8 @@ function CalendarPage() {
           Couldn't load events for this range; bookings are still shown.
         </p>
       ) : null}
+
+      <SavedCopyNotice updatedAt={bookings.dataUpdatedAt} what="The calendar" />
 
       {bookings.isError ? (
         <div className="surface-card p-6 text-sm text-destructive">

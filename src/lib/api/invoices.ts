@@ -4,7 +4,13 @@
  * but follows the same conventions: business-scoped keys, idempotent writes,
  * problem+json toasts.
  */
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api, createIdempotentMutationFn, queryKeys, toastApiError } from "@/lib/api";
 import { useBusinessId, usePlanFeature, useSubscription } from "@/lib/api/hooks";
 import type { PortalBusinessSummary, SubscriptionAddon, SubscriptionView } from "@/lib/api/hooks";
@@ -105,12 +111,12 @@ export type InvoiceListFilters = {
   enabled?: boolean;
 };
 
-export function useInvoices(filters: InvoiceListFilters = {}) {
-  const businessId = useBusinessId();
-  const { enabled, ...query } = filters;
-  return useQuery({
+export function invoicesQueryOptions(
+  businessId: string,
+  query: Omit<InvoiceListFilters, "enabled">,
+) {
+  return queryOptions({
     queryKey: queryKeys.invoices(businessId, query),
-    enabled: Boolean(businessId) && enabled !== false,
     queryFn: async () => {
       const res = await api.get<{ invoices: Invoice[] }>(
         `/api/v1/businesses/${businessId}/invoices`,
@@ -118,6 +124,15 @@ export function useInvoices(filters: InvoiceListFilters = {}) {
       );
       return res.data.invoices;
     },
+  });
+}
+
+export function useInvoices(filters: InvoiceListFilters = {}) {
+  const businessId = useBusinessId();
+  const { enabled, ...query } = filters;
+  return useQuery({
+    ...invoicesQueryOptions(businessId, query),
+    enabled: Boolean(businessId) && enabled !== false,
   });
 }
 

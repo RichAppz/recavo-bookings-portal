@@ -34,6 +34,17 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- App-Bound Domains (iOS 14+): the only way WKWebView runs a service worker,
+	     which is what gives the app its offline mode (see src/sw.ts). Paired with
+	     limitsNavigationsToAppBoundDomains in capacitor.config.ts. Navigations to
+	     anything else fail, so Stripe and OAuth stay in the system browser sheet
+	     (src/lib/native.ts). Subdomains are covered; max 10 entries. -->
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>recavo.app</string>
+		<string>stripe.com</string>
+		<string>localhost</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- WKWebView presents UIImagePickerController (including Camera) for

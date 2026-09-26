@@ -62,6 +62,7 @@ import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
+import { OfflinePack } from "@/components/OfflinePack";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoBusinessInApp } from "@/components/NoBusinessInApp";
@@ -399,6 +400,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {tenant.businessId ? <OfflinePack /> : null}
       {mobileNav ? (
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"

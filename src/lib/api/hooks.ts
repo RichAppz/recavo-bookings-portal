@@ -5,6 +5,7 @@ import { useLiveConnected } from "@/lib/live/live-status";
 import { toast } from "sonner";
 import {
   keepPreviousData,
+  queryOptions,
   useMutation,
   useQueries,
   useQuery,
@@ -134,17 +135,21 @@ function unwrapOnboardingPayload(
 
 /* ---------------- Bookings ---------------- */
 
-export function useBookings(filters: {
+export type BookingsListFilters = {
   from: string;
   to: string;
   staffId?: string;
   status?: string;
   /** Server default is 50 and its ceiling is 200. Ranges wider than a few days need it raised. */
   limit?: number;
-  enabled?: boolean;
-}) {
-  const businessId = useBusinessId();
-  const locationId = useLocationFilter();
+};
+
+/** Key + fetcher for a bookings list; shared by `useBookings` and the offline prefetcher. */
+export function bookingsQueryOptions(
+  businessId: string,
+  locationId: string | undefined,
+  filters: BookingsListFilters,
+) {
   const query = {
     from: filters.from,
     to: filters.to,
@@ -153,10 +158,8 @@ export function useBookings(filters: {
     ...(filters.limit !== undefined ? { limit: filters.limit } : {}),
     ...(locationId ? { locationId } : {}),
   };
-
-  return useQuery({
+  return queryOptions({
     queryKey: queryKeys.bookings(businessId, query),
-    enabled: Boolean(businessId) && filters.enabled !== false,
     queryFn: async () => {
       const res = await api.get<{ bookings: Booking[]; nextCursor?: string | null }>(
         `/api/v1/businesses/${businessId}/bookings`,
@@ -167,17 +170,32 @@ export function useBookings(filters: {
   });
 }
 
-export function useBooking(bookingId: string | undefined) {
+export function useBookings(filters: BookingsListFilters & { enabled?: boolean }) {
   const businessId = useBusinessId();
+  const locationId = useLocationFilter();
   return useQuery({
-    queryKey: queryKeys.booking(businessId, bookingId ?? ""),
-    enabled: Boolean(businessId && bookingId),
+    ...bookingsQueryOptions(businessId, locationId, filters),
+    enabled: Boolean(businessId) && filters.enabled !== false,
+  });
+}
+
+export function bookingQueryOptions(businessId: string, bookingId: string) {
+  return queryOptions({
+    queryKey: queryKeys.booking(businessId, bookingId),
     queryFn: async () => {
       const res = await api.get<{ booking: Booking }>(
         `/api/v1/businesses/${businessId}/bookings/${bookingId}`,
       );
       return res.data.booking;
     },
+  });
+}
+
+export function useBooking(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    ...bookingQueryOptions(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
   });
 }
 
@@ -292,6 +310,29 @@ export function useCreateBookingHold() {
  * Staff events ("calendar blocks", RECA-531) overlapping the visible range. Read
  * alongside `useBookings` for the same window; the two never overlap server-side.
  */
+export function calendarBlocksQueryOptions(
+  businessId: string,
+  locationId: string | undefined,
+  filters: { from: string; to: string; staffId?: string },
+) {
+  const query = {
+    from: filters.from,
+    to: filters.to,
+    ...(filters.staffId ? { staffId: filters.staffId } : {}),
+    ...(locationId ? { locationId } : {}),
+  };
+  return queryOptions({
+    queryKey: queryKeys.calendarBlocks(businessId, query),
+    queryFn: async () => {
+      const res = await api.get<{ blocks: CalendarBlock[] }>(
+        `/api/v1/businesses/${businessId}/calendar-blocks`,
+        { query },
+      );
+      return res.data.blocks;
+    },
+  });
+}
+
 export function useCalendarBlocks(filters: {
   from: string;
   to: string;
@@ -300,22 +341,9 @@ export function useCalendarBlocks(filters: {
 }) {
   const businessId = useBusinessId();
   const locationId = useLocationFilter();
-  const query = {
-    from: filters.from,
-    to: filters.to,
-    ...(filters.staffId ? { staffId: filters.staffId } : {}),
-    ...(locationId ? { locationId } : {}),
-  };
   return useQuery({
-    queryKey: queryKeys.calendarBlocks(businessId, query),
+    ...calendarBlocksQueryOptions(businessId, locationId, filters),
     enabled: Boolean(businessId) && filters.enabled !== false,
-    queryFn: async () => {
-      const res = await api.get<{ blocks: CalendarBlock[] }>(
-        `/api/v1/businesses/${businessId}/calendar-blocks`,
-        { query },
-      );
-      return res.data.blocks;
-    },
   });
 }
 
@@ -734,11 +762,9 @@ function isStaleVersionConflict(err: ApiError): boolean {
   return err.isConflict && /changed by someone else/i.test(err.detail ?? "");
 }
 
-export function useBookingHistory(bookingId: string | undefined) {
-  const businessId = useBusinessId();
-  return useQuery({
-    queryKey: queryKeys.bookingHistory(businessId, bookingId ?? ""),
-    enabled: Boolean(businessId && bookingId),
+export function bookingHistoryQueryOptions(businessId: string, bookingId: string) {
+  return queryOptions({
+    queryKey: queryKeys.bookingHistory(businessId, bookingId),
     queryFn: async () => {
       const res = await api.get<{ history: BookingHistoryEntry[] }>(
         `/api/v1/businesses/${businessId}/bookings/${bookingId}/history`,
@@ -748,17 +774,31 @@ export function useBookingHistory(bookingId: string | undefined) {
   });
 }
 
-export function useBookingPayments(bookingId: string | undefined) {
+export function useBookingHistory(bookingId: string | undefined) {
   const businessId = useBusinessId();
   return useQuery({
-    queryKey: queryKeys.bookingPayments(businessId, bookingId ?? ""),
+    ...bookingHistoryQueryOptions(businessId, bookingId ?? ""),
     enabled: Boolean(businessId && bookingId),
+  });
+}
+
+export function bookingPaymentsQueryOptions(businessId: string, bookingId: string) {
+  return queryOptions({
+    queryKey: queryKeys.bookingPayments(businessId, bookingId),
     queryFn: async () => {
       const res = await api.get<{ payments: Payment[] }>(
         `/api/v1/businesses/${businessId}/bookings/${bookingId}/payments`,
       );
       return res.data.payments;
     },
+  });
+}
+
+export function useBookingPayments(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    ...bookingPaymentsQueryOptions(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
   });
 }
 
@@ -1750,17 +1790,23 @@ export function useCustomerCounts() {
   });
 }
 
-export function useCustomer(customerId: string | undefined) {
-  const businessId = useBusinessId();
-  return useQuery({
-    queryKey: queryKeys.customer(businessId, customerId ?? ""),
-    enabled: Boolean(businessId && customerId),
+export function customerQueryOptions(businessId: string, customerId: string) {
+  return queryOptions({
+    queryKey: queryKeys.customer(businessId, customerId),
     queryFn: async () => {
       const res = await api.get<{ customer: Customer }>(
         `/api/v1/businesses/${businessId}/customers/${customerId}`,
       );
       return res.data.customer;
     },
+  });
+}
+
+export function useCustomer(customerId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    ...customerQueryOptions(businessId, customerId ?? ""),
+    enabled: Boolean(businessId && customerId),
   });
 }
 
@@ -2119,17 +2165,23 @@ export function useCreateCustomerLinkedRecord(customerId: string | undefined) {
 }
 
 /** Read one linked record by id (includes archived) — for history/detail. */
-export function useLinkedRecord(recordId: string | undefined) {
-  const businessId = useBusinessId();
-  return useQuery({
-    queryKey: queryKeys.linkedRecord(businessId, recordId ?? ""),
-    enabled: Boolean(businessId && recordId),
+export function linkedRecordQueryOptions(businessId: string, recordId: string) {
+  return queryOptions({
+    queryKey: queryKeys.linkedRecord(businessId, recordId),
     queryFn: async () => {
       const res = await api.get<{ record: LinkedRecord }>(
         `/api/v1/businesses/${businessId}/linked-records/${recordId}`,
       );
       return res.data.record;
     },
+  });
+}
+
+export function useLinkedRecord(recordId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    ...linkedRecordQueryOptions(businessId, recordId ?? ""),
+    enabled: Boolean(businessId && recordId),
   });
 }
 

@@ -3,6 +3,11 @@ import { getAccessToken } from "./token";
 import { buildQueryString, type QueryValue } from "./query-string";
 import { filenameFromDisposition } from "./content-disposition";
 import { CLIENT_PLATFORM_HEADER, clientPlatform } from "../native";
+import {
+  reportNetworkFailure,
+  reportNetworkSuccess,
+  setConnectivityProbeUrl,
+} from "../offline/network";
 
 export type { QueryValue };
 export { buildQueryString };
@@ -64,6 +69,12 @@ export function getApiBaseUrl(): string {
   }
   return raw.replace(/\/$/, "");
 }
+
+/** The API's health endpoint is the cheapest "are we back?" probe (see lib/offline/network). */
+export function apiHealthUrl(): string {
+  return `${getApiBaseUrl()}/health`;
+}
+if (typeof window !== "undefined") setConnectivityProbeUrl(apiHealthUrl());
 
 function resolvePath(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
@@ -204,18 +215,20 @@ async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promi
         err,
       );
     }
+    // A fetch that never got a response means no usable network, whatever the OS
+    // says: pause queries on their cached data rather than erroring every page.
+    if (!aborted) reportNetworkFailure();
     throw new ApiError({
       status: 0,
       code: aborted ? "TIMEOUT" : "NETWORK_ERROR",
-      title: aborted ? "Request timed out" : "Network error",
+      title: aborted ? "Request timed out" : "No connection",
       detail: aborted
         ? "The API took too long to respond (it may be waking up). Please try again."
-        : err instanceof Error
-          ? err.message
-          : "Unable to reach the server.",
+        : "This needs signal. Anything you were looking at is still here — try again when you're back online.",
     });
   }
 
+  reportNetworkSuccess();
   const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
   // A binary success is read as a Blob; anything else (JSON success, or any
   // failure — errors are always problem+json) goes through the text parser.

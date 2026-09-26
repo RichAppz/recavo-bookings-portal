@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { CalendarPlus, Search, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SavedCopyNotice } from "@/components/SavedCopyNotice";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { BookingPanel } from "@/components/BookingPanel";
 import { UpsellRequestsCard } from "@/components/UpsellRequestsCard";
@@ -236,6 +237,8 @@ function BookingsPage() {
           </Label>
         </div>
       </div>
+
+      <SavedCopyNotice updatedAt={bookings.dataUpdatedAt} what="This list" />
 
       <div className="surface-card overflow-hidden">
         {bookings.isLoading ? (

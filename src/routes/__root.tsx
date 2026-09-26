@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
 import { NativeReturnGate } from "@/components/NativeReturnGate";
+import { OfflineProvider } from "@/components/OfflineProvider";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
@@ -189,7 +190,7 @@ function RootComponent() {
   }, [queryClient]);
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <OfflineProvider queryClient={queryClient}>
       <ThemeProvider>
         <AuthProvider>
           <TenantProvider>
@@ -204,6 +205,6 @@ function RootComponent() {
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </OfflineProvider>
   );
 }
