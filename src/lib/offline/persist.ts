@@ -16,6 +16,8 @@ const KEY = "recavo.query-cache";
 export const CACHE_VERSION = "1";
 
 export const PERSIST_MAX_AGE_MS = OFFLINE_CACHE_MAX_AGE_MS;
+/** Longest the app will wait for the saved cache before starting without it. */
+const RESTORE_TIMEOUT_MS = 4000;
 
 function hasIndexedDb(): boolean {
   return typeof window !== "undefined" && typeof indexedDB !== "undefined";
@@ -33,7 +35,14 @@ export const queryPersister: Persister = {
   async restoreClient() {
     if (!hasIndexedDb()) return undefined;
     try {
-      return (await get<PersistedClient>(KEY)) ?? undefined;
+      // IndexedDB can stall indefinitely in some WebViews (WebKit after a
+      // background relaunch, a database mid-upgrade in another tab). The whole
+      // app waits on this restore, so give it a bounded budget and start empty
+      // rather than sit on the splash screen.
+      const timeout = new Promise<undefined>((resolve) =>
+        setTimeout(() => resolve(undefined), RESTORE_TIMEOUT_MS),
+      );
+      return (await Promise.race([get<PersistedClient>(KEY), timeout])) ?? undefined;
     } catch {
       return undefined;
     }
