@@ -1812,6 +1812,32 @@ export function useCustomerBookings(customerId: string | undefined) {
   });
 }
 
+/**
+ * Every booking for each of several clients, merged and de-duplicated — used by
+ * global search so a client's jobs surface alongside the client. Shares the cache
+ * with `useCustomerBookings`. Order is left to the caller.
+ */
+export function useCustomersBookings(customerIds: string[], enabled = true) {
+  const businessId = useBusinessId();
+  return useQueries({
+    queries: customerIds.map((customerId) => ({
+      queryKey: [...queryKeys.customer(businessId, customerId), "bookings"] as const,
+      enabled: Boolean(businessId) && enabled,
+      queryFn: async () => {
+        const res = await api.get<{ bookings: Booking[] }>(
+          `/api/v1/businesses/${businessId}/customers/${customerId}/bookings`,
+        );
+        return res.data.bookings;
+      },
+    })),
+    combine: (results) => {
+      const map = new Map<string, Booking>();
+      for (const r of results) for (const b of r.data ?? []) map.set(b.id, b);
+      return { bookings: [...map.values()], isFetching: results.some((r) => r.isFetching) };
+    },
+  });
+}
+
 export function useCreateCustomer() {
   const businessId = useBusinessId();
   const qc = useQueryClient();

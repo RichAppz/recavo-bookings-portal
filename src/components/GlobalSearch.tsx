@@ -12,7 +12,13 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { PersonAvatar } from "@/components/ui-bits";
-import { useBookings, useCustomers, useLinkedRecordsInfinite, usePackages } from "@/lib/api/hooks";
+import {
+  useBookings,
+  useCustomers,
+  useCustomersBookings,
+  useLinkedRecordsInfinite,
+  usePackages,
+} from "@/lib/api/hooks";
 import { customerDisplayName, type Booking, type LinkedRecordWithOwner } from "@/lib/api/types";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -29,6 +35,8 @@ const MAX_PER_GROUP = 5;
 /** Bookings are matched client-side, so keep the window to what people actually look for. */
 const BOOKINGS_LOOKBACK_DAYS = 30;
 const BOOKINGS_LOOKAHEAD_DAYS = 60;
+/** When the query finds clients, their jobs (any date) are pulled in too — for this many clients. */
+const CLIENT_JOBS_FOR = 3;
 
 /** Trigger + palette. Opens on click or ⌘K / Ctrl+K anywhere in the console. */
 export function GlobalSearch({ pages }: { pages: SearchablePage[] }) {
@@ -89,8 +97,8 @@ function SearchPalette({ pages, onClose }: { pages: SearchablePage[]; onClose: (
   const active = q.length > 1;
 
   const canClients = tenant.can(PERMISSIONS.CUSTOMER_READ);
-  const canBookings =
-    tenant.can(PERMISSIONS.BOOKING_READ_ALL) || tenant.can(PERMISSIONS.BOOKING_READ_OWN);
+  const canAllBookings = tenant.can(PERMISSIONS.BOOKING_READ_ALL);
+  const canBookings = canAllBookings || tenant.can(PERMISSIONS.BOOKING_READ_OWN);
   const canPackages =
     tenant.can(PERMISSIONS.PACKAGE_MANAGE) || tenant.can(PERMISSIONS.BUSINESS_READ);
   const hasRecords = pages.some((p) => p.to === "/vehicles");
@@ -122,6 +130,12 @@ function SearchPalette({ pages, onClose }: { pages: SearchablePage[]; onClose: (
     [pages, q],
   );
   const clientHits = active ? (customers.data?.items ?? []).slice(0, MAX_PER_GROUP) : [];
+  // A matched client's jobs belong in the results even when they fall outside the
+  // date window or the booking was made under a different attendee name.
+  const clientJobs = useCustomersBookings(
+    clientHits.slice(0, CLIENT_JOBS_FOR).map((c) => c.id),
+    active && canAllBookings,
+  );
   const recordHits = active ? records.items.slice(0, MAX_PER_GROUP) : [];
   const packageHits = useMemo(() => {
     if (!active || !canPackages) return [];
@@ -133,15 +147,22 @@ function SearchPalette({ pages, onClose }: { pages: SearchablePage[]; onClose: (
   }, [active, canPackages, packages.data, q]);
   const bookingHits = useMemo(() => {
     if (!active) return [];
-    return (bookings.data?.bookings ?? [])
-      .filter((b) => bookingMatches(b, q))
-      .sort((a, b) => b.start.localeCompare(a.start))
+    const byId = new Map<string, Booking>();
+    for (const b of clientJobs.bookings) byId.set(b.id, b);
+    for (const b of bookings.data?.bookings ?? []) if (bookingMatches(b, q)) byId.set(b.id, b);
+    const nowIso = new Date().toISOString();
+    return [...byId.values()]
+      .sort((a, b) => compareForSearch(a, b, nowIso))
       .slice(0, MAX_PER_GROUP);
-  }, [active, bookings.data, q]);
+  }, [active, bookings.data, clientJobs.bookings, q]);
 
   const searching =
     active &&
-    (customers.isFetching || records.isFetching || bookings.isFetching || packages.isFetching);
+    (customers.isFetching ||
+      records.isFetching ||
+      bookings.isFetching ||
+      clientJobs.isFetching ||
+      packages.isFetching);
   const nothing =
     active &&
     !searching &&
@@ -209,6 +230,28 @@ function SearchPalette({ pages, onClose }: { pages: SearchablePage[]; onClose: (
           </CommandGroup>
         ) : null}
 
+        {bookingHits.length > 0 ? (
+          <CommandGroup heading={bookingsHeading}>
+            {bookingHits.map((b) => (
+              <CommandItem
+                key={b.id}
+                value={`booking:${b.id}`}
+                onSelect={() => go("/bookings", { search: { booking: b.id } })}
+              >
+                <CalendarDays className="text-muted-foreground" />
+                <span className="flex-1 truncate">
+                  {b.serviceSnapshot.name}
+                  {leadName(b) ? ` · ${leadName(b)}` : ""}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {b.reference} · {formatInTz(b.start, b.timezone || tz, { dateStyle: "medium" })}
+                  {statusNote(b) ? ` · ${statusNote(b)}` : ""}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
         {recordHits.length > 0 ? (
           <CommandGroup heading={recordsHeading}>
             {recordHits.map((r) => (
@@ -251,27 +294,6 @@ function SearchPalette({ pages, onClose }: { pages: SearchablePage[]; onClose: (
           </CommandGroup>
         ) : null}
 
-        {bookingHits.length > 0 ? (
-          <CommandGroup heading={bookingsHeading}>
-            {bookingHits.map((b) => (
-              <CommandItem
-                key={b.id}
-                value={`booking:${b.id}`}
-                onSelect={() => go("/bookings", { search: { booking: b.id } })}
-              >
-                <CalendarDays className="text-muted-foreground" />
-                <span className="flex-1 truncate">
-                  {b.serviceSnapshot.name}
-                  {leadName(b) ? ` · ${leadName(b)}` : ""}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {b.reference} · {formatInTz(b.start, b.timezone || tz, { dateStyle: "medium" })}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ) : null}
-
         {!active && pageHits.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
             <Users className="mx-auto mb-2 size-5" />
@@ -291,6 +313,43 @@ function bookingMatches(b: Booking, q: string): boolean {
   if (b.reference.toLowerCase().includes(q)) return true;
   if (b.serviceSnapshot.name.toLowerCase().includes(q)) return true;
   return (b.attendees ?? []).some((a) => a.name.toLowerCase().includes(q));
+}
+
+const DEAD_STATUSES = new Set<Booking["status"]>([
+  "cancelled_by_customer",
+  "cancelled_by_business",
+  "late_cancelled",
+  "expired",
+]);
+
+/** What someone searching a name wants first: their next job, then recent ones, then anything cancelled. */
+function compareForSearch(a: Booking, b: Booking, nowIso: string): number {
+  const rank = (x: Booking) => (DEAD_STATUSES.has(x.status) ? 2 : x.start >= nowIso ? 0 : 1);
+  const ra = rank(a);
+  const rb = rank(b);
+  if (ra !== rb) return ra - rb;
+  // Upcoming: soonest first. Past / cancelled: most recent first.
+  return ra === 0 ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start);
+}
+
+function statusNote(b: Booking): string {
+  switch (b.status) {
+    case "cancelled_by_customer":
+    case "cancelled_by_business":
+    case "late_cancelled":
+      return "cancelled";
+    case "expired":
+      return "expired";
+    case "no_show":
+      return "no-show";
+    case "awaiting_payment":
+      return "awaiting payment";
+    case "held":
+    case "draft":
+      return "not confirmed";
+    default:
+      return "";
+  }
 }
 
 /** Display label, else the first few scalar values (reg · make · model). */
