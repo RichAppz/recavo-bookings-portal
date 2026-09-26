@@ -7,7 +7,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { CloudOff, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useOnline } from "@/lib/offline/network";
-import { registerOutboxMutations, useOutboxCount } from "@/lib/offline/outbox";
+import {
+  reapplyQueuedPatches,
+  registerOutboxMutations,
+  useOutboxCount,
+} from "@/lib/offline/outbox";
 import {
   CACHE_VERSION,
   PERSIST_MAX_AGE_MS,
@@ -53,7 +57,13 @@ export function OfflineProvider({
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={persistOptions}
-      onSuccess={() => queryClient.resumePausedMutations()}
+      onSuccess={() => {
+        // Deliberately not returned: the provider awaits onSuccess before it
+        // clears `isRestoring`, and while offline a paused mutation never
+        // settles — the whole app would sit on skeletons until signal returned.
+        reapplyQueuedPatches(queryClient);
+        void queryClient.resumePausedMutations();
+      }}
     >
       {children}
       <ConnectivityStrip />

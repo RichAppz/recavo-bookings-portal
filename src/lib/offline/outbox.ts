@@ -63,11 +63,7 @@ export function registerOutboxMutations(qc: QueryClient): void {
       return res.data;
     },
     onMutate: (vars: OutboxVariables) => {
-      if (!vars.booking) return;
-      const { businessId, bookingId, patch } = vars.booking;
-      qc.setQueryData<Booking>(queryKeys.booking(businessId, bookingId), (old) =>
-        old ? { ...old, ...patch } : old,
-      );
+      if (vars.booking) applyBookingPatch(qc, vars.booking);
     },
     onSuccess: (_data: Result, vars: OutboxVariables) => {
       for (const key of vars.invalidate) void qc.invalidateQueries({ queryKey: key });
@@ -87,6 +83,53 @@ export function registerOutboxMutations(qc: QueryClient): void {
       if (!isNetworkError(err)) toastApiError(err);
     },
   });
+}
+
+type BookingsList = { bookings: Booking[] };
+
+function isBookingsList(data: unknown): data is BookingsList {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    Array.isArray((data as { bookings?: unknown }).bookings)
+  );
+}
+
+/**
+ * Reflects a queued change in the cached booking and in every cached bookings
+ * list that contains it, so the panel, the jobs list and the calendar all agree
+ * while the change waits for signal.
+ */
+function applyBookingPatch(
+  qc: QueryClient,
+  { businessId, bookingId, patch }: NonNullable<OutboxVariables["booking"]>,
+): void {
+  qc.setQueryData<Booking>(queryKeys.booking(businessId, bookingId), (old) =>
+    old ? { ...old, ...patch } : old,
+  );
+  qc.setQueriesData<unknown>(
+    { queryKey: ["biz", businessId, "bookings"], predicate: (q) => isBookingsList(q.state.data) },
+    (old: unknown) =>
+      isBookingsList(old)
+        ? {
+            ...old,
+            bookings: old.bookings.map((b) => (b.id === bookingId ? { ...b, ...patch } : b)),
+          }
+        : old,
+  );
+}
+
+/**
+ * After the cache is restored from disk, put the optimistic patches back for
+ * every change still waiting to send — `onMutate` only runs when a mutation is
+ * first fired, not when it is restored, and the list may have been written to
+ * disk before the patch landed.
+ */
+export function reapplyQueuedPatches(qc: QueryClient): void {
+  for (const m of qc.getMutationCache().findAll({ mutationKey: OUTBOX_KEY, status: "pending" })) {
+    const vars = m.state.variables as OutboxVariables | undefined;
+    if (m.state.isPaused && vars?.booking) applyBookingPatch(qc, vars.booking);
+  }
 }
 
 /** How many changes are waiting for signal (pending or paused outbox mutations). */

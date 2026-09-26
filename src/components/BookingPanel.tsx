@@ -100,6 +100,7 @@ import {
   type RecordPaymentMethod,
   type ResendChannel,
 } from "@/lib/api/hooks";
+import { useOnline } from "@/lib/offline/network";
 import { toastQueued, useBookingQueued, useOutbox } from "@/lib/offline/outbox";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import type { BookingConflict } from "@/lib/api/errors";
@@ -217,6 +218,7 @@ export function BookingPanel({
   const syncPayment = useSyncBookingPayment();
   const outbox = useOutbox();
   const queuedChange = useBookingQueued(bookingId ?? undefined);
+  const online = useOnline();
   const [busy, setBusy] = useState<null | "received" | "payment">(null);
   const resend = useResendBookingMessage();
   const paymentReminder = useSendPaymentReminder();
@@ -862,7 +864,20 @@ export function BookingPanel({
           </div>
         ) : !booking ? (
           <div className="flex-1 p-5">
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            {online ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <div className="flex items-start gap-3 rounded-xl border border-dashed p-4">
+                <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">This job isn't saved on this device</p>
+                  <p className="text-sm text-muted-foreground">
+                    Today's and tomorrow's jobs, plus anything you've opened recently, are kept for
+                    offline use. This one will load as soon as you're back online.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>
