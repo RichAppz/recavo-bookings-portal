@@ -173,6 +173,32 @@ export function configuredDepositMinor(
 }
 
 /**
+ * Everything a client has actually paid, net of refunds.
+ *
+ * Money against a booking is read from the booking, not from the payments table: a
+ * card payment rolls into `paidMinor` *and* leaves a payment row, but cash, a bank
+ * transfer marked received and a staff-recorded deposit only ever move `paidMinor`.
+ * Summing payment rows therefore reports £0 for a business that takes money in
+ * person. Payments with no booking — package purchases — exist only as rows, so they
+ * are added separately and cannot double-count.
+ *
+ * `paidMinor` is never reduced when money goes back out, so refunds come off the
+ * total once, from the payment rows that record them.
+ */
+export function customerLifetimeSpendMinor(
+  bookings: readonly { paidMinor?: number | null }[],
+  payments: readonly Pick<Payment, "bookingId" | "amountMinor" | "amountRefundedMinor" | "state">[],
+): number {
+  const settled = payments.filter((p) => isSettledPaymentState(p.state));
+  const takenOnBookings = bookings.reduce((sum, b) => sum + (b.paidMinor ?? 0), 0);
+  const takenElsewhere = settled
+    .filter((p) => p.bookingId == null)
+    .reduce((sum, p) => sum + p.amountMinor, 0);
+  const refunded = settled.reduce((sum, p) => sum + p.amountRefundedMinor, 0);
+  return Math.max(0, takenOnBookings + takenElsewhere - refunded);
+}
+
+/**
  * Staff "take payment separately" confirms the slot first (`paymentMethod: none`).
  * The client should still see that money is due until a payment settles.
  */

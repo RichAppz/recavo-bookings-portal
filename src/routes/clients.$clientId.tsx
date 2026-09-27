@@ -150,6 +150,7 @@ import {
   type LinkedRecordOwnership,
   type Notification,
 } from "@/lib/api/types";
+import { customerLifetimeSpendMinor } from "@/lib/booking-payment";
 import { PERMISSIONS } from "@/lib/permissions";
 import { formatInTz, formatMoney, isoDate, ukDate } from "@/lib/format";
 import { suggestedBookingDate } from "@/lib/waitlist";
@@ -254,9 +255,10 @@ function ClientProfile() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + e.balance.available, 0);
-  const lifetimeSpendMinor = (payments.payments ?? [])
-    .filter((p) => p.state === "succeeded" || p.state === "partially_refunded")
-    .reduce((sum, p) => sum + p.amountMinor - p.amountRefundedMinor, 0);
+  const lifetimeSpendMinor = customerLifetimeSpendMinor(
+    bookings.data ?? [],
+    payments.payments ?? [],
+  );
 
   const downloadDsar = async () => {
     const data = await dsarExport.mutateAsync();
@@ -496,7 +498,17 @@ function ClientProfile() {
               <TableGhost rows={5} />
             ) : (payments.payments ?? []).length === 0 ? (
               <div className="p-6">
-                <EmptyState title="No payments recorded" />
+                {/* This table is card payments — cash and bank transfers are recorded
+                    against the booking and never appear here, so don't claim there is
+                    no money when Lifetime spend says otherwise. */}
+                <EmptyState
+                  title="No card payments"
+                  description={
+                    lifetimeSpendMinor > 0
+                      ? "Money taken in person or by bank transfer is recorded on the booking, not here."
+                      : undefined
+                  }
+                />
               </div>
             ) : (
               <table className="w-full text-sm">

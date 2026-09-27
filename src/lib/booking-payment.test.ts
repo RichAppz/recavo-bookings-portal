@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   balanceDueLabel,
   bookingSettlement,
+  customerLifetimeSpendMinor,
   effectiveDepositMinor,
   paymentLabel,
   paymentTone,
@@ -25,6 +26,95 @@ describe("effectiveDepositMinor", () => {
     assert.equal(effectiveDepositMinor(5000, 0), null);
     assert.equal(effectiveDepositMinor(null, 15000), null);
     assert.equal(effectiveDepositMinor(undefined, 15000), null);
+  });
+});
+
+describe("customerLifetimeSpendMinor", () => {
+  type SpendPayment = Parameters<typeof customerLifetimeSpendMinor>[1][number];
+  const payment = (o: Partial<SpendPayment> = {}): SpendPayment => ({
+    bookingId: null,
+    amountMinor: 0,
+    amountRefundedMinor: 0,
+    state: "succeeded",
+    ...o,
+  });
+
+  it("counts money taken in person, which never leaves a payment row", () => {
+    // The whole bug: cash, a bank transfer marked received and a staff-recorded
+    // deposit only move the booking's paidMinor, so payment rows alone read as £0.
+    assert.equal(customerLifetimeSpendMinor([{ paidMinor: 5000 }, { paidMinor: 2500 }], []), 7500);
+  });
+
+  it("counts a card payment once, not twice", () => {
+    // A succeeded card payment rolls into paidMinor *and* leaves a row for the booking.
+    assert.equal(
+      customerLifetimeSpendMinor(
+        [{ paidMinor: 5000 }],
+        [payment({ bookingId: "bk_1", amountMinor: 5000 })],
+      ),
+      5000,
+    );
+  });
+
+  it("adds purchases with no booking, which exist only as payment rows", () => {
+    assert.equal(
+      customerLifetimeSpendMinor([{ paidMinor: 5000 }], [payment({ amountMinor: 9900 })]),
+      14900,
+    );
+  });
+
+  it("takes refunds off once, since paidMinor is never reduced", () => {
+    assert.equal(
+      customerLifetimeSpendMinor(
+        [{ paidMinor: 5000 }],
+        [
+          payment({
+            bookingId: "bk_1",
+            amountMinor: 5000,
+            amountRefundedMinor: 2000,
+            state: "partially_refunded",
+          }),
+        ],
+      ),
+      3000,
+    );
+    // A full refund of a package purchase leaves the client having spent nothing.
+    assert.equal(
+      customerLifetimeSpendMinor(
+        [],
+        [payment({ amountMinor: 9900, amountRefundedMinor: 9900, state: "refunded" })],
+      ),
+      0,
+    );
+  });
+
+  it("ignores payments that never settled, and never goes negative", () => {
+    assert.equal(
+      customerLifetimeSpendMinor(
+        [{ paidMinor: 0 }],
+        [payment({ amountMinor: 5000, state: "failed" }), payment({ state: "requires_action" })],
+      ),
+      0,
+    );
+    // A refund recorded against a booking whose money was later cleared elsewhere.
+    assert.equal(
+      customerLifetimeSpendMinor(
+        [{ paidMinor: 0 }],
+        [
+          payment({
+            bookingId: "bk_1",
+            amountMinor: 5000,
+            amountRefundedMinor: 5000,
+            state: "refunded",
+          }),
+        ],
+      ),
+      0,
+    );
+  });
+
+  it("treats a booking with no money as nothing, not a crash", () => {
+    assert.equal(customerLifetimeSpendMinor([{}, { paidMinor: null }], []), 0);
   });
 });
 
