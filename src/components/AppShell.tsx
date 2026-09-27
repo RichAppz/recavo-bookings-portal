@@ -10,6 +10,7 @@ import {
   Car,
   ChevronsUpDown,
   ClipboardList,
+  Clock,
   CreditCard,
   ExternalLink,
   FileText,
@@ -53,6 +54,7 @@ import { PersonAvatar } from "@/components/ui-bits";
 import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { EventModal } from "@/components/EventModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
@@ -153,6 +155,13 @@ const NAV: NavGroup[] = [
         icon: ClipboardList,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
       },
+      // Staff events share the diary with bookings, so they share its permissions.
+      {
+        to: "/events",
+        label: "Events",
+        icon: Clock,
+        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+      },
       // Clients who wanted a slot the diary couldn't give them; the badge is how
       // many are waiting.
       {
@@ -234,6 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   // null = closed; an object (possibly empty) = open with those fields prefilled.
   const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [addBusinessOpen, setAddBusinessOpen] = useState(false);
@@ -714,6 +724,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       Create group session
                     </DropdownMenuItem>
                   ) : null}
+                  <DropdownMenuItem onClick={() => setEventOpen(true)}>Add event</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setQuick("block")}>
                     Block availability
                   </DropdownMenuItem>
@@ -753,6 +764,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           setWaitlistDefaults({ ...picked, from: picked.date });
         }}
       />
+      <EventModal open={eventOpen} onOpenChange={setEventOpen} />
       <AddWaitlistDialog
         open={waitlistDefaults !== null}
         onOpenChange={(open) => {

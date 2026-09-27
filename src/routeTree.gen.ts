@@ -19,6 +19,7 @@ import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ConsumablesRouteImport } from './routes/consumables'
+import { Route as EventsRouteImport } from './routes/events'
 import { Route as FollowUpsRouteImport } from './routes/follow-ups'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
@@ -106,6 +107,11 @@ const ConnectRoute = ConnectRouteImport.update({
 const ConsumablesRoute = ConsumablesRouteImport.update({
   id: '/consumables',
   path: '/consumables',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FollowUpsRoute = FollowUpsRouteImport.update({
@@ -312,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
@@ -412,6 +420,7 @@ export interface FileRoutesById {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
@@ -464,6 +473,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/events'
     | '/follow-ups'
     | '/invite'
     | '/locations'
@@ -513,6 +523,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/events'
     | '/follow-ups'
     | '/invite'
     | '/locations'
@@ -563,6 +574,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/events'
     | '/follow-ups'
     | '/invite'
     | '/locations'
@@ -614,6 +626,7 @@ export interface RootRouteChildren {
   CalendarRoute: typeof CalendarRoute
   ConnectRoute: typeof ConnectRouteWithChildren
   ConsumablesRoute: typeof ConsumablesRoute
+  EventsRoute: typeof EventsRoute
   FollowUpsRoute: typeof FollowUpsRoute
   InviteRoute: typeof InviteRoute
   LocationsRoute: typeof LocationsRoute
@@ -715,6 +728,13 @@ declare module '@tanstack/react-router' {
       path: '/consumables'
       fullPath: '/consumables'
       preLoaderRoute: typeof ConsumablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/follow-ups': {
@@ -1033,6 +1053,7 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarRoute: CalendarRoute,
   ConnectRoute: ConnectRouteWithChildren,
   ConsumablesRoute: ConsumablesRoute,
+  EventsRoute: EventsRoute,
   FollowUpsRoute: FollowUpsRoute,
   InviteRoute: InviteRoute,
   LocationsRoute: LocationsRoute,
