@@ -3,11 +3,30 @@ import { describe, it } from "node:test";
 import {
   balanceDueLabel,
   bookingSettlement,
+  effectiveDepositMinor,
   paymentLabel,
   paymentTone,
 } from "./booking-payment.ts";
 
 const fmt = (minor: number) => `£${(minor / 100).toFixed(2)}`;
+
+describe("effectiveDepositMinor", () => {
+  it("keeps a deposit strictly between nothing and the total", () => {
+    assert.equal(effectiveDepositMinor(5000, 15000), 5000);
+    assert.equal(effectiveDepositMinor(14999, 15000), 14999);
+  });
+
+  it("treats anything the total can't sit above as no deposit", () => {
+    // The API drops these on the way in, so the form must not offer them as a deposit.
+    assert.equal(effectiveDepositMinor(0, 15000), null);
+    assert.equal(effectiveDepositMinor(-500, 15000), null);
+    assert.equal(effectiveDepositMinor(15000, 15000), null);
+    assert.equal(effectiveDepositMinor(20000, 15000), null);
+    assert.equal(effectiveDepositMinor(5000, 0), null);
+    assert.equal(effectiveDepositMinor(null, 15000), null);
+    assert.equal(effectiveDepositMinor(undefined, 15000), null);
+  });
+});
 
 describe("bookingSettlement", () => {
   it("asks for the deposit first on a confirmed booking, then the balance", () => {

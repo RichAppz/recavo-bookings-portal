@@ -41321,7 +41321,7 @@
     "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
       "patch": {
         "summary": "Edit a booking",
-        "description": "Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.\n\nTime is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.\n\nMoney: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.\n\nEach edit appends a `kind: \"amended\"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.",
+        "description": "Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.\n\nTime is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.\n\nMoney: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). `depositMinor` sets or removes the deposit (omitted keeps it), and is dropped where a deposit cannot apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.\n\nEach edit appends a `kind: \"amended\"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.",
         "security": [
           {
             "bearerAuth": []
@@ -41450,6 +41450,14 @@
                     ],
                     "minimum": 0,
                     "description": "Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change)."
+                  },
+                  "depositMinor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "description": "Deposit securing this booking: a number sets it, `null` removes it, omitted keeps what it has. For correcting a deposit discovered after the job was written up (the client had already paid one). Clamped as on create — a deposit at or above the total, or on a credit-paid booking, becomes no deposit. Recording the money itself is POST …/record-payment."
                   },
                   "paymentMethod": {
                     "type": "string",

@@ -50,6 +50,7 @@ import { customerDisplayName } from "@/lib/api/types";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { paymentMethodLabel } from "@/lib/booking-changes";
 import { bookingJobMinutes } from "@/lib/booking-duration";
+import { effectiveDepositMinor } from "@/lib/booking-payment";
 import {
   clientLiftFromDraft,
   describeClientLift,
@@ -242,6 +243,11 @@ export function EditBookingDialog({
     originallyOverridden ? (booking.priceMinor / 100).toFixed(2) : null,
   );
   const [discount, setDiscount] = useState<Discount | null>(null);
+  // Deposit due up front (pounds, as typed); "" = no deposit. Editable after the fact
+  // because staff often only learn of a deposit once the job is already written up.
+  const [depositInput, setDepositInput] = useState(
+    booking.depositMinor != null ? (booking.depositMinor / 100).toFixed(2) : "",
+  );
   const [paymentMethod, setPaymentMethod] = useState<Booking["paymentMethod"]>(
     booking.paymentMethod,
   );
@@ -400,6 +406,34 @@ export function EditBookingDialog({
     return { priceMinor: effectiveTotalMinor };
   })();
 
+  // ---- Deposit ------------------------------------------------------------------
+  // Credit settles by entitlement, never money, and a deposit needs a total to sit
+  // under. Otherwise it can be set after the fact: a deposit is often only discovered
+  // once the job is already written up.
+  const depositApplies = !credit && effectiveTotalMinor > 0;
+  const typedDepositMinor: number | null = (() => {
+    if (depositInput.trim() === "") return null;
+    try {
+      return parseMoneyToMinor(depositInput);
+    } catch {
+      return null;
+    }
+  })();
+  const nextDepositMinor = depositApplies
+    ? effectiveDepositMinor(typedDepositMinor, effectiveTotalMinor)
+    : null;
+  // An amount the clamp would throw away is a mistake to point out, not to apply
+  // silently. A literal 0 is not: like the create form, it reads as "no deposit".
+  const depositInvalid =
+    depositApplies &&
+    depositInput.trim() !== "" &&
+    nextDepositMinor === null &&
+    typedDepositMinor !== 0;
+  const depositBody: { depositMinor?: number | null } =
+    !credit && nextDepositMinor !== (booking.depositMinor ?? null)
+      ? { depositMinor: nextDepositMinor }
+      : {};
+
   // ---- Duration hint -------------------------------------------------------------
   const newMinutes = picked.reduce((sum, p) => {
     const s = serviceById.get(p.serviceId);
@@ -483,6 +517,14 @@ export function EditBookingDialog({
       label: "Price",
       from: formatMoney(booking.priceMinor, currency),
       to: formatMoney(effectiveTotalMinor, currency),
+      clientVisible: true,
+    });
+  }
+  if (!credit && nextDepositMinor !== (booking.depositMinor ?? null)) {
+    changes.push({
+      label: "Deposit",
+      from: booking.depositMinor != null ? formatMoney(booking.depositMinor, currency) : "none",
+      to: nextDepositMinor != null ? formatMoney(nextDepositMinor, currency) : "none",
       clientVisible: true,
     });
   }
@@ -610,6 +652,7 @@ export function EditBookingDialog({
   if (recordRequired && nextRecordId === null && !quickAddPending)
     blockers.push(`Choose a ${recordTermLower}`);
   if (priceInvalid) blockers.push("Check the price");
+  if (depositInvalid) blockers.push("Check the deposit");
   if (whenInvalid)
     blockers.push(booking.allDay ? "The last day can't be before the first" : "Check the date");
   if (priceBelowPaid)
@@ -683,6 +726,7 @@ export function EditBookingDialog({
       ...(customerId !== booking.leadCustomerId ? { leadCustomerId: customerId } : {}),
       ...(recordId !== (booking.linkedRecordId ?? null) ? { linkedRecordId: recordId } : {}),
       ...priceBody,
+      ...depositBody,
       ...(paymentMethod !== booking.paymentMethod && paymentMethod !== "credit"
         ? { paymentMethod: paymentMethod as EditablePaymentMethod }
         : {}),
@@ -1230,6 +1274,42 @@ export function EditBookingDialog({
                 </p>
               ) : null}
             </div>
+
+            {depositApplies ? (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="edit-booking-deposit">Deposit to secure (£)</Label>
+                  {depositInput.trim() !== "" ? (
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline-offset-4 hover:underline"
+                      onClick={() => setDepositInput("")}
+                    >
+                      No deposit
+                    </button>
+                  ) : null}
+                </div>
+                <Input
+                  id="edit-booking-deposit"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={depositInput}
+                  onChange={(e) => setDepositInput(e.target.value)}
+                  aria-invalid={depositInvalid}
+                />
+                <p
+                  className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {depositInvalid
+                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, currency)}, or clear it for no deposit.`
+                    : nextDepositMinor === null
+                      ? `No deposit — the full ${formatMoney(effectiveTotalMinor, currency)} is due${paymentMethod === "pay_later" ? " after the job" : ""}.`
+                      : paidMinor >= nextDepositMinor
+                        ? `Already covered by the ${formatMoney(paidMinor, currency)} received — ${formatMoney(Math.max(0, effectiveTotalMinor - paidMinor), currency)} left to collect.`
+                        : `${formatMoney(nextDepositMinor, currency)} due up front, ${formatMoney(effectiveTotalMinor - nextDepositMinor, currency)} balance later. Already paid it? Save, then use “Deposit taken” on the booking to record the money.`}
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label htmlFor="edit-booking-notes">Internal notes</Label>
