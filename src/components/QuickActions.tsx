@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Layers, Package, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupGate } from "@/components/SetupGate";
-import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
+import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import type { ContactChannel } from "@/lib/api/types";
 import {
   Dialog,
   DialogContent,
@@ -32,17 +35,15 @@ import {
   useCreateBooking,
   useCreateCustomer,
   useCustomers,
-  SMS_FEATURE_KEY,
   useIssuePackagePurchase,
   useLocationsList,
   usePackages,
-  usePlanFeature,
   useSendMessage,
   useServices,
   useStaffList,
   useStartPackagePurchase,
 } from "@/lib/api/hooks";
-import { customerDisplayName } from "@/lib/api/types";
+import { customerDisplayName, type Customer } from "@/lib/api/types";
 import { formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -80,6 +81,8 @@ function Shell({
   submitLabel,
   disabled,
   gate,
+  dirty = false,
+  what,
 }: {
   open: boolean;
   onClose: () => void;
@@ -91,10 +94,31 @@ function Shell({
   disabled?: boolean;
   /** When set, the action can't be done yet — show this instead of the form. */
   gate?: React.ReactNode;
+  /** True once something has been typed: Esc / backdrop / Cancel then ask first. */
+  dirty?: boolean;
+  /** Noun for the discard prompt, e.g. "this client". */
+  what?: string;
 }) {
   const [saving, setSaving] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestClose = () => {
+    if (dirty && !saving && !gate) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  };
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && requestClose()}>
+      <DiscardChangesDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        what={what}
+        onDiscard={() => {
+          setConfirmDiscard(false);
+          onClose();
+        }}
+      />
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -113,7 +137,7 @@ function Shell({
           <>
             <div className="grid gap-4">{children}</div>
             <DialogFooter>
-              <Button variant="ghost" onClick={onClose}>
+              <Button variant="ghost" onClick={requestClose}>
                 Cancel
               </Button>
               <Button
@@ -145,7 +169,20 @@ function firstGate(
   return checks.find((c) => c.when)?.gate ?? null;
 }
 
-function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * The add-client drawer. Also opened over the top of the Add booking form via its
+ * "+" — pass `onCreated` there so the new client lands straight in the picker and
+ * the toast doesn't offer to navigate away from the half-filled booking.
+ */
+export function AddClientDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (customer: Customer) => void;
+}) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -153,14 +190,13 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
   const [address, setAddress] = useState<AddressFormState>(EMPTY_ADDRESS);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  // Default to SMS only when the plan can actually send it; otherwise a brand-new
-  // client would trip the upgrade prompt before anyone typed a name (RECA-527).
-  const smsEntitled = usePlanFeature(SMS_FEATURE_KEY);
-  const defaultChannel: ContactChannel = smsEntitled ? "sms" : "email";
+  // Default to SMS when a text would actually go out right now (Growth, or credits
+  // in hand); with an empty balance default to email so nothing silently falls back.
+  const smsCredits = useSmsCreditsSummary();
+  const defaultChannel: ContactChannel = smsCredits.canText ? "sms" : "email";
   const [preferredChannel, setPreferredChannel] = useState<ContactChannel>(defaultChannel);
   const [operationalNotifications, setOperationalNotifications] = useState(true);
   const createCustomer = useCreateCustomer();
-  const smsGate = useSmsChannelGate(setPreferredChannel);
 
   const reset = () => {
     setFirstName("");
@@ -183,6 +219,15 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
       title="Add client"
       description="Create a client record. They can be invited to the booking page later."
       submitLabel="Add client"
+      what="this client"
+      dirty={Boolean(
+        firstName.trim() ||
+        lastName.trim() ||
+        nickname.trim() ||
+        email.trim() ||
+        phone.trim() ||
+        Object.values(address).some((v) => String(v ?? "").trim()),
+      )}
       onSubmit={async () => {
         if (!firstName.trim()) {
           toast.error("A first name is required");
@@ -198,6 +243,7 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           preferredChannel,
           operationalNotifications,
         });
+        onCreated?.(customer);
         if (possibleDuplicates.length > 0) {
           const first = possibleDuplicates[0];
           toast.warning(
@@ -206,20 +252,27 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
             } already exist`,
             {
               description: `Did you mean ${customerDisplayName(first)}? Check you haven't created a duplicate.`,
-              action: {
-                label: "View match",
-                onClick: () =>
-                  void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
-              },
+              action: onCreated
+                ? undefined
+                : {
+                    label: "View match",
+                    onClick: () =>
+                      void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
+                  },
             },
           );
         } else {
           toast.success("Client added", {
-            action: {
-              label: "Open",
-              onClick: () =>
-                void navigate({ to: "/clients/$clientId", params: { clientId: customer.id } }),
-            },
+            action: onCreated
+              ? undefined
+              : {
+                  label: "Open",
+                  onClick: () =>
+                    void navigate({
+                      to: "/clients/$clientId",
+                      params: { clientId: customer.id },
+                    }),
+                },
           });
         }
         reset();
@@ -282,7 +335,7 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
         <Label>Preferred channel</Label>
         <Select
           value={preferredChannel}
-          onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
+          onValueChange={(v) => setPreferredChannel(v as ContactChannel)}
         >
           <SelectTrigger>
             <SelectValue />
@@ -295,11 +348,11 @@ function AddClientDialog({ open, onClose }: { open: boolean; onClose: () => void
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          {smsEntitled === false
-            ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
-            : "SMS needs a mobile number — reminders fall back to email until one is saved."}
+          SMS needs a mobile number — reminders fall back to email until one is saved.
+          {preferredChannel === "sms" && smsCredits.level !== "unlimited"
+            ? ` ${smsCredits.note}`
+            : ""}
         </p>
-        {smsGate.dialog}
       </div>
       <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
         <div>
@@ -375,6 +428,8 @@ function SellPackageDialog({
         reset();
       }}
       gate={gate}
+      what="this sale"
+      dirty={customerId !== (defaultCustomerId ?? "") || packageId !== "" || paymentRef !== ""}
       title="Sell package"
       description={
         mode === "checkout"
@@ -504,6 +559,16 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
   const customers = useCustomers();
   const createBooking = useCreateBooking();
   const groupServices = (services.data ?? []).filter((s) => s.capacityMax > 1);
+  const locationList = locations.data ?? [];
+  // A single location or staff member needs no picker: filled in, field hidden.
+  const soleLocationId = useSoleLocation()?.id ?? null;
+  const soleStaffId = useSoleStaff()?.id ?? null;
+  useEffect(() => {
+    if (open && soleLocationId && !locationId) setLocationId(soleLocationId);
+  }, [open, soleLocationId, locationId]);
+  useEffect(() => {
+    if (open && soleStaffId && !staffId) setStaffId(soleStaffId);
+  }, [open, soleStaffId, staffId]);
 
   const gate = firstGate([
     {
@@ -556,6 +621,8 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
       open={open}
       onClose={onClose}
       gate={gate}
+      what="this session"
+      dirty={customerId !== "" || serviceId !== "" || (staffId !== "" && staffId !== soleStaffId)}
       title="Create group session"
       description="Publish a group session and add the first attendee."
       submitLabel="Create session"
@@ -608,36 +675,40 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
         </Select>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label>Staff</Label>
-          <Select value={staffId} onValueChange={setStaffId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose staff" />
-            </SelectTrigger>
-            <SelectContent>
-              {(staff.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label>Location</Label>
-          <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose location" />
-            </SelectTrigger>
-            <SelectContent>
-              {(locations.data ?? []).map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {soleStaffId ? null : (
+          <div className="grid gap-2">
+            <Label>Staff</Label>
+            <Select value={staffId} onValueChange={setStaffId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose staff" />
+              </SelectTrigger>
+              <SelectContent>
+                {(staff.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {soleLocationId ? null : (
+          <div className="grid gap-2">
+            <Label>Location</Label>
+            <Select value={locationId} onValueChange={setLocationId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose location" />
+              </SelectTrigger>
+              <SelectContent>
+                {locationList.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="grid gap-2">
           <Label htmlFor="g-date">Date</Label>
           <Input id="g-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -659,6 +730,10 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
   const [reason, setReason] = useState("Admin time");
   const staff = useStaffList();
   const addTimeOff = useAddStaffTimeOff();
+  const soleStaff = useSoleStaff();
+  useEffect(() => {
+    if (open && soleStaff && !staffId) setStaffId(soleStaff.id);
+  }, [open, soleStaff, staffId]);
   const member = (staff.data ?? []).find((s) => s.id === staffId);
 
   const gate = firstGate([
@@ -683,6 +758,8 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
       open={open}
       onClose={onClose}
       gate={gate}
+      what="this block"
+      dirty={(staffId !== "" && staffId !== soleStaff?.id) || reason !== "Admin time"}
       title="Block availability"
       description="Stop new bookings being taken during a period."
       submitLabel="Block time"
@@ -705,21 +782,23 @@ function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: ()
         toast.success("Availability blocked");
       }}
     >
-      <div className="grid gap-2">
-        <Label>Staff member</Label>
-        <Select value={staffId} onValueChange={setStaffId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose staff" />
-          </SelectTrigger>
-          <SelectContent>
-            {(staff.data ?? []).map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {soleStaff ? null : (
+        <div className="grid gap-2">
+          <Label>Staff member</Label>
+          <Select value={staffId} onValueChange={setStaffId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose staff" />
+            </SelectTrigger>
+            <SelectContent>
+              {(staff.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.displayName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="grid gap-2">
           <Label htmlFor="b-date">Date</Label>
@@ -762,6 +841,8 @@ function SendMessageDialog({ open, onClose }: { open: boolean; onClose: () => vo
     <Shell
       open={open}
       onClose={onClose}
+      what="this message"
+      dirty={body.trim() !== ""}
       title="Send message"
       description="Message a client directly from anywhere in RECAVO."
       submitLabel="Send message"

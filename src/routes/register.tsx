@@ -12,13 +12,14 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
+import { AppleButton, AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { VerticalPicker } from "@/components/VerticalPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/lib/auth/auth-store";
+import { useIsNativeApp, useSaasPurchasesAllowed } from "@/hooks/use-native-app";
+import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingBusiness } from "@/lib/auth/pending-business";
 import { stashPendingProfile } from "@/lib/auth/pending-profile";
 import {
@@ -52,7 +53,8 @@ export const Route = createFileRoute("/register")({
 });
 
 function RegisterPage() {
-  const { signUp, confirmSignUp, resendSignUpCode, signInWithGoogle, status } = useAuth();
+  const { signUp, confirmSignUp, resendSignUpCode, signInWithGoogle, signInWithApple, status } =
+    useAuth();
   const navigate = useNavigate();
   const { ref } = Route.useSearch();
   const [name, setName] = useState("");
@@ -86,6 +88,18 @@ function RegisterPage() {
     }
   }, [status, navigate]);
 
+  // A new account ends at the plan chooser, so sign-up is only offered where a
+  // plan can be bought: the web (Stripe) and the iOS app (In-App Purchase). A
+  // store app that cannot sell only signs existing members in.
+  const canSignUpHere = useSaasPurchasesAllowed();
+  // On the web the trial is ours (Stripe: 14 days, card up front). In the iOS app any
+  // trial is an App Store intro offer and StoreKit decides eligibility, so don't
+  // promise one here — the plan chooser shows exactly what the store offers.
+  const storeBilled = useIsNativeApp();
+  useEffect(() => {
+    if (!canSignUpHere) void navigate({ to: "/login", replace: true });
+  }, [canSignUpHere, navigate]);
+
   useEffect(() => {
     if (resendIn <= 0) return;
     const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
@@ -94,6 +108,26 @@ function RegisterPage() {
 
   function persistReferralField() {
     if (referralCode.trim()) stashPendingReferral(referralCode);
+  }
+
+  /** Social sign-up: stash what the form has collected, then hand off to the provider. */
+  async function startSocial(start: () => Promise<SocialSignInOutcome>, failureMessage: string) {
+    setBusy(true);
+    persistReferralField();
+    if (business.trim()) {
+      stashPendingBusiness({ legalName: business.trim(), industryTemplateKey: vertical });
+    }
+    if (name.trim()) {
+      stashPendingProfile({ name: name.trim() });
+    }
+    try {
+      // In the mobile app the sheet can be dismissed without signing in,
+      // in which case this page stays put and must come back to life.
+      if ((await start()) === "cancelled") setBusy(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : failureMessage);
+      setBusy(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -241,7 +275,7 @@ function RegisterPage() {
 
   return (
     <AuthShell
-      eyebrow="Free 14-day trial"
+      eyebrow={storeBilled ? "Set up in minutes" : "Free 14-day trial"}
       title="Create your workspace"
       subtitle="Set up bookings, clients and payments in minutes — tailored to your trade."
       brand={VERTICALS[vertical].brand}
@@ -263,31 +297,18 @@ function RegisterPage() {
         <VerticalPicker value={vertical} onChange={setVertical} disabled={busy} />
       </div>
 
-      <GoogleButton
-        label="Sign up with Google"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          persistReferralField();
-          if (business.trim()) {
-            stashPendingBusiness({
-              legalName: business.trim(),
-              industryTemplateKey: vertical,
-            });
-          }
-          if (name.trim()) {
-            stashPendingProfile({ name: name.trim() });
-          }
-          try {
-            // In the mobile app the sheet can be dismissed without signing in,
-            // in which case this page stays put and must come back to life.
-            if ((await signInWithGoogle()) === "cancelled") setBusy(false);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Google sign-up failed");
-            setBusy(false);
-          }
-        }}
-      />
+      <div className="space-y-3">
+        <AppleButton
+          label="Sign up with Apple"
+          disabled={busy}
+          onClick={() => startSocial(signInWithApple, "Apple sign-up failed")}
+        />
+        <GoogleButton
+          label="Sign up with Google"
+          disabled={busy}
+          onClick={() => startSocial(signInWithGoogle, "Google sign-up failed")}
+        />
+      </div>
       <AuthDivider />
 
       <form onSubmit={submit} className="space-y-4">
@@ -375,8 +396,10 @@ function RegisterPage() {
             onChange={(e) => setReferralCode(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            You&apos;ll get the normal 14-day trial. The trainer who referred you earns a free month
-            after your first paid invoice.
+            {storeBilled
+              ? "Your plan and price don’t change."
+              : "You’ll get the normal 14-day trial."}{" "}
+            The trainer who referred you earns a free month after your first paid invoice.
           </p>
         </div>
 

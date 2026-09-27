@@ -1,26 +1,50 @@
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 
 export function PageHeader({
   title,
   description,
+  onDismissDescription,
   actions,
 }: {
   title: string;
   description?: string;
+  /** When set, the description is a dismissible hint — the page remembers the choice. */
+  onDismissDescription?: () => void;
   actions?: ReactNode;
 }) {
+  // On a phone the title and its actions share one row (the description drops
+  // beneath both) so the page's content starts a row higher; from `sm` up the
+  // wrapper becomes a real block again with the description under the title and
+  // the actions bottom-aligned to the right, as before.
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:flex-nowrap sm:items-end sm:gap-4">
+      <div className="contents sm:block sm:min-w-0">
+        <h1 className="order-1 min-w-0 text-xl font-semibold tracking-tight sm:text-[28px]">
+          {title}
+        </h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="order-3 flex max-w-2xl basis-full items-start gap-2 text-sm text-muted-foreground sm:mt-1 sm:basis-auto">
+            <span>{description}</span>
+            {onDismissDescription ? (
+              <button
+                type="button"
+                onClick={onDismissDescription}
+                aria-label="Hide this hint"
+                title="Hide this hint"
+                className="-my-1 shrink-0 rounded-md p-1 transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </p>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="order-2 flex flex-wrap items-center gap-2 sm:order-none">{actions}</div>
+      ) : null}
     </div>
   );
 }
@@ -40,16 +64,16 @@ export function StatCard({
 }) {
   const positive = (change ?? 0) >= 0;
   return (
-    <div className="surface-card flex h-full flex-col p-5">
-      <div className="flex min-h-9 items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+    <div className="surface-card flex h-full flex-col p-4 sm:p-5">
+      <div className="flex min-h-8 items-start justify-between gap-2 sm:min-h-9 sm:gap-3">
+        <p className="text-xs font-medium text-muted-foreground sm:text-sm">{label}</p>
         {icon ? (
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary sm:size-9">
             {icon}
           </span>
         ) : null}
       </div>
-      <p className="mt-3 text-3xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight sm:mt-3 sm:text-3xl">{value}</p>
       <div className="mt-auto flex items-center gap-2 pt-2 text-xs">
         {change !== undefined ? (
           <span
@@ -153,6 +177,7 @@ export function SectionCard({
   title,
   description,
   action,
+  onHide,
   children,
   className,
   bodyClassName,
@@ -160,6 +185,8 @@ export function SectionCard({
   title?: string;
   description?: string;
   action?: ReactNode;
+  /** When set, an eye icon lets the person hide this card (the page decides where it comes back). */
+  onHide?: () => void;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -167,14 +194,29 @@ export function SectionCard({
   return (
     <section className={cn("surface-card flex min-w-0 flex-col", className)}>
       {title ? (
-        <header className="flex items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4 sm:px-5">
           <div className="min-w-0">
             <h2 className="text-base font-semibold">{title}</h2>
             {description ? (
               <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
             ) : null}
           </div>
-          {action}
+          {action || onHide ? (
+            <div className="flex items-center gap-1">
+              {action}
+              {onHide ? (
+                <button
+                  type="button"
+                  onClick={onHide}
+                  aria-label={`Hide ${title}`}
+                  title="Hide this card"
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <EyeOff className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </header>
       ) : null}
       <div className={cn("min-w-0 p-4 sm:p-5", bodyClassName)}>{children}</div>

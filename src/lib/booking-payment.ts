@@ -38,9 +38,27 @@ export type BookingSettlement = {
   paidMinor: number;
   depositMinor: number | null;
   outstandingMinor: number;
-  /** What checkout collects right now: the deposit remainder while securing, else the balance. */
+  /** What checkout collects right now: the deposit remainder until it is covered, else the balance. */
   dueNowMinor: number;
+  /**
+   * "Pay after the job": whatever is left once the deposit is in is not chased before
+   * the work — it is collected afterwards (in person, or with "Send payment reminder").
+   */
+  balanceAfterJob: boolean;
 };
+
+/**
+ * The API's deposit clamp (RECA-523), so the portal never shows or sends a deposit
+ * the API would drop: only an amount strictly between nothing and the total secures
+ * a booking. At or above the total it would be a second price, not a deposit.
+ */
+export function effectiveDepositMinor(
+  requested: number | null | undefined,
+  totalMinor: number,
+): number | null {
+  if (requested == null) return null;
+  return requested > 0 && requested < totalMinor ? requested : null;
+}
 
 /**
  * Settlement view of a booking, derived the way the deposits guide (RECA-523)
@@ -56,14 +74,12 @@ export function bookingSettlement(
 ): BookingSettlement {
   const priceMinor = booking.priceMinor;
   const paidMinor = booking.paidMinor ?? 0;
-  const deposit =
-    booking.depositMinor != null && booking.depositMinor > 0 && booking.depositMinor < priceMinor
-      ? booking.depositMinor
-      : null;
+  const deposit = effectiveDepositMinor(booking.depositMinor, priceMinor);
   const outstandingMinor = Math.max(0, priceMinor - paidMinor);
-  const securing = booking.status === "held" || booking.status === "awaiting_payment";
+  // Mirrors the API's dueNowMinor: the deposit is asked for first whatever the status
+  // (a staff booking is confirmed from the start), then the balance.
   const dueNowMinor =
-    securing && deposit != null ? Math.max(0, deposit - paidMinor) : outstandingMinor;
+    deposit != null && paidMinor < deposit ? Math.max(0, deposit - paidMinor) : outstandingMinor;
 
   let state: SettlementState;
   if (booking.paymentMethod === "credit") state = "credit";
@@ -73,7 +89,20 @@ export function bookingSettlement(
   else if (deposit != null && paidMinor >= deposit) state = "deposit_paid";
   else state = "part_paid";
 
-  return { state, priceMinor, paidMinor, depositMinor: deposit, outstandingMinor, dueNowMinor };
+  return {
+    state,
+    priceMinor,
+    paidMinor,
+    depositMinor: deposit,
+    outstandingMinor,
+    dueNowMinor,
+    balanceAfterJob: booking.paymentMethod === "pay_later",
+  };
+}
+
+/** "to collect" / "due after the job" — where the outstanding balance stands. */
+export function balanceDueLabel(settlement: Pick<BookingSettlement, "balanceAfterJob">): string {
+  return settlement.balanceAfterJob ? "due after the job" : "to collect";
 }
 
 /** The at-a-glance colour family a settlement falls into (calendar chips, legends). */
@@ -103,7 +132,10 @@ export function paymentTone(
   }
 }
 
-/** Short human label for a settlement, e.g. "Deposit paid · £40.00 to collect". */
+/**
+ * Short human label for a settlement, e.g. "Deposit paid · £40.00 to collect" — or
+ * "Deposit paid · £100.00 due after the job" when the booking is paid afterwards.
+ */
 export function paymentLabel(
   settlement: BookingSettlement,
   currency: string,
@@ -114,11 +146,13 @@ export function paymentLabel(
     case "paid":
       return "Paid in full";
     case "deposit_paid":
-      return `Deposit paid · ${owed} to collect`;
+      return `Deposit paid · ${owed} ${balanceDueLabel(settlement)}`;
     case "part_paid":
-      return `Part paid · ${owed} to collect`;
+      return `Part paid · ${owed} ${balanceDueLabel(settlement)}`;
     case "unpaid":
-      return `Unpaid · ${owed} due`;
+      return settlement.depositMinor != null
+        ? `Unpaid · ${formatMoney(settlement.depositMinor, currency)} deposit due`
+        : `Unpaid · ${owed} due`;
     case "credit":
       return "Paid with credit";
     case "free":
@@ -135,7 +169,33 @@ export function configuredDepositMinor(
   totalMinor: number,
 ): number | null {
   const sum = services.reduce((acc, s) => acc + (s.depositMinor ?? 0), 0);
-  return sum > 0 && sum < totalMinor ? sum : null;
+  return effectiveDepositMinor(sum, totalMinor);
+}
+
+/**
+ * Everything a client has actually paid, net of refunds.
+ *
+ * Money against a booking is read from the booking, not from the payments table: a
+ * card payment rolls into `paidMinor` *and* leaves a payment row, but cash, a bank
+ * transfer marked received and a staff-recorded deposit only ever move `paidMinor`.
+ * Summing payment rows therefore reports £0 for a business that takes money in
+ * person. Payments with no booking — package purchases — exist only as rows, so they
+ * are added separately and cannot double-count.
+ *
+ * `paidMinor` is never reduced when money goes back out, so refunds come off the
+ * total once, from the payment rows that record them.
+ */
+export function customerLifetimeSpendMinor(
+  bookings: readonly { paidMinor?: number | null }[],
+  payments: readonly Pick<Payment, "bookingId" | "amountMinor" | "amountRefundedMinor" | "state">[],
+): number {
+  const settled = payments.filter((p) => isSettledPaymentState(p.state));
+  const takenOnBookings = bookings.reduce((sum, b) => sum + (b.paidMinor ?? 0), 0);
+  const takenElsewhere = settled
+    .filter((p) => p.bookingId == null)
+    .reduce((sum, p) => sum + p.amountMinor, 0);
+  const refunded = settled.reduce((sum, p) => sum + p.amountRefundedMinor, 0);
+  return Math.max(0, takenOnBookings + takenElsewhere - refunded);
 }
 
 /**

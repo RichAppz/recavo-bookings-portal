@@ -1,6 +1,7 @@
 /** Hierarchical React Query keys, namespaced by businessId for tenant switches. */
 export const queryKeys = {
   me: () => ["me"] as const,
+  accountDeletionPreview: () => ["me", "deletion-preview"] as const,
   myBusinesses: () => ["me", "businesses"] as const,
 
   biz: (businessId: string) => ["biz", businessId] as const,
@@ -33,6 +34,7 @@ export const queryKeys = {
     ["biz", businessId, "customers", filters ?? {}] as const,
   customersInfinite: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "customers", "infinite", filters ?? {}] as const,
+  customerCounts: (businessId: string) => ["biz", businessId, "customers", "counts"] as const,
   customer: (businessId: string, customerId: string) =>
     ["biz", businessId, "customers", customerId] as const,
   customerTagsCatalogue: (businessId: string, filters?: Record<string, unknown>) =>
@@ -58,6 +60,39 @@ export const queryKeys = {
   service: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId] as const,
 
+  /** Consumables catalogue (automotive); the list carries `serviceIds` for "used by N services". */
+  consumables: (businessId: string) => ["biz", businessId, "consumables"] as const,
+  serviceConsumables: (businessId: string, serviceId: string) =>
+    ["biz", businessId, "services", serviceId, "consumables"] as const,
+  bookingConsumables: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "consumables"] as const,
+
+  /** Service follow-ups (top-up reminders). Lists are keyed by their filter so the prefix invalidates all. */
+  followUps: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "follow-ups", filter] as const)
+      : (["biz", businessId, "follow-ups"] as const),
+  followUp: (businessId: string, followUpId: string) =>
+    ["biz", businessId, "follow-ups", "one", followUpId] as const,
+
+  /** Waitlist. Lists are keyed by their filter; the bare prefix invalidates lists and the count. */
+  waitlist: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "waitlist", filter] as const)
+      : (["biz", businessId, "waitlist"] as const),
+  waitlistSummary: (businessId: string) => ["biz", businessId, "waitlist", "summary"] as const,
+
+  /** Upsells: a service's add-on pairings, and the offers/requests on staff-made bookings. */
+  serviceUpsells: (businessId: string, serviceId: string) =>
+    ["biz", businessId, "services", serviceId, "upsells"] as const,
+  upsellOffers: (businessId: string, filter?: Record<string, unknown>) =>
+    filter
+      ? (["biz", businessId, "upsell-offers", filter] as const)
+      : (["biz", businessId, "upsell-offers"] as const),
+  upsellOffersSummary: (businessId: string) =>
+    ["biz", businessId, "upsell-offers", "summary"] as const,
+  publicUpsellOffer: (token: string) => ["public", "upsell-offer", token] as const,
+
   staff: (businessId: string) => ["biz", businessId, "staff"] as const,
   staffMember: (businessId: string, staffId: string) =>
     ["biz", businessId, "staff", staffId] as const,
@@ -65,6 +100,12 @@ export const queryKeys = {
   packages: (businessId: string) => ["biz", businessId, "packages"] as const,
   package: (businessId: string, packageId: string) =>
     ["biz", businessId, "packages", packageId] as const,
+  packageLinks: (businessId: string) => ["biz", businessId, "package-links"] as const,
+  packageRequests: (businessId: string, status: string) =>
+    ["biz", businessId, "package-requests", status] as const,
+  supportRequests: (businessId: string) => ["biz", businessId, "support-requests"] as const,
+  supportRequest: (businessId: string, requestId: string) =>
+    ["biz", businessId, "support-requests", requestId] as const,
   entitlements: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "entitlements", filters ?? {}] as const,
   creditLedger: (businessId: string, filters?: Record<string, unknown>) =>
@@ -103,6 +144,8 @@ export const queryKeys = {
     ["biz", businessId, "exports", exportId] as const,
 
   subscription: (businessId: string) => ["biz", businessId, "subscription"] as const,
+  appStoreConfig: (businessId: string) => ["biz", businessId, "iap-config"] as const,
+  smsCredits: (businessId: string) => ["biz", businessId, "sms-credits"] as const,
   referral: (businessId: string) => ["biz", businessId, "referral"] as const,
   plans: () => ["plans"] as const,
   billingCatalogue: () => ["billing", "catalogue"] as const,
@@ -113,6 +156,10 @@ export const queryKeys = {
     ["biz", businessId, "policy-documents", "current", type] as const,
   privacyNoticeLatest: (businessId: string) =>
     ["biz", businessId, "privacy-notices", "latest"] as const,
+  notificationTemplates: (businessId: string) =>
+    ["biz", businessId, "notification-templates"] as const,
+  notificationTemplatePreview: (businessId: string, key: string, channel: string, body: string) =>
+    ["biz", businessId, "notification-templates", "preview", key, channel, body] as const,
   linkedRecordDefinition: (businessId: string) =>
     ["biz", businessId, "linked-record-definition"] as const,
   lifecycle: (businessId: string) => ["biz", businessId, "lifecycle"] as const,
@@ -138,6 +185,8 @@ export const queryKeys = {
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,
   publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
+  publicPackageLink: (businessId: string, code: string) =>
+    ["public", businessId, "package-links", code] as const,
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
@@ -157,6 +206,9 @@ export const queryKeys = {
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
+  portalPackageRequests: (businessId: string) =>
+    ["portal", businessId, "package-requests"] as const,
+  portalPackageLinks: (businessId: string) => ["portal", businessId, "package-links"] as const,
   portalLinkedRecords: (businessId: string) => ["portal", businessId, "linked-records"] as const,
   portalInvoices: (businessId: string) => ["portal", businessId, "invoices"] as const,
   portalInvoice: (businessId: string, invoiceId: string) =>

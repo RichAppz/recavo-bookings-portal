@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Opening…</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #f5f5f4;
+        color: #1c1917;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0c0a09;
+          color: #fafaf9;
+        }
+      }
+      p {
+        opacity: 0.75;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p id="msg">Opening…</p>
+    </main>
+    <script>
+      // Entry point for hosted Stripe flows started from the mobile app.
+      //
+      // The app opens this page — not Stripe directly — in its in-app browser
+      // sheet, and the sheet's storage is separate from the app's own. So this
+      // page leaves a short-lived marker in that storage before sending the
+      // sheet on to Stripe. When Stripe redirects back to a page on this origin,
+      // the web app finds the marker, knows it is running inside the sheet, and
+      // hands the return URL to the app via its URL scheme (see
+      // src/lib/native-return.ts). Only Stripe destinations are accepted, so
+      // this cannot be used as an open redirect.
+      (function () {
+        var to = new URLSearchParams(location.search).get("to") || "";
+        var ok = false;
+        try {
+          var u = new URL(to);
+          ok = u.protocol === "https:" && /(^|\.)stripe\.com$/.test(u.hostname);
+        } catch (e) {
+          ok = false;
+        }
+        if (!ok) {
+          document.getElementById("msg").textContent = "This link isn't valid.";
+          return;
+        }
+        try {
+          localStorage.setItem("recavo.nativeReturn", String(Date.now()));
+        } catch (e) {
+          // Storage blocked: the app still keeps Stripe in the sheet, the user
+          // just has to tap Done afterwards.
+        }
+        location.replace(to);
+      })();
+    </script>
+  </body>
+</html>

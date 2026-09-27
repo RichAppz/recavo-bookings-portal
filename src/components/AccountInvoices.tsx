@@ -19,7 +19,12 @@ import {
   type PortalInvoice,
 } from "@/lib/api/invoices";
 import { formatMoney, isoDate, ukDate } from "@/lib/format";
-import { invoiceBalanceMinor, isInvoiceOverdue, sortInvoicesNewestFirst } from "@/lib/invoices";
+import {
+  invoiceBalanceMinor,
+  invoiceLinkedRecord,
+  isInvoiceOverdue,
+  sortInvoicesNewestFirst,
+} from "@/lib/invoices";
 
 /**
  * A customer's invoices across every studio they deal with — issued and paid
@@ -91,6 +96,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
               const balance = invoiceBalanceMinor(inv);
               const overdue = isInvoiceOverdue(inv, today);
               const busy = busyId === inv.id;
+              const record = invoiceLinkedRecord(inv);
               return (
                 <li
                   key={inv.id}
@@ -102,6 +108,11 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
                       <span className="tabular-nums">
                         {formatMoney(inv.totalMinor, inv.currency)}
                       </span>
+                      {record ? (
+                        <span className="truncate font-normal text-muted-foreground">
+                          · {record.value}
+                        </span>
+                      ) : null}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {inv.issueDate ? ukDate(inv.issueDate) : ""}

@@ -1,0 +1,8 @@
+app_identifier("com.richappz.recavo")
+team_id("P3VAW47988")
+
+for_platform :ios do
+  for_lane :beta do
+    app_identifier("com.richappz.recavo")
+  end
+end

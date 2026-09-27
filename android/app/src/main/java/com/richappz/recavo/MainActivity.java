@@ -1,4 +1,4 @@
-package app.recavo.portal;
+package com.richappz.recavo;
 
 import com.getcapacitor.BridgeActivity;
 

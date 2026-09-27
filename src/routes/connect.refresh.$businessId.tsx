@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { EmptyState, PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { useStartConnectOnboarding } from "@/lib/api/hooks";
+import { openHostedFlow } from "@/lib/native";
 
 /**
  * Stripe Account Link `refresh_url` — reached when the link expired or was reused.
@@ -30,7 +31,7 @@ function ConnectRefreshPage() {
               disabled={startOnboarding.isPending}
               onClick={async () => {
                 const result = await startOnboarding.mutateAsync();
-                if (result.onboardingUrl) window.location.assign(result.onboardingUrl);
+                if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
               }}
             >
               {startOnboarding.isPending ? "Starting…" : "Restart onboarding"}

@@ -174,12 +174,142 @@
   h4 {
     letter-spacing: -0.02em;
   }
+
+  /* iOS Safari gives date/time inputs an intrinsic width that ignores `width: 100%`
+     and their grid cell, so two side by side ran past the edge of the card. Drop the
+     native chrome and let them fill whatever box they're given. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    /* WebKit centres the value and collapses the height when empty. */
+    text-align: left;
+    min-height: 1.5em;
+  }
 }
 
 @utility surface-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
+}
+
+/* Toasts (components/ui/sonner.tsx). Sonner handles stacking, timers and swipe;
+   these rules give the card its look, swap sonner's drop-down entrance for a slide
+   in from the right, and draw a timer bar along the bottom edge. Sonner injects its
+   own stylesheet after ours, so every rule is prefixed with `.toaster` to outrank it. */
+.toaster {
+  --toast-accent: var(--color-primary);
+  --toast-surface: oklch(0.2 0.008 258);
+  --toast-duration: 5000ms;
+  --toast-motion: cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: var(--font-sans);
+  /* `right` moves when a side drawer opens; glide rather than jump. */
+  transition:
+    right 400ms var(--toast-motion),
+    transform 400ms ease;
+}
+.dark .toaster {
+  --toast-surface: oklch(0.27 0.012 258);
+}
+.toaster [data-sonner-toast] {
+  background:
+    radial-gradient(
+      120% 170% at 100% 100%,
+      color-mix(in oklch, var(--toast-accent) 32%, transparent),
+      transparent 62%
+    ),
+    var(--toast-surface);
+}
+.toaster [data-sonner-toast][data-type="success"] {
+  --toast-accent: var(--color-success);
+}
+.toaster [data-sonner-toast][data-type="error"] {
+  --toast-accent: var(--color-destructive);
+}
+.toaster [data-sonner-toast][data-type="warning"] {
+  --toast-accent: var(--color-warning);
+}
+.toaster [data-sonner-toast][data-type="info"] {
+  --toast-accent: var(--color-info);
+}
+
+/* Motion. Sonner drives everything through its `--y` transform: we point the
+   not-yet-mounted and removed states off to the right instead of up, and the
+   stack reshuffles with the same easing. Swiping keeps sonner's `transition: none`. */
+.toaster [data-sonner-toast][data-swiping="false"] {
+  transition:
+    transform 520ms var(--toast-motion),
+    opacity 320ms ease,
+    height 400ms ease;
+}
+.toaster [data-sonner-toast][data-x-position="right"][data-mounted="false"] {
+  --y: translateX(calc(100% + 32px));
+}
+.toaster
+  [data-sonner-toast][data-x-position="right"][data-removed="true"][data-swipe-out="false"][data-expanded="true"] {
+  --y: translateY(calc(var(--lift) * var(--offset))) translateX(calc(100% + 32px));
+  opacity: 0;
+}
+
+/* Timer bar: shrinks from the right over the toast's lifetime, in step with sonner's
+   auto-dismiss, and pauses with it while the pointer is over the stack. Inset from
+   the corners so it sits on the straight part of the rounded bottom edge. */
+.toaster [data-sonner-toast] [data-content]::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--toast-accent);
+  opacity: 0.9;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.toaster [data-sonner-toast][data-mounted="true"]:not([data-type="loading"]) [data-content]::after {
+  animation: toast-timer var(--toast-duration) linear forwards;
+}
+.toaster:hover [data-sonner-toast] [data-content]::after {
+  animation-play-state: paused;
+}
+@keyframes toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toaster [data-sonner-toast] [data-content]::after {
+    display: none;
+  }
+}
+
+/* Calendar bars slide their label back and forth when it is wider than the bar
+   (see components/Marquee.tsx, which sets the two custom properties). Pausing at
+   each end gives the eye time to read the start and the finish. */
+@keyframes marquee {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  82%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee var(--marquee-duration, 6s) ease-in-out infinite alternate;
 }
 
 @utility no-scrollbar {
@@ -205,4 +335,89 @@
 }
 @utility pb-safe-* {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(--value(integer)));
+}
+/* Horizontal insets. Zero on most phones in portrait, but not always: a notched
+   iPhone in landscape has one on each side, and the iPhone Duo puts its status bar
+   and sensor housing in a column down the right edge, so `safe-area-inset-right`
+   is ~84px the whole height of the screen in portrait. Apple's own apps keep that
+   column clear; so do we. */
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility pl-safe-* {
+  padding-left: calc(env(safe-area-inset-left, 0px) + --spacing(--value(integer)));
+}
+@utility pr-safe-* {
+  padding-right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
+@utility px-safe-* {
+  padding-left: calc(env(safe-area-inset-left, 0px) + --spacing(--value(integer)));
+  padding-right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
+/* Sidebar column: its fixed width plus whatever the left inset is, so the content
+   column (`pl-sidebar`) and the sidebar itself (`w-sidebar`) agree. */
+@utility w-sidebar {
+  width: calc(264px + env(safe-area-inset-left, 0px));
+}
+@utility pl-sidebar {
+  padding-left: calc(264px + env(safe-area-inset-left, 0px));
+}
+/* A centred modal: full width of, and centred within, the safe box rather than
+   the screen (translate-x-[-50%] then lands it in the middle of the safe area). */
+@utility w-safe-full {
+  width: calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+}
+@utility left-safe-center {
+  left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2);
+}
+/* Toasts on phones: sonner sizes a toast as 100% minus twice the *left* mobile
+   offset, so an asymmetric right inset (iPhone Duo) would push it under the
+   sensor column. Size it from both offsets instead; the offsets themselves are
+   set in ui/sonner.tsx. */
+@media (max-width: 600px) {
+  [data-sonner-toaster][data-x-position] [data-sonner-toast] {
+    width: calc(100% - var(--mobile-offset-left) - var(--mobile-offset-right));
+  }
+}
+/* Right-anchored controls (a close button) that must sit inside the inset. */
+@utility right-safe-* {
+  right: calc(env(safe-area-inset-right, 0px) + --spacing(--value(integer)));
+}
+/* Full-viewport centred card (setup, invite, error, loading screens). `safe`
+   alignment falls back to the start when the card is taller than the viewport,
+   so nothing is clipped off the top; the padding keeps it clear of the notch and
+   home indicator in the mobile app. */
+@utility screen-center {
+  display: flex;
+  min-height: 100vh;
+  align-items: safe center;
+  justify-content: safe center;
+  padding-top: calc(env(safe-area-inset-top, 0px) + --spacing(6));
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(6));
+}
+/* Safe-area room as a spacer pseudo-element rather than padding, for panels
+   (e.g. Sheet) whose consumers set their own padding. Works in block and
+   flex-column layouts; zero-height outside the mobile app. */
+@utility safe-spacer-top {
+  &::before {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    height: env(safe-area-inset-top, 0px);
+  }
+}
+@utility safe-spacer-bottom {
+  &::after {
+    content: "";
+    display: block;
+    flex-shrink: 0;
+    height: env(safe-area-inset-bottom, 0px);
+  }
 }

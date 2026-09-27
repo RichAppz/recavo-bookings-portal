@@ -5,26 +5,30 @@ import {
   formatVatRate,
   invoiceAllows,
   invoiceBalanceMinor,
+  invoiceLinkedRecord,
   isCustomerVisible,
   isInvoiceOverdue,
   isValidNumberPrefix,
+  linkedRecordInput,
   nextInvoiceNumberPreview,
   percentInputToBps,
   showsVat,
   sortInvoicesNewestFirst,
+  supportsLinkedRecord,
   validateLineDrafts,
+  visibleInvoices,
   type InvoiceStatus,
 } from "./invoices.ts";
 
 describe("invoiceAllows", () => {
-  it("matches the status table from the integration guide", () => {
+  it("matches the status table: drafts are deleted, numbered invoices voided or redone", () => {
     const table: Record<InvoiceStatus, string[]> = {
-      draft: ["edit", "issue", "void", "pdf"],
-      issued: ["send", "markPaid", "void", "pdf"],
-      paid: ["send", "void", "pdf"],
+      draft: ["edit", "issue", "delete", "pdf"],
+      issued: ["send", "markPaid", "void", "redo", "pdf"],
+      paid: ["send", "void", "redo", "pdf"],
       void: ["pdf"],
     };
-    const actions = ["edit", "issue", "send", "markPaid", "void", "pdf"] as const;
+    const actions = ["edit", "issue", "send", "markPaid", "void", "redo", "delete", "pdf"] as const;
     for (const status of Object.keys(table) as InvoiceStatus[]) {
       for (const action of actions) {
         assert.equal(
@@ -36,11 +40,38 @@ describe("invoiceAllows", () => {
     }
   });
 
-  it("only issued and paid invoices are customer-visible", () => {
+  it("customers see issued, paid and voided invoices but never drafts", () => {
     assert.equal(isCustomerVisible("draft"), false);
     assert.equal(isCustomerVisible("issued"), true);
     assert.equal(isCustomerVisible("paid"), true);
-    assert.equal(isCustomerVisible("void"), false);
+    assert.equal(isCustomerVisible("void"), true);
+  });
+});
+
+describe("visibleInvoices", () => {
+  const list = [
+    { id: "a", status: "draft" as const },
+    { id: "b", status: "issued" as const },
+    { id: "c", status: "void" as const },
+    { id: "d", status: "paid" as const },
+  ];
+
+  it("hides voided invoices from the day-to-day 'all' view", () => {
+    assert.deepEqual(
+      visibleInvoices(list, "all").map((i) => i.id),
+      ["a", "b", "d"],
+    );
+  });
+
+  it("shows exactly the chosen status, including void when asked for", () => {
+    assert.deepEqual(
+      visibleInvoices(list, "void").map((i) => i.id),
+      ["c"],
+    );
+    assert.deepEqual(
+      visibleInvoices(list, "draft").map((i) => i.id),
+      ["a"],
+    );
   });
 });
 
@@ -134,7 +165,7 @@ describe("validateLineDrafts", () => {
   it("reports per-row problems and leaves valid rows clean", () => {
     const result = validateLineDrafts([
       good,
-      { ...good, description: "   ", quantity: "0", unitPrice: "-3" },
+      { ...good, description: "   ", quantity: "0", unitPrice: "abc" },
       { ...good, quantity: "1.5" },
     ]);
     assert.equal(result.ok, false);
@@ -150,6 +181,16 @@ describe("validateLineDrafts", () => {
   it("allows a zero price but not a blank one", () => {
     assert.equal(validateLineDrafts([{ ...good, unitPrice: "0" }]).ok, true);
     assert.equal(validateLineDrafts([{ ...good, unitPrice: "" }]).ok, false);
+  });
+
+  it("keeps a negative unit price — a discount line — as typed", () => {
+    const result = validateLineDrafts([
+      good,
+      { ...good, description: "Discount", unitPrice: "-145.00" },
+    ]);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.lines[1]?.unitPriceMinor, -14500);
   });
 });
 
@@ -182,5 +223,33 @@ describe("sortInvoicesNewestFirst", () => {
         "2026-08-30T10:00:00Z",
       ],
     );
+  });
+});
+
+describe("linked record on an invoice", () => {
+  const vehicle = { label: "Vehicle", value: "AB12 CDE · Ford · Focus" };
+
+  it("reads the snapshot, treating a missing key (older API) as no record", () => {
+    assert.deepEqual(invoiceLinkedRecord({ linkedRecord: vehicle }), vehicle);
+    assert.equal(invoiceLinkedRecord({ linkedRecord: null }), null);
+    assert.equal(invoiceLinkedRecord({}), null);
+  });
+
+  it("only offers the editor field when the API sends the key at all", () => {
+    assert.equal(supportsLinkedRecord({ linkedRecord: vehicle }), true);
+    assert.equal(supportsLinkedRecord({ linkedRecord: null }), true);
+    assert.equal(supportsLinkedRecord({}), false);
+  });
+
+  it("turns typed text into the PATCH body, clearing on blank", () => {
+    assert.deepEqual(linkedRecordInput("Vehicle", "  AB12 CDE · Ford Focus ST "), {
+      label: "Vehicle",
+      value: "AB12 CDE · Ford Focus ST",
+    });
+    assert.equal(linkedRecordInput("Vehicle", "   "), null);
+    assert.deepEqual(linkedRecordInput("  ", "AB12 CDE"), {
+      label: "Reference",
+      value: "AB12 CDE",
+    });
   });
 });

@@ -29,6 +29,10 @@ import {
 import { useInvoicingAddon, useInvoicingEntitled } from "@/lib/api/invoices";
 import { isBillingBlocked } from "@/lib/billing/access";
 import { formatMoney } from "@/lib/format";
+import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
+import { billingSurface } from "@/lib/native";
+import { openIapManagement } from "@/lib/iap";
+import { subscriptionManagedHere } from "@/lib/billing/access";
 import {
   DEFAULT_DUE_DAYS,
   DEFAULT_NUMBER_PREFIX,
@@ -136,19 +140,42 @@ export function InvoicingSetting({ className }: { className?: string }) {
     }
   };
 
-  // Bolt-on control
+  // Bolt-on control. Bought and removed where the subscription is billed: Stripe
+  // on the web, the App Store in the iOS app (at the store's price, removed via
+  // Apple's subscription page). A store app that cannot sell shows state only.
   const current = subscription.data?.subscription ?? null;
-  const canManageBilling = canManageSaasBilling({
-    can: tenant.can,
-    roleKeys: tenant.roleKeys,
-    blocked: isBillingBlocked(current),
-  });
-  const price = addon
-    ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
-    : "£10/month";
-  const addonBusy = addAddon.isPending || removeAddon.isPending;
+  const surface = billingSurface();
+  const sellsHere = surface !== "none";
+  const managedHere = subscriptionManagedHere(current, surface);
+  const iap = useIapProducts();
+  const iapFlow = useIapPurchase();
+  const storeItem =
+    surface === "store"
+      ? iap.products.find(
+          (p) => p.product.kind === "addon" && p.product.addonKey === INVOICING_ADDON_KEY,
+        )
+      : undefined;
+  const canManageBilling =
+    sellsHere &&
+    managedHere &&
+    (surface === "web" || Boolean(storeItem)) &&
+    canManageSaasBilling({
+      can: tenant.can,
+      roleKeys: tenant.roleKeys,
+      blocked: isBillingBlocked(current),
+    });
+  const price = storeItem
+    ? `${storeItem.priceString}/month`
+    : addon
+      ? `${formatMoney(addon.unitAmountMinor, addon.currency, { compact: true })}/${addon.interval}`
+      : "£8/month";
+  const addonBusy = addAddon.isPending || removeAddon.isPending || iapFlow.busy;
 
   const buy = async () => {
+    if (storeItem) {
+      await iapFlow.purchase(storeItem, "Invoicing added");
+      return;
+    }
     try {
       const view = await addAddon.mutateAsync(INVOICING_ADDON_KEY);
       if (view.features?.[INVOICING_FEATURE_KEY]) {
@@ -186,8 +213,14 @@ export function InvoicingSetting({ className }: { className?: string }) {
     entitlementControl = (
       <div className="flex items-center gap-2">
         <StatusBadge status="active" />
-        <span className="text-xs text-muted-foreground">Bolt-on · {price}</span>
-        {canManageBilling ? (
+        <span className="text-xs text-muted-foreground">
+          {sellsHere && managedHere ? `Bolt-on · ${price}` : "Bolt-on"}
+        </span>
+        {canManageBilling && surface === "store" ? (
+          <Button variant="outline" size="sm" onClick={() => void openIapManagement()}>
+            Manage in App Store
+          </Button>
+        ) : canManageBilling ? (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" disabled={addonBusy}>
@@ -225,10 +258,22 @@ export function InvoicingSetting({ className }: { className?: string }) {
   } else {
     entitlementControl = canManageBilling ? (
       <Button size="sm" disabled={addonBusy || !current} onClick={() => void buy()}>
-        {addAddon.isPending ? "Adding…" : `Add invoicing — ${price}`}
+        {iapFlow.state === "purchasing"
+          ? "Waiting for App Store…"
+          : addAddon.isPending || iapFlow.state === "reconciling"
+            ? "Adding…"
+            : `Add invoicing — ${price}`}
       </Button>
     ) : (
-      <span className="text-xs text-muted-foreground">Not on your plan — ask the owner</span>
+      <span className="text-xs text-muted-foreground">
+        {!sellsHere
+          ? "Not on your plan"
+          : current && !managedHere
+            ? surface === "web"
+              ? "Not on your plan — add it in the iPhone app"
+              : "Not on your plan — add it on the website"
+            : "Not on your plan — ask the owner"}
+      </span>
     );
   }
 
@@ -243,8 +288,9 @@ export function InvoicingSetting({ className }: { className?: string }) {
             <p className="text-base font-semibold tracking-tight">Invoicing</p>
             <p className="text-sm text-muted-foreground">
               Numbered PDF invoices, emailed to clients and issued automatically when a job is
-              marked attended. Included with Growth; a {price} bolt-on on Solo and Business.
-              {!current && !subscription.isLoading ? (
+              marked attended.
+              {sellsHere ? ` Included with Growth; a ${price} bolt-on on Solo and Business.` : ""}
+              {sellsHere && !current && !subscription.isLoading ? (
                 <>
                   {" "}
                   <Link to="/billing" className="underline">

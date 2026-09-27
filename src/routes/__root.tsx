@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -17,12 +17,16 @@ import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
 import { RecoveryPending } from "@/components/RecoveryPending";
+import { NativeReturnGate } from "@/components/NativeReturnGate";
+import { OfflineProvider } from "@/components/OfflineProvider";
+import { PullToRefresh } from "@/components/PullToRefresh";
+import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeScript } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
@@ -50,7 +54,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
@@ -190,20 +194,33 @@ function PasswordRecoveryGate({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // The mobile app runs Stripe in a browser sheet; when it is dismissed by hand
+  // the plan, cards or Connect status may have changed behind our cache.
+  useEffect(() => {
+    const refresh = () => void queryClient.invalidateQueries();
+    window.addEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+    return () => window.removeEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
+  }, [queryClient]);
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <OfflineProvider queryClient={queryClient}>
       <ThemeProvider>
         <AuthProvider>
           <TenantProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <PasswordRecoveryGate>
-              <Outlet />
-            </PasswordRecoveryGate>
-            <Toaster position="top-right" richColors />
+            {/* Native return is outermost: it consumes a one-shot handoff value and
+                leaves the page, so it must not be blocked by the recovery gate. */}
+            <NativeReturnGate>
+              <PasswordRecoveryGate>
+                <Outlet />
+              </PasswordRecoveryGate>
+            </NativeReturnGate>
+            <Toaster />
             <MfaDialog />
+            <PullToRefresh />
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </OfflineProvider>
   );
 }

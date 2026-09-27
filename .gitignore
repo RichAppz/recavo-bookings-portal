@@ -42,6 +42,17 @@ android/app/src/main/assets/public/
 android/local.properties
 android/capacitor-cordova-android-plugins/
 
+# Fastlane
+fastlane/build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Bundler
+vendor/bundle/
+.bundle/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

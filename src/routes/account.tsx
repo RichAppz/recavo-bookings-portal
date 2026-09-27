@@ -1,7 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { CalendarClock, CalendarDays, Receipt, Store, Ticket, Wallet } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  Gift,
+  Hourglass,
+  Receipt,
+  Store,
+  Ticket,
+  Wallet,
+} from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
@@ -9,6 +18,7 @@ import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
 import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
 import { businessIdPendingCardReturn } from "@/components/BookingFlow";
 import { CalendarDayBooker } from "@/components/CalendarDayBooker";
+import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
 import { Button } from "@/components/ui/button";
@@ -21,6 +31,7 @@ import {
   usePortalAcrossStudios,
   usePortalBusinesses,
   usePortalLink,
+  usePortalPackageLinksAcrossStudios,
   stripeCheckoutFrom,
   stripeCheckoutUnavailableMessage,
   useStartPortalBookingPayment,
@@ -28,16 +39,63 @@ import {
   type FromStudio,
   type PortalBusinessSummary,
   type PortalCredit,
+  type PortalPackageRequest,
   type PublicBookingPayment,
+  type PublicPackageLink,
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
 import { userDisplayName } from "@/lib/api/types";
-import { bookingNeedsPayment, isSettledPaymentState } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate } from "@/lib/format";
+import {
+  bookingNeedsPayment,
+  bookingSettlement,
+  isSettledPaymentState,
+} from "@/lib/booking-payment";
+import { describeClientLiftForCustomer } from "@/lib/client-lift";
+import {
+  formatAllDaySpan,
+  formatDuration,
+  formatInTz,
+  formatMoney,
+  isoDate,
+  isoDateInTz,
+} from "@/lib/format";
+import { isMultiDay } from "@/lib/working-days";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+/**
+ * The lift the business arranged once the customer has dropped their vehicle off,
+ * read-only and worded as their confirmation was. Only detailers ever set one.
+ */
+function liftLine(booking: Pick<Booking, "clientLift">): string | null {
+  return describeClientLiftForCustomer(booking.clientLift);
+}
+
+/**
+ * What the customer owes on a booking, in their words (RECA-523): the deposit while
+ * that is what "Pay now" takes, then the balance — "after the job" when the business
+ * settles up afterwards. Nothing for bookings with no money story to tell.
+ */
+function customerMoneyHint(booking: Booking, payments: readonly Payment[]): string | null {
+  // Settled card payments from before paidMinor existed count as paid too.
+  if (!bookingNeedsPayment(booking, payments)) return null;
+  const s = bookingSettlement(booking);
+  if (s.state === "free" || s.state === "credit" || s.state === "paid") return null;
+  const later = s.balanceAfterJob ? "after the job" : "later";
+  const owed = formatMoney(s.outstandingMinor, booking.currency);
+  if (s.depositMinor != null && s.paidMinor < s.depositMinor) {
+    return `${formatMoney(s.dueNowMinor, booking.currency)} deposit to pay now · ${formatMoney(s.outstandingMinor - s.dueNowMinor, booking.currency)} ${later}`;
+  }
+  if (s.state === "deposit_paid") return `Deposit paid · ${owed} ${later}`;
+  if (s.state === "part_paid")
+    return `${formatMoney(s.paidMinor, booking.currency)} paid · ${owed} ${later}`;
+  return s.balanceAfterJob ? `${owed} to pay after the job` : `${owed} to pay`;
+}
+
 const searchSchema = z.object({
-  view: z.enum(["overview", "calendar", "credits", "purchases", "invoices", "profile"]).optional(),
+  view: z
+    .enum(["overview", "calendar", "offers", "credits", "purchases", "invoices", "profile"])
+    .optional(),
   // Stripe 3-D Secure returns here when checkout ran from the account drawer.
   payment_intent: z.string().optional(),
   payment_intent_client_secret: z.string().optional(),
@@ -62,6 +120,7 @@ export const Route = createFileRoute("/account")({
 const TITLES: Record<AccountView, { title: string; description: string }> = {
   overview: { title: "My account", description: "Your bookings, credits and payments." },
   calendar: { title: "Calendar", description: "Your bookings, month by month." },
+  offers: { title: "Offers", description: "Sessions and packages picked out for you." },
   credits: { title: "Credits", description: "Bookings you've already paid for." },
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
   invoices: { title: "Invoices", description: "Invoices businesses have sent you, as PDFs." },
@@ -100,7 +159,7 @@ function AccountPage() {
   if (studios.isLoading || !studios.data) {
     return (
       <AccountShell view={view} title={copy.title}>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="surface-card h-[124px] animate-pulse" />
           ))}
@@ -134,11 +193,17 @@ function AccountContent({
   studios: PortalBusinessSummary[];
 }) {
   const { user } = useAuth();
-  const { bookings, credits, payments } = usePortalAcrossStudios(studios);
+  const { bookings, credits, payments, packageRequests } = usePortalAcrossStudios(studios);
+  const pendingRequests = useMemo(
+    () => (packageRequests.data ?? []).filter((r) => r.status === "pending"),
+    [packageRequests.data],
+  );
+  const offers = usePortalPackageLinksAcrossStudios(studios);
   const startPayment = useStartPortalBookingPayment(undefined);
   const syncPayment = useSyncPortalBookingPayment();
   const [bookingStudio, setBookingStudio] = useState<PortalBusinessSummary | null>(null);
   const [bookingSeed, setBookingSeed] = useState<BookingSeed | null>(null);
+  const [bookingOffer, setBookingOffer] = useState<{ code: string; name: string } | null>(null);
   const [calDay, setCalDay] = useState(isoDate(new Date()));
   const [checkout, setCheckout] = useState<{
     payment: PublicBookingPayment;
@@ -154,6 +219,7 @@ function AccountContent({
     const studio = studios.find((s) => s.id === id);
     if (studio) {
       setBookingSeed(null);
+      setBookingOffer(null);
       setBookingStudio(studio);
     }
   }, [studios]);
@@ -219,7 +285,14 @@ function AccountContent({
 
   const openBooking = (studio: PortalBusinessSummary, seed?: BookingSeed | null) => {
     setBookingSeed(seed ?? null);
+    setBookingOffer(null);
     setBookingStudio(studio);
+  };
+
+  const openOffer = (offer: FromStudio<PublicPackageLink>) => {
+    setBookingSeed(null);
+    setBookingOffer(offer.link);
+    setBookingStudio(offer.studio);
   };
 
   return (
@@ -242,6 +315,7 @@ function AccountContent({
             studios={studios}
             upcoming={upcoming}
             usable={usable}
+            pendingRequests={pendingRequests}
             history={history}
             sessions={sessions}
             loading={bookings.isPending}
@@ -255,25 +329,39 @@ function AccountContent({
             selected={calDay}
             onSelectedChange={setCalDay}
             emptyHint="Nothing booked on this day."
+            hideSelectedList
             aside={
-              <CalendarDayBooker
-                date={calDay}
-                studios={studios}
-                credits={usable}
-                onBookPaid={(paid) =>
-                  openBooking(paid.studio, {
-                    date: paid.date,
-                    serviceId: paid.serviceId,
-                    locationId: paid.locationId,
-                    slot: paid.slot,
-                  })
-                }
-              />
+              <>
+                <CalendarDayManage
+                  date={calDay}
+                  bookings={live}
+                  solo={solo}
+                  onPay={(booking) => void payNow(booking)}
+                  payingId={payingId}
+                  payments={history}
+                />
+                <CalendarDayBooker
+                  date={calDay}
+                  studios={studios}
+                  credits={usable}
+                  onBookPaid={(paid) =>
+                    openBooking(paid.studio, {
+                      date: paid.date,
+                      serviceId: paid.serviceId,
+                      locationId: paid.locationId,
+                      slot: paid.slot,
+                    })
+                  }
+                />
+              </>
             }
           />
+        ) : view === "offers" ? (
+          <Offers offers={offers.data} loading={offers.isPending} solo={solo} onOpen={openOffer} />
         ) : view === "credits" ? (
           <Credits
             credits={usable}
+            pendingRequests={pendingRequests}
             studios={studios}
             solo={solo}
             onBook={(studio) => openBooking(studio)}
@@ -316,15 +404,71 @@ function AccountContent({
       <BookSessionDrawer
         studio={bookingStudio}
         seed={bookingSeed}
+        offer={bookingOffer}
         open={bookingStudio !== null}
         onOpenChange={(open) => {
           if (!open) {
             setBookingStudio(null);
             setBookingSeed(null);
+            setBookingOffer(null);
           }
         }}
       />
     </>
+  );
+}
+
+/** Bookings on the selected calendar day, with Move / Cancel for the ones still open. */
+function CalendarDayManage({
+  date,
+  bookings,
+  solo,
+  onPay,
+  payingId,
+  payments,
+}: {
+  date: string;
+  bookings: FromStudio<Booking>[];
+  solo: boolean;
+  onPay: (booking: FromStudio<Booking>) => void;
+  payingId: string | null;
+  payments: FromStudio<Payment>[];
+}) {
+  const onDay = bookings.filter((b) => isoDateInTz(b.start, b.timezone) === date);
+  if (onDay.length === 0) return null;
+  return (
+    <ul className="space-y-3">
+      {onDay.map((b) => {
+        const needsPay = bookingNeedsPayment(b, payments);
+        return (
+          <li key={b.id} className="rounded-xl border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {b.allDay ? "All day" : formatInTz(b.start, b.timezone, { timeStyle: "short" })}
+                  {solo ? "" : ` · ${b.studio.tradingName}`}
+                </p>
+              </div>
+              <StatusBadge status={b.status} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {needsPay ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={payingId === b.id}
+                  onClick={() => onPay(b)}
+                >
+                  {payingId === b.id ? "Starting…" : "Pay now"}
+                </Button>
+              ) : null}
+              <ClientBookingActions booking={b} businessId={b.studio.id} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -339,6 +483,7 @@ function Overview({
   studios,
   upcoming,
   usable,
+  pendingRequests,
   history,
   sessions,
   loading,
@@ -350,6 +495,7 @@ function Overview({
   studios: PortalBusinessSummary[];
   upcoming: FromStudio<Booking>[];
   usable: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
   history: FromStudio<Payment>[];
   sessions: CalendarSession[];
   loading: boolean;
@@ -369,7 +515,13 @@ function Overview({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <PendingPackageRequests requests={pendingRequests} solo={solo} />
+
+      {/* Explicit `grid-cols-1` (minmax(0, 1fr)) on every phone-width grid: a bare
+          `grid` sizes its single implicit column to the widest item's min-content, and
+          with a nowrap (`truncate`) name inside, that can be wider than the screen. The
+          column then grows past the viewport and the whole page scrolls sideways. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="Next booking"
           value={
@@ -396,7 +548,9 @@ function Overview({
           hint={
             usable[0]
               ? `Next expires ${formatInTz(usable[0].expiresAt, "Europe/London", { day: "numeric", month: "short" })}`
-              : "No prepaid credits"
+              : pendingRequests.length > 0
+                ? `${pendingRequests.length} package ${pendingRequests.length === 1 ? "request" : "requests"} awaiting confirmation`
+                : "No prepaid credits"
           }
           icon={<Ticket className="size-4.5" />}
         />
@@ -408,7 +562,7 @@ function Overview({
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <SectionCard
           title="Upcoming bookings"
           action={
@@ -433,39 +587,73 @@ function Overview({
             </div>
           ) : (
             <ul className="divide-y">
-              {upcoming.slice(0, 6).map((b) => (
-                <li
-                  key={b.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {formatInTz(b.start, b.timezone, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {solo ? "" : ` · ${b.studio.tradingName}`}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {bookingNeedsPayment(b, history) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={payingId === b.id}
-                        onClick={() => onPay(b)}
-                      >
-                        {payingId === b.id ? "Starting…" : "Pay now"}
-                      </Button>
-                    ) : null}
-                    <StatusBadge status={b.status} />
-                  </div>
-                </li>
-              ))}
+              {upcoming.slice(0, 6).map((b) => {
+                const needsPay = bookingNeedsPayment(b, history);
+                const hint = customerMoneyHint(b, history);
+                return (
+                  // Phone: the status chip sits beside the name, the date and money
+                  // lines wrap underneath, and "Pay now" drops to its own line. Squeezed
+                  // into one row next to two buttons, the text had a few letters left.
+                  // From `sm` up it is the original one-line row: text left, actions right.
+                  <li
+                    key={b.id}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1 basis-full sm:basis-0">
+                      <div className="flex items-center justify-between gap-2 sm:block">
+                        <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
+                        <StatusBadge status={b.status} className="sm:hidden" />
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
+                        {b.allDay
+                          ? `${formatAllDaySpan(b.start, b.end, b.timezone)} · All day`
+                          : formatInTz(b.start, b.timezone, {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                        {/* A job over several days says when it is ready — its real end,
+                            after any days the business does not work. */}
+                        {!b.allDay && isMultiDay(b, b.timezone)
+                          ? ` → ready ${formatInTz(b.end, b.timezone, {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                        {solo ? "" : ` · ${b.studio.tradingName}`}
+                      </p>
+                      {hint ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">{hint}</p>
+                      ) : null}
+                      {/* Read-only: the lift the business arranged after drop-off. */}
+                      {liftLine(b) ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
+                          {liftLine(b)}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {needsPay ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={payingId === b.id}
+                          onClick={() => onPay(b)}
+                        >
+                          {payingId === b.id ? "Starting…" : "Pay now"}
+                        </Button>
+                      ) : null}
+                      <ClientBookingActions booking={b} businessId={b.studio.id} />
+                      <StatusBadge status={b.status} className="hidden sm:inline-flex" />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </SectionCard>
@@ -533,51 +721,196 @@ function Overview({
   );
 }
 
+/**
+ * Offer links a studio has handed to this customer. Each opens the booking drawer
+ * in offer mode, so sessions and packages the studio keeps off its public page are
+ * bookable here — that is usually the point of sending one.
+ */
+function Offers({
+  offers,
+  loading,
+  solo,
+  onOpen,
+}: {
+  offers: FromStudio<PublicPackageLink>[];
+  loading: boolean;
+  solo: boolean;
+  onOpen: (offer: FromStudio<PublicPackageLink>) => void;
+}) {
+  if (loading && offers.length === 0) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 2 }, (_, i) => (
+          <div key={i} className="surface-card h-[164px] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  if (offers.length === 0) {
+    return (
+      <EmptyState
+        icon={<Gift className="size-5" />}
+        title="No offers yet"
+        description="When a business picks out sessions or packages for you, they'll appear here ready to book."
+      />
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {offers.map((offer) => {
+        return (
+          <div
+            key={`${offer.studio.id}:${offer.link.code}`}
+            className="surface-card flex flex-col gap-4 p-5"
+          >
+            <div>
+              <p className="text-lg font-semibold">{offer.link.name}</p>
+              {!solo ? (
+                <p className="text-sm text-muted-foreground">{offer.studio.tradingName}</p>
+              ) : null}
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {offer.services.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-3">
+                  <span className="truncate">{s.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {formatDuration(s.durationMinutes)} ·{" "}
+                    {formatMoney(s.basePriceMinor, s.currency)}
+                  </span>
+                </li>
+              ))}
+              {offer.packages.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <span className="truncate">{p.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {p.creditsIssued} credits · {formatMoney(p.priceMinor, p.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Button size="sm" className="mt-auto self-start" onClick={() => onOpen(offer)}>
+              <Gift className="size-4" /> Book or buy
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Packages the customer has asked for that the studio has not confirmed yet. Shown on
+ * the Overview and above Credits so "I sent it, they haven't confirmed" is visible
+ * wherever they land rather than only once the credits appear.
+ */
+function PendingPackageRequests({
+  requests,
+  solo,
+}: {
+  requests: FromStudio<PortalPackageRequest>[];
+  solo: boolean;
+}) {
+  if (requests.length === 0) return null;
+  return (
+    <div className="surface-card space-y-3 border-warning/40 bg-warning-soft/40 p-5 text-sm">
+      <div className="flex items-center gap-2">
+        <Hourglass className="size-4 text-warning-foreground" />
+        <p className="font-medium">
+          {requests.length === 1
+            ? "Package request sent — waiting on the studio"
+            : `${requests.length} package requests sent — waiting on the studio`}
+        </p>
+      </div>
+      <ul className="space-y-1.5">
+        {requests.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span>
+              <span className="font-medium">{r.packageName}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                · {r.creditsIssued} {r.creditsIssued === 1 ? "credit" : "credits"} ·{" "}
+                {formatMoney(r.amountMinor, r.currency)}
+                {solo ? "" : ` · ${r.studio.tradingName}`}
+              </span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Sent {formatInTz(r.createdAt, "Europe/London", { day: "numeric", month: "short" })}
+              {" · "}
+              <StatusBadge status="pending" />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        {solo
+          ? "The studio will confirm once payment is arranged; your credits appear here as soon as they do."
+          : "Each studio confirms once payment is arranged; your credits appear here as soon as they do."}
+      </p>
+    </div>
+  );
+}
+
 function Credits({
   credits,
+  pendingRequests,
   studios,
   solo,
   onBook,
 }: {
   credits: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
   studios: PortalBusinessSummary[];
   solo: boolean;
   onBook: (studio: PortalBusinessSummary) => void;
 }) {
+  // A package asked for but not yet confirmed by the studio: shown above the credits
+  // so the customer knows why they have not appeared yet.
+  const waiting = <PendingPackageRequests requests={pendingRequests} solo={solo} />;
+
   if (credits.length === 0) {
     return (
-      <EmptyState
-        icon={<Ticket className="size-5" />}
-        title="No prepaid credits"
-        description="Buy a package and your credits land here, ready to book."
-        action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
-      />
+      <div className="space-y-4">
+        {waiting}
+        <EmptyState
+          icon={<Ticket className="size-5" />}
+          title="No prepaid credits"
+          description={
+            pendingRequests.length > 0
+              ? "Your credits land here as soon as the studio confirms your request."
+              : "Buy a package and your credits land here, ready to book."
+          }
+          action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {credits.map((c) => (
-        <div key={c.id} className="surface-card flex flex-col gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-3xl font-semibold tracking-tight tabular-nums">{c.available}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                of {c.unitsIssued} {c.unitsIssued === 1 ? "credit" : "credits"} left
-              </p>
+    <div className="space-y-4">
+      {waiting}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {credits.map((c) => (
+          <div key={c.id} className="surface-card flex flex-col gap-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-3xl font-semibold tracking-tight tabular-nums">{c.available}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  of {c.unitsIssued} {c.unitsIssued === 1 ? "credit" : "credits"} left
+                </p>
+              </div>
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <Ticket className="size-4.5" />
+              </span>
             </div>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary">
-              <Ticket className="size-4.5" />
-            </span>
+            <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
+              {solo ? null : <p className="truncate font-medium">{c.studio.tradingName}</p>}
+              <p>Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}</p>
+              {c.reserved > 0 ? <p>{c.reserved} held against a pending booking</p> : null}
+            </div>
+            <BookWithCredit studio={c.studio} full />
           </div>
-          <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
-            {solo ? null : <p className="truncate font-medium">{c.studio.tradingName}</p>}
-            <p>Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}</p>
-            {c.reserved > 0 ? <p>{c.reserved} held against a pending booking</p> : null}
-          </div>
-          <BookWithCredit studio={c.studio} full />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

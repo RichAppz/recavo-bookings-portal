@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
+import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
 import { StatsGhost } from "@/components/ghost";
@@ -94,11 +95,17 @@ function pctChange(current: number, previous: number) {
 
 function planGateMessage(error: unknown) {
   if (!(error instanceof ApiError)) return null;
+  // A store app that cannot sell states the gate without an upgrade prompt
+  // (saasPurchasesAllowedInApp).
   if (error.code === "FEATURE_NOT_AVAILABLE") {
-    return "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics.";
+    return saasPurchasesAllowedInApp()
+      ? "Advanced reports aren't included on your current plan. Upgrade to unlock full analytics."
+      : "Advanced reports aren't included on your current plan.";
   }
   if (error.code === "BILLING_ACCESS_REQUIRED") {
-    return "Your subscription needs attention before reports can be loaded. Open billing to start or update a Recavo plan.";
+    return saasPurchasesAllowedInApp()
+      ? "Your subscription needs attention before reports can be loaded. Open billing to start or update a Recavo plan."
+      : "Your subscription needs attention before reports can be loaded.";
   }
   return null;
 }
@@ -235,22 +242,24 @@ function ReportsPage() {
             className="w-40"
           />
         </div>
-        <div className="grid gap-2">
-          <Label>Location</Label>
-          <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All locations</SelectItem>
-              {tenant.locations.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {tenant.locations.length > 1 ? (
+          <div className="grid gap-2">
+            <Label>Location</Label>
+            <Select value={locationId} onValueChange={setLocationId}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
+                {tenant.locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       <Can
@@ -267,11 +276,14 @@ function ReportsPage() {
             title="Reports unavailable"
             description={planGate}
             action={
-              <Button asChild>
-                <Link to="/settings" search={{ tab: "billing" }}>
-                  Go to billing
-                </Link>
-              </Button>
+              // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
+              saasPurchasesAllowedInApp() ? (
+                <Button asChild>
+                  <Link to="/settings" search={{ tab: "billing" }}>
+                    Go to billing
+                  </Link>
+                </Button>
+              ) : undefined
             }
           />
         ) : dashboard.isLoading ? (
@@ -280,7 +292,7 @@ function ReportsPage() {
           <EmptyState title="Couldn't load reports" description="Please try again shortly." />
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
               <StatCard
                 label="Revenue"
                 value={formatMoney(dashboard.data.revenue.netMinor, dashboard.data.basis.currency)}
