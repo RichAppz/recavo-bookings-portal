@@ -21,9 +21,9 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 /**
- * "Today's pack": what someone on the road needs if the signal goes.
+ * "This week's pack": what someone on the road needs if the signal goes.
  *
- * While the app is open and online it quietly fetches today's and tomorrow's
+ * While the app is open and online it quietly fetches the next PREFETCH_DAYS of
  * jobs — the day-view calendar queries exactly as the Calendar page asks for
  * them — then each job's detail, client, vehicle/record, history, payments and
  * invoices, using the same query options the booking panel uses, so opening any
@@ -37,6 +37,9 @@ const MIN_GAP_MS = 60_000;
 const MAX_JOBS = 60;
 /** Treat data younger than this as good enough — no point refetching a job every run. */
 const PACK_STALE_MS = 10 * 60_000;
+/** How many days ahead to prefetch. 7 covers the working week so a Monday morning
+ *  offline still has Friday's jobs cached from a Sunday evening sync. */
+const PREFETCH_DAYS = 7;
 
 export function OfflinePack() {
   const tenant = useTenant();
@@ -92,7 +95,7 @@ async function prefetchPack(
   const { businessId, locationId } = opts;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const days = [today, addDays(today, 1)];
+  const days = Array.from({ length: PREFETCH_DAYS }, (_, i) => addDays(today, i));
 
   const warm = <T extends { queryKey: readonly unknown[] }>(options: T) =>
     qc
@@ -101,7 +104,7 @@ async function prefetchPack(
       >[0])
       .catch(() => undefined);
 
-  // Day views for today and tomorrow, plus the events beside them.
+  // Day views for each day in the range, plus the events beside them.
   const lists = await Promise.all(
     days.map((start) => {
       const range = { from: start.toISOString(), to: addDays(start, 1).toISOString() };
