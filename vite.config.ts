@@ -9,7 +9,14 @@ import { loadEnv } from "vite";
 
 // The deployed API does not send CORS headers for the local dev origin, so in
 // dev the browser calls same-origin "/api/*" and Vite proxies to the real API.
-const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+//
+// Honour `vite dev --mode staging` so the proxy reads .env.staging like the
+// client bundle does; NODE_ENV alone is always "development" under `vite dev`,
+// which silently sent staging sessions to the local API port.
+const modeFlag = process.argv.findIndex((a) => a === "--mode" || a === "-m");
+const mode =
+  (modeFlag >= 0 ? process.argv[modeFlag + 1] : undefined) || process.env.NODE_ENV || "development";
+const env = loadEnv(mode, process.cwd(), "");
 const apiTarget = env.VITE_API_BASE_URL || "http://localhost:3000";
 
 export default defineConfig({

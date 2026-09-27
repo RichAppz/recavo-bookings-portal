@@ -1304,6 +1304,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/brand/businesses/{businessId}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A business’s uploaded logo
+         * @description The image uploaded via `PUT /api/v1/businesses/{businessId}/branding/logo`. Public and embeddable cross-origin because mail clients, the booking page and invoice PDFs load it without credentials. `branding.logoUrl` carries a `?v=` content hash purely as a cache-buster; the route ignores the query. 404 when the business has no uploaded logo. Rate-limited per IP.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PNG or JPEG image bytes */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                        "image/jpeg": string;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -2198,7 +2347,155 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete the authenticated user’s account
+         * @description Self-serve account deletion (App Store guideline 5.1.1(v)). Deletes the sign-in identity, closes every business the caller is the only owner of through the normal closure workflow (export window, Stripe cancellation, retention anonymisation), suspends their other memberships, revokes sessions and scrubs all personal data from the user record. App Store subscriptions are not cancelled by this call — the user must cancel them in iOS Settings. Irreversible.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        confirm: "DELETE";
+                    };
+                };
+            };
+            responses: {
+                /** @description The account is deleted and the session cookie cleared */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: date-time */
+                            deletedAt: string;
+                            closingBusinesses: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                appleSubscription: boolean;
+                            }[];
+                            leavingBusinessIds: string[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -2346,6 +2643,163 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/me/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview what deleting the account will do
+         * @description Lists the businesses that will be closed (the caller is their only owner) and the businesses the caller will simply leave. Drive the confirmation dialog from this.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Consequences of deleting the account */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Businesses solely owned by the user; deleting the account closes them. */
+                            closingBusinesses: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                appleSubscription: boolean;
+                            }[];
+                            /** @description Businesses the user only belongs to; they lose their membership. */
+                            leavingBusinessIds: string[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/public/businesses/by-slug/{slug}": {
@@ -2699,7 +3153,10 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            services: components["schemas"]["CatalogueService"][];
+                            services: (components["schemas"]["CatalogueService"] & {
+                                /** @description Extras the visitor can tick with this service (`upsells` feature). Pass the chosen ids as `additionalServiceIds` on availability; the hold books them. */
+                                upsells: components["schemas"]["PublicServiceUpsell"][];
+                            })[];
                         };
                     };
                 };
@@ -2984,6 +3441,10 @@ export interface paths {
                     variantId?: string;
                     staffId?: string;
                     granularityMinutes?: number;
+                    /** @description Comma-separated ids of upsell add-ons ticked with the service. Each must be offered with it (400 NOT_OFFERED otherwise). Slots are sized for the whole job and `priceMinor` is the combined total at pairing prices; the ids ride in `slotToken` so the hold books exactly what was quoted. */
+                    additionalServiceIds?: string;
+                    /** @description Code from the shared package link the visitor arrived through. Lets them search a session that is kept off the general public page. Ignored when unknown or revoked. */
+                    linkCode?: string;
                 };
                 header?: never;
                 path: {
@@ -3166,6 +3627,8 @@ export interface paths {
                                     amount: number;
                                 };
                             }[];
+                            /** @description Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for. */
+                            onlinePaymentAvailable: boolean;
                         };
                     };
                 };
@@ -3285,7 +3748,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/public/businesses/{businessId}/package-purchases/payment": {
+    "/api/v1/public/businesses/{businessId}/package-links/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve a shared package link
+         * @description The sessions and packages a visitor holding this link may choose from, in the order the business picked, whether or not they are on the general public page. 404 for an unknown or revoked code, so the booking page can fall back to its ordinary listing.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Link with its sessions and packages */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for. */
+                            onlinePaymentAvailable: boolean;
+                            link: {
+                                code: string;
+                                name: string;
+                                /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
+                                showFullCatalogue: boolean;
+                            };
+                            services: components["schemas"]["CatalogueService"][];
+                            packages: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                description?: string | null;
+                                priceMinor: number;
+                                currency: string;
+                                creditsIssued: number;
+                                eligibleServiceIds?: string[];
+                                validity: {
+                                    /** @enum {string} */
+                                    kind: "calendar_months" | "days";
+                                    amount: number;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/businesses/{businessId}/package-requests": {
         parameters: {
             query?: never;
             header?: never;
@@ -3295,8 +3932,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start card payment for a package bought on the booking page
-         * @description Creates the buyer as a lead customer and a PaymentIntent on the business’s connected account. Credits are issued by the payment webhook once the card clears, not by this call. Rejects packages that are not on public sale.
+         * Ask for a package the business cannot sell online
+         * @description For businesses without card processing: records the visitor as a lead customer and a pending package request the business confirms (credits issued, payment arranged between them) or declines from Packages. Refused with 422 when the business does take card payment, so it cannot be used to skip checkout. Same package visibility rules as the checkout endpoint.
          */
         post: {
             parameters: {
@@ -3314,6 +3951,185 @@ export interface paths {
                     "application/json": {
                         /** Format: uuid */
                         packageId: string;
+                        linkCode?: string | null;
+                        firstName: string;
+                        lastName?: string | null;
+                        email?: string | null;
+                        phone?: string | null;
+                        marketingConsent?: boolean;
+                        /** @description Optional note to the business, e.g. how they would like to pay. */
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The pending request and a claim token for portal access */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: {
+                                /** Format: uuid */
+                                id: string;
+                                /** @enum {string} */
+                                status: "pending" | "confirmed" | "declined";
+                                packageName: string;
+                                creditsIssued: number;
+                                amountMinor: number;
+                                currency: string;
+                            };
+                            claimToken: string;
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/businesses/{businessId}/package-purchases/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start card payment for a package bought on the booking page
+         * @description Creates the buyer as a lead customer and a PaymentIntent on the business’s connected account. Credits are issued by the payment webhook once the card clears, not by this call. Rejects packages that are not on public sale unless a live linkCode names them.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        packageId: string;
+                        /** @description Code from the shared package link the buyer arrived through. Lets them buy a package that is kept off the general public page. Ignored when unknown or revoked. */
+                        linkCode?: string | null;
                         firstName: string;
                         lastName?: string | null;
                         email?: string | null;
@@ -3483,6 +4299,8 @@ export interface paths {
                     "application/json": {
                         /** @description Signed slot token from availability search. */
                         slotToken: string;
+                        /** @description Code from the shared package link the visitor arrived through. Lets them hold a session that is kept off the general public page. Ignored when unknown or revoked. */
+                        linkCode?: string | null;
                         firstName: string;
                         lastName?: string | null;
                         email?: string | null;
@@ -3517,6 +4335,185 @@ export interface paths {
                             bankTransferAvailable: boolean;
                             /** @description What checkout collects right now (RECA-523): the deposit when one is set, otherwise the full price. Card intents and bank-transfer instructions both charge/quote this amount. */
                             amountDueNowMinor: number;
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/businesses/{businessId}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join the waitlist from the public booking page
+         * @description "Can’t find a time? Join the waitlist." Identifies the visitor the way a public booking does (name + email and/or phone; an existing customer with matching contact details is reused). No slot is reserved and nothing is promised: staff are shown the entry and book people in by hand. The visitor receives a "you’re on the list" message by email/text. A repeat join for the same service returns the existing entry with `alreadyOnList: true` (200). Rate-limited like booking holds.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        serviceId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        firstName: string;
+                        lastName?: string | null;
+                        /** @description Email or phone is required. */
+                        email?: string | null;
+                        phone?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        marketingConsent?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Joined (201) or already on the list (200) */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            waitlist: components["schemas"]["PublicWaitlistReceipt"];
                         };
                     };
                 };
@@ -4878,13 +5875,17 @@ export interface paths {
         };
         /**
          * List own bookings
-         * @description Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232).
+         * @description Bookings where lead_customer_id equals the authorised linked customer (business_id + customer_id bound server-side; RECA-81 / RECA-232). Bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (ordered by start time, RECA-482).
          */
         get: {
             parameters: {
                 query: {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -4892,13 +5893,18 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Success */
+                /** @description Own bookings page */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            bookings: components["schemas"]["Booking"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -5920,6 +6926,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portal/package-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List package links handed to me
+         * @description Live links the business has assigned to the authorised linked customer, each resolved to its sessions and packages exactly as the public `?offer=` route would, so the account can open the booking flow in offer mode. Newest first.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
+                    businessId: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Assigned links */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            links: {
+                                /** @description Whether the business can take card payment for packages online. When false the checkout endpoint would be refused; send a package request instead, which the business confirms and arranges payment for. */
+                                onlinePaymentAvailable: boolean;
+                                link: {
+                                    code: string;
+                                    name: string;
+                                    /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
+                                    showFullCatalogue: boolean;
+                                };
+                                services: components["schemas"]["CatalogueService"][];
+                                packages: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    description?: string | null;
+                                    priceMinor: number;
+                                    currency: string;
+                                    creditsIssued: number;
+                                    eligibleServiceIds?: string[];
+                                    validity: {
+                                        /** @enum {string} */
+                                        kind: "calendar_months" | "days";
+                                        amount: number;
+                                    };
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portal/credits": {
         parameters: {
             query?: never;
@@ -6067,7 +7249,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/portal/payments": {
+    "/api/v1/portal/package-requests": {
         parameters: {
             query?: never;
             header?: never;
@@ -6075,8 +7257,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List own payments
-         * @description Payments for the authorised linked customer only (business_id + customer_id; RECA-81).
+         * List own package requests
+         * @description Packages the authorised linked customer asked for while the business had no card processing. A pending request explains why no credits have appeared yet; a declined one carries the business’s note when they left one.
          */
         get: {
             parameters: {
@@ -6097,6 +7279,614 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List own payments
+         * @description Payments for the authorised linked customer only (business_id + customer_id; RECA-81). Newest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more (RECA-482).
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
+                    businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Own payments page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            payments: components["schemas"]["Payment"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List own invoices
+         * @description Issued, paid and voided invoices for the authorised linked customer only (drafts are never shown; a voided one stays listed so the number is accounted for). Newest first.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
+                    businessId: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invoices */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoices: components["schemas"]["Invoice"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/invoices/{invoiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get own invoice
+         * @description Another customer’s invoice or a draft is 404 — existence is never revealed.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
+                    businessId: string;
+                };
+                header?: never;
+                path: {
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The invoice */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/invoices/{invoiceId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download own invoice PDF */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
+                    businessId: string;
+                };
+                header?: never;
+                path: {
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PDF document */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -6223,7 +8013,7 @@ export interface paths {
         };
         /**
          * Get own conversation
-         * @description Conversation for the authorised linked customer in the current business (RECA-81).
+         * @description Conversation for the authorised linked customer in the current business (RECA-81). Read-only: `conversation` is null until the first message opens the thread (RECA-482 — a GET never creates rows).
          */
         get: {
             parameters: {
@@ -6237,13 +8027,17 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Success */
+                /** @description Own conversation, or null before the first message */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            conversation: components["schemas"]["Conversation"] | null;
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -6368,12 +8162,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List portal conversation messages */
+        /**
+         * List portal conversation messages
+         * @description Oldest first and bounded: `limit` defaults to 100 (max 200); pass `nextCursor` back as `cursor` for more. Empty until the first message opens the thread (RECA-482).
+         */
         get: {
             parameters: {
                 query: {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -6381,7 +8182,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Messages */
+                /** @description Messages page */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -6390,6 +8191,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             messages: components["schemas"]["ConversationMessage"][];
+                            nextCursor: components["schemas"]["NextCursor"];
                         };
                     };
                 };
@@ -6504,7 +8306,7 @@ export interface paths {
         put?: never;
         /**
          * Post a message to own conversation
-         * @description Customer appends a message to their own conversation (business_id + customer_id bound server-side). Rate-limited (RECA-81).
+         * @description Customer appends a message to their own conversation (business_id + customer_id bound server-side); the first message opens the thread. Rate-limited and requires `Idempotency-Key` so a retried send posts once (RECA-81 / RECA-482).
          */
         post: {
             parameters: {
@@ -6512,7 +8314,9 @@ export interface paths {
                     /** @description Business scope for the portal session. The authorised customer is resolved from the authenticated portal user link — never from a client-supplied customerId (RECA-81). */
                     businessId: string;
                 };
-                header?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -7270,7 +9074,11 @@ export interface paths {
                         "x-request-id": components["headers"]["X-Request-Id"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            referral: components["schemas"]["ReferralProgramView"];
+                        };
+                    };
                 };
                 /** @description Created */
                 201: {
@@ -7561,10 +9369,38 @@ export interface paths {
                         tax?: {
                             vatRegistered?: boolean;
                             vatNumber?: string | null;
+                            /** @description VAT rate in basis points (2000 = 20%). Drives the per-line VAT breakdown on invoices when vatRegistered; null = no VAT breakdown (ADR 0019). */
+                            vatRateBps?: number | null;
+                            /** @description Whether service prices already include VAT (UK consumer default true). Exclusive pricing adds VAT on top of the line total. */
+                            pricesIncludeVat?: boolean;
                         };
                         retention?: {
                             closureWindowDays?: number;
                             fileRetentionDays?: number | null;
+                        };
+                        /** @description Customer invoicing preferences (ADR 0019). Invoicing itself is the `invoicing` feature (included in Growth, paid bolt-on below); these settings apply once entitled. */
+                        invoicing?: {
+                            /** @description Issue and email a PDF invoice automatically when a job is marked attended/completed. */
+                            autoSendOnCompletion?: boolean;
+                            /** @description Prefix for sequential invoice numbers, e.g. `INV-` → INV-0001. */
+                            numberPrefix?: string;
+                            dueDays?: number;
+                            footerNote?: string | null;
+                        };
+                        /** @description Console calendar settings. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). `eventColour` is the default for new events (null = slate). `publicHolidays` picks which UK holiday set the calendar marks, or null for none. Staff-only. */
+                        calendar?: {
+                            paymentColours?: {
+                                paid?: string | null;
+                                partial?: string | null;
+                                unpaid?: string | null;
+                            };
+                            eventColour?: string | null;
+                            /** @enum {string|null} */
+                            publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
+                        };
+                        /** @description Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only. */
+                        navigation?: {
+                            hidden?: ("waitlist" | "consumables" | "packages" | "offer_links" | "follow_ups" | "records" | "staff" | "messages" | "invoices" | "reports" | "referrals")[];
                         };
                         legalAddress?: {
                             line1?: string;
@@ -7574,11 +9410,11 @@ export interface paths {
                             postalCode?: string;
                             country?: string;
                         } | null;
-                        /** @description Customer-facing email branding; null fields fall back to platform branding. */
+                        /** @description Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding. */
                         branding?: {
                             /**
                              * Format: uri
-                             * @description Absolute https URL to a logo image.
+                             * @description Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image.
                              */
                             logoUrl?: string | null;
                             /** @description Hex accent used for buttons and rules in email. */
@@ -7595,12 +9431,12 @@ export interface paths {
                             iban?: string | null;
                             bic?: string | null;
                         };
-                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
                         reminders?: {
                             rules: {
                                 minutesBefore: number;
                                 /**
-                                 * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                                 * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email.
                                  * @enum {string}
                                  */
                                 channel: "preferred" | "email" | "sms";
@@ -7730,6 +9566,295 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the business logo
+         * @description Send the image bytes as the request body with `Content-Type: image/png` or `image/jpeg` (≤ 1 MiB; PNG/JPEG verified from the bytes, SVG refused). The image is malware-scanned, stored once per business and published at a stable API-hosted URL that is written to `branding.logoUrl` — so it appears on invoice PDFs, customer emails and the public booking page. Re-uploading replaces the previous logo. Requires business.update. `400 VALIDATION_FAILED` with `errors[0].code` of `UNSUPPORTED_MEDIA_TYPE` / `TOO_LARGE` / `NOT_AN_IMAGE` / `MALWARE_DETECTED`; `422` when the scanner is unavailable.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            responses: {
+                /** @description Updated configuration with `branding.logoUrl` set */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            configuration: components["schemas"]["BusinessConfiguration"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Remove the business logo
+         * @description Deletes the uploaded image and clears `branding.logoUrl` (also clears an externally hosted URL). Requires business.update.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Updated configuration with `branding.logoUrl: null` */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            configuration: components["schemas"]["BusinessConfiguration"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/businesses/{businessId}/onboarding": {
@@ -9758,7 +11883,7 @@ export interface paths {
                         email?: string | null;
                         phone?: string | null;
                         /**
-                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement.
+                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020).
                          * @enum {string}
                          */
                         preferredChannel?: "email" | "phone" | "sms" | "none";
@@ -11476,7 +13601,7 @@ export interface paths {
                         email?: string | null;
                         phone?: string | null;
                         /**
-                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still requires the business to hold the reminders.sms entitlement.
+                         * @description Writable preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518); delivery still needs the business to be able to text (Growth tier or a prepaid credit, ADR 0020).
                          * @enum {string}
                          */
                         preferredChannel?: "email" | "phone" | "sms" | "none";
@@ -14343,7 +16468,136 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a linked record that was never booked
+         * @description Permanently removes the record and its ownership timeline. Only for records no booking has ever referenced: one with booking history returns `409 CONFLICT` and should be archived instead (`PATCH status=archived`, RECA-90). Requires customer.update and the `custom_records.manage` feature.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    recordId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Record has bookings — archive it instead (CONFLICT) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /**
@@ -16987,6 +19241,13 @@ export interface paths {
                         publicVisible?: boolean;
                         colour?: string | null;
                         displayOrder?: number;
+                        /** @description Set the follow-up rule; `null` switches it off. Omit to leave unchanged. */
+                        followUp?: {
+                            intervalMonths: number;
+                            /** @default 14 */
+                            leadDays?: number;
+                            label?: string | null;
+                        } | null;
                     };
                 };
             };
@@ -17259,7 +19520,136 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a service that was never booked
+         * @description Permanently removes the service. Only for services no booking has ever referenced (including cancelled bookings): one with booking history returns `409 CONFLICT` and should be deactivated instead (`PATCH active=false`). Requires business.update.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Service has bookings — deactivate it instead (CONFLICT) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update a service */
@@ -17320,6 +19710,13 @@ export interface paths {
                         active?: boolean;
                         colour?: string | null;
                         displayOrder?: number;
+                        /** @description Set the follow-up rule; `null` switches it off. Omit to leave unchanged. */
+                        followUp?: {
+                            intervalMonths: number;
+                            /** @default 14 */
+                            leadDays?: number;
+                            label?: string | null;
+                        } | null;
                     };
                 };
             };
@@ -17469,6 +19866,8 @@ export interface paths {
                     variantId?: string | null;
                     staffId?: string | null;
                     granularityMinutes?: number;
+                    /** @description Quote times as if the staff member’s all-day jobs were not there, so a short job can be squeezed in beside one as a drop-in. Timed bookings, calendar blocks, time off and working hours still apply. Book the chosen slot with `dropIn: true`. Staff only — the public availability search never ignores holds. */
+                    dropIn?: boolean;
                 };
                 header?: never;
                 path: {
@@ -17793,7 +20192,11 @@ export interface paths {
                             serviceId: string;
                             /** Format: uuid */
                             variantId?: string | null;
+                            /** @description Staff price for this line — a cheaper or dearer service, not a discount; the line keeps its catalogue/pairing price on `listPriceMinor`. Omitted = that list price. */
+                            priceMinor?: number;
                         }[];
+                        /** @description Staff price for the primary service line (`serviceId`); omitted = its catalogue price. Same semantics as `additionalServices[].priceMinor`. */
+                        servicePriceMinor?: number;
                         /** Format: uuid */
                         locationId: string;
                         /** Format: uuid */
@@ -17818,10 +20221,38 @@ export interface paths {
                         notesInternal?: string | null;
                         source?: string;
                         /**
-                         * @description `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions.
+                         * @description `none` confirms the slot and asks the customer to pay up front (the confirmation is a payment request with a pay link). `pay_later` confirms the slot for businesses that take payment after the job: with no deposit the customer gets a plain confirmation; with a deposit (`depositMinor`, or the services’ configured deposits) they get a payment request for the deposit only and the balance waits until after the job. Nothing chases the balance automatically — staff follow up with POST …/bookings/{bookingId}/payment-reminder. `bank_transfer` (RECA-522) requires the business to have enabled bank details and a priced booking; it lands in awaiting_payment with no expiry and the response carries `bankTransfer` payment instructions.
                          * @enum {string}
                          */
-                        paymentMethod?: "none" | "credit" | "bank_transfer";
+                        paymentMethod?: "none" | "credit" | "bank_transfer" | "pay_later";
+                        /** @description Staff override for the deposit securing this booking (RECA-523). Omitted = the services’ configured deposits; 0/null = no deposit. */
+                        depositMinor?: number | null;
+                        /**
+                         * Format: date-time
+                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. A window of a day or more is read as working days: the days between start and end that are not worked stay free and the stored duration counts only the occupied days (see Booking.segments). Public and portal routes never accept it.
+                         */
+                        end?: string;
+                        /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
+                        allDay?: boolean;
+                        /** @description Staff-set total for the whole job (RECA-532). Every line keeps its list price; the difference is returned as `booking.adjustmentMinor` (negative = discount) and shown as a Discount / Price adjustment line on the booking and its invoice. To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor` instead. May be any amount from 0 up. */
+                        priceMinor?: number;
+                        /**
+                         * @description Staff confirmed this booking may share its day with other work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked onto a day that already has an all-day job, timed work or a calendar block taking part of the day (an untimed drop-in with no set time). Overlap protection then ignores those clashes — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @default false
+                         */
+                        dropIn?: boolean;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
+                        /**
+                         * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
+                         * @default true
+                         */
+                        notifyCustomer?: boolean;
+                        /** @description Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only. */
+                        notifyChannels?: ("email" | "sms")[];
                     };
                 };
             };
@@ -17988,7 +20419,11 @@ export interface paths {
                             serviceId: string;
                             /** Format: uuid */
                             variantId?: string | null;
+                            /** @description Staff price for this line (not a discount); omitted = its catalogue/pairing price. */
+                            priceMinor?: number;
                         }[];
+                        /** @description Staff price for the primary service line; omitted = its catalogue price. */
+                        servicePriceMinor?: number;
                         /** Format: uuid */
                         locationId: string;
                         /** Format: uuid */
@@ -18010,9 +20445,40 @@ export interface paths {
                         notesInternal?: string | null;
                         source?: string;
                         /** @enum {string} */
-                        paymentMethod?: "none" | "credit" | "bank_transfer";
+                        paymentMethod?: "none" | "credit" | "bank_transfer" | "pay_later";
                         /** @description Staff override for the deposit securing this booking (RECA-523). Omitted = the sum of the booked services’ configured deposits; 0/null = no deposit (full amount up front). A value at or above the total price collapses to "pay in full". */
                         depositMinor?: number | null;
+                        /**
+                         * Format: date-time
+                         * @description Staff-set end of the job (RECA-532). With `start` this replaces the catalogue duration; the primary line item’s durationMinutes absorbs the difference. Must be after start. Setting this (or allDay/priceMinor) bypasses the notice/horizon rules — clash protection still applies. A window of a day or more is read as working days: the days between start and end that are not worked stay free and the stored duration counts only the occupied days (see Booking.segments). Public and portal routes never accept it.
+                         */
+                        end?: string;
+                        /** @description Whole-day job (RECA-532): start snaps back to local midnight at the location and end snaps forward to the next local midnight (exclusive), so a one-day job spans 24h and a 7–8 Sept job is 00:00 7th → 00:00 9th. Blocks the staff member for the whole day(s); no buffers. Render as dates, not times. */
+                        allDay?: boolean;
+                        /** @description Staff-set total for the whole job (RECA-532). Every line keeps its list price and the difference is `booking.adjustmentMinor` (a Discount / Price adjustment line). To price one service differently use `servicePriceMinor` / `additionalServices[].priceMinor`. */
+                        priceMinor?: number;
+                        /**
+                         * @description Staff confirmed this booking may share its day with the other kind of work: a timed job squeezed in beside an all-day one (a "drop-in"), or an all-day job booked over existing timed work or a calendar block that takes part of the day. Overlap protection then ignores clashes with that other kind only — timed jobs still never overlap each other, blocks still stop timed work, and a block covering the whole day (a holiday) still stops an all-day job. Without it such a clash is a `409 BOOKING_CONFLICT` with `overridable: true` and the `conflicts` listed, so a console can offer to book anyway. Never accepted on public/portal routes.
+                         * @default false
+                         */
+                        dropIn?: boolean;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
+                        /**
+                         * @description Send the confirmation / payment request to the customer straight away (RECA-533). false creates the booking silently: reminders are still scheduled per the customer’s preferences and staff can message later via POST …/bookings/{bookingId}/resend. Staff routes only; customer paths always notify.
+                         * @default true
+                         */
+                        notifyCustomer?: boolean;
+                        /** @description Which channels carry the confirmation / payment request. Overrides the customer’s preferred channel: each listed channel is sent; an empty list sends nothing (same as notifyCustomer: false). A text the customer cannot receive (no mobile, opted out, no credits) is sent by email instead. Staff routes only. */
+                        notifyChannels?: ("email" | "sms")[];
+                        /**
+                         * Format: uuid
+                         * @description The waitlist entry this booking answers, when staff book someone in from the list. The entry is marked `booked` (with this booking’s id) once the booking is created. Staff routes only.
+                         */
+                        waitlistEntryId?: string | null;
                     };
                 };
             };
@@ -18639,6 +21105,8 @@ export interface paths {
                         /** @enum {string} */
                         by: "customer" | "business";
                         reason?: string | null;
+                        /** @description Defaults to true. Set false to cancel without sending the customer the cancellation message (e.g. they asked over the phone). Reminders are still removed. */
+                        notifyCustomer?: boolean;
                     };
                 };
             };
@@ -18778,7 +21246,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reschedule a booking */
+        /**
+         * Reschedule a booking, or quietly correct its time
+         * @description Moves a live booking to `start` (optionally with another staff member), re-reserving the diary: a clash is 409 BOOKING_CONFLICT and nothing changes. An all-day booking snaps to whole local days and keeps its day count unless `end` gives a new last day. `end` is refused (400 NOT_ALL_DAY) for timed bookings — their length comes from the services.
+         *
+         *     By default this is a reschedule: the client is sent the "your booking has moved" message, the history reads "rescheduled" and `booking.rescheduled` is emitted. With `correction: true` the same move is treated as staff fixing a typo in the diary: nothing is sent to the client, the history gets a `kind: "amended"` entry whose `changes` carry a `when` change (the console shows "Date corrected"), `booking.time_corrected` is emitted and the notice/horizon window is not applied. Scheduled reminders re-anchor to the new time either way. Requires `Idempotency-Key`.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -18796,8 +21269,20 @@ export interface paths {
                     "application/json": {
                         /** Format: date-time */
                         start: string;
+                        /**
+                         * Format: date-time
+                         * @description All-day bookings only: the new last day (any instant on it; exclusive-midnight also accepted).
+                         */
+                        end?: string;
                         /** Format: uuid */
                         staffId?: string;
+                        /**
+                         * @description true = a quiet correction: no client message, "date corrected" in the history.
+                         * @default false
+                         */
+                        correction?: boolean;
+                        /** @description As on create: may the moved booking share its new day with the other kind of work? Omitted keeps the flag the booking already has. A clash that only this would resolve is a `409 BOOKING_CONFLICT` with `overridable: true`. */
+                        dropIn?: boolean;
                     };
                 };
             };
@@ -18926,6 +21411,483 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a booking
+         * @description Returns a single booking aggregate (immutable service snapshot, status, attendees). Used by staff calendar/detail views.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Booking detail */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            booking: components["schemas"]["Booking"];
+                            /** @description The add-on offer on this job, if one went out (staff-made bookings with upsells): lets the drawer show a pending request. */
+                            upsellOffer: components["schemas"]["BookingUpsellSummary"] | null;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete a booking (silent, soft)
+         * @description Staff remove a booking outright: nothing is sent to the client, scheduled reminders are dropped, the slot/seats and any package credit are freed, and the booking disappears from the calendar, lists, customer history, the portal and reports (`GET` answers 404 afterwards). Allowed from any status, including cancelled. Refused with `409 CONFLICT` while a payment has been recorded against it or an invoice has been issued — refund/void or cancel instead. Requires `booking.cancel`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Booking has payments or an issued invoice — refund/void or cancel instead */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Edit a booking
+         * @description Staff edit the content of a live booking — services (primary + variant + additional), staff, location, linked record (vehicle), lead client, price override, payment method and internal notes. Only fields present change; `null` clears a nullable field. `If-Match` must carry the booking version the caller last saw (409 when stale) and an `Idempotency-Key` is required.
+         *
+         *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
+         *
+         *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). `depositMinor` sets or removes the deposit (omitted keeps it), and is dropped where a deposit cannot apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
+         *
+         *     Each edit appends a `kind: "amended"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Optimistic concurrency version (integer as string). */
+                    "If-Match": string;
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        serviceId?: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /** @description Full replacement list of extra services; `[]` removes them all. */
+                        additionalServices?: {
+                            /** Format: uuid */
+                            serviceId: string;
+                            /** Format: uuid */
+                            variantId?: string | null;
+                            /** @description Staff price for this line: a number re-prices it, `null` puts it back to its list price, omitted keeps what it has (list when the services change). */
+                            priceMinor?: number | null;
+                        }[];
+                        /** @description Staff price for the primary line: a number re-prices it, `null` puts it back to its catalogue price, omitted keeps what it has. */
+                        servicePriceMinor?: number | null;
+                        /** Format: uuid */
+                        staffId?: string;
+                        /** Format: uuid */
+                        locationId?: string;
+                        /** Format: uuid */
+                        linkedRecordId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Only while nothing has been paid. The vehicle must belong to the new client.
+                         */
+                        leadCustomerId?: string;
+                        /** @description Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change). */
+                        priceMinor?: number | null;
+                        /** @description Deposit securing this booking: a number sets it, `null` removes it, omitted keeps what it has. For correcting a deposit discovered after the job was written up (the client had already paid one). Clamped as on create — a deposit at or above the total, or on a credit-paid booking, becomes no deposit. Recording the money itself is POST …/record-payment. */
+                        depositMinor?: number | null;
+                        /**
+                         * @description Confirmed bookings, or a pay-by-bank booking still `awaiting_payment` with nothing received — switching that one to `none` / `pay_later` confirms it on the spot (the customer no longer has to transfer anything to secure it) and, with `notify`, sends the confirmation or payment request for the new method via `booking.confirmed`. To or from `credit` is not allowed; other unconfirmed states answer 409.
+                         * @enum {string}
+                         */
+                        paymentMethod?: "none" | "bank_transfer" | "pay_later";
+                        notesInternal?: string | null;
+                        /** @description The customer needs a lift after dropping their vehicle off. Send an object to set it (blank strings are stored as null), `null` to clear. Staff routes only; public and portal routes never accept it. */
+                        clientLift?: {
+                            destination?: string | null;
+                            notes?: string | null;
+                        } | null;
+                        /** @description When present, the client is sent the updated details on these channels (the confirmation / payment request for the booking’s current state). */
+                        notify?: {
+                            channels: ("email" | "sms")[];
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Edited booking (unchanged, with the same version, when nothing differed) */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            booking: components["schemas"]["Booking"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/attendance": {
@@ -19084,7 +22046,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}": {
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -19092,8 +22054,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a booking
-         * @description Returns a single booking aggregate (immutable service snapshot, status, attendees). Used by staff calendar/detail views.
+         * Get booking history (status changes and messages)
+         * @description Status transitions for the booking, followed by one entry per message sent about it. Message entries have `kind: "message"` and carry `channel` (`email` | `sms` | `in_app`), `requestedChannel` (set when a text went as email), `templateKey`, `status` (`sent` | `failed` | `fallback`) and a `reasonCode` staff can act on: `invalid_phone`, `no_phone`, `no_email`, `opted_out`, `no_credits`, `not_entitled`, `sms_unavailable`, `provider_error`; null when the message simply went. Raw provider errors and message bodies are never returned. Sort client-side by `occurredAt`.
          */
         get: {
             parameters: {
@@ -19107,7 +22069,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Booking detail */
+                /** @description History entries (status changes and messages) */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -19115,157 +22077,9 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            booking: components["schemas"]["Booking"];
-                        };
-                    };
-                };
-                /** @description Created */
-                201: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description No content */
-                204: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Validation failed (VALIDATION_FAILED) */
-                400: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Unauthenticated (UNAUTHENTICATED) */
-                401: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
-                402: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
-                403: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Not found (NOT_FOUND) */
-                404: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
-                409: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Unprocessable (UNPROCESSABLE) */
-                422: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Rate limited (RATE_LIMITED) */
-                429: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-                /** @description Internal error (INTERNAL) */
-                500: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/problem+json": components["schemas"]["ProblemDetails"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/businesses/{businessId}/bookings/{bookingId}/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get booking status history */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    businessId: string;
-                    bookingId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Ordered history entries */
-                200: {
-                    headers: {
-                        "x-request-id": components["headers"]["X-Request-Id"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            history: {
+                            history: (components["schemas"]["BookingStatusHistoryEntry"] | components["schemas"]["BookingMessageHistoryEntry"] | {
                                 [key: string]: unknown;
-                            }[];
+                            })[];
                         };
                     };
                 };
@@ -20610,7 +23424,138 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a credit package that was never sold
+         * @description Permanently removes the package. Only for packages no purchase, entitlement or payment has ever referenced: one with sales history returns `409 CONFLICT` and should be archived instead (`PATCH active=false`). Requires package.manage.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    packageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         /** Update a credit package */
@@ -20769,6 +23714,743 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/package-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List live package links
+         * @description Revoked links are omitted. Newest first.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live package links */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            links: components["schemas"]["PackageLink"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a shareable package link
+         * @description A hand-picked, ordered subset of this business’s sessions and packages that a visitor sees at `{bookingPage}?offer={code}`. Every id must belong to the business, and at least one id is required across the two lists. Sessions in the link are bookable and packages purchasable through it even when kept off the public page; inactive items are simply not shown until reactivated. `customerIds` hands the link to those customers straight away (see the customers sub-route); every id must belong to the business or the whole request fails. Requires package.manage.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        serviceIds?: string[];
+                        packageIds?: string[];
+                        customerIds?: string[];
+                        /**
+                         * @description Offer visitors a way out to the full booking page ("Looking for something else?"). Omit or true = shown; false keeps the offer private.
+                         * @default true
+                         */
+                        showFullCatalogue?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Link created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: components["schemas"]["PackageLink"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/package-links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a package link
+         * @description The URL stops resolving immediately; the booking page falls back to its ordinary listing. Idempotent. Requires package.manage.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    linkId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revoked link */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: components["schemas"]["PackageLink"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/package-links/{linkId}/customers/{customerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Hand a package link to a customer
+         * @description The link appears under Offers in that customer’s signed-in portal. It remains a public handle anyone can open; assignment adds a place to find it, not a lock. Idempotent. 404 for an unknown link or customer; 422 for a revoked link. Requires package.manage.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    linkId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Link with updated customerIds */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: components["schemas"]["PackageLink"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Take a package link back from a customer
+         * @description Removes it from their portal. Idempotent. Requires package.manage.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    linkId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Link with updated customerIds */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: components["schemas"]["PackageLink"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/package-purchases": {
         parameters: {
             query?: never;
@@ -20826,6 +24508,479 @@ export interface paths {
                             entitlement: components["schemas"]["Entitlement"];
                         };
                     };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/package-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List package requests
+         * @description Packages customers asked for while the business had no card processing, newest first. Filter by status; pending ones need a decision.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "confirmed" | "declined";
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Package requests */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            requests: components["schemas"]["PackageRequest"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/package-requests/{requestId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a package request
+         * @description Issues the package credits to the customer as a staff sale (payment is arranged between business and customer) and marks the request confirmed. The customer gets the purchase receipt with a portal link. Idempotent: confirming again returns the same entitlement. 409 if the request was already declined.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Kept on the request. On a decline it is also sent to the customer; on a confirm it is for the business’s own records. */
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Confirmed request and the issued entitlement */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["PackageRequest"];
+                            entitlement: components["schemas"]["Entitlement"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/package-requests/{requestId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a package request
+         * @description Marks the request declined and tells the customer, including the note when given. Idempotent on an already-declined request; 409 if it was already confirmed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Kept on the request. On a decline it is also sent to the customer; on a confirm it is for the business’s own records. */
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Declined request */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["PackageRequest"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
                 /** @description No content */
                 204: {
@@ -23694,6 +27849,1674 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List invoices
+         * @description Newest first. Filter by status, customer or booking. Requires invoice.read.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "draft" | "issued" | "paid" | "void";
+                    customerId?: string;
+                    bookingId?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invoices */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoices: components["schemas"]["Invoice"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a draft invoice
+         * @description Drafts an invoice for a customer, pre-filled from a booking when `bookingId` is given (one line per booked service; `customerId` defaults to the lead customer) or from explicit `lines`. Drafts are editable and have no number. Requires invoice.manage and the `invoicing` feature — Growth, or the bolt-on on Solo/Business (403 FEATURE_NOT_AVAILABLE otherwise). Idempotency-Key required.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        bookingId?: string;
+                        /** Format: uuid */
+                        customerId?: string;
+                        lines?: {
+                            description: string;
+                            quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
+                            unitPriceMinor: number;
+                            /** @description Default true; false marks the line VAT-exempt. */
+                            taxable?: boolean;
+                            /** Format: uuid */
+                            serviceId?: string | null;
+                        }[];
+                        /** Format: date */
+                        dueDate?: string;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Draft invoice */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an invoice */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The invoice */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete a draft invoice
+         * @description Hard-deletes a draft — it has no number, so nothing is kept on record. Anything issued, paid or void returns `409 CONFLICT`: void it instead. Requires invoice.manage (not gated by the bolt-on, so drafts can be tidied after a plan lapses).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Edit a draft invoice
+         * @description Replaces lines / due date / notes / customer / linked record on a draft. Issued invoices are frozen (409 CONFLICT). Requires invoice.manage and the `invoicing` feature.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        lines?: {
+                            description: string;
+                            quantity: number;
+                            /** @description Negative = a discount line. The document must still total ≥ 0, otherwise 400 `lines` / NEGATIVE_TOTAL. */
+                            unitPriceMinor: number;
+                            /** @description Default true; false marks the line VAT-exempt. */
+                            taxable?: boolean;
+                            /** Format: uuid */
+                            serviceId?: string | null;
+                        }[];
+                        /** Format: date */
+                        dueDate?: string | null;
+                        notes?: string | null;
+                        /** Format: uuid */
+                        customerId?: string;
+                        /** @description Correct the vehicle / pet / … the invoice is about. Null or a blank `value` clears it. Both parts are trimmed. */
+                        linkedRecord?: {
+                            label: string;
+                            value: string;
+                        } | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated draft */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue an invoice
+         * @description Allocates the next sequential number, refreshes and freezes the seller / customer snapshots and totals, and moves the invoice to `issued` (or straight to `paid` when the booking is already fully paid). `send: true` also emails the customer the PDF. Idempotency-Key required so a retry never burns a second number.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default false */
+                        send?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Issued invoice */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email an issued invoice to the customer
+         * @description Queues the branded invoice email with the PDF attached and stamps `sentAt`. Only issued or paid invoices can be sent (409 otherwise).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Invoice with sentAt set */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an invoice as paid
+         * @description Sets paidMinor to the total and status to `paid`. Issued invoices only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paid invoice */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void an invoice
+         * @description Issued or paid → `void`. The document stays on record, stamped VOID, and the number is never reused; the customer still sees it in their account. A draft is `409 CONFLICT` — delete it instead. Requires invoice.manage and the `invoicing` feature.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Voided invoice */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/void-and-redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void an invoice and open a corrected copy
+         * @description Voids an issued or paid invoice and creates a fresh draft copied from it — lines, customer, booking, notes, linked record and the amount already paid — in one transaction. The original keeps its number, stamped VOID. Requires `Idempotency-Key`, invoice.manage and the `invoicing` feature; a draft is `409 CONFLICT`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The replacement draft (`invoice`) and the voided original (`voided`) */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            invoice: components["schemas"]["Invoice"];
+                            voided: components["schemas"]["Invoice"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/invoices/{invoiceId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the invoice PDF
+         * @description Rendered on demand from the frozen snapshot; drafts are watermarked DRAFT, paid invoices PAID, voided VOID. `Content-Disposition: attachment; filename="INV-0001.pdf"`. Requires invoice.read only — downloads keep working after the entitlement lapses.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    invoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description PDF document */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/saas/plans": {
         parameters: {
             query?: never;
@@ -24032,6 +29855,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -24042,6 +29870,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -24057,20 +29896,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -24365,7 +30206,7 @@ export interface paths {
         put?: never;
         /**
          * Add a paid add-on to the current subscription
-         * @description Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `sms` (SMS reminders, £10/month).
+         * @description Self-serve bolt-on purchase (RECA-526). Attaches the add-on Price as a Stripe subscription item with prorations and grants the entitlement immediately, so the returned view already reflects it. Only meaningful on tiers that do not bundle the feature — `409` when the plan already includes it, `422` without a live subscription or when the Price is not configured in Stripe, `404` for an unknown add-on key. Requires billing.manage. Known keys: `invoicing` (£8/month). The former `sms` add-on was replaced by prepaid bundles — see /sms-credits.
          */
         post: {
             parameters: {
@@ -24375,8 +30216,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `sms` (RECA-526). */
-                    addonKey: "sms";
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
             };
@@ -24402,6 +30243,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -24412,6 +30258,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -24427,20 +30284,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -24568,8 +30427,8 @@ export interface paths {
                 };
                 path: {
                     businessId: string;
-                    /** @description Add-on key. Currently `sms` (RECA-526). */
-                    addonKey: "sms";
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
                 };
                 cookie?: never;
             };
@@ -24595,6 +30454,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -24605,6 +30469,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -24620,20 +30495,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -24754,6 +30631,559 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/sms-credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Text credit balance and recent ledger
+         * @description Prepaid SMS credits for the business (ADR 0020). Any active member may read it so staff know whether texts will go out. `unlimited: true` on Growth.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Balance */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down. */
+                            smsCredits: {
+                                /** @example 87 */
+                                balance: number;
+                                purchasedTotal: number;
+                                consumedTotal: number;
+                                /** @description True when the plan tier bundles `reminders.sms` (Growth): no credits needed. */
+                                unlimited: boolean;
+                                /** @description The pack on sale. Display amount only — Stripe is the money authority. */
+                                bundle: {
+                                    /** @example sms_150 */
+                                    key: string;
+                                    /** @example 150 */
+                                    credits: number;
+                                    /** @example 600 */
+                                    unitAmountMinor: number;
+                                    /** @example GBP */
+                                    currency: string;
+                                };
+                                /** @description Most recent 20 ledger entries, newest first. */
+                                recent: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @description Positive for purchase/grant/release, -1 per text. */
+                                    delta: number;
+                                    balanceAfter: number;
+                                    /** @enum {string} */
+                                    kind: "purchase" | "consume" | "release" | "grant";
+                                    /** @description Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase. */
+                                    reference: string;
+                                    metadata?: {
+                                        [key: string]: unknown;
+                                    } | null;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/sms-credits/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Buy a bundle of 150 texts (£6)
+         * @description Creates a one-off Stripe Checkout Session (`mode: payment`) for the bundle on the business’s Stripe Customer and returns its URL. Nothing is credited here: the balance moves when Stripe confirms payment (webhook) or when the success page calls /sms-credits/checkout/reconcile — both are idempotent per Session. Success URL: `{PUBLIC_APP_URL}/billing/sms-credits/success?session_id=…`. Requires billing.manage and an Idempotency-Key (replays return the same URL). `403` when checkout is disabled.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description Bundle key; defaults to `sms_150` (`sms_100` is accepted as a legacy alias). Unknown keys → 404. */
+                        bundle?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Checkout session created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            checkoutUrl: string;
+                            bundle: {
+                                /** @example sms_150 */
+                                key: string;
+                                /** @example 150 */
+                                credits: number;
+                                /** @example 600 */
+                                unitAmountMinor: number;
+                                /** @example GBP */
+                                currency: string;
+                            };
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/sms-credits/checkout/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Success-page reconcile for a bundle purchase
+         * @description Call from the success page with the `session_id` query value. Retrieves the Session from Stripe, checks it belongs to this business and credits the bundle if paid and not already credited (`credited: true` exactly once; the late webhook then no-ops). Open or unpaid sessions return `credited: false`. `404` for a Session of another tenant or a non-bundle Session. Requires billing.manage; financial rate limit applies.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @example cs_test_… */
+                        stripeCheckoutSessionId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Reconciled */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            credited: boolean;
+                            balance: number;
+                            /** @example paid */
+                            paymentStatus: string | null;
+                            /** @description Prepaid text credits (ADR 0020). One credit is spent per SMS the platform sends for the business, whatever its length; credits never expire. Growth has texts included (`unlimited: true`) and never draws down. */
+                            smsCredits: {
+                                /** @example 87 */
+                                balance: number;
+                                purchasedTotal: number;
+                                consumedTotal: number;
+                                /** @description True when the plan tier bundles `reminders.sms` (Growth): no credits needed. */
+                                unlimited: boolean;
+                                /** @description The pack on sale. Display amount only — Stripe is the money authority. */
+                                bundle: {
+                                    /** @example sms_150 */
+                                    key: string;
+                                    /** @example 150 */
+                                    credits: number;
+                                    /** @example 600 */
+                                    unitAmountMinor: number;
+                                    /** @example GBP */
+                                    currency: string;
+                                };
+                                /** @description Most recent 20 ledger entries, newest first. */
+                                recent: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    /** @description Positive for purchase/grant/release, -1 per text. */
+                                    delta: number;
+                                    balanceAfter: number;
+                                    /** @enum {string} */
+                                    kind: "purchase" | "consume" | "release" | "grant";
+                                    /** @description Idempotency reference, e.g. `stripe_checkout:cs_…` for a purchase. */
+                                    reference: string;
+                                    metadata?: {
+                                        [key: string]: unknown;
+                                    } | null;
+                                    /** Format: date-time */
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/subscription/checkout/reconcile": {
         parameters: {
             query?: never;
@@ -24808,6 +31238,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -24818,6 +31253,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -24833,20 +31279,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -24937,6 +31385,394 @@ export interface paths {
                     content: {
                         "application/problem+json": components["schemas"]["ProblemDetails"];
                     };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/subscription/iap/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * App Store In-App Purchase config
+         * @description RevenueCat App User ID for this business plus the App Store product catalogue (product id → plan/interval, add-on or SMS bundle). Member-readable. Prices are never returned — the app reads them from StoreKit.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description IAP configuration */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            appUserId: string;
+                            reconcileEnabled: boolean;
+                            products: {
+                                productId: string;
+                                /** @enum {string} */
+                                kind: "plan" | "addon" | "sms";
+                                /** @enum {string} */
+                                plan?: "solo" | "business" | "growth";
+                                /** @enum {string} */
+                                interval?: "month" | "year";
+                                addonKey?: string;
+                                bundleKey?: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/subscription/iap/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile App Store purchases
+         * @description Pulls the RevenueCat subscriber snapshot for this business and projects it onto the subscription, add-on entitlements and SMS credit ledger. Called by the iOS app after a purchase or restore; idempotent and rate-limited. Requires billing.manage. Returns 409 when the business holds a live Stripe subscription and an App Store plan was bought.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Subscription projection after reconcile */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Current non-terminal subscription projection. Stripe / grace identifiers are included only when the actor holds billing.manage. */
+                            subscription: {
+                                /** Format: uuid */
+                                id?: string;
+                                /** Format: uuid */
+                                businessId?: string;
+                                /** Format: uuid */
+                                planId?: string;
+                                /** @enum {string} */
+                                status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
+                                /** @enum {string} */
+                                accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
+                                planVersion?: string | null;
+                                /** Format: date-time */
+                                currentPeriodStart?: string | null;
+                                /** Format: date-time */
+                                currentPeriodEnd?: string | null;
+                                /** Format: date-time */
+                                trialStart?: string | null;
+                                /** Format: date-time */
+                                trialEnd?: string | null;
+                                cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
+                                /** @enum {string} */
+                                limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
+                                stripeSubscriptionId?: string | null;
+                                stripeCustomerId?: string | null;
+                                stripePriceId?: string | null;
+                                /** Format: date-time */
+                                graceStartedAt?: string | null;
+                                /** Format: date-time */
+                                graceEndsAt?: string | null;
+                            } | null;
+                            plan: Record<string, never> | null;
+                            /** @description Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-524/526). Example keys: `reminders.sms`, `custom_records.images`. */
+                            features: {
+                                [key: string]: boolean;
+                            };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
+                            /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
+                            addons: {
+                                /** @example invoicing */
+                                key: string;
+                                /** @example invoicing */
+                                featureKey: string;
+                                /** @example 800 */
+                                unitAmountMinor: number;
+                                /** @example GBP */
+                                currency: string;
+                                /** @enum {string} */
+                                interval: "month" | "year";
+                                /**
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
+                                 * @enum {string}
+                                 */
+                                status: "included" | "active" | "available";
+                            }[];
+                        } & {
+                            billingBypass?: boolean;
+                            iap?: {
+                                planProjected?: boolean;
+                                addonsActive?: string[];
+                                smsCredited?: number;
+                            };
+                            smsCredits?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Business is billed by Stripe */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description App Store billing is not configured */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
                 /** @description Rate limited */
                 429: {
@@ -25163,6 +31999,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -25173,6 +32014,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -25188,20 +32040,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -25369,6 +32223,11 @@ export interface paths {
                                 status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                /**
+                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @enum {string}
+                                 */
+                                provider?: "stripe" | "apple";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -25379,6 +32238,17 @@ export interface paths {
                                 /** Format: date-time */
                                 trialEnd?: string | null;
                                 cancelAtPeriodEnd?: boolean;
+                                /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                discount?: {
+                                    label: string | null;
+                                    percentOff: number | null;
+                                    amountOffMinor: number | null;
+                                    /**
+                                     * Format: date-time
+                                     * @description When the discount stops applying; null for open-ended.
+                                     */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                 stripeSubscriptionId?: string | null;
@@ -25394,20 +32264,22 @@ export interface paths {
                             features: {
                                 [key: string]: boolean;
                             };
+                            /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                            billingBypass?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                             addons: {
-                                /** @example sms */
+                                /** @example invoicing */
                                 key: string;
-                                /** @example reminders.sms */
+                                /** @example invoicing */
                                 featureKey: string;
-                                /** @example 1000 */
+                                /** @example 800 */
                                 unitAmountMinor: number;
                                 /** @example GBP */
                                 currency: string;
                                 /** @enum {string} */
                                 interval: "month" | "year";
                                 /**
-                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                 * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                  * @enum {string}
                                  */
                                 status: "included" | "active" | "available";
@@ -25781,6 +32653,11 @@ export interface paths {
                                     status?: "trialing" | "active" | "past_due" | "cancelled" | "unpaid" | "incomplete" | "incomplete_expired" | "paused";
                                     /** @enum {string} */
                                     accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                                    /**
+                                     * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                     * @enum {string}
+                                     */
+                                    provider?: "stripe" | "apple";
                                     planVersion?: string | null;
                                     /** Format: date-time */
                                     currentPeriodStart?: string | null;
@@ -25791,6 +32668,17 @@ export interface paths {
                                     /** Format: date-time */
                                     trialEnd?: string | null;
                                     cancelAtPeriodEnd?: boolean;
+                                    /** @description Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price. */
+                                    discount?: {
+                                        label: string | null;
+                                        percentOff: number | null;
+                                        amountOffMinor: number | null;
+                                        /**
+                                         * Format: date-time
+                                         * @description When the discount stops applying; null for open-ended.
+                                         */
+                                        endsAt: string | null;
+                                    } | null;
                                     /** @enum {string} */
                                     limitCompliance?: "ok" | "over_limit" | "grace_over_limit";
                                     stripeSubscriptionId?: string | null;
@@ -25806,20 +32694,22 @@ export interface paths {
                                 features: {
                                     [key: string]: boolean;
                                 };
+                                /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
+                                billingBypass?: boolean;
                                 /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
                                 addons: {
-                                    /** @example sms */
+                                    /** @example invoicing */
                                     key: string;
-                                    /** @example reminders.sms */
+                                    /** @example invoicing */
                                     featureKey: string;
-                                    /** @example 1000 */
+                                    /** @example 800 */
                                     unitAmountMinor: number;
                                     /** @example GBP */
                                     currency: string;
                                     /** @enum {string} */
                                     interval: "month" | "year";
                                     /**
-                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}.
+                                     * @description `included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held.
                                      * @enum {string}
                                      */
                                     status: "included" | "active" | "available";
@@ -25907,6 +32797,162 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/webhooks/revenuecat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RevenueCat webhook (App Store In-App Purchase)
+         * @description Public endpoint verified by the shared secret RevenueCat sends in the Authorization header; no bearer auth. Deliveries are recorded in the provider-event inbox and projected by a durable job.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    Authorization: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Acknowledged */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
                 };
                 /** @description Rate limited (RATE_LIMITED) */
                 429: {
@@ -26675,6 +33721,170 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/businesses/{id}/addons/{addonKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Offer (or withdraw) an invitation-only add-on to a business (platform admin)
+         * @description Makes `sms_unlimited` (unlimited texts, £10/month) available to one business: it then appears on their Billing page with the usual Add button and they subscribe (and can remove it) themselves through the self-serve add-on routes. Offering bills nothing and grants nothing. Withdrawing hides it again for a business that has not bought it; one that has keeps it until they remove it. 422 for add-ons that are always available (`invoicing`, `upsells`). Idempotent. Audited as `saas.addon_offered` / `saas.addon_offer_withdrawn` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description Add-on key: `invoicing` (£8/month) or `upsells` (£5/month). `sms_unlimited` (£10/month, unlimited texts) is by invitation — it is listed and can be added only once RECAVO has offered it to the business from the internal console (403 before that). Prepaid text bundles are separate: see /sms-credits (ADR 0020). */
+                    addonKey: "invoicing" | "upsells" | "sms_unlimited";
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        offered: boolean;
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Offer and purchase state after the change */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            addon: {
+                                key: string;
+                                offered: boolean;
+                                /** @enum {string} */
+                                status: "included" | "active" | "available";
+                            };
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/businesses/{id}/billing/reconcile": {
         parameters: {
             query?: never;
@@ -26912,6 +34122,1845 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Business directory (platform admin)
+         * @description Every business, newest first, with owner, billing and usage. `search` matches trading/legal name, slug or owner email. Test accounts are hidden unless `accountKind` is `test` or `all`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    search?: string;
+                    accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                    /** @description Defaults to `customer`. */
+                    accountKind?: "customer" | "test" | "all";
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Business page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            businesses: components["schemas"]["PlatformBusinessSummary"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One business in full (platform admin)
+         * @description The directory row plus members, usage detail, SMS credits and onboarding state. Billing detail and overrides are on `/billing` and `/overrides`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Business detail */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            business: components["schemas"]["PlatformBusinessDetail"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage counts for one business across every module (platform admin)
+         * @description Team, catalogue, clients, sessions (bookings), packages and credits, client payments through Connect, invoices, messaging and notification deliveries, engagement features, plus 12-week series. Counts only. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Business usage */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            usage: components["schemas"]["PlatformBusinessUsage"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Setup checklist progress for one business (platform admin)
+         * @description The same derived “Get set up” checklist the portal shows the owner — ordered steps, required/optional, completion, `percentComplete` over required steps and overall `status` — read by the internal console. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Onboarding progress */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            onboarding: components["schemas"]["BusinessOnboarding"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/referral-program": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Switch a business between referral programmes (platform admin)
+         * @description Moves the business’s referral code onto `standard` or `partner`. Mints the code if the business has none yet. Existing attributions keep the programme they were created under; only new sign-ups with the code follow the new programme. Audited as `referral.program_changed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+                         * @enum {string}
+                         */
+                        program: "standard" | "partner";
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated referral block */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            referral: components["schemas"]["PlatformBusinessReferral"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/account-kind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark a business as a test account, or back to a customer (platform admin)
+         * @description Operator label only: `test` hides the business from the default directory listing and drops it from usage metrics; nothing changes for the tenant, its billing or its data. Re-applying the current kind is a no-op. Audited as `business.account_kind_changed` with the reason. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant.
+                         * @enum {string}
+                         */
+                        accountKind: "customer" | "test";
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated label */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /**
+                             * @description Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant.
+                             * @enum {string}
+                             */
+                            accountKind: "customer" | "test";
+                            /** Format: date-time */
+                            accountKindChangedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/platform/revenue/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-mirror Stripe charges into the revenue ledger (platform admin)
+         * @description Lists every Stripe Customer’s succeeded charges and upserts them into `saas_revenue_events`. Idempotent and safe to repeat; the ledger is also refreshed automatically on every paid invoice and SMS bundle checkout, so this is the backfill / belt-and-braces button. Audited as `saas.revenue_synced`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Sync counts */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Customers attempted. */
+                            businesses: number;
+                            /** @description Charges written (inserted or refreshed). */
+                            charges: number;
+                            /** @description Customers whose Stripe read failed. */
+                            failed: number;
+                            stripeConfigured: boolean;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Platform usage summary (platform admin)
+         * @description Totals and 12-week series for the internal dashboard. Also the cheapest probe for "am I a platform admin?" — a 403 means no. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Usage summary */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlatformUsageSummary"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/support-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Support queue (platform admin)
+         * @description Every business’s requests, newest first. Filter with `status` (comma-separated or repeated) and `businessId`. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    businessId?: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support request page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            requests: components["schemas"]["PlatformSupportRequest"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/support-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One support request with its thread (platform admin) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support request and thread */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["PlatformSupportRequest"];
+                            messages: components["schemas"]["SupportMessage"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a support request (platform admin)
+         * @description Move it between open / in_progress / resolved and/or set the internal note (null clears). Resolving stamps resolvedAt; reopening clears it. At least one field is required. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "open" | "in_progress" | "resolved";
+                        internalNote?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated support request */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["PlatformSupportRequest"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/platform/support-requests/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply to a support request (platform admin)
+         * @description Posts a reply as RECAVO. The member of staff who raised the request is emailed (and sees it in their bell feed) with a link to the thread. An open request moves to in_progress; a resolved one stays resolved. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Reply posted */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["PlatformSupportRequest"];
+                            message: components["schemas"]["SupportMessage"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
                 };
                 /** @description Not found (NOT_FOUND) */
                 404: {
@@ -27424,8 +36473,145 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Edit a notification template region */
+        /**
+         * List editable message templates
+         * @description The customer-facing messages a business may reword, labelled and defaulted in its own terminology, with the current email and text wording, a rendered preview of each, and the placeholders each supports.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Message templates */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            templates: components["schemas"]["MessageTemplate"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        /**
+         * Edit a message template on one channel
+         * @description Saves the business’s own wording for one template: the email prose region, or (with `channel: "sms"`) the whole text message. Blank text resets it to the default. Unknown keys are rejected; text wording over 600 characters is rejected.
+         */
         put: {
             parameters: {
                 query?: never;
@@ -27440,6 +36626,8 @@ export interface paths {
                     "application/json": {
                         key: string;
                         bodyRegion: string;
+                        /** @default email */
+                        channel?: components["schemas"]["MessageTemplateChannel"];
                     };
                 };
             };
@@ -27567,6 +36755,309 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/notification-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview message template wording
+         * @description Renders the given wording against sample values using the same renderer that sends the real message, so the settings preview and the delivered message always match. Blank `body` previews the default.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        key: string;
+                        /** @default email */
+                        channel?: components["schemas"]["MessageTemplateChannel"];
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Rendered preview */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MessageTemplatePreview"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/notification-templates/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Reset a message template to its default wording */
+        delete: {
+            parameters: {
+                query?: {
+                    channel?: "email" | "sms";
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Template reset */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/bookings/{bookingId}/resend": {
         parameters: {
             query?: never;
@@ -27612,6 +37103,315 @@ export interface paths {
                         "application/json": {
                             notification: components["schemas"]["Notification"];
                             templateKey: string;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/payment-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the customer a reminder that a balance is outstanding
+         * @description Staff nudge for money still owed on a booking — the follow-up for “pay after the job” bookings. Emails when the customer has an email address; texts when they have a mobile number, have not opted out of operational messages and the business is entitled to SMS or holds credits — so a phone-only customer is texted alone. The message quotes the outstanding balance and every way to pay: the pay link when card payments are live, the bank details when transfers are enabled, otherwise an “in person / contact us” line. 409 for closed bookings or when a reminder went out within the last ten minutes; 422 when nothing is outstanding, the booking was paid by credit, the customer can be reached on neither channel (no contact details, or no email plus no text credits / opted out), or every channel failed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The notifications that were sent */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            notifications: components["schemas"]["Notification"][];
+                            channels: ("email" | "sms")[];
+                            outstandingMinor: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/booking-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the customer a reminder that their booking is coming up
+         * @description Staff send the same `reminder` message the scheduled reminder rules use, by hand from the booking panel. Emails when the customer has an email address; texts when they have a mobile number, have not opted out of operational messages and the business is entitled to SMS or holds credits — so a phone-only customer is texted alone. 409 when the booking is not messageable (cancelled, held, completed, no-show), has already started, or a reminder went out within the last ten minutes; 422 when the customer can be reached on neither channel (no contact details, or no email plus no text credits / opted out), or every channel failed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The notifications that were sent */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            notifications: components["schemas"]["Notification"][];
+                            channels: ("email" | "sms")[];
                         };
                     };
                 };
@@ -31379,6 +41179,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live updates stream (Server-Sent Events)
+         * @description Long-lived `text/event-stream` any active member may open (documents/live-updates.md). Frames are refetch hints, never content: `event: <type>` with a one-line JSON `data` of `{ type, businessId, bookingId?, customerId?, invoiceId? }`. The first frame is always `hello` — treat it as "refetch everything you care about" on connect and reconnect; there is no event replay. Then `sms_credits.changed` (credit consumed / refunded / purchased), `notification.recorded` (a message row was written — booking history, customer notifications), `booking.changed` (any booking state change) and `invoice.changed`. `: keepalive` comments every 25s. `EventSource` cannot send the bearer header, so clients use `fetch` + a stream reader and reconnect with backoff.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Event stream (never completes while the client stays connected) */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        "Cache-Control"?: string;
+                        "X-Accel-Buffering"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/admin/outbox/failed": {
         parameters: {
             query?: never;
@@ -32736,6 +42686,4387 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/consumables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List consumables
+         * @description The tenant’s materials catalogue, active first then archived, each with the services that use it by default. Requires `business.read`. Staff-only: no public, customer or portal route exposes consumables.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Catalogue */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            consumables: components["schemas"]["Consumable"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a consumable
+         * @description Adds a material to the catalogue. `currency` defaults to the business currency. Requires `business.update` (the catalogue-management key).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        unit: string;
+                        unitCostMinor?: number | null;
+                        currency?: string;
+                        sku?: string | null;
+                        notes?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Consumable created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            consumable: components["schemas"]["Consumable"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/consumables/{consumableId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a consumable */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    consumableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Consumable */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            consumable: components["schemas"]["Consumable"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete a consumable (archives when in use)
+         * @description Hard-deletes a consumable nothing refers to (`deleted: true`). One named by a service default or a job is archived instead and returned (`deleted: false`), so old jobs keep resolving what they used. Requires `business.update`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    consumableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted or archived */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            consumable: components["schemas"]["Consumable"] | null;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Update, archive or restore a consumable
+         * @description Partial update; `status: "archived"` hides it from pickers while old jobs keep resolving it, `status: "active"` restores. `If-Match` is optional: when present a stale version is `409`. Requires `business.update`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optimistic concurrency version (integer as string). */
+                    "If-Match"?: string;
+                };
+                path: {
+                    businessId: string;
+                    consumableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        unit?: string;
+                        unitCostMinor?: number | null;
+                        sku?: string | null;
+                        notes?: string | null;
+                        /** @enum {string} */
+                        status?: "active" | "archived";
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated consumable */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            consumable: components["schemas"]["Consumable"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/services/{serviceId}/consumables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a service’s default consumables
+         * @description What one job of this service is expected to use; new bookings are seeded from it. Requires `business.read`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default usage */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["ConsumableUsageLine"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        /**
+         * Replace a service’s default consumables
+         * @description Replaces the list wholesale (an empty list clears it). Every line must name a consumable in this business, once, with a positive quantity. Existing bookings are not re-seeded. Requires `business.update`.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The whole list; omitted lines are removed. Each consumable at most once. */
+                        items: {
+                            /** Format: uuid */
+                            consumableId: string;
+                            quantity: number;
+                            note?: string | null;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved default usage */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["ConsumableUsageLine"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/bookings/{bookingId}/consumables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the materials recorded against a booking
+         * @description Seeded from every booked service’s defaults when the booking was created (quantities summed per consumable, unit costs snapshotted), then whatever staff last saved. `estimatedCostMinor` is for the business’s eyes only and is never charged. Requires `booking.read_all` or `booking.read_own`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Usage on the job */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BookingConsumablesUsage"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        /**
+         * Replace the materials recorded against a booking
+         * @description Replaces the list wholesale; unit costs are snapshotted from the catalogue at this write. When anything changed, the booking’s history gains a `kind: "amended"` entry with a `consumables` change and `booking.consumables_updated` is emitted (no customer message). The booking’s price and version are untouched. Requires `booking.create` (the edit-booking key).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    bookingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The whole list; omitted lines are removed. Each consumable at most once. */
+                        items: {
+                            /** Format: uuid */
+                            consumableId: string;
+                            quantity: number;
+                            note?: string | null;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Saved usage on the job */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BookingConsumablesUsage"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/follow-ups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List service follow-ups
+         * @description Follow-ups scheduled from finished jobs whose service carries a follow-up rule, ordered by due date. Filter by `status` (comma-separated or repeated), a `from`/`to` window on `dueAt`, `customerId` or `bookingId`. Requires `booking.read_all`. Staff-only: no public, customer or portal route exposes follow-ups.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    /** @description Only follow-ups due at or after this instant. */
+                    from?: string;
+                    /** @description Only follow-ups due before this instant. */
+                    to?: string;
+                    customerId?: string;
+                    /** @description Follow-ups scheduled from this job. */
+                    bookingId?: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Follow-up page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            followUps: components["schemas"]["ServiceFollowUp"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/follow-ups/{followUpId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a service follow-up */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    followUpId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Follow-up */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            followUp: components["schemas"]["ServiceFollowUp"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Act on a service follow-up
+         * @description `dismiss` closes an open follow-up; `snooze` holds the reminder until `until` (the reminder then goes out even if it already went once); `send_now` messages the client and the business immediately and marks it sent (`422` when nobody could be reached); `reopen` brings a dismissed, completed or cancelled follow-up back. `409` when the action does not fit the current status. Requires `booking.create`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    followUpId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "dismiss" | "snooze" | "send_now" | "reopen";
+                        /**
+                         * Format: date-time
+                         * @description Snooze only: when to remind again. Must be in the future.
+                         */
+                        until?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated follow-up */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            followUp: components["schemas"]["ServiceFollowUp"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List waitlist entries
+         * @description Customers waiting for a slot, soonest preferred start first (entries with no preferred start come first). Open (`waiting`) entries by default; pass `status` (comma-separated or repeated) for others. `from`/`to` are calendar dates the entry’s preferred window must overlap. Requires `booking.read_all`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                    serviceId?: string;
+                    locationId?: string;
+                    customerId?: string;
+                    /** @description Only entries whose preferred window reaches this day or later. */
+                    from?: string;
+                    /** @description Only entries whose preferred window starts on this day or earlier. */
+                    to?: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waitlist page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entries: components["schemas"]["WaitlistEntry"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Add a customer to the waitlist
+         * @description One open entry per customer + service: adding the same pair again returns the existing entry. `linkedRecordId` must belong to the customer. Requires `booking.create` and an `Idempotency-Key`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        customerId: string;
+                        /** Format: uuid */
+                        serviceId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Must belong to the customer.
+                         */
+                        linkedRecordId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        /** Format: uuid */
+                        staffId?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        /** @enum {string} */
+                        priority?: "normal" | "high";
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Waitlist entry */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/waitlist/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Waitlist count
+         * @description How many customers are currently waiting; for the nav badge and calendar.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waiting count */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            waiting: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/waitlist/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a waitlist entry */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Waitlist entry */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit or act on a waitlist entry
+         * @description Either `{ action }` — `cancel` removes an open entry, `reopen` brings a booked, cancelled or expired one back (409 if the customer is already waiting for that service) — or a set of fields to change on an open entry (409 when it is closed). Booking someone in is not an action here: create the booking with `waitlistEntryId` and the entry closes itself. Requires `booking.create`.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "cancel" | "reopen";
+                    } | {
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        /**
+                         * Format: uuid
+                         * @description Must belong to the customer.
+                         */
+                        linkedRecordId?: string | null;
+                        /** Format: uuid */
+                        locationId?: string | null;
+                        /** Format: uuid */
+                        staffId?: string | null;
+                        preferences?: {
+                            /** Format: date */
+                            from?: string | null;
+                            /** Format: date */
+                            to?: string | null;
+                            days?: number[] | null;
+                            /** @enum {string|null} */
+                            timeOfDay?: "any" | "morning" | "afternoon" | "evening" | null;
+                        };
+                        notes?: string | null;
+                        /** @enum {string} */
+                        priority?: "normal" | "high";
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated waitlist entry */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entry: components["schemas"]["WaitlistEntry"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/support-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List this business’s support requests
+         * @description Newest first, up to 50. Any active member can read them.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support requests */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            requests: components["schemas"]["SupportRequest"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Raise a support request
+         * @description Any active member of staff can ask us for help. Rate limited per actor; the body is customer content and is never logged.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        category: "question" | "bug" | "billing" | "feature" | "other";
+                        subject: string;
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Support request raised */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/support-requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One of this business’s support requests, with its thread
+         * @description The request plus every reply so far, oldest first. 404 for another business’s.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support request and thread */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                            messages: components["schemas"]["SupportMessage"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/support-requests/{requestId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply on a support request
+         * @description Adds a message from the business side. Replying to a resolved request reopens it (status back to open, resolvedAt cleared). Rate limited like raising a request.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Reply posted */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                            message: components["schemas"]["SupportMessage"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/services/{serviceId}/upsells": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a service’s upsells
+         * @description The add-ons paired with the service, in display order, each joined to the add-on it names. Requires `business.read`. Readable without the `upsells` feature so a lapsed bolt-on never hides what was set up.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Upsell pairings */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["ServiceUpsell"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        /**
+         * Replace a service’s upsells
+         * @description Replaces the list wholesale, in the given order (at most 5). Targets must be other active, individually booked services in the same currency; a service cannot upsell itself. `priceMinor` is the price when taken with this service (null = the add-on’s own price); `pitch` a one-line sales note. Requires `business.update` and the `upsells` feature (Business and Growth include it; Solo buys the bolt-on — 403 FEATURE_NOT_AVAILABLE otherwise).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    serviceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        items: {
+                            /** Format: uuid */
+                            upsellServiceId: string;
+                            priceMinor?: number | null;
+                            pitch?: string | null;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Upsell pairings */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: components["schemas"]["ServiceUpsell"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/upsell-offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List upsell offers
+         * @description Offers sent after staff-made bookings. Open requests (`requested`) by default; pass `status` (comma-separated) for others. Requires `booking.read_all`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: string;
+                };
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Offers */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            offers: components["schemas"]["UpsellOffer"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/upsell-offers/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open add-on request count
+         * @description How many offers are awaiting staff; for the Overview task and badges.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Request count */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            requested: number;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/upsell-offers/{offerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an upsell offer */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    offerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Offer */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            offer: components["schemas"]["UpsellOffer"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/upsell-offers/{offerId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline an add-on request
+         * @description Closes the offer as `declined`; the customer is not told automatically. Adding the requested service is not an action here: amend the booking with `additionalServices` and the offer closes itself as `added`. 409 once resolved. Requires `booking.create`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    offerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Declined offer */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            offer: components["schemas"]["UpsellOffer"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/upsell-offers/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an add-on offer from its link
+         * @description The page behind the link in the offer email. The token is all the customer has; it names the business. Closed and expired offers still render (`open: false`). 404 for an unknown token.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Offer page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicUpsellOfferPage"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/upsell-offers/{token}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request add-ons from an offer
+         * @description The customer asks for one or more of the offered add-ons. Nothing is added to the booking or charged: the offer becomes `requested`, the business is notified and the customer gets an acknowledgement; staff add it from the console. Repeating with a different selection replaces it. 409 once the offer is closed or the booking has started.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        serviceIds: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated offer */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            offer: components["schemas"]["PublicUpsellOffer"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -32747,6 +47078,27 @@ export interface components {
             code: string;
             /** @description Optional human-readable fallback for clients without a localisation map */
             message?: string;
+        };
+        BookingConflict: {
+            /**
+             * Format: uuid
+             * @description The clashing booking, or the calendar block id when `kind` is `block`.
+             */
+            bookingId: string;
+            /** @enum {string} */
+            kind: "booking" | "block";
+            /** @description Booking reference; null for blocks. */
+            reference: string | null;
+            /** @description True when the clashing entry is an all-day job (what a drop-in may sit beside). */
+            allDay: boolean;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @description Primary service name (the block title for a block); null when unknown. */
+            serviceName: string | null;
+            /** @description Lead client name; null when unknown. */
+            customerName: string | null;
         };
         ProblemDetails: {
             /**
@@ -32766,6 +47118,10 @@ export interface components {
             requestId: string;
             /** @description Field-level validation problems (empty for non-validation errors) */
             errors: components["schemas"]["FieldError"][];
+            /** @description BOOKING_CONFLICT only: the diary entries the booking clashed with. Each has `bookingId`, `kind` (`booking` | `block`), `reference`, `allDay`, `start`, `end`, `serviceName` and `customerName` (nullable where unknown). */
+            conflicts?: components["schemas"]["BookingConflict"][];
+            /** @description BOOKING_CONFLICT only: true when nothing in the way is a hard clash (two timed jobs, or a calendar block) — an all-day job in the way of a timed booking, or anything but a whole-day block in the way of an all-day one — so re-sending the same request with `dropIn: true` would be accepted. Absent/false otherwise. */
+            overridable?: boolean;
         };
         /** @description Opaque cursor for the next page, or null when the list is exhausted. Pass as `cursor` on the subsequent request. */
         NextCursor: string | null;
@@ -32860,7 +47216,7 @@ export interface components {
             businessId: string;
             reference: string;
             serviceSnapshot: components["schemas"]["ServiceSnapshot"];
-            /** @description Every service on this booking, `position`-ordered (RECA-516). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `priceMinor` and `end` are the roll-up across all items — render this list as the job checklist and do not recompute totals from the primary service alone. */
+            /** @description Every service on this booking, `position`-ordered (RECA-516), each at the price it was booked at (`priceMinor`) with the price it was booked from (`listPriceMinor`). Always non-empty: item 0 is the primary service and matches `serviceSnapshot`. `end` is the roll-up across all items; `booking.priceMinor` is the sum of these lines plus `adjustmentMinor` — render each line (list struck through where it differs), then a Discount / Price adjustment row when `adjustmentMinor` is non-zero, then the total. Do not recompute totals from the primary service alone. */
             lineItems: {
                 /** Format: uuid */
                 serviceId: string;
@@ -32870,7 +47226,10 @@ export interface components {
                 variantId: string | null;
                 variantName: string | null;
                 durationMinutes: number;
+                /** @description What this line is charged at. Equals `listPriceMinor` unless staff priced the line themselves when booking — then this is the price and the list is shown struck through. */
                 priceMinor: number;
+                /** @description The price the line was booked from: the variant/catalogue price, or the pairing price for a plain add-on. Σ listPriceMinor is the catalogue total ("Adjusted from £x"). */
+                listPriceMinor: number;
                 /** @example GBP */
                 currency: string;
                 position: number;
@@ -32889,6 +47248,19 @@ export interface components {
             start: string;
             /** Format: date-time */
             end: string;
+            /** @description Staff marked this an all-day job (RECA-532): start/end are local midnights at the location (end exclusive). Show the date(s) and "All day" rather than times. */
+            allDay: boolean;
+            /** @description Staff confirmed this booking shares its day with other work: a timed job booked as a drop-in beside an all-day job, or an all-day job booked onto a day that already has work (an untimed drop-in — "sometime that day"). Show a "Drop-in" marker on timed bookings; the calendar draws the all-day bar in the all-day lane and the drop-in as a timed chip under it. Staff-only; always false on customer-made bookings. */
+            dropIn: boolean;
+            /** @description The time the job actually holds, one UTC interval per working day it occupies, in order. Jobs of a day or more follow the staff member’s working days (else the location’s opening hours): a three-day job started on a Thursday is Thu, Fri and Mon, so the weekend stays free for other work. `start` is the first segment’s start and `end` the last one’s end. Draw the job on these days only — never as one bar from start to end. A job under a day, or a booking made before segments existed, is a single `[start, end)` segment. */
+            segments: {
+                /** Format: date-time */
+                start: string;
+                /** Format: date-time */
+                end: string;
+            }[];
+            /** @description Local calendar days (YYYY-MM-DD in `timezone`) covered by `segments`, in order — the days a calendar should show this job on. */
+            occupiedDays: string[];
             /** Format: date-time */
             occupiedStart: string;
             /** Format: date-time */
@@ -32910,7 +47282,10 @@ export interface components {
                 customerId: string | null;
             }[];
             seatCount: number;
+            /** @description What the client pays for the whole job — the authoritative total that payments, deposits and the outstanding balance work from. Σ lineItems[].priceMinor + adjustmentMinor. */
             priceMinor: number;
+            /** @description Whole-job adjustment on top of the lines: `priceMinor − Σ lineItems[].priceMinor`. Negative = discount (show a "Discount −£x" row), positive = surcharge ("Price adjustment +£x"), 0 = the job costs what its lines add up to. A service staff re-priced is *not* here: its own `priceMinor` differs from its `listPriceMinor` and it is shown as that price, so a job of £85 + £400-instead-of-£450 has an adjustment of 0. */
+            adjustmentMinor: number;
             /** @description Deposit securing the booking (RECA-523), snapshotted at create from the services’ configured deposits or a staff override. Null = no deposit: the booking is paid in full up front. Only ever set strictly between 0 and priceMinor. */
             depositMinor?: number | null;
             /** @description Money received to date across every channel — card, bank transfer, cash recorded by staff (RECA-523). Outstanding balance = priceMinor - paidMinor. */
@@ -32920,7 +47295,7 @@ export interface components {
             /** @enum {string} */
             status: "draft" | "held" | "awaiting_payment" | "confirmed" | "completed" | "cancelled_by_customer" | "cancelled_by_business" | "late_cancelled" | "no_show" | "expired";
             /** @enum {string} */
-            paymentMethod: "none" | "credit" | "bank_transfer";
+            paymentMethod: "none" | "credit" | "bank_transfer" | "pay_later";
             /** @enum {string} */
             attendanceStatus: "unknown" | "attended" | "no_show";
             cancellation: {
@@ -32939,6 +47314,13 @@ export interface components {
             createdActorId: string;
             notesCustomer: string | null;
             notesInternal: string | null;
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            clientLift: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
             /** @description Map of policy type → policy_documents.id effective at booking create (RECA-67). At least `cancellation` is set when a published cancellation policy exists. */
             applicablePolicyDocumentIds: {
                 /** Format: uuid */
@@ -33010,7 +47392,7 @@ export interface components {
             phoneDisplay: string | null;
             contactPreferences: {
                 /**
-                 * @description Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered only while the business holds the reminders.sms entitlement and the customer keeps operational notifications on; otherwise reminders fall back to email.
+                 * @description Preferred contact channel. `sms` opts the customer into SMS job reminders (RECA-518) — delivered while the business can text (Growth includes unlimited texts; Solo/Business spend prepaid credits, ADR 0020) and the customer keeps operational notifications on; otherwise reminders fall back to email.
                  * @enum {string}
                  */
                 preferredChannel: "email" | "phone" | "sms" | "none";
@@ -33324,6 +47706,72 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @description A material the business uses up on jobs — a bottle of ceramic coating, a polishing pad. Costs are for the business’s own records only: they never change a price and are never exposed on public, customer or portal routes. */
+        Consumable: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** @example Ceramic coat 50ml */
+            name: string;
+            /**
+             * @description Free text the business counts in: ml, bottle, pad, litre.
+             * @example bottle
+             */
+            unit: string;
+            /** @description Cost to the business per unit, minor units; null = not recorded. */
+            unitCostMinor: number | null;
+            currency: string;
+            sku: string | null;
+            notes: string | null;
+            /**
+             * @description Archived rows stay for old jobs; the console offers only active ones.
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** @description Services that list this consumable in their defaults ("used by N services"). */
+            serviceIds: string[];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ConsumableUsageLine: {
+            /** Format: uuid */
+            consumableId: string;
+            name: string;
+            unit: string;
+            /** @description Positive, at most three decimal places. */
+            quantity: number;
+            /** @description Booking lines: the cost snapshotted when the line was written. Service defaults: the catalogue’s current cost. */
+            unitCostMinor: number | null;
+            currency: string;
+            note: string | null;
+            /** @description The catalogue entry has since been archived; the line still resolves. */
+            archived: boolean;
+        };
+        /** @description What a job used (or is expected to use). Seeded from the booked services’ defaults at create time; staff replace the list as the work happens. Staff eyes only. */
+        BookingConsumablesUsage: {
+            items: {
+                /** Format: uuid */
+                consumableId: string;
+                name: string;
+                unit: string;
+                /** @description Positive, at most three decimal places. */
+                quantity: number;
+                /** @description Booking lines: the cost snapshotted when the line was written. Service defaults: the catalogue’s current cost. */
+                unitCostMinor: number | null;
+                currency: string;
+                note: string | null;
+                /** @description The catalogue entry has since been archived; the line still resolves. */
+                archived: boolean;
+            }[];
+            /** @description Sum of quantity × snapshotted unit cost over lines that carry a cost; null when none do. Not charged to the client. */
+            estimatedCostMinor: number | null;
+            costedLines: number;
+            currency: string;
+        };
         CatalogueService: {
             /** Format: uuid */
             id: string;
@@ -33375,11 +47823,417 @@ export interface components {
             active: boolean;
             colour: string | null;
             displayOrder: number;
+            followUp: components["schemas"]["ServiceFollowUpRule"] | null;
             version: number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        /** @description When set, finishing a job that includes this service schedules a follow-up due `intervalMonths` after the job, and the client and the business are reminded `leadDays` before that date. */
+        ServiceFollowUpRule: {
+            /** @example 24 */
+            intervalMonths: number;
+            /**
+             * @description How many days before the due date the reminder goes out.
+             * @default 14
+             */
+            leadDays: number;
+            /**
+             * @description What the reminder calls it; the service name when null.
+             * @example Ceramic top-up
+             */
+            label: string | null;
+        };
+        /** @description Created when a job that includes a service with a follow-up rule is completed (or its end passes unmarked). `dueAt` = job end + intervalMonths; `remindAt` = dueAt − leadDays. The worker sends the reminder when `remindAt` passes (unless snoozed) and marks it `sent`. A repeat booking of the same service (same vehicle when both are known) marks it `completed`; cancelling/deleting the job marks it `cancelled`. */
+        ServiceFollowUp: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            customerId: string;
+            /**
+             * Format: uuid
+             * @description The job it was scheduled from.
+             */
+            bookingId: string;
+            /** Format: uuid */
+            serviceId: string;
+            /**
+             * Format: uuid
+             * @description The vehicle (or other linked record) the job was done on, when it had one.
+             */
+            linkedRecordId: string | null;
+            /** @description Service name as booked. */
+            serviceName: string;
+            /** @description The rule’s label at scheduling time. */
+            label: string | null;
+            /** @description The label when set, else the service name. */
+            title: string;
+            /**
+             * Format: date-time
+             * @description The job’s end.
+             */
+            lastDoneAt: string;
+            /** Format: date-time */
+            dueAt: string;
+            /** Format: date-time */
+            remindAt: string;
+            /** @enum {string} */
+            status: "scheduled" | "sent" | "dismissed" | "completed" | "cancelled";
+            /** Format: date-time */
+            sentAt: string | null;
+            /** Format: date-time */
+            dismissedAt: string | null;
+            /** Format: date-time */
+            snoozedUntil: string | null;
+            /**
+             * Format: uuid
+             * @description The later booking that answered this follow-up (status `completed`).
+             */
+            supersededByBookingId: string | null;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                firstName: string;
+                lastName: string | null;
+                email: string | null;
+                phone: string | null;
+            } | null;
+            linkedRecord: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+            } | null;
+            booking: {
+                /** Format: uuid */
+                id: string;
+                reference: string;
+                /** Format: date-time */
+                start: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        WaitlistPreferences: {
+            /**
+             * Format: date
+             * @description Inclusive calendar date the window opens; null = as soon as possible.
+             */
+            from: string | null;
+            /**
+             * Format: date
+             * @description Inclusive calendar date the window closes; null = open-ended.
+             */
+            to: string | null;
+            /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+            days: number[] | null;
+            /** @enum {string} */
+            timeOfDay: "any" | "morning" | "afternoon" | "evening";
+        };
+        /** @description A customer waiting for a slot. Added by staff (`source: staff`) or by the customer on the public booking page (`source: public`). One open entry per customer + service. Closed by creating a booking with `waitlistEntryId` (→ `booked`), by staff removing it (`cancelled`), or by housekeeping when the window passes (`expired`). */
+        WaitlistEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            customerId: string;
+            /** Format: uuid */
+            serviceId: string;
+            /** Format: uuid */
+            variantId: string | null;
+            /**
+             * Format: uuid
+             * @description The vehicle (or other linked record) the job is for, when known.
+             */
+            linkedRecordId: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description A staff member they asked for; null = anyone.
+             */
+            staffId: string | null;
+            preferences: {
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window opens; null = as soon as possible.
+                 */
+                from: string | null;
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window closes; null = open-ended.
+                 */
+                to: string | null;
+                /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+                days: number[] | null;
+                /** @enum {string} */
+                timeOfDay: "any" | "morning" | "afternoon" | "evening";
+            };
+            notes: string | null;
+            /** @enum {string} */
+            priority: "normal" | "high";
+            /** @enum {string} */
+            source: "staff" | "public";
+            /** @enum {string} */
+            status: "waiting" | "booked" | "cancelled" | "expired";
+            /**
+             * Format: uuid
+             * @description The booking staff created from this entry (status `booked`).
+             */
+            bookingId: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description The staff user who added it; null for public joins.
+             */
+            createdByUserId: string | null;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                firstName: string;
+                lastName: string | null;
+                email: string | null;
+                phone: string | null;
+            } | null;
+            service: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            variant: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            location: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            staff: {
+                /** Format: uuid */
+                id: string;
+                displayName: string;
+            } | null;
+            linkedRecord: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+            } | null;
+            booking: {
+                /** Format: uuid */
+                id: string;
+                reference: string;
+                /** Format: date-time */
+                start: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PublicWaitlistReceipt: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "waiting";
+            /** Format: uuid */
+            serviceId: string;
+            preferences: {
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window opens; null = as soon as possible.
+                 */
+                from: string | null;
+                /**
+                 * Format: date
+                 * @description Inclusive calendar date the window closes; null = open-ended.
+                 */
+                to: string | null;
+                /** @description ISO weekdays they can do (1 = Monday … 7 = Sunday); null = any day. */
+                days: number[] | null;
+                /** @enum {string} */
+                timeOfDay: "any" | "morning" | "afternoon" | "evening";
+            };
+            /** @description True when this person was already waiting for this service; the existing entry is returned (200) and no second confirmation is sent. */
+            alreadyOnList: boolean;
+        };
+        /** @description One add-on paired with a service, joined to the add-on it names. `priceMinor` is the price when taken with this service (null = the add-on’s own price); `effectivePriceMinor` resolves that. */
+        ServiceUpsell: {
+            /** Format: uuid */
+            businessId: string;
+            /**
+             * Format: uuid
+             * @description The service the offer hangs off.
+             */
+            serviceId: string;
+            /**
+             * Format: uuid
+             * @description The add-on being offered.
+             */
+            upsellServiceId: string;
+            priceMinor: number | null;
+            pitch: string | null;
+            position: number;
+            service: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                durationMinutes: number;
+                basePriceMinor: number;
+                currency: string;
+                active: boolean;
+                publicVisible: boolean;
+            } | null;
+            effectivePriceMinor: number | null;
+        };
+        /** @description An extra a visitor can tick with a service on the public booking page. `priceMinor` is what it costs with this service; `basePriceMinor` its normal price, for a strike-through when discounted. */
+        PublicServiceUpsell: {
+            /** Format: uuid */
+            serviceId: string;
+            name: string;
+            description: string | null;
+            durationMinutes: number;
+            basePriceMinor: number;
+            priceMinor: number;
+            currency: string;
+            pitch: string | null;
+        };
+        /** @description The add-on offer sent after a staff-made booking, as staff see it: what was offered, what the customer asked for, and who/which job it is about. One per booking. */
+        UpsellOffer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            bookingId: string;
+            /** Format: uuid */
+            customerId: string;
+            offered: {
+                /** Format: uuid */
+                serviceId: string;
+                name: string;
+                durationMinutes: number;
+                priceMinor: number;
+                currency: string;
+                pitch: string | null;
+            }[];
+            /**
+             * @description offered = email sent, no answer; requested = customer asked for add-on(s); added = staff amended the booking and it carries a requested service; declined = staff turned it down; expired = the booking started or was cancelled first.
+             * @enum {string}
+             */
+            status: "offered" | "requested" | "added" | "declined" | "expired";
+            requestedServiceIds: string[];
+            /** Format: date-time */
+            requestedAt: string | null;
+            /** Format: date-time */
+            resolvedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                firstName: string;
+                lastName: string | null;
+            } | null;
+            booking: {
+                /** Format: uuid */
+                id: string;
+                reference: string;
+                /** Format: date-time */
+                start: string;
+                serviceName: string;
+            } | null;
+            /** @description The requested add-ons, resolved from the offer snapshot. */
+            requested: {
+                /** Format: uuid */
+                serviceId: string;
+                name: string;
+                durationMinutes: number;
+                priceMinor: number;
+                currency: string;
+                pitch: string | null;
+            }[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        BookingUpsellSummary: {
+            /** Format: uuid */
+            offerId: string;
+            /**
+             * @description offered = email sent, no answer; requested = customer asked for add-on(s); added = staff amended the booking and it carries a requested service; declined = staff turned it down; expired = the booking started or was cancelled first.
+             * @enum {string}
+             */
+            status: "offered" | "requested" | "added" | "declined" | "expired";
+            requested: {
+                /** Format: uuid */
+                serviceId: string;
+                name: string;
+                durationMinutes: number;
+                priceMinor: number;
+                currency: string;
+                pitch: string | null;
+            }[];
+            /** Format: date-time */
+            requestedAt: string | null;
+        };
+        PublicUpsellOffer: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description offered = email sent, no answer; requested = customer asked for add-on(s); added = staff amended the booking and it carries a requested service; declined = staff turned it down; expired = the booking started or was cancelled first.
+             * @enum {string}
+             */
+            status: "offered" | "requested" | "added" | "declined" | "expired";
+            offered: {
+                /** Format: uuid */
+                serviceId: string;
+                name: string;
+                durationMinutes: number;
+                priceMinor: number;
+                currency: string;
+                pitch: string | null;
+            }[];
+            requestedServiceIds: string[];
+            /** Format: date-time */
+            requestedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        PublicUpsellOfferPage: {
+            offer: components["schemas"]["PublicUpsellOffer"];
+            /** @description Whether the customer can still request: offered/requested, booking confirmed, not started. */
+            open: boolean;
+            booking: {
+                reference: string;
+                /** Format: date-time */
+                start: string;
+                timezone: string;
+                serviceName: string;
+            } | null;
+            customerFirstName: string | null;
+            business: components["schemas"]["PublicBusinessProfile"];
+        };
+        /** @description Public booking-page projection: no legal name, lifecycle, or staff fields. */
+        PublicBusinessProfile: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            tradingName: string;
+            currency: string;
+            defaultTimezone: string;
+            branding: {
+                logoUrl: string | null;
+                accentColour: string | null;
+            };
         };
         Resource: {
             /** Format: uuid */
@@ -33521,17 +48375,184 @@ export interface components {
             recipientType: "customer" | "user";
             recipientId: string;
             /** @enum {string} */
-            channel: "email" | "in_app";
+            channel: "email" | "in_app" | "sms";
             templateKey: string;
             templateVersion: number;
             subject: string;
             body: string;
             /** Format: uuid */
             bookingId: string | null;
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel?: "email" | "in_app" | "sms" | null;
+            /** @enum {string|null} */
+            fallbackReason?: "no_phone" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | null;
             /** Format: date-time */
             readAt: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        BookingMessageHistoryEntry: {
+            /** @enum {string} */
+            kind: "message";
+            /** Format: uuid */
+            notificationId: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            channel: "email" | "in_app" | "sms";
+            /**
+             * @description Channel asked for when it differs from `channel` (a text that went as email).
+             * @enum {string|null}
+             */
+            requestedChannel: "email" | "in_app" | "sms" | null;
+            templateKey: string;
+            /**
+             * @description `sent`: handed to the provider; `failed`: the provider refused it; `fallback`: went by email because the text could not.
+             * @enum {string}
+             */
+            status: "sent" | "failed" | "fallback";
+            /**
+             * @description Why it failed or fell back. Never raw provider text.
+             * @enum {string|null}
+             */
+            reasonCode: "invalid_phone" | "no_phone" | "no_email" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | "provider_error" | null;
+        };
+        BookingChange: {
+            /** @enum {string} */
+            field: "services";
+            from: string[];
+            to: string[];
+        } | {
+            /** @enum {string} */
+            field: "price";
+            from: number;
+            to: number;
+            currency: string;
+        } | {
+            /** @enum {string} */
+            field: "deposit";
+            from: number | null;
+            to: number | null;
+            currency: string;
+        } | {
+            /** @enum {string} */
+            field: "duration";
+            /** @description Minutes. */
+            from: number;
+            /** @description Minutes. */
+            to: number;
+            /**
+             * Format: date-time
+             * @description New end of the job.
+             */
+            end: string;
+        } | {
+            /** @enum {string} */
+            field: "when";
+            /**
+             * Format: date-time
+             * @description Previous start.
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Corrected start.
+             */
+            to: string;
+            /**
+             * Format: date-time
+             * @description Corrected end.
+             */
+            end: string;
+            allDay: boolean;
+        } | {
+            /** @enum {string} */
+            field: "staff" | "location" | "leadCustomer";
+            from: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            };
+            to: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            };
+        } | {
+            /** @enum {string} */
+            field: "linkedRecord";
+            from: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            } | null;
+            to: {
+                /** Format: uuid */
+                id: string;
+                /** @description Display name at the time of the edit; null when not resolvable (e.g. client). */
+                label: string | null;
+            } | null;
+        } | {
+            /** @enum {string} */
+            field: "paymentMethod";
+            /** @enum {string} */
+            from: "none" | "credit" | "bank_transfer" | "pay_later";
+            /** @enum {string} */
+            to: "none" | "credit" | "bank_transfer" | "pay_later";
+        } | {
+            /** @enum {string} */
+            field: "notesInternal";
+            from: string | null;
+            to: string | null;
+        } | {
+            /** @enum {string} */
+            field: "consumables";
+            from: string[];
+            to: string[];
+        } | {
+            /** @enum {string} */
+            field: "clientLift";
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            from: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
+            /** @description Set when the customer needs dropping somewhere after leaving their vehicle — a one-person detailer runs them home or to the station. Null when no lift is needed. Show a "Lift needed" marker and "Drop client at {destination}" on the booking; the customer’s confirmation carries a "we’ll drop you at…" line. Only staff routes accept it; the customer portal returns it read-only. */
+            to: {
+                /** @description Where to ("Home — 12 Elm Rd", "Train station"). May be null while unknown. */
+                destination: string | null;
+                /** @description Anything else worth knowing ("Back at 5pm to collect"). */
+                notes: string | null;
+            } | null;
+        };
+        BookingStatusHistoryEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId?: string;
+            /** Format: uuid */
+            bookingId: string;
+            /**
+             * @default status
+             * @enum {string}
+             */
+            kind: "status" | "amended";
+            fromStatus: string | null;
+            toStatus: string;
+            actorId: string;
+            reason: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Present (non-empty) when `kind` is `amended`. */
+            changes?: components["schemas"]["BookingChange"][] | null;
         };
         PublicCataloguePlan: {
             /** @enum {string} */
@@ -33637,10 +48658,38 @@ export interface components {
             tax?: {
                 vatRegistered?: boolean;
                 vatNumber?: string | null;
+                /** @description VAT rate in basis points (2000 = 20%). Drives the per-line VAT breakdown on invoices when vatRegistered; null = no VAT breakdown (ADR 0019). */
+                vatRateBps?: number | null;
+                /** @description Whether service prices already include VAT (UK consumer default true). Exclusive pricing adds VAT on top of the line total. */
+                pricesIncludeVat?: boolean;
             };
             retention?: {
                 closureWindowDays?: number;
                 fileRetentionDays?: number | null;
+            };
+            /** @description Customer invoicing preferences (ADR 0019). Invoicing itself is the `invoicing` feature (included in Growth, paid bolt-on below); these settings apply once entitled. */
+            invoicing?: {
+                /** @description Issue and email a PDF invoice automatically when a job is marked attended/completed. */
+                autoSendOnCompletion?: boolean;
+                /** @description Prefix for sequential invoice numbers, e.g. `INV-` → INV-0001. */
+                numberPrefix?: string;
+                dueDays?: number;
+                footerNote?: string | null;
+            };
+            /** @description Console calendar settings. Booking bars are painted by payment state; each key is `#rrggbb` or null for the platform default (green / amber / red). `eventColour` is the default for new events (null = slate). `publicHolidays` picks which UK holiday set the calendar marks, or null for none. Staff-only. */
+            calendar?: {
+                paymentColours?: {
+                    paid?: string | null;
+                    partial?: string | null;
+                    unpaid?: string | null;
+                };
+                eventColour?: string | null;
+                /** @enum {string|null} */
+                publicHolidays?: "england-and-wales" | "scotland" | "northern-ireland" | null;
+            };
+            /** @description Console menu items the business has switched off (settings → menu). Cosmetic only: routes and API stay available and plan entitlements are enforced separately. On PATCH the whole `hidden` list is replaced; `[]` shows everything. Staff-only. */
+            navigation?: {
+                hidden?: ("waitlist" | "consumables" | "packages" | "offer_links" | "follow_ups" | "records" | "staff" | "messages" | "invoices" | "reports" | "referrals")[];
             };
             legalAddress?: {
                 line1?: string;
@@ -33650,11 +48699,11 @@ export interface components {
                 postalCode?: string;
                 country?: string;
             } | null;
-            /** @description Customer-facing email branding; null fields fall back to platform branding. */
+            /** @description Customer-facing branding for email, the booking page and invoice PDFs; null fields fall back to platform branding. */
             branding?: {
                 /**
                  * Format: uri
-                 * @description Absolute https URL to a logo image.
+                 * @description Absolute https URL to a logo image. Set automatically by `PUT /businesses/{businessId}/branding/logo` (an API-hosted URL under `/brand/businesses/{businessId}/logo`), or supply your own externally hosted image.
                  */
                 logoUrl?: string | null;
                 /** @description Hex accent used for buttons and rules in email. */
@@ -33671,12 +48720,12 @@ export interface components {
                 iban?: string | null;
                 bic?: string | null;
             };
-            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` requires the reminders.sms entitlement (Business/Growth, or the Solo bolt-on) — otherwise 403. Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
             reminders?: {
                 rules: {
                     minutesBefore: number;
                     /**
-                     * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business is entitled); `email` always emails; `sms` texts when the client has a phone and has not opted out of operational messages, else email.
+                     * @description `preferred` follows the client’s contact preference (SMS only when they opted in and the business can text); `email` always emails; `sms` texts when the client has a phone, has not opted out of operational messages and a credit (or the Growth tier) covers it, else email.
                      * @enum {string}
                      */
                     channel: "preferred" | "email" | "sms";
@@ -33759,6 +48808,31 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /** @description A shareable link that scopes the public booking page to a hand-picked set of sessions and packages. Visitors arriving through it can book those sessions and buy those packages even when they are kept off the general public page (publicVisible / salesAvailable false). The code is a public handle, not a secret. */
+        PackageLink: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** @description Append as `?offer={code}` to the business booking page URL. */
+            code: string;
+            /** @description Staff-facing label; also shown to the buyer. */
+            name: string;
+            /** @description Sessions shown to the visitor, in this order. */
+            serviceIds: string[];
+            /** @description Packages shown to the visitor, in this order. */
+            packageIds: string[];
+            /** @description Customers this link has been handed to; it appears under Offers in their portal. Assignment does not restrict who can open the link. */
+            customerIds: string[];
+            /** @description Whether the booking page opened through this link offers the visitor a way out to everything the business sells ("Looking for something else?"). False keeps a private offer private: the visitor sees only what the link names. */
+            showFullCatalogue: boolean;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         PackagePurchase: {
             /** Format: uuid */
             id: string;
@@ -33793,6 +48867,41 @@ export interface components {
             status: "active" | "expired";
             /** Format: date-time */
             createdAt?: string;
+        };
+        /** @description A package a visitor asked for while the business could not take card payment online. Pending until staff confirm (credits issued; payment arranged offline) or decline it. */
+        PackageRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            customerId: string;
+            /** Format: uuid */
+            packageId: string;
+            /** @description Package name at the time of the request. */
+            packageName: string;
+            creditsIssued: number;
+            priceMinor: number;
+            currency: string;
+            linkCode?: string | null;
+            /** @description Note the customer left for the business. */
+            notesCustomer?: string | null;
+            /** @enum {string} */
+            status: "pending" | "confirmed" | "declined";
+            /** Format: date-time */
+            resolvedAt?: string | null;
+            /** @description Staff user who confirmed or declined. */
+            resolvedBy?: string | null;
+            resolutionNote?: string | null;
+            /**
+             * Format: uuid
+             * @description Credits issued on confirmation.
+             */
+            entitlementId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         /** @description Balance derived from the append-only credit ledger. `available` is spendable. */
         CreditBalance: {
@@ -33863,6 +48972,54 @@ export interface components {
             /** Format: date-time */
             readByStaffAt?: string | null;
         };
+        MessageTemplate: {
+            /** @description Template key, e.g. `booking_confirmation`. */
+            key: string;
+            label: string;
+            /** @description When the message is sent. */
+            description: string;
+            /** @description Fixed email subject line in the business’s terminology (not editable). */
+            emailSubject: string;
+            /** @description Platform default email prose with terminology filled in and placeholders intact. */
+            defaultBodyRegion: string;
+            /** @description Current email prose: the saved override, else `defaultBodyRegion`. */
+            bodyRegion: string;
+            /** @description Whether the business has saved its own email wording. */
+            customised: boolean;
+            /** @description `bodyRegion` rendered against sample values by the sending renderer. */
+            emailPreview: string;
+            /** @description Platform default text message with terminology filled in and placeholders intact. Clauses in `[[…]]` are only sent when every placeholder inside them has a value. */
+            defaultSmsBody: string;
+            /** @description Current text message wording: the saved override, else `defaultSmsBody`. */
+            smsBody: string;
+            /** @description Whether the business has saved its own text wording. */
+            smsCustomised: boolean;
+            /** @description `smsBody` rendered against sample values, trailing link included — the text as it would send. */
+            smsPreview: string;
+            /** @description Label of the link appended to the text ("Details", "Pay") unless the wording places `{{link}}`; null when the message has no link. */
+            smsLinkLabel: string | null;
+            placeholders: {
+                /** @description e.g. `{{first_name}}` */
+                token: string;
+                aliases: string[];
+                description: string;
+                /** @description A believable value for a live preview. */
+                sample: string;
+            }[];
+        };
+        /**
+         * @description Which wording: `email` is the prose above the details table; `sms` is the whole text message.
+         * @enum {string}
+         */
+        MessageTemplateChannel: "email" | "sms";
+        MessageTemplatePreview: {
+            /** @description The wording rendered against sample values. For `sms` this is the complete text, link included. */
+            preview: string;
+            /** @description Characters in `preview`. */
+            length: number;
+            /** @description GSM-7 segments the text would bill as; null for email. */
+            segments: number | null;
+        };
         CustomerNote: {
             /** Format: uuid */
             id: string;
@@ -33919,6 +49076,108 @@ export interface components {
             businessAddressSnapshot?: string | null;
             documentKind: string;
         };
+        Invoice: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** @description Sequential per-business number (prefix + zero-padded), assigned on issue. */
+            number: string | null;
+            /** @enum {string} */
+            status: "draft" | "issued" | "paid" | "void";
+            /** @enum {string} */
+            origin: "manual" | "booking_completed";
+            /** Format: uuid */
+            bookingId: string | null;
+            bookingReference?: string | null;
+            /** @description The record the work was done on (vehicle, pet, …), snapshotted from the booking’s linked record when the draft was created and printed on the PDF and email. `label` is the business’s singular term for the record type ("Vehicle"); `value` is a short summary ("AB12 CDE · Ford · Focus"). Null when the invoice is not about a record. */
+            linkedRecord?: {
+                label: string;
+                value: string;
+            } | null;
+            /** Format: uuid */
+            customerId: string;
+            currency: string;
+            /** Format: date */
+            issueDate: string | null;
+            /** Format: date */
+            dueDate: string | null;
+            lines: {
+                /** Format: uuid */
+                serviceId?: string | null;
+                description: string;
+                quantity: number;
+                /** @description Per unit as entered — gross when pricesIncludeVat, net otherwise. Negative for a discount line (e.g. the "Discount" line generated from a staff-priced booking). */
+                unitPriceMinor: number;
+                taxable: boolean;
+                /** @description Computed server-side; never client input. */
+                netMinor: number;
+                vatMinor: number;
+                /** @description Line gross (net + VAT). */
+                totalMinor: number;
+            }[];
+            /** @description Net of VAT. */
+            subtotalMinor: number;
+            vatMinor: number;
+            totalMinor: number;
+            paidMinor: number;
+            vatRateBps?: number | null;
+            pricesIncludeVat?: boolean;
+            /** @enum {string} */
+            taxTreatment: "vat_registered" | "not_vat_registered";
+            seller: {
+                legalName?: string;
+                tradingName?: string;
+                vatNumber?: string | null;
+                address?: {
+                    line1?: string | null;
+                    line2?: string | null;
+                    city?: string | null;
+                    region?: string | null;
+                    postalCode?: string | null;
+                    country?: string | null;
+                } | null;
+                email?: string | null;
+                phone?: string | null;
+                logoUrl?: string | null;
+                accentColour?: string | null;
+                locale?: string;
+                timezone?: string;
+            };
+            billTo: {
+                name?: string;
+                email?: string | null;
+                address?: {
+                    line1?: string | null;
+                    line2?: string | null;
+                    city?: string | null;
+                    region?: string | null;
+                    postalCode?: string | null;
+                    country?: string | null;
+                } | null;
+            };
+            /** @description Bank transfer details printed when enabled and a balance is due. */
+            paymentInstructions?: {
+                accountName?: string;
+                sortCode?: string;
+                accountNumber?: string;
+                iban?: string | null;
+                bic?: string | null;
+            } | null;
+            notes?: string | null;
+            footerNote?: string | null;
+            /** Format: date-time */
+            sentAt?: string | null;
+            /** Format: date-time */
+            paidAt?: string | null;
+            /** Format: date-time */
+            voidedAt?: string | null;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         AuditEvent: {
             /** Format: uuid */
             id: string;
@@ -33955,6 +49214,537 @@ export interface components {
             /** Format: date-time */
             runAt: string;
             status: string;
+        };
+        /** @description A request for help raised by staff from the console. Worked through the internal platform console; the business sees its status but never the internal note. */
+        SupportRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** Format: uuid */
+            userId: string | null;
+            /** @enum {string} */
+            category: "question" | "bug" | "billing" | "feature" | "other";
+            subject: string;
+            body: string;
+            /** @enum {string} */
+            status: "open" | "in_progress" | "resolved";
+            /** Format: date-time */
+            resolvedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the latest reply was posted; null until someone replies.
+             */
+            lastMessageAt?: string | null;
+            /**
+             * @description Which side replied last. `user` = the business is waiting on RECAVO; `platform` = RECAVO is waiting on the business.
+             * @enum {string|null}
+             */
+            lastMessageBy?: "user" | "platform" | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description A reply on a support request. The opening message is the request body itself; these follow it, oldest first. */
+        SupportMessage: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            authorType: "user" | "platform";
+            /**
+             * Format: uuid
+             * @description Only populated for platform admins; the business sees null.
+             */
+            authorId: string | null;
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PlatformSupportRequest: components["schemas"]["SupportRequest"] & {
+            internalNote: string | null;
+            business: {
+                /** Format: uuid */
+                id: string;
+                tradingName: string;
+                slug: string;
+            } | null;
+            raisedBy: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+                displayName: string | null;
+            } | null;
+        };
+        /** @description One business as the platform operator sees it: who owns it, what it pays, how much it uses the product. Derived, read-only. */
+        PlatformBusinessSummary: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            tradingName: string;
+            legalName: string;
+            industryTemplateKey: string;
+            status: string;
+            onboardingState: string;
+            /**
+             * @description Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant.
+             * @enum {string}
+             */
+            accountKind: "customer" | "test";
+            /**
+             * Format: date-time
+             * @description When an operator last changed accountKind; null when never touched.
+             */
+            accountKindChangedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Surface the business signed up on (the one that created it, else the one its owner's account was created from). Null for accounts that predate the X-Recavo-Client header.
+             * @enum {string|null}
+             */
+            signupClient: "web" | "ios" | "android" | null;
+            owner: {
+                email: string;
+                displayName: string | null;
+                /**
+                 * @description Surface of the owner's most recent authenticated request.
+                 * @enum {string|null}
+                 */
+                lastClient: "web" | "ios" | "android" | null;
+            } | null;
+            billing: {
+                /** @enum {string} */
+                accessState: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+                subscriptionStatus: string | null;
+                /** @enum {string|null} */
+                provider: "stripe" | "apple" | null;
+                planCode: string | null;
+                planName: string | null;
+                priceMinor: number | null;
+                currency: string | null;
+                /** @enum {string|null} */
+                interval: "month" | "year" | null;
+                /** Format: date-time */
+                trialEnd: string | null;
+                /** Format: date-time */
+                currentPeriodEnd: string | null;
+                cancelAtPeriodEnd: boolean;
+                /** @description Every sellable bolt-on and where this business stands on it. */
+                addons: components["schemas"]["PlatformBusinessAddon"][];
+            };
+            revenue: components["schemas"]["PlatformBusinessRevenue"];
+            usage: {
+                staffActive: number;
+                locationsActive: number;
+                bookingsLast30d: number;
+                /** Format: date-time */
+                lastBookingAt: string | null;
+            };
+            openSupportRequests: number;
+            referral: components["schemas"]["PlatformBusinessReferral"];
+        };
+        /** @description Which referral programme this business’s code is on and how it has performed. */
+        PlatformBusinessReferral: {
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /** @description Display form (ABCD-EFGH); null until the business has a code. */
+            code: string | null;
+            attributedCount: number;
+            convertedCount: number;
+            /** Format: date-time */
+            programChangedAt: string | null;
+        };
+        PlatformBusinessDetail: components["schemas"]["PlatformBusinessSummary"] & {
+            /** @description Businesses that signed up with this one’s code, newest first. */
+            referred: components["schemas"]["PlatformReferredBusiness"][];
+            referredBy: components["schemas"]["PlatformReferredBy"] | null;
+            /** @description Payment history, newest first, capped at 60. */
+            payments: components["schemas"]["PlatformBusinessPayment"][];
+            members: {
+                /** Format: uuid */
+                userId: string;
+                email: string;
+                displayName: string | null;
+                roleKeys: string[];
+                status: string;
+                /** Format: date-time */
+                joinedAt: string | null;
+                /** Format: date-time */
+                lastLoginAt: string | null;
+                /** @enum {string|null} */
+                lastClient: "web" | "ios" | "android" | null;
+            }[];
+            usageDetail: {
+                customersTotal: number;
+                bookingsTotal: number;
+                bookingsByStatusLast30d: {
+                    [key: string]: number;
+                };
+            };
+            smsCredits: {
+                balance: number;
+                purchasedTotal: number;
+                consumedTotal: number;
+            } | null;
+            /** @description Messages the platform delivered for this business, however they were paid for (credits, Growth, unlimited bolt-on). Counts from notification deliveries. */
+            messages: {
+                smsSent: number;
+                smsSent30d: number;
+                smsFailed: number;
+                emailSent: number;
+                emailSent30d: number;
+            };
+            onboarding: {
+                /** Format: date-time */
+                dismissedAt: string | null;
+                skippedSteps: string[];
+            } | null;
+        };
+        PlatformBusinessAddon: {
+            /** @example invoicing */
+            key: string;
+            /** @example Invoicing */
+            name: string;
+            /** @description Catalogue list price per month. */
+            unitAmountMinor: number;
+            currency: string;
+            /** @description The business only sees and can buy this add-on once offered via PUT …/addons/{addonKey}. */
+            byInvitation: boolean;
+            /** @description Whether this business has been offered the add-on (always true for add-ons that are not by invitation). */
+            offered: boolean;
+            /**
+             * @description `included` — bundled in the tier; `active` — bought as a bolt-on (or granted); `available` — not held.
+             * @enum {string}
+             */
+            status: "included" | "active" | "available";
+        };
+        /** @description A business that signed up with this one’s referral code. */
+        PlatformReferredBusiness: {
+            /** Format: uuid */
+            attributionId: string;
+            /** Format: uuid */
+            businessId: string;
+            tradingName: string;
+            slug: string;
+            /**
+             * @description Operator label. `test` marks an internal/demo/QA account: hidden from the directory unless asked for and excluded from platform metrics. Changes nothing for the tenant.
+             * @enum {string}
+             */
+            accountKind: "customer" | "test";
+            /** @enum {string} */
+            accessState: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /**
+             * @description `attributed` — signed up with the code, not yet paid; `converted` — first paid invoice after trial; `reward_pending` / `rewarded` / `apply_failed` — referrer reward lifecycle (standard programme).
+             * @enum {string}
+             */
+            status: "attributed" | "converted" | "reward_pending" | "rewarded" | "apply_failed";
+            /** Format: date-time */
+            signedUpAt: string;
+            /** Format: date-time */
+            convertedAt: string | null;
+            /** @enum {string|null} */
+            rewardKind: "coupon_once" | "period_shift" | "referee_discount" | null;
+            /** Format: date-time */
+            rewardedAt: string | null;
+            applyError: string | null;
+            /** Format: date-time */
+            refereeDiscountAppliedAt: string | null;
+        };
+        /** @description The business whose code this one signed up with. */
+        PlatformReferredBy: {
+            /** Format: uuid */
+            attributionId: string;
+            /** Format: uuid */
+            businessId: string;
+            tradingName: string;
+            slug: string;
+            /** @description Display form, e.g. ABCD-EFGH. */
+            code: string;
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /**
+             * @description `attributed` — signed up with the code, not yet paid; `converted` — first paid invoice after trial; `reward_pending` / `rewarded` / `apply_failed` — referrer reward lifecycle (standard programme).
+             * @enum {string}
+             */
+            status: "attributed" | "converted" | "reward_pending" | "rewarded" | "apply_failed";
+            /** Format: date-time */
+            signedUpAt: string;
+            /** Format: date-time */
+            convertedAt: string | null;
+        };
+        /** @description How much of the product one business uses, as counts across every module. Read by the internal console business page. Aggregates only: no names, bodies or contact details. */
+        PlatformBusinessUsage: {
+            /** Format: uuid */
+            businessId: string;
+            /** Format: date-time */
+            generatedAt: string;
+            currency: string;
+            team: {
+                membersActive: number;
+                invitationsPending: number;
+                staffActive: number;
+                staffTotal: number;
+                locationsActive: number;
+                locationsTotal: number;
+                /** Format: date-time */
+                lastSeenAt: string | null;
+            };
+            catalogue: {
+                servicesActive: number;
+                servicesPublic: number;
+                servicesTotal: number;
+                packagesActive: number;
+                packagesTotal: number;
+                resourcesActive: number;
+                consumablesActive: number;
+                policyDocumentsPublished: number;
+                customFieldDefinitions: number;
+            };
+            clients: {
+                total: number;
+                active: number;
+                archived: number;
+                new30d: number;
+                booked90d: number;
+                withLogin: number;
+                withEmail: number;
+                withPhone: number;
+                linkedRecords: number;
+                notes: number;
+            };
+            /** @description Bookings, in customer-facing terms. */
+            sessions: {
+                total: number;
+                upcoming: number;
+                last7d: number;
+                last30d: number;
+                completed: number;
+                cancelled: number;
+                noShows: number;
+                attended: number;
+                group: number;
+                attendeesTotal: number;
+                byStatus: {
+                    [key: string]: number;
+                };
+                bySource: {
+                    [key: string]: number;
+                };
+                /** Format: date-time */
+                firstAt: string | null;
+                /** Format: date-time */
+                lastAt: string | null;
+                /** Format: date-time */
+                nextAt: string | null;
+                bookedValueMinor: number;
+            };
+            packages: {
+                purchasesTotal: number;
+                purchases30d: number;
+                salesMinor: number;
+                creditsIssued: number;
+                creditsConsumed: number;
+                creditsAvailable: number;
+                holders: number;
+            };
+            /** @description Money the business takes from its own clients through Stripe Connect. */
+            clientPayments: {
+                connectState: string | null;
+                chargesEnabled: boolean;
+                payoutsEnabled: boolean;
+                succeededCount: number;
+                succeededMinor: number;
+                last30dMinor: number;
+                refundsCount: number;
+                refundedMinor: number;
+                failedCount: number;
+                byState: {
+                    [key: string]: number;
+                };
+            };
+            invoices: {
+                total: number;
+                byStatus: {
+                    [key: string]: number;
+                };
+                invoicedMinor: number;
+                paidMinor: number;
+                outstandingMinor: number;
+            };
+            comms: {
+                conversations: number;
+                messagesTotal: number;
+                messagesFromStaff: number;
+                messagesFromCustomers: number;
+                messages30d: number;
+                deliveriesByChannel: {
+                    [key: string]: {
+                        sent: number;
+                        failed: number;
+                    };
+                };
+                deliveries30d: number;
+            };
+            engagement: {
+                waitlistWaiting: number;
+                waitlistTotal: number;
+                waitlistBooked: number;
+                followUpsOpen: number;
+                followUpsTotal: number;
+                upsellOffers: number;
+                upsellAccepted: number;
+                calendarBlocks: number;
+                filesCount: number;
+                filesBytes: number;
+                policyAcceptances: number;
+            };
+            series: {
+                sessionsByWeek: {
+                    /**
+                     * Format: date
+                     * @description ISO Monday the week starts on.
+                     */
+                    weekStart: string;
+                    count: number;
+                }[];
+                newClientsByWeek: {
+                    /**
+                     * Format: date
+                     * @description ISO Monday the week starts on.
+                     */
+                    weekStart: string;
+                    count: number;
+                }[];
+            };
+        };
+        /** @description What the business has paid us, net of refunds, from the revenue ledger (saas_revenue_events: Stripe charges + App Store purchases). Minor units. */
+        PlatformBusinessRevenue: {
+            /** @description Lifetime value. */
+            lifetimeMinor: number;
+            last12mMinor: number;
+            /** @description Null until the first payment. */
+            currency: string | null;
+            paymentsCount: number;
+            /** Format: date-time */
+            firstPaidAt: string | null;
+            /** Format: date-time */
+            lastPaidAt: string | null;
+        };
+        PlatformBusinessPayment: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "stripe" | "apple";
+            /**
+             * @description `subscription` — plan / bolt-on invoice; `one_off` — SMS bundle or other single payment.
+             * @enum {string}
+             */
+            kind: "subscription" | "one_off";
+            /** @description Gross, before refunds. */
+            amountMinor: number;
+            refundedMinor: number;
+            currency: string;
+            description: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        ReferralProgramView: {
+            /**
+             * @description `standard`: the referrer earns a free month per converted referee. `partner`: invite-only, switched on per business from the internal console; the referrer earns nothing and the referee gets 20% off for six months (monthly) or 10% off their first annual invoice.
+             * @enum {string}
+             */
+            program: "standard" | "partner";
+            /** @description Display form, e.g. ABCD-EFGH. */
+            code: string;
+            sharePath: string;
+            stats: {
+                attributedCount: number;
+                convertedCount: number;
+                pendingRewardCount: number;
+                rewardedCount: number;
+            };
+        };
+        /** @description Platform-wide totals and 12-week series for the internal dashboard. */
+        PlatformUsageSummary: {
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description Test accounts are excluded from every business and booking figure; `testAccounts` is how many were left out. */
+            businesses: {
+                /** @description Customer accounts only. */
+                total: number;
+                testAccounts: number;
+                byAccessState: {
+                    none: number;
+                    pending: number;
+                    trial: number;
+                    entitled: number;
+                    grace: number;
+                    restricted: number;
+                    ended: number;
+                };
+                createdLast7d: number;
+                createdLast30d: number;
+                /** @description Businesses with at least one booking created in the last 30 days. */
+                activeLast30d: number;
+            };
+            bookings: {
+                total: number;
+                last7d: number;
+                last30d: number;
+            };
+            /** @description Money from customer accounts, net of refunds, minor units in `currency`. MRR is the normalised monthly run-rate of paying subscriptions (yearly ÷ 12) plus their bought bolt-ons at catalogue price. */
+            revenue: {
+                currency: string;
+                lifetimeMinor: number;
+                last30dMinor: number;
+                last7dMinor: number;
+                mrrMinor: number;
+                payingBusinesses: number;
+                subscribedBusinesses: number;
+            };
+            support: {
+                open: number;
+                inProgress: number;
+                resolved: number;
+            };
+            series: {
+                signupsByWeek: {
+                    /**
+                     * Format: date
+                     * @description ISO Monday the week starts on.
+                     */
+                    weekStart: string;
+                    count: number;
+                }[];
+                bookingsByWeek: {
+                    /**
+                     * Format: date
+                     * @description ISO Monday the week starts on.
+                     */
+                    weekStart: string;
+                    count: number;
+                }[];
+                /** @description `count` is net revenue in minor units for that week. */
+                revenueByWeek: {
+                    /**
+                     * Format: date
+                     * @description ISO Monday the week starts on.
+                     */
+                    weekStart: string;
+                    count: number;
+                }[];
+            };
         };
     };
     responses: never;

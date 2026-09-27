@@ -1,4 +1,4 @@
-import type { components } from "./schema";
+import type { components, paths } from "./schema";
 
 export type schemas = components["schemas"];
 
@@ -14,11 +14,61 @@ export type Membership = schemas["Membership"];
 export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
 export type CatalogueService = schemas["CatalogueService"];
+/** "Remind the client (and me) when this is due again" — e.g. a ceramic top-up every 2 years. */
+export type ServiceFollowUpRule = schemas["ServiceFollowUpRule"];
+/** A scheduled follow-up: one client, one service, one finished job, and when it is due again. */
+export type ServiceFollowUp = schemas["ServiceFollowUp"];
+export type ServiceFollowUpStatus = ServiceFollowUp["status"];
+export type ServiceFollowUpAction = "dismiss" | "snooze" | "send_now" | "reopen";
+/** A client waiting for a slot; staff book them in from the list. */
+export type WaitlistEntry = schemas["WaitlistEntry"];
+export type WaitlistStatus = WaitlistEntry["status"];
+export type WaitlistPriority = WaitlistEntry["priority"];
+export type WaitlistPreferences = schemas["WaitlistPreferences"];
+export type WaitlistTimeOfDay = WaitlistPreferences["timeOfDay"];
+export type WaitlistAction = "cancel" | "reopen";
+export type PublicWaitlistReceipt = schemas["PublicWaitlistReceipt"];
+/** Upsells: add-ons paired with a service, and the post-booking offer loop. */
+export type ServiceUpsell = schemas["ServiceUpsell"];
+export type PublicServiceUpsell = schemas["PublicServiceUpsell"];
+export type UpsellOffer = schemas["UpsellOffer"];
+export type UpsellOfferStatus = UpsellOffer["status"];
+export type BookingUpsellSummary = schemas["BookingUpsellSummary"];
+export type PublicUpsellOffer = schemas["PublicUpsellOffer"];
+export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
+/**
+ * A material a job uses up (ceramic bottle, pads, chemicals) — automotive only.
+ * Staff-only bookkeeping: never priced into a booking, never shown to a client.
+ */
+export type Consumable = schemas["Consumable"];
+/** One consumable on a service (default usage) or a booking (actual usage). */
+export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
+/** A booking's usage plus the staff-only estimated materials cost. */
+export type BookingConsumablesUsage = schemas["BookingConsumablesUsage"];
+/** Body of `PUT …/consumables` on a service or booking — replaces the list. */
+export type ConsumableUsageInput = { consumableId: string; quantity: number; note?: string | null };
 export type Booking = schemas["Booking"];
+export type SupportRequest = schemas["SupportRequest"];
+export type SupportRequestCategory = SupportRequest["category"];
+/** A reply on a support request thread — ours (`platform`) or the business's (`user`). */
+export type SupportMessage = schemas["SupportMessage"];
 /** Staff-side "event" on the diary (dentist, school run) that keeps jobs off the slot (RECA-531). */
 export type CalendarBlock = schemas["CalendarBlock"];
 /** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */
 export type ServiceLineItem = Booking["lineItems"][number];
+/** One field of a structured "edit booking" diff (RECA edit booking). */
+export type BookingChange = schemas["BookingChange"];
+/** Body of `PATCH …/bookings/{id}` — only the fields present change. */
+export type AmendBookingBody =
+  paths["/api/v1/businesses/{businessId}/bookings/{bookingId}"]["patch"]["requestBody"]["content"]["application/json"];
+/**
+ * Body of the quiet date fix (`POST …/reschedule` with `correction: true`, which the
+ * hook adds): the new start and, for all-day jobs, the new last day.
+ */
+export type CorrectBookingTimeBody = Omit<
+  paths["/api/v1/businesses/{businessId}/bookings/{bookingId}/reschedule"]["post"]["requestBody"]["content"]["application/json"],
+  "correction"
+>;
 /** History entries are loosely typed in OpenAPI (`additionalProperties: true`). */
 export type BookingHistoryEntry = {
   at?: string;
@@ -34,6 +84,9 @@ export type BookingHistoryEntry = {
   actorType?: string;
   actorId?: string | null;
   actorName?: string | null;
+  /** `amended` entries carry a structured diff instead of a status move. */
+  kind?: "status" | "amended" | string;
+  changes?: BookingChange[] | null;
   [key: string]: unknown;
 };
 export type AvailabilitySlot = schemas["AvailabilitySlot"];
@@ -41,6 +94,7 @@ export type Customer = schemas["Customer"];
 export type CustomerNote = schemas["CustomerNote"];
 export type CustomerTag = schemas["CustomerTag"];
 export type Package = schemas["Package"];
+export type PackageLink = schemas["PackageLink"];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];
@@ -79,6 +133,9 @@ export type ProblemDetails = schemas["ProblemDetails"];
 
 export type PolicyDocumentType = PolicyDocument["type"];
 export type SaasPlanCode = PublicCataloguePlan["code"];
+
+/** A customer's preferred contact channel (`contactPreferences.preferredChannel`). */
+export type ContactChannel = "email" | "phone" | "sms" | "none";
 export type SaasInterval = PublicCataloguePlan["prices"][number]["interval"];
 
 export type LinkedRecordDefinitionBundle = {

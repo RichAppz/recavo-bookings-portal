@@ -1,8 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
 import { BookingFlow } from "@/components/BookingFlow";
 import { PageGhost } from "@/components/ghost";
 import { Wordmark } from "@/components/Wordmark";
 import { usePublicBusiness } from "@/lib/api/hooks";
+
+/**
+ * `?offer=<code>` is a package link the studio shared: the page then shows only
+ * the packages in that link. Stripe's redirect parameters share this search
+ * space and are read straight off the URL, so they are left unlisted here.
+ */
+const searchSchema = z.object({
+  offer: z.string().min(1).optional(),
+});
 
 /**
  * A studio's booking page at `book.recavo.app/<their-slug>`.
@@ -14,6 +24,7 @@ import { usePublicBusiness } from "@/lib/api/hooks";
  * that a future page would then hide.
  */
 export const Route = createFileRoute("/$slug")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Book a session — RECAVO" },
@@ -29,6 +40,7 @@ export const Route = createFileRoute("/$slug")({
 
 function SlugBookingPage() {
   const { slug } = Route.useParams();
+  const { offer } = Route.useSearch();
   const navigate = useNavigate();
   const business = usePublicBusiness(slug);
 
@@ -39,7 +51,17 @@ function SlugBookingPage() {
     <BookingFlow
       businessId={business.data.id}
       studio={business.data}
-      onClearRedirectParams={() => void navigate({ to: "/$slug", params: { slug }, replace: true })}
+      offerCode={offer ?? null}
+      // Stripe's parameters go; the offer stays, so "buy another" is still the same offer.
+      onClearRedirectParams={() =>
+        void navigate({
+          to: "/$slug",
+          params: { slug },
+          search: offer ? { offer } : {},
+          replace: true,
+        })
+      }
+      onLeaveOffer={() => void navigate({ to: "/$slug", params: { slug }, search: {} })}
     />
   );
 }
@@ -47,10 +69,10 @@ function SlugBookingPage() {
 function ResolvingPage() {
   return (
     <main className="min-h-screen bg-background">
-      <header className="flex h-16 items-center border-b px-4 sm:px-6">
+      <header className="pt-safe px-safe-4 sm:px-safe-6 flex min-h-16 items-center sm:border-b">
         <Wordmark />
       </header>
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-8">
+      <div className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl py-4 sm:py-8">
         <PageGhost />
       </div>
     </main>
@@ -64,7 +86,7 @@ function ResolvingPage() {
  */
 function NoSuchPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main className="screen-center bg-background px-safe-4">
       <div className="max-w-md text-center">
         <Wordmark />
         <h1 className="mt-6 text-lg font-semibold">This booking page isn't available</h1>

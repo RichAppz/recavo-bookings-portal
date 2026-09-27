@@ -1,6 +1,13 @@
 import { ApiError, parseProblemDetails } from "./errors";
 import { getAccessToken } from "./token";
 import { buildQueryString, type QueryValue } from "./query-string";
+import { filenameFromDisposition } from "./content-disposition";
+import { CLIENT_PLATFORM_HEADER, clientPlatform } from "../native";
+import {
+  reportNetworkFailure,
+  reportNetworkSuccess,
+  setConnectivityProbeUrl,
+} from "../offline/network";
 
 export type { QueryValue };
 export { buildQueryString };
@@ -63,6 +70,12 @@ export function getApiBaseUrl(): string {
   return raw.replace(/\/$/, "");
 }
 
+/** The API's health endpoint is the cheapest "are we back?" probe (see lib/offline/network). */
+export function apiHealthUrl(): string {
+  return `${getApiBaseUrl()}/health`;
+}
+if (typeof window !== "undefined") setConnectivityProbeUrl(apiHealthUrl());
+
 function resolvePath(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   const base = getApiBaseUrl();
@@ -81,7 +94,51 @@ async function parseBody(res: Response): Promise<unknown> {
   }
 }
 
+export type BlobResult = {
+  blob: Blob;
+  /** From `Content-Disposition: attachment; filename="…"`, when the server sent one. */
+  filename: string | null;
+  contentType: string | null;
+  requestId?: string;
+  status: number;
+};
+
+export { filenameFromDisposition };
+
 export async function request<T>(options: RequestOptions): Promise<ApiResult<T>> {
+  const result = await requestRaw(options, "json");
+  return {
+    data: result.parsed as T,
+    requestId: result.requestId,
+    status: result.status,
+  };
+}
+
+/**
+ * Same headers, auth and 401-replay as {@link request}, but the successful body
+ * comes back as a Blob — for PDFs and other binaries the JSON path would mangle
+ * (it reads the body as text). Errors are still problem+json → {@link ApiError}.
+ */
+export async function requestBlob(options: RequestOptions): Promise<BlobResult> {
+  const result = await requestRaw(options, "blob");
+  return {
+    blob: result.blob ?? new Blob(),
+    filename: filenameFromDisposition(result.headers.get("Content-Disposition")),
+    contentType: result.headers.get("Content-Type"),
+    requestId: result.requestId,
+    status: result.status,
+  };
+}
+
+type RawResult = {
+  parsed?: unknown;
+  blob?: Blob;
+  headers: Headers;
+  requestId?: string;
+  status: number;
+};
+
+async function requestRaw(options: RequestOptions, mode: "json" | "blob"): Promise<RawResult> {
   const {
     method = "GET",
     path,
@@ -97,11 +154,20 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
 
   const url = `${resolvePath(path)}${buildQueryString(query)}`;
   const headers: Record<string, string> = {
-    Accept: "application/json",
+    Accept: mode === "blob" ? "*/*" : "application/json",
     ...extraHeaders,
   };
+  // Tell the API whether this is the website or one of the apps; it records the
+  // surface at sign-up and on each request for the internal console.
+  const platform = clientPlatform();
+  if (platform) headers[CLIENT_PLATFORM_HEADER] = platform;
 
-  if (body !== undefined) {
+  // A Blob/File body is sent as-is (e.g. the branding logo upload takes raw image
+  // bytes); everything else is JSON.
+  const rawBody = typeof Blob !== "undefined" && body instanceof Blob;
+  if (rawBody) {
+    if (!headers["Content-Type"]) headers["Content-Type"] = body.type || "application/octet-stream";
+  } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
   if (idempotencyKey) {
@@ -134,7 +200,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     res = await fetch(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : rawBody ? body : JSON.stringify(body),
       signal,
     });
   } catch (err) {
@@ -149,20 +215,26 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
         err,
       );
     }
+    // A fetch that never got a response means no usable network, whatever the OS
+    // says: pause queries on their cached data rather than erroring every page.
+    if (!aborted) reportNetworkFailure();
     throw new ApiError({
       status: 0,
       code: aborted ? "TIMEOUT" : "NETWORK_ERROR",
-      title: aborted ? "Request timed out" : "Network error",
+      title: aborted ? "Request timed out" : "No connection",
       detail: aborted
         ? "The API took too long to respond (it may be waking up). Please try again."
-        : err instanceof Error
-          ? err.message
-          : "Unable to reach the server.",
+        : "This needs signal. Anything you were looking at is still here — try again when you're back online.",
     });
   }
 
+  reportNetworkSuccess();
   const requestId = res.headers.get("x-request-id") ?? res.headers.get("X-Request-Id") ?? undefined;
-  const parsed = await parseBody(res);
+  // A binary success is read as a Blob; anything else (JSON success, or any
+  // failure — errors are always problem+json) goes through the text parser.
+  const asBlob = mode === "blob" && res.ok;
+  const blob = asBlob ? await res.blob() : undefined;
+  const parsed = asBlob ? undefined : await parseBody(res);
 
   if (import.meta.env.DEV) {
     const line = `[api] ← ${res.status} ${method} ${url} in ${elapsed()}ms${requestId ? ` reqId=${requestId}` : ""}`;
@@ -176,7 +248,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     if (error.isMfaRequired && mfaHandler) {
       const retried = await mfaHandler(error);
       if (retried) {
-        return request<T>(options);
+        return requestRaw(options, mode);
       }
     }
 
@@ -195,7 +267,7 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
     ) {
       const refreshed = await authRetryHandler(bearerToken);
       if (refreshed) {
-        return request<T>({ ...options, authRetried: true });
+        return requestRaw({ ...options, authRetried: true }, mode);
       }
     }
 
@@ -203,7 +275,9 @@ export async function request<T>(options: RequestOptions): Promise<ApiResult<T>>
   }
 
   return {
-    data: parsed as T,
+    parsed,
+    blob,
+    headers: res.headers,
     requestId,
     status: res.status,
   };
@@ -227,4 +301,7 @@ export const api = {
   ) => request<T>({ ...opts, method: "PATCH", path, body }),
   delete: <T>(path: string, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
     request<T>({ ...opts, method: "DELETE", path }),
+  /** GET a binary body (PDF etc.) with the usual auth. */
+  blob: (path: string, opts?: Omit<RequestOptions, "method" | "path" | "body">) =>
+    requestBlob({ ...opts, method: "GET", path }),
 };

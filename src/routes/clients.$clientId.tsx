@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { z } from "zod";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   CalendarPlus,
+  Hourglass,
   Camera,
   Check,
   ChevronDown,
@@ -19,6 +21,7 @@ import {
   Pencil,
   Plus,
   ShieldOff,
+  Trash2,
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -26,11 +29,18 @@ import { CustomerAddressFields } from "@/components/CustomerAddressFields";
 import { addressToForm, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { CustomerFollowUpsCard } from "@/components/CustomerFollowUpsCard";
+import { CustomerWaitlistCard } from "@/components/CustomerWaitlistCard";
+import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { BookingPanel } from "@/components/BookingPanel";
+import { CreateInvoiceDialog } from "@/components/CreateInvoiceDialog";
 import { FileAttachments } from "@/components/FileAttachments";
+import { InvoicesTable } from "@/components/InvoicesTable";
+import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { LinkedRecordPhotosDialog } from "@/components/LinkedRecordPhotos";
 import {
   activeSortedFields,
+  DeleteLinkedRecordDialog,
   LinkedRecordFormDialog,
   OwnershipHistoryDialog,
   summariseValues,
@@ -39,8 +49,10 @@ import {
 } from "@/components/LinkedRecordDialogs";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PersonAvatar, SectionCard, StatusBadge } from "@/components/ui-bits";
+import { ClientOfferLinksCard } from "@/components/ClientOfferLinksCard";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
-import { useSmsChannelGate, type ContactChannel } from "@/lib/billing/sms-channel-gate";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
+import type { ContactChannel, ServiceFollowUp, WaitlistEntry } from "@/lib/api/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -127,6 +139,7 @@ import {
   useUpdateCustomer,
   useUpdateCustomerStatus,
 } from "@/lib/api/hooks";
+import { useInvoices, useInvoicingEntitled } from "@/lib/api/invoices";
 import {
   customerAddressLine,
   customerDisplayName,
@@ -137,12 +150,21 @@ import {
   type LinkedRecordOwnership,
   type Notification,
 } from "@/lib/api/types";
+import { customerLifetimeSpendMinor } from "@/lib/booking-payment";
 import { PERMISSIONS } from "@/lib/permissions";
-import { formatInTz, formatMoney, ukDate } from "@/lib/format";
+import { formatInTz, formatMoney, isoDate, ukDate } from "@/lib/format";
+import { suggestedBookingDate } from "@/lib/waitlist";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
+/** Deep-link support: `?tab=linked&record=<id>` lands on the client's vehicle from a booking. */
+const searchSchema = z.object({
+  tab: z.string().optional(),
+  record: z.string().optional(),
+});
+
 export const Route = createFileRoute("/clients/$clientId")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Client profile — RECAVO" },
@@ -169,9 +191,17 @@ export const Route = createFileRoute("/clients/$clientId")({
 
 function ClientProfile() {
   const { clientId } = Route.useParams();
+  const search = Route.useSearch();
   const tenant = useTenant();
   const [quick, setQuick] = useState<QuickAction>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  // "Book" from a follow-up row: the service and vehicle come along with the client.
+  const [bookingFollowUp, setBookingFollowUp] = useState<ServiceFollowUp | null>(null);
+  // "Book" from a waitlist row: service, vehicle, place and person come along too, and
+  // the entry closes itself once the booking exists.
+  const [bookingWaitlist, setBookingWaitlist] = useState<WaitlistEntry | null>(null);
+  const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
+  const [editingWaitlist, setEditingWaitlist] = useState<WaitlistEntry | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [confirmDsar, setConfirmDsar] = useState(false);
@@ -225,9 +255,10 @@ function ClientProfile() {
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + e.balance.available, 0);
-  const lifetimeSpendMinor = (payments.payments ?? [])
-    .filter((p) => p.state === "succeeded" || p.state === "partially_refunded")
-    .reduce((sum, p) => sum + p.amountMinor - p.amountRefundedMinor, 0);
+  const lifetimeSpendMinor = customerLifetimeSpendMinor(
+    bookings.data ?? [],
+    payments.payments ?? [],
+  );
 
   const downloadDsar = async () => {
     const data = await dsarExport.mutateAsync();
@@ -288,6 +319,13 @@ function ClientProfile() {
           <Button variant="outline" disabled={anonymised} onClick={() => setQuick("package")}>
             <Package className="size-4" /> Sell package
           </Button>
+          <Button
+            variant="outline"
+            disabled={anonymised}
+            onClick={() => setWaitlistDefaults({ customerId: client.id })}
+          >
+            <Hourglass className="size-4" /> Add to waitlist
+          </Button>
           <Button disabled={anonymised} onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-4" /> Create booking
           </Button>
@@ -308,12 +346,15 @@ function ClientProfile() {
         ))}
       </div>
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={search.tab ?? "profile"}>
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
           <TabsTrigger value="packages">Packages</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          {tenant.can(PERMISSIONS.INVOICE_READ) ? (
+            <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          ) : null}
           <TabsTrigger value="notes">Notes</TabsTrigger>
           <TabsTrigger value="consents">Consents</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
@@ -331,7 +372,31 @@ function ClientProfile() {
           <CustomerProfileForm client={client} disabled={anonymised} />
         </TabsContent>
 
-        <TabsContent value="upcoming" className="mt-4">
+        <TabsContent value="upcoming" className="mt-4 space-y-6">
+          {/* Follow-ups due (top-ups); hidden when the client has none. */}
+          <CustomerFollowUpsCard
+            customerId={client.id}
+            onBook={
+              anonymised
+                ? undefined
+                : (f) => {
+                    setBookingFollowUp(f);
+                    setBookingOpen(true);
+                  }
+            }
+          />
+          <CustomerWaitlistCard
+            customerId={client.id}
+            onBook={
+              anonymised
+                ? undefined
+                : (e) => {
+                    setBookingWaitlist(e);
+                    setBookingOpen(true);
+                  }
+            }
+            onEdit={anonymised ? undefined : setEditingWaitlist}
+          />
           <SectionCard bodyClassName="p-0">
             {bookings.isLoading ? (
               <TableGhost rows={5} />
@@ -360,7 +425,9 @@ function ClientProfile() {
                           {formatInTz(b.start, b.timezone, { dateStyle: "medium" })}
                         </p>
                         <p className="text-xs text-muted-foreground tabular-nums">
-                          {formatInTz(b.start, b.timezone, { timeStyle: "short" })}
+                          {b.allDay
+                            ? "All day"
+                            : formatInTz(b.start, b.timezone, { timeStyle: "short" })}
                         </p>
                       </div>
                       <div className="min-w-0 flex-1">
@@ -415,6 +482,14 @@ function ClientProfile() {
               </div>
             )}
           </SectionCard>
+
+          {tenant.business ? (
+            <ClientOfferLinksCard
+              clientId={clientId}
+              slug={tenant.business.slug}
+              disabled={anonymised}
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
@@ -423,7 +498,17 @@ function ClientProfile() {
               <TableGhost rows={5} />
             ) : (payments.payments ?? []).length === 0 ? (
               <div className="p-6">
-                <EmptyState title="No payments recorded" />
+                {/* This table is card payments — cash and bank transfers are recorded
+                    against the booking and never appear here, so don't claim there is
+                    no money when Lifetime spend says otherwise. */}
+                <EmptyState
+                  title="No card payments"
+                  description={
+                    lifetimeSpendMinor > 0
+                      ? "Money taken in person or by bank transfer is recorded on the booking, not here."
+                      : undefined
+                  }
+                />
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -478,6 +563,12 @@ function ClientProfile() {
           </SectionCard>
         </TabsContent>
 
+        {tenant.can(PERMISSIONS.INVOICE_READ) ? (
+          <TabsContent value="invoices" className="mt-4">
+            <ClientInvoicesTab customerId={client.id} disabled={anonymised} />
+          </TabsContent>
+        ) : null}
+
         <TabsContent value="notes" className="mt-4">
           <SectionCard title="Internal notes" description="Only visible to your team">
             <div className="space-y-3">
@@ -528,7 +619,11 @@ function ClientProfile() {
         </TabsContent>
 
         <TabsContent value="linked" className="mt-4">
-          <CustomerLinkedRecordsTab customerId={client.id} disabled={anonymised} />
+          <CustomerLinkedRecordsTab
+            customerId={client.id}
+            disabled={anonymised}
+            focusRecordId={search.record}
+          />
         </TabsContent>
 
         <TabsContent value="portal" className="mt-4">
@@ -605,9 +700,45 @@ function ClientProfile() {
       </div>
 
       <AddBookingModal
+        key={bookingWaitlist?.id ?? bookingFollowUp?.id ?? "plain"}
         open={bookingOpen}
-        onOpenChange={setBookingOpen}
+        onOpenChange={(open) => {
+          setBookingOpen(open);
+          if (!open) {
+            setBookingFollowUp(null);
+            setBookingWaitlist(null);
+          }
+        }}
         defaultCustomerId={client.id}
+        defaultServiceId={bookingWaitlist?.serviceId ?? bookingFollowUp?.serviceId}
+        defaultLinkedRecordId={
+          bookingWaitlist?.linkedRecordId ?? bookingFollowUp?.linkedRecordId ?? undefined
+        }
+        defaultStaffId={bookingWaitlist?.staffId ?? undefined}
+        defaultDate={
+          bookingWaitlist
+            ? suggestedBookingDate(bookingWaitlist.preferences, isoDate(new Date()))
+            : undefined
+        }
+        waitlistEntryId={bookingWaitlist?.id}
+        onNoAvailability={(picked) => {
+          setBookingOpen(false);
+          setWaitlistDefaults({ ...picked, from: picked.date });
+        }}
+      />
+      <AddWaitlistDialog
+        open={waitlistDefaults !== null}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistDefaults(null);
+        }}
+        defaults={waitlistDefaults ?? undefined}
+      />
+      <AddWaitlistDialog
+        open={editingWaitlist !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingWaitlist(null);
+        }}
+        entry={editingWaitlist}
       />
       <QuickActionDialogs action={quick} onClose={() => setQuick(null)} customerId={client.id} />
       <BookingPanel bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />
@@ -682,8 +813,8 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
   );
   const [marketingConsent, setMarketingConsent] = useState(client.marketingConsent.granted);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  // Picking SMS on a plan without it opens the bolt-on/upgrade prompt (RECA-527).
-  const smsGate = useSmsChannelGate(setPreferredChannel);
+  // SMS is allowed on every plan (ADR 0020); the note below says what it'll cost.
+  const smsCredits = useSmsCreditsSummary();
 
   useEffect(() => {
     setFirstName(client.firstName);
@@ -773,13 +904,14 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
           value={address}
           onChange={setAddress}
           disabled={disabled}
+          className="sm:col-span-2"
         />
         <div className="grid gap-2 sm:col-span-2">
           <Label>Preferred channel</Label>
           <Select
             value={preferredChannel}
             disabled={disabled}
-            onValueChange={(v) => smsGate.onChannelChange(v as ContactChannel)}
+            onValueChange={(v) => setPreferredChannel(v as ContactChannel)}
           >
             <SelectTrigger className="max-w-xs">
               <SelectValue />
@@ -795,11 +927,11 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
             <p className="text-xs text-destructive">{fieldErrors.preferredChannel}</p>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            {smsGate.smsEntitled === false
-              ? "SMS reminders aren’t on your plan yet — pick SMS to add the bolt-on or see plans."
-              : "SMS needs a phone number — reminders fall back to email until one is saved."}
+            SMS needs a mobile number — reminders fall back to email until one is saved.
+            {preferredChannel === "sms" && smsCredits.level !== "unlimited"
+              ? ` ${smsCredits.note}`
+              : ""}
           </p>
-          {smsGate.dialog}
         </div>
         <label className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
           <div>
@@ -875,6 +1007,74 @@ function CustomerProfileForm({ client, disabled }: { client: Customer; disabled:
         </div>
       </Can>
     </SectionCard>
+  );
+}
+
+/** Every invoice raised for this client (drafts included), with a shortcut to raise another. */
+function ClientInvoicesTab({ customerId, disabled }: { customerId: string; disabled: boolean }) {
+  const tenant = useTenant();
+  const invoices = useInvoices({ customerId, limit: 200 });
+  const entitled = useInvoicingEntitled();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const canManage = tenant.can(PERMISSIONS.INVOICE_MANAGE);
+
+  const startCreate = () => {
+    if (entitled === false) setUpsellOpen(true);
+    else setCreateOpen(true);
+  };
+
+  return (
+    <>
+      <SectionCard
+        title="Invoices"
+        description="Newest first"
+        bodyClassName="p-0"
+        action={
+          canManage ? (
+            <Button
+              size="sm"
+              disabled={disabled || entitled === undefined}
+              title={
+                entitled === false
+                  ? "Invoicing isn’t on your plan yet — add the bolt-on to raise invoices."
+                  : undefined
+              }
+              onClick={startCreate}
+            >
+              <Plus className="size-4" /> New invoice
+            </Button>
+          ) : null
+        }
+      >
+        <InvoicesTable
+          invoices={invoices.data}
+          loading={invoices.isLoading}
+          error={invoices.isError}
+          showCustomer={false}
+          empty={
+            <EmptyState
+              title="No invoices for this client"
+              description={
+                canManage
+                  ? "Raise one from a job in the booking panel, or start a blank invoice here."
+                  : undefined
+              }
+            />
+          }
+        />
+      </SectionCard>
+      <CreateInvoiceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultCustomerId={customerId}
+      />
+      <InvoicingUpgradeDialog
+        open={upsellOpen}
+        onOpenChange={setUpsellOpen}
+        onEnabled={() => setCreateOpen(true)}
+      />
+    </>
   );
 }
 
@@ -1055,9 +1255,12 @@ function CustomerTagsTab({ customerId, disabled }: { customerId: string; disable
 function CustomerLinkedRecordsTab({
   customerId,
   disabled,
+  focusRecordId,
 }: {
   customerId: string;
   disabled: boolean;
+  /** Record to open on arrival (from a booking's vehicle link). */
+  focusRecordId?: string;
 }) {
   const tenant = useTenant();
   const term = tenant.terminology.linkedRecord;
@@ -1071,12 +1274,24 @@ function CustomerLinkedRecordsTab({
     [definition.data],
   );
   const hasSchema = fields.length > 0;
+  const canEdit = tenant.can(PERMISSIONS.CUSTOMER_UPDATE);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<LinkedRecord | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<LinkedRecord | null>(null);
   const [photosFor, setPhotosFor] = useState<LinkedRecord | null>(null);
+  const [deletingFor, setDeletingFor] = useState<LinkedRecord | null>(null);
+
+  // Arriving from a booking's vehicle link: open that record once it has loaded.
+  const [focused, setFocused] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusRecordId || focused === focusRecordId || !canEdit || disabled) return;
+    const target = (records.data ?? []).find((r) => r.id === focusRecordId);
+    if (!target) return;
+    setFocused(focusRecordId);
+    setEditing(target);
+  }, [focusRecordId, focused, records.data, canEdit, disabled]);
 
   // Resolve the transfer target from the live list so that after a 409 (stale
   // version) the refetched record — with its bumped version — flows into the
@@ -1118,10 +1333,31 @@ function CustomerLinkedRecordsTab({
         <ul className="divide-y">
           {(records.data ?? []).map((r) => {
             const summary = summariseValues(fields, (r.values ?? {}) as Record<string, unknown>);
+            const openEdit = canEdit && !disabled ? () => setEditing(r) : undefined;
             return (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+                role={openEdit ? "button" : undefined}
+                tabIndex={openEdit ? 0 : undefined}
+                aria-label={openEdit ? `Edit ${r.displayLabel}` : undefined}
+                onClick={openEdit}
+                onKeyDown={
+                  openEdit
+                    ? (e) => {
+                        // Only when the row itself is focused — not the menu.
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openEdit();
+                        }
+                      }
+                    : undefined
+                }
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-3 px-5 py-4",
+                  openEdit &&
+                    "cursor-pointer transition-colors outline-none hover:bg-secondary/50 focus-visible:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+                )}
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{r.displayLabel}</p>
@@ -1132,7 +1368,9 @@ function CustomerLinkedRecordsTab({
                     Updated {ukDate(r.updatedAt.slice(0, 10))}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* Menu clicks (incl. the portaled items, which bubble through
+                    React's tree) must not also open the editor. */}
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <StatusBadge status={r.status} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1183,6 +1421,13 @@ function CustomerLinkedRecordsTab({
                               }}
                             >
                               <Archive className="size-4" /> Archive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={disabled}
+                              className="text-destructive focus:text-destructive"
+                              onSelect={() => setDeletingFor(r)}
+                            >
+                              <Trash2 className="size-4" /> Delete
                             </DropdownMenuItem>
                           </>
                         ) : null}
@@ -1256,6 +1501,14 @@ function CustomerLinkedRecordsTab({
         }}
       />
 
+      <DeleteLinkedRecordDialog
+        record={deletingFor}
+        term={term}
+        onOpenChange={(o) => {
+          if (!o) setDeletingFor(null);
+        }}
+      />
+
       <LinkedRecordPhotosDialog
         record={photosFor}
         term={term}
@@ -1275,7 +1528,7 @@ function CustomerNotificationsTab({ customerId }: { customerId: string }) {
   return (
     <SectionCard
       title="Notifications"
-      description="Reminders and updates sent to this client. SMS falls back to email until the bolt-on is active."
+      description="Reminders and updates sent to this client. Texts use your prepaid credits and fall back to email when none are left."
       action={
         <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
           <Button

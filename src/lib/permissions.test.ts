@@ -1,6 +1,49 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SYSTEM_ROLES, roleLabel, roleLabels } from "./permissions.ts";
+import {
+  PERMISSIONS,
+  SYSTEM_ROLES,
+  permissionsForRoles,
+  roleLabel,
+  roleLabels,
+} from "./permissions.ts";
+
+describe("invoice permissions", () => {
+  const manage = [
+    SYSTEM_ROLES.BUSINESS_OWNER,
+    SYSTEM_ROLES.ADMINISTRATOR,
+    SYSTEM_ROLES.MANAGER,
+    SYSTEM_ROLES.FINANCE,
+  ];
+
+  it("owner, admin, manager and finance can read and manage", () => {
+    for (const role of manage) {
+      const perms = permissionsForRoles([role]);
+      assert.ok(perms.has(PERMISSIONS.INVOICE_READ), `${role} reads`);
+      assert.ok(perms.has(PERMISSIONS.INVOICE_MANAGE), `${role} manages`);
+    }
+  });
+
+  it("reception is read-only", () => {
+    const perms = permissionsForRoles([SYSTEM_ROLES.RECEPTION]);
+    assert.ok(perms.has(PERMISSIONS.INVOICE_READ));
+    assert.equal(perms.has(PERMISSIONS.INVOICE_MANAGE), false);
+  });
+
+  it("staff and restricted staff see nothing", () => {
+    for (const role of [SYSTEM_ROLES.STAFF, SYSTEM_ROLES.RESTRICTED_STAFF]) {
+      const perms = permissionsForRoles([role]);
+      assert.equal(perms.has(PERMISSIONS.INVOICE_READ), false, role);
+      assert.equal(perms.has(PERMISSIONS.INVOICE_MANAGE), false, role);
+    }
+  });
+
+  it("portal customers hold read_own only", () => {
+    const perms = permissionsForRoles([SYSTEM_ROLES.CUSTOMER]);
+    assert.ok(perms.has(PERMISSIONS.INVOICE_READ_OWN));
+    assert.equal(perms.has(PERMISSIONS.INVOICE_READ), false);
+  });
+});
 
 describe("roleLabel", () => {
   it("names every system role in plain English", () => {

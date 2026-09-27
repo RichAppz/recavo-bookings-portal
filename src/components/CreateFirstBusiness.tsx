@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError, newIdempotencyKey, queryKeys, toastApiError } from "@/lib/api";
+import { buildCreateBusinessPayload } from "@/lib/api/business-payload";
 import {
   clearPendingBusiness,
   clearSignUpBusinessMetadata,
@@ -16,11 +17,14 @@ import {
   readPendingReferral,
 } from "@/lib/auth/pending-referral";
 import { Button } from "@/components/ui/button";
+import { DeleteAccountDialog } from "@/components/DeleteAccountSection";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { VerticalPicker } from "@/components/VerticalPicker";
+import { BusinessDetailsFields } from "@/components/BusinessDetailsFields";
 import { Wordmark } from "@/components/Wordmark";
 import { useAuth } from "@/lib/auth/auth-store";
+import { bookingUrlFor } from "@/lib/hosts";
+import { isNativeApp } from "@/lib/native";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
 function referralFieldError(error: unknown): string | null {
@@ -43,7 +47,24 @@ type CreateVars = {
   referralCode?: string;
 };
 
-export function CreateFirstBusiness() {
+/** The customer account page paired with this origin, e.g. `https://book.recavo.app/account`. */
+function customerAccountUrl(): string {
+  if (typeof window === "undefined") return "https://book.recavo.app/account";
+  return `${new URL(bookingUrlFor("")).origin}/account`;
+}
+
+/**
+ * `customerElsewhere`: this account books sessions as a client of some studio
+ * but runs nothing. Whoever signs in on the business host (or in the app, which
+ * has no customer side) is here to run a business, so they still get the setup
+ * form — plus a pointer to where their own bookings live, so nobody wonders why
+ * we are asking for a business name.
+ */
+export function CreateFirstBusiness({
+  customerElsewhere = false,
+}: {
+  customerElsewhere?: boolean;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { signOut, supabaseUser } = useAuth();
@@ -66,15 +87,9 @@ export function CreateFirstBusiness() {
 
   const create = useMutation({
     mutationFn: async (vars: CreateVars) => {
-      const code = vars.referralCode?.trim();
       const res = await api.post<{ business?: { id: string } }>(
         "/api/v1/businesses",
-        {
-          legalName: vars.legalName.trim(),
-          ...(vars.tradingName?.trim() ? { tradingName: vars.tradingName.trim() } : {}),
-          industryTemplateKey: vars.industryTemplateKey,
-          ...(code ? { referralCode: code } : {}),
-        },
+        buildCreateBusinessPayload(vars),
         { idempotencyKey: newIdempotencyKey() },
       );
       return res.data;
@@ -135,7 +150,7 @@ export function CreateFirstBusiness() {
 
   if (autoCreating) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="screen-center bg-background px-safe-4">
         <div className="w-full max-w-md space-y-6">
           <div className="flex justify-center">
             <Wordmark />
@@ -153,7 +168,7 @@ export function CreateFirstBusiness() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="screen-center bg-background px-safe-4">
       <div className="w-full max-w-md space-y-6">
         <div className="flex justify-center">
           <Wordmark />
@@ -164,6 +179,24 @@ export function CreateFirstBusiness() {
             Your account isn't linked to a business yet. Pick your trade and add your name to get
             started with bookings, clients and payments.
           </p>
+          {customerElsewhere ? (
+            <p className="mt-3 rounded-lg bg-secondary/70 px-3 py-2 text-xs text-muted-foreground">
+              This is the business console. The sessions you've booked as a client are at{" "}
+              {isNativeApp() ? (
+                <span className="font-medium text-foreground">
+                  {new URL(customerAccountUrl()).hostname}
+                </span>
+              ) : (
+                <a
+                  href={customerAccountUrl()}
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  {new URL(customerAccountUrl()).hostname}
+                </a>
+              )}
+              .
+            </p>
+          ) : null}
 
           <form
             className="mt-6 space-y-4"
@@ -181,35 +214,15 @@ export function CreateFirstBusiness() {
               });
             }}
           >
-            <div className="flex flex-col gap-4">
-              <Label>What do you do?</Label>
-              <VerticalPicker value={vertical} onChange={setVertical} disabled={create.isPending} />
-              <p className="text-xs text-muted-foreground">
-                Sets your labels and defaults — automotive adds a Vehicle record to each client
-                automatically.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="legalName">{VERTICALS[vertical].businessLabel}</Label>
-              <Input
-                id="legalName"
-                required
-                value={legalName}
-                onChange={(e) => setLegalName(e.target.value)}
-                placeholder={VERTICALS[vertical].businessPlaceholder}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tradingName">Trading name (optional)</Label>
-              <Input
-                id="tradingName"
-                value={tradingName}
-                onChange={(e) => setTradingName(e.target.value)}
-                placeholder="Peak PT"
-              />
-            </div>
+            <BusinessDetailsFields
+              vertical={vertical}
+              onVerticalChange={setVertical}
+              legalName={legalName}
+              onLegalNameChange={setLegalName}
+              tradingName={tradingName}
+              onTradingNameChange={setTradingName}
+              disabled={create.isPending}
+            />
 
             <div className="space-y-2">
               <Label htmlFor="referralCode">Referral code (optional)</Label>
@@ -221,7 +234,10 @@ export function CreateFirstBusiness() {
                 placeholder="ABCD-EFGH"
               />
               <p className="text-xs text-muted-foreground">
-                You&apos;ll get the normal 14-day trial. Leave this blank if nobody referred you.
+                {isNativeApp()
+                  ? "Your plan and price don’t change."
+                  : "You’ll get the normal 14-day trial."}{" "}
+                Leave this blank if nobody referred you.
               </p>
             </div>
 
@@ -230,14 +246,17 @@ export function CreateFirstBusiness() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="text-sm text-muted-foreground hover:underline"
-            >
+          <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
+            <button type="button" onClick={() => void signOut()} className="hover:underline">
               Sign out
             </button>
+            <DeleteAccountDialog
+              trigger={
+                <button type="button" className="hover:underline">
+                  Delete account
+                </button>
+              }
+            />
           </div>
         </div>
       </div>

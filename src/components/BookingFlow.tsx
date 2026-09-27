@@ -11,12 +11,15 @@ import { Wordmark } from "@/components/Wordmark";
 import { CardsGhost } from "@/components/ghost";
 import { ApiError } from "@/lib/api";
 import { BookingCheckout, type BookingContact } from "@/components/BookingCheckout";
+import { JoinWaitlistSheet } from "@/components/JoinWaitlistSheet";
 import {
   useBuyPublicPackage,
+  useRequestPublicPackage,
   useConfirmPublicBooking,
   useCreatePublicBookingHold,
   usePublicAvailability,
   usePublicLocations,
+  usePublicPackageLink,
   usePublicPackages,
   usePortalBusinesses,
   usePortalLink,
@@ -27,13 +30,15 @@ import {
   type PublicBusinessProfile,
   type PublicPackage,
   type PublicPackagePayment,
+  type PublicPackageRequestReceipt,
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/query-keys";
 import { useAuth } from "@/lib/auth/auth-store";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import { bookingSettlement } from "@/lib/booking-payment";
-import { formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { formatDuration, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
 
@@ -102,6 +107,18 @@ function formatCountdown(ms: number) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** One line under a shared link's heading, shaped by what the link actually holds. */
+function offerIntro(studioName: string | null, hasSessions: boolean, hasPackages: boolean) {
+  const who = studioName ? `${studioName} has` : "You've been";
+  if (hasSessions && hasPackages) {
+    return `${who} sent you a choice of sessions and packages. Book a session, or buy a package and use the credits whenever you like.`;
+  }
+  if (hasSessions) {
+    return `${who} sent you a choice of sessions. Pick one, choose a time, and you're booked.`;
+  }
+  return `${who} sent you a choice of packages. Pick one, pay securely, and your credits are ready to book.`;
 }
 
 type Hold = {
@@ -271,6 +288,14 @@ export interface BookingFlowProps {
   readonly initialServiceId?: string;
   readonly initialLocationId?: string;
   readonly initialSlot?: AvailabilitySlot | null;
+  /**
+   * Code from a package link the studio shared (`?offer=`). The first step then
+   * shows only that link's packages — including ones kept off the public page —
+   * and the code travels with the purchase so the API lets them through.
+   */
+  readonly offerCode?: string | null;
+  /** Drops the offer and shows the studio's full booking page. */
+  readonly onLeaveOffer?: () => void;
 }
 
 export function BookingFlow({
@@ -283,6 +308,8 @@ export function BookingFlow({
   initialServiceId,
   initialLocationId,
   initialSlot = null,
+  offerCode = null,
+  onLeaveOffer,
 }: BookingFlowProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -298,6 +325,8 @@ export function BookingFlow({
   );
   const [date, setDate] = useState(bookingStartDate(initialDate));
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(initialSlot);
+  /** Upsell add-ons ticked with the service; the slot is sized and priced for the lot. */
+  const [extraIds, setExtraIds] = useState<string[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -307,20 +336,49 @@ export function BookingFlow({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
+  // "Can't find a time? Join the waitlist" — the sheet for the expanded service.
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
   const locations = usePublicLocations(businessId);
   const packages = usePublicPackages(businessId);
+  const offer = usePublicPackageLink(businessId, offerCode ?? undefined);
+  // A live link narrows the page to its own sessions and packages. A dead one (revoked,
+  // mistyped) is not an error the visitor can act on, so the page quietly shows
+  // everything instead.
+  const offerActive = Boolean(offerCode) && offer.isSuccess;
+  const offerGone = Boolean(offerCode) && offer.isError;
+  const offerLoading = Boolean(offerCode) && offer.isPending;
+  const visibleServices = offerActive ? (offer.data?.services ?? []) : (services.data ?? []);
+  const visiblePackages = offerActive
+    ? (offer.data?.packages ?? [])
+    : (packages.data?.packages ?? []);
+  // No card processing at this business: a package is asked for, not bought. Read from
+  // whichever catalogue the visitor is looking at; older API builds omit the flag.
+  const packageRequestMode =
+    (offerActive ? offer.data?.onlinePaymentAvailable : packages.data?.onlinePaymentAvailable) ===
+    false;
+  // Only sent to the API while the link is live; a dead code is simply not mentioned.
+  const linkCode = offerActive ? offerCode : null;
 
-  const service = services.data?.find((s) => s.id === serviceId) ?? null;
+  // Both lists are searched: a session reached through a link may be on no public list.
+  const service =
+    offer.data?.services.find((s) => s.id === serviceId) ??
+    services.data?.find((s) => s.id === serviceId) ??
+    null;
   // With one location there is nothing to choose, so it is picked for the customer and
   // the "Where" block never appears. Derived rather than assigned on click, so it still
   // holds when the locations arrive after the service was picked.
   const soleLocationId = locations.data?.length === 1 ? locations.data[0].id : null;
   const activeLocationId = locationId ?? soleLocationId;
   const location = locations.data?.find((l) => l.id === activeLocationId) ?? null;
-  const chosenPackage = packages.data?.find((p) => p.id === packageId) ?? null;
+  // Both lists are searched: a package bought through a link may be on no public list,
+  // and after card authentication the page may resume before the link has resolved.
+  const chosenPackage =
+    offer.data?.packages.find((p) => p.id === packageId) ??
+    packages.data?.packages.find((p) => p.id === packageId) ??
+    null;
 
   const dayStart = new Date(`${date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -330,8 +388,14 @@ export function BookingFlow({
     locationId: activeLocationId ?? undefined,
     from: dayStart.toISOString(),
     to: dayEnd.toISOString(),
+    linkCode,
+    additionalServiceIds: extraIds,
     enabled: step === STEP_CHOOSE && Boolean(serviceId && activeLocationId),
   });
+  const chosenExtras = useMemo(
+    () => (service?.upsells ?? []).filter((u) => extraIds.includes(u.serviceId)),
+    [service, extraIds],
+  );
 
   const slots = useMemo(
     () => (availability.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start)),
@@ -350,8 +414,12 @@ export function BookingFlow({
   const confirmMutation = useConfirmPublicBooking(businessId);
   const paymentMutation = useStartPublicBookingPayment(businessId);
   const buyPackage = useBuyPublicPackage(businessId);
+  const requestPackage = useRequestPublicPackage(businessId);
   const [packagePayment, setPackagePayment] = useState<PublicPackagePayment | null>(null);
   const [packageBought, setPackageBought] = useState(false);
+  // The receipt for a package *request* (no card processing at this business): the
+  // business confirms it and arranges payment, so there is nothing to pay here.
+  const [packageRequest, setPackageRequest] = useState<PublicPackageRequestReceipt | null>(null);
   const [payment, setPayment] = useState<PublicBookingPayment | null>(null);
   const [settling, setSettling] = useState(false);
   const [payMethod, setPayMethod] = useState<PayMethod>("card");
@@ -401,6 +469,7 @@ export function BookingFlow({
     setServiceId(null);
     setLocationId(null);
     setSelectedSlot(null);
+    setExtraIds([]);
     setNotes("");
     setFieldErrors({});
     setHold(null);
@@ -427,6 +496,7 @@ export function BookingFlow({
     holdMutation.mutate(
       {
         slotToken: selectedSlot.slotToken,
+        linkCode,
         firstName: firstName.trim(),
         lastName: lastName.trim() || null,
         email: email.trim() || null,
@@ -485,10 +555,17 @@ export function BookingFlow({
   const submitPackageDetails = async () => {
     if (!chosenPackage) return;
     setFieldErrors({});
+    // Nothing to set up when the business cannot take cards: Review shows what will be
+    // asked for and the request itself is sent from there.
+    if (packageRequestMode) {
+      setStep(STEP_REVIEW);
+      return;
+    }
     try {
       setPackagePayment(
         await buyPackage.mutateAsync({
           packageId: chosenPackage.id,
+          linkCode,
           firstName: firstName.trim(),
           lastName: lastName.trim() || null,
           email: email.trim(),
@@ -499,7 +576,42 @@ export function BookingFlow({
       setStep(STEP_REVIEW);
     } catch (err) {
       toast.error(
-        err instanceof ApiError ? err.title : "We couldn't start the payment. Please try again.",
+        err instanceof ApiError
+          ? (err.detail ?? err.title)
+          : "We couldn't start the payment. Please try again.",
+      );
+    }
+  };
+
+  /** Sends the package request; the business confirms it from their Packages page. */
+  const submitPackageRequest = async () => {
+    if (!chosenPackage) return;
+    try {
+      const receipt = await requestPackage.mutateAsync({
+        packageId: chosenPackage.id,
+        linkCode,
+        firstName: firstName.trim(),
+        lastName: lastName.trim() || null,
+        email: email.trim(),
+        phone: phone.trim() || null,
+        marketingConsent,
+        notes: notes.trim() || null,
+      });
+      setPackageRequest(receipt);
+      if (
+        goToDashboardIfSignedIn(
+          "Request sent",
+          `${receipt.request.packageName} is waiting for the studio to confirm.`,
+        )
+      ) {
+        return;
+      }
+      setStep(STEP_DONE);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? (err.detail ?? err.title)
+          : "We couldn't send your request. Please try again.",
       );
     }
   };
@@ -752,9 +864,11 @@ export function BookingFlow({
   const embedded = layout === "embedded";
 
   return (
-    <div className={embedded ? undefined : "min-h-screen bg-background"}>
+    // `overflow-x-clip`: a long word in a service name can never widen the page on a
+    // phone. `clip` rather than `hidden` so this does not become a scroll container.
+    <div className={embedded ? undefined : "min-h-screen overflow-x-clip bg-background"}>
       {embedded ? null : (
-        <header className="border-b bg-nav text-nav-foreground">
+        <header className="pt-safe border-b bg-nav text-nav-foreground">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-4">
             <div className="flex min-w-0 items-center gap-3">
               {studio?.branding.logoUrl ? (
@@ -818,225 +932,348 @@ export function BookingFlow({
         {step === STEP_CHOOSE ? (
           <section className="space-y-3">
             <h1 className="text-2xl font-semibold tracking-tight">
-              {embedded
-                ? "Choose a session"
-                : studioName
-                  ? `Book at ${studioName}`
-                  : "Choose a session"}
+              {offerActive
+                ? offer.data?.link.name
+                : embedded
+                  ? "Choose a session"
+                  : studioName
+                    ? `Book at ${studioName}`
+                    : "Choose a session"}
             </h1>
-            {services.isLoading ? (
+            {offerActive ? (
+              <p className="text-sm text-muted-foreground">
+                {offerIntro(studioName, visibleServices.length > 0, visiblePackages.length > 0)}
+              </p>
+            ) : null}
+            {offerGone ? (
+              <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                That link is no longer active, so here is everything
+                {studioName ? ` ${studioName}` : ""} offers.
+              </p>
+            ) : null}
+            {offerLoading ? null : !offerActive && services.isLoading ? (
               <CardsGhost count={3} className="h-28" />
-            ) : services.isError ? (
+            ) : !offerActive && services.isError ? (
               <p className="text-sm text-destructive">
                 Couldn't load services. Please try again shortly.
               </p>
-            ) : (services.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No bookable services are available right now.
-              </p>
+            ) : visibleServices.length === 0 ? (
+              // A link with nothing available says so once, below, for both kinds.
+              offerActive ? null : (
+                <p className="text-sm text-muted-foreground">
+                  No bookable services are available right now.
+                </p>
+              )
             ) : (
-              (services.data ?? []).map((s) => {
-                const expanded = s.id === serviceId;
-                return (
-                  <div key={s.id} className="space-y-3">
-                    <button
-                      onClick={() => {
-                        // Tapping the open one closes it again, so a mis-tap is undoable
-                        // without a Back button on a step that no longer exists.
-                        if (expanded) {
-                          setServiceId(null);
-                          setSelectedSlot(null);
-                          return;
-                        }
-                        setServiceId(s.id);
-                        setSelectedSlot(null);
-                      }}
-                      aria-expanded={expanded}
-                      className={`surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition ${
-                        expanded ? "ring-2 ring-primary" : ""
-                      }`}
-                    >
-                      <span>
-                        <span className="block font-medium">{s.name}</span>
-                        {s.description ? (
-                          <span className="mt-1 block text-sm text-muted-foreground">
-                            {s.description}
+              groupByCategory(visibleServices).map((group) => (
+                <div key={group.category ?? "__none"} className="space-y-3">
+                  {/* Headings only when the studio has sorted its services into categories. */}
+                  {hasCategories(visibleServices) ? (
+                    <h2 className="pt-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                      {group.category ?? "Other"}
+                    </h2>
+                  ) : null}
+                  {group.items.map((s) => {
+                    const expanded = s.id === serviceId;
+                    return (
+                      <div key={s.id} className="space-y-3">
+                        <button
+                          onClick={() => {
+                            // Tapping the open one closes it again, so a mis-tap is undoable
+                            // without a Back button on a step that no longer exists.
+                            if (expanded) {
+                              setServiceId(null);
+                              setSelectedSlot(null);
+                              setExtraIds([]);
+                              return;
+                            }
+                            setServiceId(s.id);
+                            setSelectedSlot(null);
+                            setExtraIds([]);
+                          }}
+                          aria-expanded={expanded}
+                          className={`surface-card flex w-full items-center justify-between gap-4 p-5 text-left transition ${
+                            expanded ? "ring-2 ring-primary" : ""
+                          }`}
+                        >
+                          <span>
+                            <span className="block font-medium">{s.name}</span>
+                            {s.description ? (
+                              <span className="mt-1 block text-sm text-muted-foreground">
+                                {s.description}
+                              </span>
+                            ) : null}
+                            <span className="mt-2 block text-xs text-muted-foreground">
+                              {formatDuration(s.durationMinutes)}
+                            </span>
                           </span>
-                        ) : null}
-                        <span className="mt-2 block text-xs text-muted-foreground">
-                          {s.durationMinutes} minutes
-                        </span>
-                      </span>
-                      <span className="text-right whitespace-nowrap">
-                        <span className="block text-lg font-semibold">
-                          {formatMoney(s.basePriceMinor, s.currency)}
-                        </span>
-                        {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {formatMoney(s.depositMinor, s.currency)} deposit
+                          <span className="text-right whitespace-nowrap">
+                            <span className="block text-lg font-semibold">
+                              {formatMoney(s.basePriceMinor, s.currency)}
+                            </span>
+                            {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
+                              <span className="block text-xs text-muted-foreground">
+                                {formatMoney(s.depositMinor, s.currency)} deposit
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                      </span>
-                    </button>
+                        </button>
 
-                    {expanded ? (
-                      <div className="animate-in fade-in slide-in-from-top-2 space-y-5 rounded-xl border border-dashed p-4 duration-300 sm:p-5">
-                        {(locations.data ?? []).length > 1 ? (
-                          <div className="space-y-2">
-                            <h2 className="text-sm font-medium">Where</h2>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {(locations.data ?? []).map((l) => (
-                                <button
-                                  key={l.id}
-                                  onClick={() => {
-                                    setLocationId(l.id);
-                                    setSelectedSlot(null);
-                                  }}
-                                  className={`rounded-xl border p-3 text-left transition ${
-                                    l.id === activeLocationId
-                                      ? "border-primary bg-primary-soft text-primary"
-                                      : "bg-card hover:bg-secondary"
-                                  }`}
-                                >
-                                  <span className="flex items-center gap-2 text-sm font-medium">
-                                    <MapPin className="size-4" />
-                                    {l.name}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {activeLocationId ? (
-                          <div className="animate-in fade-in slide-in-from-top-1 space-y-3 duration-300">
-                            <h2 className="text-sm font-medium">When</h2>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                              {dateChoices(date).map((d) => {
-                                const dt = new Date(`${d}T00:00:00Z`);
-                                const selected = d === date;
-                                return (
-                                  <button
-                                    key={d}
-                                    type="button"
-                                    aria-pressed={selected}
-                                    onClick={() => {
-                                      setDate(d);
-                                      setSelectedSlot(null);
-                                    }}
-                                    className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition ${
-                                      selected
-                                        ? "border-primary bg-primary-soft text-primary"
-                                        : "bg-card hover:bg-secondary"
-                                    }`}
-                                  >
-                                    <span className="text-xs text-muted-foreground">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        weekday: "short",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                    <span className="text-base font-semibold tabular-nums">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        day: "numeric",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {dt.toLocaleDateString("en-GB", {
-                                        month: "short",
-                                        timeZone: "UTC",
-                                      })}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {availability.isLoading ? (
-                              <div className="grid grid-cols-3 gap-2">
-                                {Array.from({ length: 6 }, (_, i) => (
-                                  <div
-                                    key={i}
-                                    className="h-10 animate-pulse rounded-md bg-primary/10"
-                                  />
-                                ))}
+                        {expanded ? (
+                          <div className="animate-in fade-in slide-in-from-top-2 space-y-5 rounded-xl border border-dashed p-4 duration-300 sm:p-5">
+                            {s.upsells && s.upsells.length > 0 ? (
+                              <div className="space-y-2">
+                                <h2 className="text-sm font-medium">Add extras</h2>
+                                <p className="text-xs text-muted-foreground">
+                                  Done in the same visit — the times below allow for whatever you
+                                  add.
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {s.upsells.map((u) => {
+                                    const on = extraIds.includes(u.serviceId);
+                                    const discounted = u.priceMinor < u.basePriceMinor;
+                                    return (
+                                      <button
+                                        key={u.serviceId}
+                                        type="button"
+                                        role="checkbox"
+                                        aria-checked={on}
+                                        onClick={() => {
+                                          setExtraIds((ids) =>
+                                            on
+                                              ? ids.filter((id) => id !== u.serviceId)
+                                              : [...ids, u.serviceId],
+                                          );
+                                          setSelectedSlot(null);
+                                        }}
+                                        className={`flex items-start justify-between gap-3 rounded-xl border p-3 text-left transition ${
+                                          on
+                                            ? "border-primary bg-primary-soft"
+                                            : "bg-card hover:bg-secondary"
+                                        }`}
+                                      >
+                                        <span className="min-w-0">
+                                          <span className="flex items-center gap-2 text-sm font-medium">
+                                            <span
+                                              aria-hidden
+                                              className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                                                on
+                                                  ? "border-primary bg-primary text-primary-foreground"
+                                                  : "border-input"
+                                              }`}
+                                            >
+                                              {on ? <Check className="size-3" /> : null}
+                                            </span>
+                                            {u.name}
+                                          </span>
+                                          {u.pitch ? (
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                              {u.pitch}
+                                            </span>
+                                          ) : null}
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            +{formatDuration(u.durationMinutes)}
+                                          </span>
+                                        </span>
+                                        <span className="shrink-0 text-right text-sm whitespace-nowrap">
+                                          <span className="block font-semibold">
+                                            +{formatMoney(u.priceMinor, u.currency)}
+                                          </span>
+                                          {discounted ? (
+                                            <span className="block text-xs text-muted-foreground line-through">
+                                              {formatMoney(u.basePriceMinor, u.currency)}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            ) : slots.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">
-                                {loadingTimes
-                                  ? "Checking this date…"
-                                  : "No availability on this date. Try another day."}
-                              </p>
-                            ) : (
-                              <>
-                                {/* The previous day's times stay put while the new ones
-                                    load, dimmed and inert so the grid never jumps and a
-                                    stale time can't be tapped mid-swap. */}
-                                <div
-                                  aria-busy={loadingTimes}
-                                  className={`grid grid-cols-3 gap-2 transition-opacity duration-200 sm:grid-cols-4 ${
-                                    loadingTimes ? "pointer-events-none opacity-50" : "opacity-100"
-                                  }`}
-                                >
-                                  {slots.map((slot) => (
+                            ) : null}
+
+                            {(locations.data ?? []).length > 1 ? (
+                              <div className="space-y-2">
+                                <h2 className="text-sm font-medium">Where</h2>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {(locations.data ?? []).map((l) => (
                                     <button
-                                      key={`${slot.start}-${slot.staffId}`}
-                                      onClick={() => setSelectedSlot(slot)}
-                                      className={`rounded-xl border py-2.5 text-sm tabular-nums transition ${
-                                        slot.start === selectedSlot?.start &&
-                                        slot.staffId === selectedSlot?.staffId
+                                      key={l.id}
+                                      onClick={() => {
+                                        setLocationId(l.id);
+                                        setSelectedSlot(null);
+                                      }}
+                                      className={`rounded-xl border p-3 text-left transition ${
+                                        l.id === activeLocationId
                                           ? "border-primary bg-primary-soft text-primary"
-                                          : "hover:bg-secondary"
+                                          : "bg-card hover:bg-secondary"
                                       }`}
                                     >
-                                      {formatInTz(slot.start, slot.displayTimezone, {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
+                                      <span className="flex items-center gap-2 text-sm font-medium">
+                                        <MapPin className="size-4" />
+                                        {l.name}
+                                      </span>
                                     </button>
                                   ))}
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  Times shown in {slots[0]?.displayTimezone}.
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            Choose a location to see available times.
-                          </p>
-                        )}
+                              </div>
+                            ) : null}
 
-                        {selectedSlot ? (
-                          <Button
-                            size="xl"
-                            className="animate-in fade-in w-full duration-300"
-                            onClick={() => {
-                              setMode("service");
-                              setStep(STEP_DETAILS);
-                            }}
-                          >
-                            Continue
-                          </Button>
+                            {activeLocationId ? (
+                              <div className="animate-in fade-in slide-in-from-top-1 space-y-3 duration-300">
+                                <h2 className="text-sm font-medium">When</h2>
+                                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                                  {dateChoices(date).map((d) => {
+                                    const dt = new Date(`${d}T00:00:00Z`);
+                                    const selected = d === date;
+                                    return (
+                                      <button
+                                        key={d}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => {
+                                          setDate(d);
+                                          setSelectedSlot(null);
+                                        }}
+                                        className={`flex flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition ${
+                                          selected
+                                            ? "border-primary bg-primary-soft text-primary"
+                                            : "bg-card hover:bg-secondary"
+                                        }`}
+                                      >
+                                        <span className="text-xs text-muted-foreground">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            weekday: "short",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                        <span className="text-base font-semibold tabular-nums">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            day: "numeric",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {dt.toLocaleDateString("en-GB", {
+                                            month: "short",
+                                            timeZone: "UTC",
+                                          })}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {availability.isLoading ? (
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {Array.from({ length: 6 }, (_, i) => (
+                                      <div
+                                        key={i}
+                                        className="h-10 animate-pulse rounded-md bg-primary/10"
+                                      />
+                                    ))}
+                                  </div>
+                                ) : slots.length === 0 ? (
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      {loadingTimes
+                                        ? "Checking this date…"
+                                        : "No availability on this date. Try another day."}
+                                    </p>
+                                    {loadingTimes ? null : (
+                                      <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    )}
+                                  </div>
+                                ) : (
+                                  <>
+                                    {/* The previous day's times stay put while the new ones
+                                        load, dimmed and inert so the grid never jumps and a
+                                        stale time can't be tapped mid-swap. */}
+                                    <div
+                                      aria-busy={loadingTimes}
+                                      className={`grid grid-cols-3 gap-2 transition-opacity duration-200 sm:grid-cols-4 ${
+                                        loadingTimes
+                                          ? "pointer-events-none opacity-50"
+                                          : "opacity-100"
+                                      }`}
+                                    >
+                                      {slots.map((slot) => (
+                                        <button
+                                          key={`${slot.start}-${slot.staffId}`}
+                                          onClick={() => setSelectedSlot(slot)}
+                                          className={`rounded-xl border py-2.5 text-sm tabular-nums transition ${
+                                            slot.start === selectedSlot?.start &&
+                                            slot.staffId === selectedSlot?.staffId
+                                              ? "border-primary bg-primary-soft text-primary"
+                                              : "hover:bg-secondary"
+                                          }`}
+                                        >
+                                          {formatInTz(slot.start, slot.displayTimezone, {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      Times shown in {slots[0]?.displayTimezone}.
+                                    </p>
+                                    <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                Choose a location to see available times.
+                              </p>
+                            )}
+
+                            {selectedSlot ? (
+                              <Button
+                                size="xl"
+                                className="animate-in fade-in w-full duration-300"
+                                onClick={() => {
+                                  setMode("service");
+                                  setStep(STEP_DETAILS);
+                                }}
+                              >
+                                Continue
+                              </Button>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })
+                    );
+                  })}
+                </div>
+              ))
             )}
 
-            {(packages.data ?? []).length > 0 ? (
-              <div className="space-y-3 pt-4">
-                <div>
-                  <h2 className="text-base font-semibold">Buy a package</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Pay for several sessions up front, then book them whenever you like.
-                  </p>
-                </div>
-                {(packages.data ?? []).map((p) => (
+            {offerLoading ? <CardsGhost count={2} className="h-24" /> : null}
+
+            {offerActive && visibleServices.length === 0 && visiblePackages.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing on this link is available right now. Check with
+                {studioName ? ` ${studioName}` : " the studio"}.
+              </p>
+            ) : null}
+
+            {visiblePackages.length > 0 ? (
+              <div
+                className={
+                  offerActive && visibleServices.length === 0 ? "space-y-3" : "space-y-3 pt-4"
+                }
+              >
+                {/* The heading earns its place when packages sit under a list of sessions. */}
+                {offerActive && visibleServices.length === 0 ? null : (
+                  <div>
+                    <h2 className="text-base font-semibold">Buy a package</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Pay for several sessions up front, then book them whenever you like.
+                    </p>
+                  </div>
+                )}
+                {visiblePackages.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => {
@@ -1067,6 +1304,21 @@ export function BookingFlow({
                   </button>
                 ))}
               </div>
+            ) : null}
+
+            {/* The way out to the full page is the link's choice: a private offer
+                keeps the visitor to what it names (RECA offer links). */}
+            {offerActive && onLeaveOffer && (offer.data?.link.showFullCatalogue ?? true) ? (
+              <p className="pt-2 text-sm text-muted-foreground">
+                Looking for something else?{" "}
+                <button
+                  type="button"
+                  onClick={onLeaveOffer}
+                  className="text-primary hover:underline"
+                >
+                  See everything{studioName ? ` ${studioName}` : ""} offers
+                </button>
+              </p>
             ) : null}
           </section>
         ) : null}
@@ -1135,9 +1387,13 @@ export function BookingFlow({
                   <p className="text-xs text-destructive">{fieldErrors.phone}</p>
                 ) : null}
               </div>
-              {!isPackage ? (
+              {!isPackage || packageRequestMode ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="b-notes">Anything we should know? (optional)</Label>
+                  <Label htmlFor="b-notes">
+                    {isPackage
+                      ? "Anything to tell them, e.g. how you'd like to pay? (optional)"
+                      : "Anything we should know? (optional)"}
+                  </Label>
                   <Textarea
                     id="b-notes"
                     value={notes}
@@ -1162,6 +1418,10 @@ export function BookingFlow({
             ) : service && selectedSlot && location ? (
               <Summary
                 serviceName={service.name}
+                extras={chosenExtras.map((u) => ({
+                  name: u.name,
+                  price: formatMoney(u.priceMinor, u.currency),
+                }))}
                 locationName={location.name}
                 start={selectedSlot.start}
                 end={selectedSlot.end}
@@ -1191,7 +1451,9 @@ export function BookingFlow({
               {isPackage
                 ? buyPackage.isPending
                   ? "Setting up secure payment…"
-                  : "Continue"
+                  : packageRequestMode
+                    ? "Review request"
+                    : "Continue"
                 : holdMutation.isPending
                   ? "Holding your slot…"
                   : "Continue"}
@@ -1199,7 +1461,34 @@ export function BookingFlow({
           </section>
         ) : null}
 
-        {step === STEP_REVIEW && isPackage && chosenPackage ? (
+        {step === STEP_REVIEW && isPackage && chosenPackage && packageRequestMode ? (
+          <section className="space-y-4">
+            <Back onClick={() => setStep(STEP_DETAILS)} />
+            <h1 className="text-2xl font-semibold tracking-tight">Review your request</h1>
+            <p className="text-sm text-muted-foreground">
+              {studioName ?? "The studio"} doesn't take card payments online, so nothing is charged
+              now. They'll confirm your request and arrange payment with you, and your credits
+              appear once they do.
+            </p>
+            <PackageSummary pkg={chosenPackage} />
+            {notes.trim() ? (
+              <div className="surface-card p-5 text-left text-sm">
+                <p className="text-muted-foreground">Your note</p>
+                <p className="mt-1 whitespace-pre-wrap">{notes.trim()}</p>
+              </div>
+            ) : null}
+            <Button
+              size="xl"
+              className="w-full"
+              disabled={requestPackage.isPending}
+              onClick={() => void submitPackageRequest()}
+            >
+              {requestPackage.isPending ? "Sending…" : "Send request"}
+            </Button>
+          </section>
+        ) : null}
+
+        {step === STEP_REVIEW && isPackage && chosenPackage && !packageRequestMode ? (
           <section className="space-y-4">
             <Back onClick={() => setStep(STEP_DETAILS)} />
             <h1 className="text-2xl font-semibold tracking-tight">Review &amp; pay</h1>
@@ -1245,6 +1534,7 @@ export function BookingFlow({
             {service && location ? (
               <Summary
                 serviceName={service.name}
+                extras={lineExtras(hold.booking)}
                 locationName={location.name}
                 start={hold.booking.start}
                 end={hold.booking.end}
@@ -1325,6 +1615,39 @@ export function BookingFlow({
           </section>
         ) : null}
 
+        {step === STEP_DONE && isPackage && packageRequest && chosenPackage ? (
+          <section className="space-y-4 text-center">
+            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
+              <Check className="size-7" />
+            </span>
+            <h1 className="text-2xl font-semibold tracking-tight">Request sent</h1>
+            <p className="text-sm text-muted-foreground">
+              {studioName ?? "The studio"} has your request for {packageRequest.request.packageName}
+              . They'll be in touch to arrange payment and confirm it, and your{" "}
+              {packageRequest.request.creditsIssued} credits will appear on your account as soon as
+              they do. We've sent a copy to {email.trim() || "your inbox"}.
+            </p>
+            <PackageSummary pkg={chosenPackage} />
+            {hasPortalHere ? (
+              <Button size="xl" className="w-full" asChild>
+                <Link to="/account">Go to my dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button size="xl" className="w-full" asChild>
+                  <Link to="/claim/$token" params={{ token: packageRequest.claimToken }}>
+                    Set up my account
+                  </Link>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Takes a moment, and lets you see the request and book your sessions once it's
+                  confirmed. The same link is in your email.
+                </p>
+              </>
+            )}
+          </section>
+        ) : null}
+
         {step === STEP_DONE && isPackage && packageBought && chosenPackage ? (
           <section className="space-y-4 text-center">
             <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
@@ -1390,6 +1713,7 @@ export function BookingFlow({
             {service && location ? (
               <Summary
                 serviceName={service.name}
+                extras={lineExtras(confirmedBooking)}
                 locationName={location.name}
                 start={confirmedBooking.start}
                 end={confirmedBooking.end}
@@ -1420,7 +1744,37 @@ export function BookingFlow({
           </section>
         ) : null}
       </div>
+
+      {service ? (
+        <JoinWaitlistSheet
+          open={waitlistOpen}
+          onOpenChange={setWaitlistOpen}
+          businessId={businessId}
+          serviceId={service.id}
+          serviceName={service.name}
+          locationId={activeLocationId}
+          date={date}
+          contact={{ firstName, lastName, email, phone }}
+          studioName={studioName}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** The one line under the times: the diary can't help, but the studio can. */
+function WaitlistPrompt({ onClick }: { onClick: () => void }) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      Can't find a time that works?{" "}
+      <button
+        type="button"
+        onClick={onClick}
+        className="font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Join the waitlist
+      </button>
+    </p>
   );
 }
 
@@ -1525,8 +1879,21 @@ function PackageSummary({ pkg }: { pkg: PublicPackage }) {
   );
 }
 
+/** Add-on line items on a booking (everything after the primary), for the summary. */
+function lineExtras(
+  booking: Pick<Booking, "currency"> & { lineItems?: Booking["lineItems"] },
+): { name: string; price: string }[] {
+  return (booking.lineItems ?? [])
+    .filter((i) => i.position > 0)
+    .map((i) => ({
+      name: i.variantName ? `${i.name} · ${i.variantName}` : i.name,
+      price: formatMoney(i.priceMinor, i.currency ?? booking.currency),
+    }));
+}
+
 function Summary({
   serviceName,
+  extras,
   locationName,
   start,
   end,
@@ -1535,6 +1902,8 @@ function Summary({
   deposit,
 }: {
   serviceName: string;
+  /** Upsell add-ons taken with the service. */
+  extras?: { name: string; price: string }[];
   locationName: string;
   start: string;
   end?: string;
@@ -1555,6 +1924,7 @@ function Summary({
     <dl className="surface-card space-y-2 p-5 text-left text-sm">
       {[
         ["Service", serviceName],
+        ...(extras ?? []).map((e) => [`+ ${e.name}`, e.price]),
         ["Where", locationName],
         [multiDay ? "Drop off" : "When", formatInTz(start, timezone, whenOpts)],
         ...(multiDay && end ? [["Ready by", formatInTz(end, timezone, whenOpts)]] : []),

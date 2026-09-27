@@ -37,7 +37,7 @@ export function CustomerAuthLayout({
   readonly footer?: ReactNode;
 }) {
   return (
-    <div className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+    <div className="grid min-h-screen grid-cols-1 overflow-x-clip bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       <aside className="relative hidden overflow-hidden bg-sidebar px-12 py-14 lg:flex lg:flex-col lg:justify-between">
         <div
           aria-hidden
@@ -89,7 +89,7 @@ export function CustomerAuthLayout({
         </div>
       </aside>
 
-      <main className="pt-safe-8 pb-safe-8 flex flex-col px-5 sm:px-10">
+      <main className="pt-safe-8 pb-safe-8 px-safe-5 sm:px-safe-10 flex flex-col">
         <div className="flex items-center">
           <Link to="/" className="lg:invisible">
             <BrandMark tone="light" />

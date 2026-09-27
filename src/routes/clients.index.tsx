@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Search, Upload, UserPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { EmptyState, PageHeader, PersonAvatar, StatCard, StatusBadge } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
+import { LoadMoreSentinel } from "@/components/LoadMoreSentinel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useCustomersInfinite } from "@/lib/api/hooks";
+import { useCustomerCounts, useCustomersInfinite } from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
 
@@ -54,7 +55,9 @@ function ClientsPage() {
     status: status !== "all" ? status : undefined,
   });
   const rows = customers.items;
-  const activeCount = useMemo(() => rows.filter((c) => c.status === "active").length, [rows]);
+  const counts = useCustomerCounts();
+  const { fetchNextPage } = customers;
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
 
   return (
     <>
@@ -75,10 +78,21 @@ function ClientsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Clients loaded" value={String(rows.length)} />
-        <StatCard label="Active (loaded)" value={String(activeCount)} />
-        <StatCard label="Archived or anonymised" value={String(rows.length - activeCount)} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <StatCard
+          label="Total clients"
+          value={counts.data ? String(counts.data.total) : "—"}
+          hint={
+            counts.data && counts.data.total !== counts.data.active
+              ? `${counts.data.active} active`
+              : undefined
+          }
+        />
+        <StatCard
+          label="Archived"
+          value={counts.data ? String(counts.data.archived + counts.data.anonymised) : "—"}
+          hint={counts.data?.anonymised ? `${counts.data.anonymised} anonymised` : undefined}
+        />
       </div>
 
       <div className="surface-card overflow-hidden">
@@ -170,17 +184,11 @@ function ClientsPage() {
                 </tbody>
               </table>
             </div>
-            {customers.hasNextPage ? (
-              <div className="border-t p-4">
-                <Button
-                  variant="outline"
-                  disabled={customers.isFetchingNextPage}
-                  onClick={() => void customers.fetchNextPage()}
-                >
-                  {customers.isFetchingNextPage ? "Loading…" : "Load more"}
-                </Button>
-              </div>
-            ) : null}
+            <LoadMoreSentinel
+              hasNextPage={Boolean(customers.hasNextPage)}
+              isFetchingNextPage={customers.isFetchingNextPage}
+              onLoadMore={loadMore}
+            />
           </>
         )}
       </div>

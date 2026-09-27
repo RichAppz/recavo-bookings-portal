@@ -45,12 +45,15 @@ export function SessionCalendar({
   selected: selectedProp,
   onSelectedChange,
   aside,
+  hideSelectedList,
 }: {
   readonly sessions: readonly CalendarSession[];
   readonly emptyHint?: string;
   readonly selected?: string | null;
   readonly onSelectedChange?: (date: string) => void;
   readonly aside?: ReactNode;
+  /** When the parent draws the day's bookings itself (with Move / Cancel). */
+  readonly hideSelectedList?: boolean;
 }) {
   const today = new Date();
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
@@ -89,6 +92,7 @@ export function SessionCalendar({
 
   const todayKey = isoDate(today);
   const selectedSessions = selected ? (byDay.get(selected) ?? []) : [];
+  const onDayEmpty = selectedSessions.length === 0;
 
   function step(by: number) {
     const next = new Date(cursor.year, cursor.month + by, 1);
@@ -195,7 +199,7 @@ export function SessionCalendar({
           </h2>
         </header>
         <div className="min-w-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
-          {selectedSessions.length === 0 ? (
+          {hideSelectedList ? null : selectedSessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {emptyHint ?? "Nothing booked on this day."}
             </p>
@@ -214,6 +218,11 @@ export function SessionCalendar({
               </div>
             ))
           )}
+          {hideSelectedList && onDayEmpty ? (
+            <p className="text-sm text-muted-foreground">
+              {emptyHint ?? "Nothing booked on this day."}
+            </p>
+          ) : null}
           {aside}
         </div>
       </section>

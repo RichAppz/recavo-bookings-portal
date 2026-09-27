@@ -45,7 +45,16 @@ import {
   useUpdateStaff,
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
-import { formatDuration, formatInTz, minutesToTime, timeToMinutes, ukDate } from "@/lib/format";
+import {
+  formatDuration,
+  formatInTz,
+  minutesToTime,
+  parseTimeInput,
+  timeToMinutes,
+  ukDate,
+} from "@/lib/format";
+import { useSoleLocation, useSoloPlan } from "@/lib/sole";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/staff")({
@@ -107,6 +116,10 @@ function StaffPage() {
   const [quick, setQuick] = useState<QuickAction>(null);
   const [inviting, setInviting] = useState(false);
   const [staffDialog, setStaffDialog] = useState<"create" | Staff | null>(null);
+  // One seat: this page is the owner's own availability, not a team roster. The
+  // menu doesn't link here on Solo (setup and the dashboard do), so it reads as
+  // "your hours" — no list, no invites, no headcount.
+  const solo = useSoloPlan();
 
   const list = staff.data ?? [];
   const selectedId = selected ?? list[0]?.id ?? null;
@@ -115,31 +128,44 @@ function StaffPage() {
   return (
     <>
       <PageHeader
-        title="Staff"
-        description="Who works where, what they deliver and when they're available."
+        title={solo ? "Your availability" : "Staff"}
+        description={
+          solo
+            ? "Your working hours, time off and the services you deliver."
+            : "Who works where, what they deliver and when they're available."
+        }
         actions={
           <>
             <Button variant="outline" onClick={() => setQuick("block")}>
               <CalendarOff className="size-4" /> Block time
             </Button>
-            <Button variant="outline" onClick={() => setInviting(true)}>
-              Invite by email
-            </Button>
-            <Button onClick={() => setStaffDialog("create")}>
-              <Plus className="size-4" /> Add staff
-            </Button>
+            {solo ? null : (
+              <>
+                <Button variant="outline" onClick={() => setInviting(true)}>
+                  Invite by email
+                </Button>
+                <Button onClick={() => setStaffDialog("create")}>
+                  <Plus className="size-4" /> Add staff
+                </Button>
+              </>
+            )}
           </>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Team members" value={String(list.length)} />
-        <StatCard label="Active" value={String(list.filter((s) => s.status === "active").length)} />
-        <StatCard
-          label="Pending invitations"
-          value={String(list.filter((s) => s.status === "invited").length)}
-        />
-      </div>
+      {solo ? null : (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+          <StatCard label="Team members" value={String(list.length)} />
+          <StatCard
+            label="Active"
+            value={String(list.filter((s) => s.status === "active").length)}
+          />
+          <StatCard
+            label="Pending invitations"
+            value={String(list.filter((s) => s.status === "invited").length)}
+          />
+        </div>
+      )}
 
       {staff.isLoading ? (
         <CardsGhost count={2} className="h-[320px]" />
@@ -155,43 +181,53 @@ function StaffPage() {
         />
       ) : list.length === 0 ? (
         <EmptyState
-          title="No staff yet"
-          description="Add your first team member to start assigning bookings."
-          action={<Button onClick={() => setStaffDialog("create")}>Add staff</Button>}
+          title={solo ? "Set up your availability" : "No staff yet"}
+          description={
+            solo
+              ? "Add yourself with your working hours so sessions can be booked."
+              : "Add your first team member to start assigning bookings."
+          }
+          action={
+            <Button onClick={() => setStaffDialog("create")}>
+              {solo ? "Add your details" : "Add staff"}
+            </Button>
+          }
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-          <SectionCard title="Team" bodyClassName="p-0">
-            <ul className="divide-y">
-              {list.map((m) => (
-                <li key={m.id}>
-                  <button
-                    onClick={() => setSelected(m.id)}
-                    className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-                      m.id === selectedId ? "bg-primary-soft" : "hover:bg-secondary/60"
-                    }`}
-                  >
-                    <span className="relative shrink-0">
-                      <PersonAvatar name={m.displayName} size={40} />
-                      {m.calendarColour ? (
-                        <span
-                          className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background"
-                          style={{ backgroundColor: m.calendarColour }}
-                        />
-                      ) : null}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{m.displayName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {m.title ?? "Team member"}
+        <div className={cn("grid gap-5", !solo && "lg:grid-cols-[320px_1fr]")}>
+          {solo ? null : (
+            <SectionCard title="Team" bodyClassName="p-0">
+              <ul className="divide-y">
+                {list.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => setSelected(m.id)}
+                      className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                        m.id === selectedId ? "bg-primary-soft" : "hover:bg-secondary/60"
+                      }`}
+                    >
+                      <span className="relative shrink-0">
+                        <PersonAvatar name={m.displayName} size={40} />
+                        {m.calendarColour ? (
+                          <span
+                            className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background"
+                            style={{ backgroundColor: m.calendarColour }}
+                          />
+                        ) : null}
                       </span>
-                    </span>
-                    {m.status !== "active" ? <StatusBadge status={m.status} /> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{m.displayName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {m.title ?? "Team member"}
+                        </span>
+                      </span>
+                      {m.status !== "active" ? <StatusBadge status={m.status} /> : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
 
           {member ? (
             <div className="space-y-5">
@@ -440,6 +476,7 @@ function StaffDialog({
   const updateStaff = useUpdateStaff();
   const services = useServices();
   const locations = useLocationsList();
+  const soleLocation = useSoleLocation();
 
   const [displayName, setDisplayName] = useState(staff?.displayName ?? "");
   const [title, setTitle] = useState(staff?.title ?? "");
@@ -562,7 +599,7 @@ function StaffDialog({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="px-6 pt-6 pb-4">
+        <DialogHeader className="px-6 pt-safe-6 pb-4">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
@@ -679,27 +716,31 @@ function StaffDialog({
             </p>
           </div>
 
-          <div className="grid gap-2 border-t pt-4">
-            <Label>Locations</Label>
-            {(locations.data ?? []).length === 0 ? (
-              <p className="text-xs text-muted-foreground">No locations created yet.</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(locations.data ?? []).map((l) => (
-                  <label key={l.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={locationIds.includes(l.id)}
-                      onCheckedChange={() => setLocationIds((ids) => toggleId(ids, l.id))}
-                    />
-                    {l.name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Leave all unchecked to make this trainer available everywhere.
-            </p>
-          </div>
+          {/* With one location there is nothing to restrict by; the section only
+              earns its place once there are several. */}
+          {soleLocation ? null : (
+            <div className="grid gap-2 border-t pt-4">
+              <Label>Locations</Label>
+              {(locations.data ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No locations created yet.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(locations.data ?? []).map((l) => (
+                    <label key={l.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={locationIds.includes(l.id)}
+                        onCheckedChange={() => setLocationIds((ids) => toggleId(ids, l.id))}
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Leave all unchecked to make this trainer available everywhere.
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-2 border-t pt-4">
             <div className="flex items-center justify-between">
@@ -715,8 +756,10 @@ function StaffDialog({
             ) : (
               <div className="space-y-2 pb-2">
                 {workingRules.map((r, i) => (
+                  // Positional key on purpose: see WeeklyWindowsEditor — a value-derived
+                  // key remounts the focused time input mid-edit and crashes Safari.
                   <div
-                    key={`${r.dayOfWeek}-${r.startMinute}-${i}`}
+                    key={i}
                     className="flex flex-wrap items-end gap-2 rounded-lg border border-border/70 bg-card p-2.5"
                   >
                     <div className="grid w-28 gap-1">
@@ -742,9 +785,10 @@ function StaffDialog({
                       <Input
                         type="time"
                         value={minutesToTime(r.startMinute)}
-                        onChange={(e) =>
-                          updateWorkingRule(i, { startMinute: timeToMinutes(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          const mins = parseTimeInput(e.target.value);
+                          if (mins !== null) updateWorkingRule(i, { startMinute: mins });
+                        }}
                       />
                     </div>
                     <div className="grid w-28 gap-1">
@@ -752,32 +796,35 @@ function StaffDialog({
                       <Input
                         type="time"
                         value={minutesToTime(r.endMinute)}
-                        onChange={(e) =>
-                          updateWorkingRule(i, { endMinute: timeToMinutes(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          const mins = parseTimeInput(e.target.value);
+                          if (mins !== null) updateWorkingRule(i, { endMinute: mins });
+                        }}
                       />
                     </div>
-                    <div className="grid min-w-40 flex-1 gap-1">
-                      <Label className="text-xs text-muted-foreground">Location</Label>
-                      <Select
-                        value={r.locationId ?? "any"}
-                        onValueChange={(v) =>
-                          updateWorkingRule(i, { locationId: v === "any" ? null : v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="any">Any location</SelectItem>
-                          {(locations.data ?? []).map((l) => (
-                            <SelectItem key={l.id} value={l.id}>
-                              {l.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {soleLocation ? null : (
+                      <div className="grid min-w-40 flex-1 gap-1">
+                        <Label className="text-xs text-muted-foreground">Location</Label>
+                        <Select
+                          value={r.locationId ?? "any"}
+                          onValueChange={(v) =>
+                            updateWorkingRule(i, { locationId: v === "any" ? null : v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any location</SelectItem>
+                            {(locations.data ?? []).map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -793,7 +840,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter className="px-6 pb-6">
+        <DialogFooter className="px-6 pb-safe-6">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

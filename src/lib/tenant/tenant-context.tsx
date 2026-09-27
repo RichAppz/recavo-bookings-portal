@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 import { TableGhost } from "@/components/ghost";
 import { api, ApiError, queryKeys } from "@/lib/api";
@@ -75,6 +75,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     () => (readStored(LOCATION_KEY) as string | "all") || "all",
   );
 
+  const restoring = useIsRestoring();
   const businessesQuery = useQuery({
     queryKey: queryKeys.myBusinesses(),
     enabled: status === "authenticated",
@@ -215,13 +216,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       setCurrentLocationId,
       configuration,
       switchBusiness,
+      // While the persisted cache is being read back from the device the queries
+      // are neither loading nor loaded — treat that as loading, or a cold start
+      // flashes "set up your first business" before the saved data lands.
       isLoading:
+        restoring ||
         businessesQuery.isLoading ||
         (!!activeBusinessId &&
           (businessQuery.isLoading || locationsQuery.isLoading || configurationQuery.isLoading)),
       terminology,
     }),
     [
+      restoring,
       businesses,
       activeBusinessId,
       businessQuery.data,
@@ -249,7 +255,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         ? err.detail || err.title
         : "The portal couldn't reach the API. Check your connection or the API URL.";
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="screen-center bg-background px-safe-4">
         <div className="max-w-md space-y-3 text-center">
           <h1 className="text-lg font-semibold">Couldn't load your businesses</h1>
           <p className="text-sm text-muted-foreground">{detail}</p>

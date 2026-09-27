@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { Copy, CreditCard, Globe, Landmark, Sparkles } from "lucide-react";
+import { Copy, CreditCard, Landmark, Sparkles } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
+import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { AppShell } from "@/components/AppShell";
+import { BrandingLogoField } from "@/components/BrandingLogoField";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
+import { CalendarColoursSetting } from "@/components/CalendarColoursSetting";
+import { MenuVisibilitySetting } from "@/components/MenuVisibilitySetting";
+import { MessageTemplatesSetting } from "@/components/MessageTemplatesSetting";
+import { InvoicingSetting } from "@/components/InvoicingSetting";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { Markdown } from "@/components/Markdown";
 import { EmptyState, PageHeader, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -58,7 +64,6 @@ import {
   useUpdateBusiness,
   useUpdateConfiguration,
   useUpdateMembership,
-  useUpdateNotificationTemplate,
 } from "@/lib/api/hooks";
 import type {
   AiPolicyDraftResponse,
@@ -71,6 +76,8 @@ import { toastApiError } from "@/lib/api/errors";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { formatInTz } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
+import { bpsToPercentInput, percentInputToBps, type TaxConfig } from "@/lib/invoices";
+import { cn } from "@/lib/utils";
 import { markdownToPlainText, parsePolicyContent } from "@/lib/markdown";
 import {
   PERMISSIONS,
@@ -236,30 +243,6 @@ const INVITE_ROLES = [
   SYSTEM_ROLES.RESTRICTED_STAFF,
 ] as const;
 
-const NOTIFICATION_TEMPLATE_KEYS = [
-  {
-    key: "booking_confirmation",
-    label: "Booking confirmation",
-    placeholder:
-      "Hi {{first_name}}, your {{service}} with {{trainer}} is confirmed for {{date}} at {{time}}.",
-  },
-  {
-    key: "booking_reminder_24h",
-    label: "24-hour reminder",
-    placeholder: "Reminder: your {{service}} is tomorrow at {{time}}.",
-  },
-  {
-    key: "booking_cancelled",
-    label: "Booking cancelled",
-    placeholder: "Your {{service}} on {{date}} has been cancelled.",
-  },
-  {
-    key: "package_expiry",
-    label: "Package expiry warning",
-    placeholder: "Your package expires on {{expiry_date}}. Renew to keep booking.",
-  },
-] as const;
-
 const AUDIT_PAGE_SIZE = 25;
 
 function SettingsPage() {
@@ -345,7 +328,7 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="notifications" className="mt-4 grid gap-5">
             <BookingRemindersSetting />
-            <NotificationTemplatesTab />
+            <MessageTemplatesSetting />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <AuditTab />
@@ -410,6 +393,7 @@ function AccountProfileTab() {
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
       </SectionCard>
+      <DeleteAccountSection />
     </div>
   );
 }
@@ -775,8 +759,13 @@ function ConfigurationTab() {
   );
   const [logoUrl, setLogoUrl] = useState(brandingConfig?.logoUrl ?? "");
   const [accentColour, setAccentColour] = useState(brandingConfig?.accentColour ?? "");
+  // VAT rate / inclusive pricing aren't on the committed OpenAPI snapshot yet
+  // either (ADR 0019); same widening as branding until the schema is refreshed.
+  const taxConfig = config?.tax as TaxConfig | undefined;
   const [vatRegistered, setVatRegistered] = useState(Boolean(config?.tax?.vatRegistered));
   const [vatNumber, setVatNumber] = useState(config?.tax?.vatNumber ?? "");
+  const [vatRatePct, setVatRatePct] = useState(bpsToPercentInput(taxConfig?.vatRateBps));
+  const [pricesIncludeVat, setPricesIncludeVat] = useState(taxConfig?.pricesIncludeVat !== false);
   const [closureDays, setClosureDays] = useState(
     String(config?.retention?.closureWindowDays ?? 30),
   );
@@ -798,6 +787,8 @@ function ConfigurationTab() {
     setAccentColour(brandingConfig?.accentColour ?? "");
     setVatRegistered(Boolean(config?.tax?.vatRegistered));
     setVatNumber(config?.tax?.vatNumber ?? "");
+    setVatRatePct(bpsToPercentInput((config?.tax as TaxConfig | undefined)?.vatRateBps));
+    setPricesIncludeVat((config?.tax as TaxConfig | undefined)?.pricesIncludeVat !== false);
     setClosureDays(String(config?.retention?.closureWindowDays ?? 30));
     setLine1(config?.legalAddress?.line1 ?? "");
     setLine2(config?.legalAddress?.line2 ?? "");
@@ -809,11 +800,14 @@ function ConfigurationTab() {
 
   const accentValid = accentColour === "" || /^#[0-9a-fA-F]{6}$/.test(accentColour);
   const logoValid = logoUrl === "" || logoUrl.startsWith("https://");
+  const vatRateBps = percentInputToBps(vatRatePct);
+  const vatRateValid = vatRateBps !== undefined;
 
-  // Branding is not on the generated configuration type yet, so it rides along
-  // on a widened patch until openapi.json is refreshed.
-  type ConfigPatch = Parameters<typeof update.mutateAsync>[0] & {
+  // Branding / tax extras are not on the generated configuration type yet, so
+  // they ride along on a widened patch until openapi.json is refreshed.
+  type ConfigPatch = Omit<Parameters<typeof update.mutateAsync>[0], "tax"> & {
     branding?: { logoUrl: string | null; accentColour: string | null };
+    tax?: TaxConfig;
   };
 
   return (
@@ -829,20 +823,29 @@ function ConfigurationTab() {
             <Field label="Linked record label" value={linkedTerm} onChange={setLinkedTerm} />
           </div>
         </SectionCard>
-        <SectionCard title="Branding">
+        <SectionCard
+          title="Branding"
+          description="Your logo and accent colour on customer emails, invoices and the booking page. Included on every plan."
+        >
           <div className="grid gap-4">
-            <p className="text-xs text-muted-foreground">
-              Used on the emails your customers receive. Leave either field empty to fall back to
-              RECAVO's.
-            </p>
-            <div className="grid gap-1.5">
-              <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
-              <p className="text-xs text-muted-foreground">
-                {logoValid
-                  ? "Must be a public https link — email apps cannot load private files."
-                  : "Must start with https://"}
-              </p>
-            </div>
+            <BrandingLogoField
+              logoUrl={logoValid ? logoUrl : ""}
+              onChange={setLogoUrl}
+              disabled={!tenant.can(PERMISSIONS.BUSINESS_UPDATE)}
+            />
+            <details className="group">
+              <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
+                Use an image hosted elsewhere instead
+              </summary>
+              <div className="mt-2 grid gap-1.5">
+                <Field label="Logo URL" value={logoUrl} onChange={setLogoUrl} />
+                <p className="text-xs text-muted-foreground">
+                  {logoValid
+                    ? "Must be a public https link — email apps cannot load private files. Saved with the rest of this page."
+                    : "Must start with https://"}
+                </p>
+              </div>
+            </details>
             <div className="grid gap-1.5">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
@@ -887,6 +890,8 @@ function ConfigurationTab() {
             </div>
           </div>
         </SectionCard>
+        <CalendarColoursSetting />
+        <MenuVisibilitySetting />
       </div>
       <div className="grid gap-5">
         <SectionCard title="Booking rules">
@@ -913,6 +918,35 @@ function ConfigurationTab() {
               <Switch checked={vatRegistered} onCheckedChange={setVatRegistered} />
             </div>
             <Field label="VAT number" value={vatNumber} onChange={setVatNumber} />
+            <div className="grid gap-1.5">
+              <Field
+                label="VAT rate (%)"
+                value={vatRatePct}
+                onChange={setVatRatePct}
+                type="number"
+              />
+              <p
+                className={cn(
+                  "text-xs",
+                  vatRateValid ? "text-muted-foreground" : "text-destructive",
+                )}
+              >
+                {vatRateValid
+                  ? "Applied to taxable invoice lines. Invoices show a VAT breakdown only when you're registered and a rate is set."
+                  : "Enter a rate between 0 and 100."}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">Prices include VAT</p>
+                <p className="text-xs text-muted-foreground">
+                  {pricesIncludeVat
+                    ? "Your prices are gross — VAT is backed out on invoices."
+                    : "Your prices are net — VAT is added on top on invoices."}
+                </p>
+              </div>
+              <Switch checked={pricesIncludeVat} onCheckedChange={setPricesIncludeVat} />
+            </div>
           </div>
         </SectionCard>
         <SectionCard title="Legal address & retention">
@@ -938,7 +972,7 @@ function ConfigurationTab() {
           fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
         >
           <Button
-            disabled={update.isPending || !accentValid || !logoValid}
+            disabled={update.isPending || !accentValid || !logoValid || !vatRateValid}
             onClick={async () => {
               const patch: ConfigPatch = {
                 branding: {
@@ -958,7 +992,12 @@ function ConfigurationTab() {
                   // a booking patch that omitted it would turn online payments off.
                   requireOnlinePayment: isOnlinePaymentRequired(config),
                 } as NonNullable<Parameters<typeof update.mutateAsync>[0]["booking"]>,
-                tax: { vatRegistered, vatNumber: vatNumber.trim() || null },
+                tax: {
+                  vatRegistered,
+                  vatNumber: vatNumber.trim() || null,
+                  vatRateBps: vatRateBps ?? null,
+                  pricesIncludeVat,
+                },
                 retention: { closureWindowDays: Number(closureDays) || 30 },
                 legalAddress: line1.trim()
                   ? {
@@ -1568,57 +1607,6 @@ function PrivacyTab() {
   );
 }
 
-function NotificationTemplatesTab() {
-  const update = useUpdateNotificationTemplate();
-  const [bodies, setBodies] = useState<Record<string, string>>(() =>
-    Object.fromEntries(NOTIFICATION_TEMPLATE_KEYS.map((t) => [t.key, t.placeholder])),
-  );
-  return (
-    <SectionCard
-      title="Message templates"
-      description="API exposes PUT only — edit known template keys."
-    >
-      <Can
-        permission={PERMISSIONS.BUSINESS_UPDATE}
-        fallback={<p className="text-sm text-muted-foreground">Requires business.update</p>}
-      >
-        <div className="grid gap-5">
-          {NOTIFICATION_TEMPLATE_KEYS.map((tpl) => (
-            <div key={tpl.key} className="grid gap-2">
-              <Label htmlFor={tpl.key}>
-                {tpl.label} <span className="font-normal text-muted-foreground">({tpl.key})</span>
-              </Label>
-              <Textarea
-                id={tpl.key}
-                rows={3}
-                value={bodies[tpl.key] ?? ""}
-                onChange={(e) => setBodies((p) => ({ ...p, [tpl.key]: e.target.value }))}
-              />
-              <Button
-                size="sm"
-                className="w-fit"
-                disabled={update.isPending || !(bodies[tpl.key] ?? "").trim()}
-                onClick={async () => {
-                  await update.mutateAsync({
-                    key: tpl.key,
-                    bodyRegion: (bodies[tpl.key] ?? "").trim(),
-                  });
-                  toast.success(`${tpl.label} saved`);
-                }}
-              >
-                Save {tpl.label}
-              </Button>
-            </div>
-          ))}
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="size-3.5" /> Merge tags are replaced automatically.
-          </p>
-        </div>
-      </Can>
-    </SectionCard>
-  );
-}
-
 function AuditTab() {
   const events = useAuditEvents();
   const [page, setPage] = useState(0);
@@ -1749,18 +1737,7 @@ function PaymentsTab() {
           </div>
         )}
       </SectionCard>
-      {/* self-start stops the grid stretching this stub card to match the tall
-          Stripe card beside it. */}
-      <SectionCard title="Invoicing and tax" className="self-start">
-        <p className="text-sm text-muted-foreground">
-          VAT and legal address are managed under Configuration.
-        </p>
-        <Button variant="outline" size="sm" className="mt-3 w-fit" asChild>
-          <Link to="/settings" search={{ tab: "configuration" }}>
-            Edit VAT &amp; legal address
-          </Link>
-        </Button>
-      </SectionCard>
+      <InvoicingSetting className="xl:col-span-2" />
     </>
   );
 }

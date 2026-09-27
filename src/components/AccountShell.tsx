@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarDays,
+  FileText,
+  Gift,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -17,13 +19,16 @@ import { useAuth } from "@/lib/auth/auth-store";
 import { userDisplayName } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-export type AccountView = "overview" | "calendar" | "credits" | "purchases" | "profile";
+export type AccountView =
+  "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile";
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "calendar", label: "Calendar", icon: CalendarDays },
+  { view: "offers", label: "Offers", icon: Gift },
   { view: "credits", label: "Credits", icon: Ticket },
   { view: "purchases", label: "Purchases", icon: Receipt },
+  { view: "invoices", label: "Invoices", icon: FileText },
   { view: "profile", label: "Profile", icon: UserRound },
 ];
 
@@ -56,7 +61,10 @@ export function AccountShell({
   useEffect(() => setMobileNav(false), [pathname, view]);
 
   return (
-    <div className="min-h-screen bg-background">
+    // `overflow-x-clip` is the backstop: whatever a card gets wrong, the page itself
+    // can never grow wider than the phone. `clip` rather than `hidden`, because
+    // `overflow-x: hidden` makes this the scroll container and unsticks the header.
+    <div className="min-h-screen overflow-x-clip bg-background">
       {mobileNav ? (
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"
@@ -66,7 +74,7 @@ export function AccountShell({
 
       <aside
         className={cn(
-          "pt-safe pb-safe fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
+          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
           mobileNav ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -126,9 +134,9 @@ export function AccountShell({
         </div>
       </aside>
 
-      <div className="lg:pl-[264px]">
+      <div className="lg:pl-sidebar">
         <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-          <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+          <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -143,7 +151,7 @@ export function AccountShell({
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6">
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
             {description ? (

@@ -323,7 +323,7 @@ function TimezoneField({
           onChange={(e) => onChange(e.target.value)}
         />
       ) : (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover modal open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               id="profile-timezone"

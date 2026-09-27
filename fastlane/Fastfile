@@ -1,0 +1,66 @@
+default_platform(:ios)
+
+APP_STORE_CONNECT_API_KEY_ID      = "QLBXLNY339"
+APP_STORE_CONNECT_API_ISSUER_ID   = "69a6de78-bc86-47e3-e053-5b8c7c11a4d1"
+APP_STORE_CONNECT_API_KEY_PATH    = File.expand_path("~/.private_keys/AuthKey_QLBXLNY339.p8")
+
+platform :ios do
+  desc "Push a new build to TestFlight"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: APP_STORE_CONNECT_API_KEY_ID,
+      issuer_id: APP_STORE_CONNECT_API_ISSUER_ID,
+      key_filepath: APP_STORE_CONNECT_API_KEY_PATH,
+    )
+
+    testflight_build = latest_testflight_build_number(api_key: api_key)
+    local_build = get_build_number(xcodeproj: "ios/App/App.xcodeproj").to_i
+    next_build = [testflight_build, local_build].max + 1
+
+    # skip_info_plist: Info.plist reads $(CURRENT_PROJECT_VERSION); agvtool would
+    # otherwise overwrite that with a literal and the two drift apart.
+    increment_build_number(
+      xcodeproj: "ios/App/App.xcodeproj",
+      build_number: next_build,
+      skip_info_plist: true,
+    )
+
+    cap_sync_production
+
+    build_app(
+      project: "ios/App/App.xcodeproj",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "fastlane/build",
+      output_name: "RECAVO.ipa",
+      clean: true,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+
+  desc "Build only (no upload) — useful for verifying the archive"
+  lane :build do
+    cap_sync_production
+
+    build_app(
+      project: "ios/App/App.xcodeproj",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "fastlane/build",
+      output_name: "RECAVO.ipa",
+      clean: true,
+    )
+  end
+end
+
+private_lane :cap_sync_production do
+  Dir.chdir("..") do
+    sh("CAP_ENV=production npx cap sync ios")
+  end
+end

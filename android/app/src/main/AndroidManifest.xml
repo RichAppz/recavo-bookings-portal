@@ -22,12 +22,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep link scheme: Supabase OAuth redirects to app.recavo.portal://auth/callback (see src/lib/native.ts) -->
+            <!-- Deep link scheme: Supabase OAuth redirects to com.richappz.recavo://auth/callback (see src/lib/native.ts) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="app.recavo.portal" />
+                <data android:scheme="com.richappz.recavo" />
             </intent-filter>
 
         </activity>
