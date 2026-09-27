@@ -21698,7 +21698,7 @@ export interface paths {
          *
          *     Time is not edited here: `start`, `end` or `allDay` in the body are refused with 400 `USE_RESCHEDULE` — call POST …/reschedule (with `correction: true` for a quiet fix that does not message the client). Changing services re-snapshots and re-prices like create; a catalogue-length job grows/shrinks from its start (a clash is 409 BOOKING_CONFLICT and nothing changes), while an all-day or hand-set window is kept.
          *
-         *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). The deposit is kept unless it can no longer apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
+         *     Money: payments already recorded are kept and `outstanding` follows the new price; a price below `paidMinor` is a 409 (refund first). `depositMinor` sets or removes the deposit (omitted keeps it), and is dropped where a deposit cannot apply. The lead client may only change while `paidMinor` is 0 (409 otherwise). Credit-paid bookings lock services, price, client and payment method (409: cancel and rebook). Cancelled / attended / no-show / expired bookings are 409.
          *
          *     Each edit appends a `kind: "amended"` history entry with a structured `changes` diff and emits `booking.amended`. With `notify.channels` the client is sent the confirmation again with the new details on those channels; otherwise nothing is sent.
          */
@@ -21747,6 +21747,8 @@ export interface paths {
                         leadCustomerId?: string;
                         /** @description Staff total for the whole job. A number overrides the total (every line goes back to its list price and the difference becomes `adjustmentMinor`); `null` puts it back to the sum of the lines; omitted keeps the current price (the lines' sum when the services or per-line prices change). */
                         priceMinor?: number | null;
+                        /** @description Deposit securing this booking: a number sets it, `null` removes it, omitted keeps what it has. For correcting a deposit discovered after the job was written up (the client had already paid one). Clamped as on create — a deposit at or above the total, or on a credit-paid booking, becomes no deposit. Recording the money itself is POST …/record-payment. */
+                        depositMinor?: number | null;
                         /**
                          * @description Confirmed bookings, or a pay-by-bank booking still `awaiting_payment` with nothing received — switching that one to `none` / `pay_later` confirms it on the spot (the customer no longer has to transfer anything to secure it) and, with `notify`, sends the confirmation or payment request for the new method via `booking.confirmed`. To or from `credit` is not allowed; other unconfirmed states answer 409.
                          * @enum {string}

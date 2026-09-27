@@ -48,6 +48,19 @@ export type BookingSettlement = {
 };
 
 /**
+ * The API's deposit clamp (RECA-523), so the portal never shows or sends a deposit
+ * the API would drop: only an amount strictly between nothing and the total secures
+ * a booking. At or above the total it would be a second price, not a deposit.
+ */
+export function effectiveDepositMinor(
+  requested: number | null | undefined,
+  totalMinor: number,
+): number | null {
+  if (requested == null) return null;
+  return requested > 0 && requested < totalMinor ? requested : null;
+}
+
+/**
  * Settlement view of a booking, derived the way the deposits guide (RECA-523)
  * prescribes: outstanding = price − paid; a deposit only counts while it is
  * strictly between 0 and the price; credit bookings never carry money.
@@ -61,10 +74,7 @@ export function bookingSettlement(
 ): BookingSettlement {
   const priceMinor = booking.priceMinor;
   const paidMinor = booking.paidMinor ?? 0;
-  const deposit =
-    booking.depositMinor != null && booking.depositMinor > 0 && booking.depositMinor < priceMinor
-      ? booking.depositMinor
-      : null;
+  const deposit = effectiveDepositMinor(booking.depositMinor, priceMinor);
   const outstandingMinor = Math.max(0, priceMinor - paidMinor);
   // Mirrors the API's dueNowMinor: the deposit is asked for first whatever the status
   // (a staff booking is confirmed from the start), then the balance.
@@ -159,7 +169,7 @@ export function configuredDepositMinor(
   totalMinor: number,
 ): number | null {
   const sum = services.reduce((acc, s) => acc + (s.depositMinor ?? 0), 0);
-  return sum > 0 && sum < totalMinor ? sum : null;
+  return effectiveDepositMinor(sum, totalMinor);
 }
 
 /**
