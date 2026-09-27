@@ -7,8 +7,13 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-09-27",
-    title: "Overview in your own words, and only the cards you want",
+    title: "A full week offline, and an Overview in your own words",
     items: [
+      {
+        kind: "improved",
+        text: "Offline mode now covers the whole week ahead, not just today and tomorrow. Open the app with signal once and every job for the next seven days \u2014 with its client, vehicle, payments and history \u2014 is saved to your phone for when you\u2019re out of range.",
+        where: "Everywhere \u2014 works automatically in the background",
+      },
       {
         kind: "improved",
         text: "The Overview now talks your trade: automotive businesses see jobs, completed work and how full the diary is, rather than sessions, attendance and seats.",
