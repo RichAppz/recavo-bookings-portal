@@ -48952,6 +48952,22 @@ export interface components {
             requirementsDue: string[];
             /** Format: date-time */
             lastSyncedAt?: string;
+            /** @description ISO 3166-1 alpha-2 country the provider holds for the account. */
+            country?: string | null;
+            /** @description The provider's raw reason that capabilities are off — a rejection (`rejected.*`) or an outstanding requirement (`requirements.past_due`, `under_review`). */
+            disabledReason?: string | null;
+            /**
+             * @description The rejection reason the business has been told, set once a rejection is recorded. Only `terms_of_service` and `credit_risk` are ever disclosed — the reasons UK regulation obliges us to pass on — so only those appear here; for any other rejection this stays null and `disabledReason` carries the raw value. Safe to show to the business.
+             * @enum {string|null}
+             */
+            rejectionReasonCode?: "terms_of_service" | "credit_risk" | "fraud" | "listed" | "incomplete_verification" | "other" | null;
+            /** @description The provider's own wording for the rejection category, when it gave any. */
+            rejectionReasonDetail?: string | null;
+            /**
+             * Format: date-time
+             * @description When the rejection was first recorded.
+             */
+            rejectedAt?: string | null;
         };
         ConversationMessage: {
             /** Format: uuid */

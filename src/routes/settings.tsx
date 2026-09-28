@@ -6,6 +6,7 @@ import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { AppShell } from "@/components/AppShell";
 import { BrandingLogoField } from "@/components/BrandingLogoField";
+import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
@@ -74,6 +75,7 @@ import type {
 import { userDisplayName } from "@/lib/api/types";
 import { toastApiError } from "@/lib/api/errors";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
+import { connectRejection } from "@/lib/connect-rejection";
 import { formatInTz } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { bpsToPercentInput, percentInputToBps, type TaxConfig } from "@/lib/invoices";
@@ -1677,6 +1679,7 @@ function AuditTab() {
 function PaymentsTab() {
   const connect = useConnectAccount();
   const loginLink = useConnectLoginLink();
+  const rejection = connectRejection(connect.data);
 
   const openStripeDashboard = async () => {
     const url = await loginLink.mutateAsync();
@@ -1707,6 +1710,7 @@ function PaymentsTab() {
           </div>
         ) : (
           <div className="space-y-4">
+            {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
             <div className="flex items-start gap-4 rounded-xl border p-4">
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
                 <CreditCard className="size-5" />
