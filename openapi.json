@@ -453,11 +453,13 @@
             "enum": [
               "customers",
               "bookings",
+              "payments",
               "dsar"
             ]
           },
           "rowCount": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Data rows in the file, excluding the header."
           },
           "expiresAt": {
             "type": "string",
@@ -67165,7 +67167,7 @@
     "/api/v1/businesses/{businessId}/exports": {
       "post": {
         "summary": "Request a tenant-scoped CSV export",
-        "description": "Creates an export (`customers` or `bookings`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.",
+        "description": "Creates an export (`customers`, `bookings` or `payments`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.\n\nThe optional `from`/`to` bounds form a half-open UTC range; omitting both exports all time. Because the range is part of the idempotent request, reusing one key with a different range is a 409 rather than a replay of the first file. An export that would exceed the row limit fails with 422 instead of returning a truncated file.",
         "security": [
           {
             "bearerAuth": []
@@ -67185,13 +67187,35 @@
             "name": "type",
             "in": "query",
             "required": false,
+            "description": "Which rows to export. `dsar` is not requestable here — subject access requests are issued by the privacy endpoints under their own permission.",
             "schema": {
               "type": "string",
               "enum": [
                 "customers",
-                "bookings"
+                "bookings",
+                "payments"
               ],
               "default": "customers"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive RFC 3339 start. Filters the column the export type is defined by: `customers` on when the record was created, `bookings` on when the job starts, `payments` on when the money moved.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Exclusive RFC 3339 end. Must be later than `from`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
             }
           },
           {

@@ -32,7 +32,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { downloadExportFile, useDashboard, useRequestExport } from "@/lib/api/hooks";
+import {
+  downloadExportFile,
+  useDashboard,
+  useRequestExport,
+  type ExportType,
+} from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api/errors";
 import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
@@ -164,12 +169,22 @@ function ReportsPage() {
       ]
     : [];
 
-  const handleExport = async (type: "bookings" | "customers") => {
+  // Exports cover the range chosen above, so the file matches the figures on screen rather
+  // than being every row the business has ever had.
+  const handleExport = async (type: ExportType) => {
     try {
-      const result = await requestExport.mutateAsync({ type });
+      const result = await requestExport.mutateAsync({
+        type,
+        from: range.from,
+        to: range.to,
+      });
       setExports((prev) => [{ export: result.export, downloadUrl: result.downloadUrl }, ...prev]);
-      toast.success("Export queued", {
-        description: "Download will be available once processing finishes.",
+      const rows = result.export.rowCount;
+      toast.success(rows === 0 ? "Nothing to export in this range" : "Export ready", {
+        description:
+          rows === 0
+            ? "Widen the date range and try again."
+            : `${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"} for ${fromDate} to ${toDate}.`,
       });
     } catch (err) {
       const gate = planGateMessage(err);
@@ -203,6 +218,13 @@ function ReportsPage() {
         actions={
           <Can permission={PERMISSIONS.REPORT_EXPORT}>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={requestExport.isPending}
+                onClick={() => void handleExport("payments")}
+              >
+                <ArrowDownToLine className="size-4" /> Export payments
+              </Button>
               <Button
                 variant="outline"
                 disabled={requestExport.isPending}
@@ -499,7 +521,8 @@ function ReportsPage() {
                         <span>
                           <span className="font-medium capitalize">{exp.type}</span>
                           <span className="ml-2 text-xs text-muted-foreground">
-                            {exp.rowCount} rows · queued
+                            {exp.rowCount.toLocaleString()} {exp.rowCount === 1 ? "row" : "rows"} ·
+                            ready
                           </span>
                         </span>
                         <Button

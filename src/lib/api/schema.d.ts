@@ -38584,12 +38584,19 @@ export interface paths {
         put?: never;
         /**
          * Request a tenant-scoped CSV export
-         * @description Creates an export (`customers` or `bookings`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.
+         * @description Creates an export (`customers`, `bookings` or `payments`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.
+         *
+         *     The optional `from`/`to` bounds form a half-open UTC range; omitting both exports all time. Because the range is part of the idempotent request, reusing one key with a different range is a 409 rather than a replay of the first file. An export that would exceed the row limit fails with 422 instead of returning a truncated file.
          */
         post: {
             parameters: {
                 query?: {
-                    type?: "customers" | "bookings";
+                    /** @description Which rows to export. `dsar` is not requestable here — subject access requests are issued by the privacy endpoints under their own permission. */
+                    type?: "customers" | "bookings" | "payments";
+                    /** @description Inclusive RFC 3339 start. Filters the column the export type is defined by: `customers` on when the record was created, `bookings` on when the job starts, `payments` on when the money moved. */
+                    from?: string;
+                    /** @description Exclusive RFC 3339 end. Must be later than `from`. */
+                    to?: string;
                 };
                 header: {
                     "Idempotency-Key": string;
@@ -47190,7 +47197,8 @@ export interface components {
             /** Format: uuid */
             businessId: string;
             /** @enum {string} */
-            type: "customers" | "bookings" | "dsar";
+            type: "customers" | "bookings" | "payments" | "dsar";
+            /** @description Data rows in the file, excluding the header. */
             rowCount: number;
             /** Format: date-time */
             expiresAt: string;
