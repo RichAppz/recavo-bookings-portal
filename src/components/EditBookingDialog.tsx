@@ -68,6 +68,7 @@ import {
   isoDateInTz,
   parseMoneyToMinor,
   timeInTz,
+  todayLabelInTz,
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
@@ -845,6 +846,9 @@ export function EditBookingDialog({
               </div>
               {whenOpen ? (
                 <div id="edit-booking-when" className="mt-2 grid gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Today is {todayLabelInTz(timezone)}
+                  </p>
                   {booking.allDay ? (
                     <div className="grid grid-cols-2 gap-2">
                       <div className="grid gap-1">

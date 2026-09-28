@@ -82,6 +82,7 @@ import {
   parseMoneyToMinor,
   spansDays,
   timeInTz,
+  todayLabelInTz,
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { outsideWorkingHours } from "@/lib/working-hours";
@@ -1465,7 +1466,12 @@ export function AddBookingModal({
               )}
               {scheduling === "slot" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="booking-date">Date</Label>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label htmlFor="booking-date">Date</Label>
+                    <span className="text-xs text-muted-foreground">
+                      Today {todayLabelInTz(timezone)}
+                    </span>
+                  </div>
                   <input
                     id="booking-date"
                     type="date"
