@@ -19,6 +19,7 @@ import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
+import { TakingsBreakdown } from "@/components/TakingsBreakdown";
 import { StatsGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,10 +32,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { downloadExportFile, useDashboard, useRequestExport } from "@/lib/api/hooks";
+import {
+  downloadExportFile,
+  useDashboard,
+  useRequestExport,
+  type ExportType,
+} from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api/errors";
 import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
+import { monthStartIn, previousReportRange, reportRange, todayIn } from "@/lib/report-range";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reports")({
@@ -63,31 +70,6 @@ export const Route = createFileRoute("/reports")({
 
 const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
 
-function defaultFrom() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toIsoRange(fromDate: string, toDate: string) {
-  return {
-    from: new Date(`${fromDate}T00:00:00`).toISOString(),
-    to: new Date(`${toDate}T23:59:59`).toISOString(),
-  };
-}
-
-function previousRange(fromDate: string, toDate: string) {
-  const from = new Date(`${fromDate}T00:00:00`);
-  const to = new Date(`${toDate}T23:59:59`);
-  const ms = to.getTime() - from.getTime() + 1;
-  const prevTo = new Date(from.getTime() - 1);
-  const prevFrom = new Date(prevTo.getTime() - ms + 1);
-  return { from: prevFrom.toISOString(), to: prevTo.toISOString() };
-}
-
 function pctChange(current: number, previous: number) {
   if (!previous) return undefined;
   return Math.round(((current - previous) / previous) * 1000) / 10;
@@ -112,16 +94,25 @@ function planGateMessage(error: unknown) {
 
 function ReportsPage() {
   const tenant = useTenant();
-  const [fromDate, setFromDate] = useState(defaultFrom);
-  const [toDate, setToDate] = useState(defaultTo);
+  // Reports are in the business's calendar, not the browser's: September for a London
+  // business is September in London wherever the owner is reading this from.
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  const [fromDate, setFromDate] = useState(() => monthStartIn(timezone));
+  const [toDate, setToDate] = useState(() => todayIn(timezone));
   const [locationId, setLocationId] = useState<string>("all");
   const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>(
     [],
   );
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const range = useMemo(() => toIsoRange(fromDate, toDate), [fromDate, toDate]);
-  const prevRange = useMemo(() => previousRange(fromDate, toDate), [fromDate, toDate]);
+  const range = useMemo(
+    () => reportRange(fromDate, toDate, timezone),
+    [fromDate, toDate, timezone],
+  );
+  const prevRange = useMemo(
+    () => previousReportRange(fromDate, toDate, timezone),
+    [fromDate, toDate, timezone],
+  );
 
   const dashboard = useDashboard({
     from: range.from,
@@ -163,12 +154,22 @@ function ReportsPage() {
       ]
     : [];
 
-  const handleExport = async (type: "bookings" | "customers") => {
+  // Exports cover the range chosen above, so the file matches the figures on screen rather
+  // than being every row the business has ever had.
+  const handleExport = async (type: ExportType) => {
     try {
-      const result = await requestExport.mutateAsync({ type });
+      const result = await requestExport.mutateAsync({
+        type,
+        from: range.from,
+        to: range.to,
+      });
       setExports((prev) => [{ export: result.export, downloadUrl: result.downloadUrl }, ...prev]);
-      toast.success("Export queued", {
-        description: "Download will be available once processing finishes.",
+      const rows = result.export.rowCount;
+      toast.success(rows === 0 ? "Nothing to export in this range" : "Export ready", {
+        description:
+          rows === 0
+            ? "Widen the date range and try again."
+            : `${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"} for ${fromDate} to ${toDate}.`,
       });
     } catch (err) {
       const gate = planGateMessage(err);
@@ -202,6 +203,13 @@ function ReportsPage() {
         actions={
           <Can permission={PERMISSIONS.REPORT_EXPORT}>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={requestExport.isPending}
+                onClick={() => void handleExport("payments")}
+              >
+                <ArrowDownToLine className="size-4" /> Export payments
+              </Button>
               <Button
                 variant="outline"
                 disabled={requestExport.isPending}
@@ -325,6 +333,18 @@ function ReportsPage() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
+              <SectionCard
+                className="xl:col-span-2"
+                title="How you were paid"
+                description="Takings by payment method, split online card from your own card machine"
+              >
+                <TakingsBreakdown
+                  revenue={dashboard.data.revenue}
+                  currency={dashboard.data.basis.currency}
+                  detailed
+                />
+              </SectionCard>
+
               <SectionCard
                 title="Revenue breakdown"
                 description="Net, refunded and disputed for the selected range"
@@ -486,7 +506,8 @@ function ReportsPage() {
                         <span>
                           <span className="font-medium capitalize">{exp.type}</span>
                           <span className="ml-2 text-xs text-muted-foreground">
-                            {exp.rowCount} rows · queued
+                            {exp.rowCount.toLocaleString()} {exp.rowCount === 1 ? "row" : "rows"} ·
+                            ready
                           </span>
                         </span>
                         <Button

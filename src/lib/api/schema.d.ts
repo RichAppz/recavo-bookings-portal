@@ -38584,12 +38584,19 @@ export interface paths {
         put?: never;
         /**
          * Request a tenant-scoped CSV export
-         * @description Creates an export (`customers` or `bookings`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.
+         * @description Creates an export (`customers`, `bookings` or `payments`). Requires `Idempotency-Key`. Location-scoped actors receive 403. Also requires plan feature `exports.data` (FEATURE_NOT_AVAILABLE / BILLING_ACCESS_REQUIRED when gated; RECA-157). `downloadUrl` may be relative or absolute when `PUBLIC_API_URL` is set; clients must still authenticate the download.
+         *
+         *     The optional `from`/`to` bounds form a half-open UTC range; omitting both exports all time. Because the range is part of the idempotent request, reusing one key with a different range is a 409 rather than a replay of the first file. An export that would exceed the row limit fails with 422 instead of returning a truncated file.
          */
         post: {
             parameters: {
                 query?: {
-                    type?: "customers" | "bookings";
+                    /** @description Which rows to export. `dsar` is not requestable here — subject access requests are issued by the privacy endpoints under their own permission. */
+                    type?: "customers" | "bookings" | "payments";
+                    /** @description Inclusive RFC 3339 start. Filters the column the export type is defined by: `customers` on when the record was created, `bookings` on when the job starts, `payments` on when the money moved. */
+                    from?: string;
+                    /** @description Exclusive RFC 3339 end. Must be later than `from`. */
+                    to?: string;
                 };
                 header: {
                     "Idempotency-Key": string;
@@ -47138,12 +47145,27 @@ export interface components {
                 /** @description When false, open disputes/chargebacks are excluded from net and tracked as disputedMinor (RECA-439). */
                 includesDisputedRevenue: boolean;
             };
+            /** @description All money the business took, whatever way it arrived — card, cash and bank transfer alike (RECA-542). Folded from the settlement ledger, so the totals here are always the sum of byMethod. */
             revenue: {
                 grossMinor: number;
                 refundedMinor: number;
                 disputedMinor: number;
                 /** @description grossMinor - refundedMinor - disputedMinor */
                 netMinor: number;
+                /** @description Takings split by how the money arrived. Only methods with activity appear, in a fixed order so a chart legend does not reshuffle between ranges. The entries always sum to the totals above. */
+                byMethod: {
+                    /**
+                     * @description card_online went through the payment provider and carries fees and a payout; card_manual is the business’s own terminal. Both read as "card" when rolled up.
+                     * @enum {string}
+                     */
+                    method: "card_online" | "card_manual" | "cash" | "bank_transfer" | "other";
+                    grossMinor: number;
+                    refundedMinor: number;
+                    disputedMinor: number;
+                    netMinor: number;
+                    /** @description Payments taken this way, ignoring refunds and disputes. */
+                    count: number;
+                }[];
             };
             bookings: {
                 count: number;
@@ -47175,7 +47197,8 @@ export interface components {
             /** Format: uuid */
             businessId: string;
             /** @enum {string} */
-            type: "customers" | "bookings" | "dsar";
+            type: "customers" | "bookings" | "payments" | "dsar";
+            /** @description Data rows in the file, excluding the header. */
             rowCount: number;
             /** Format: date-time */
             expiresAt: string;

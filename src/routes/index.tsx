@@ -44,6 +44,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui-bits";
+import { TakingsBreakdown } from "@/components/TakingsBreakdown";
 import { PageGhost, StatsGhost, TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +81,7 @@ import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
+import { currentMonthRange, lastDaysRange } from "@/lib/report-range";
 import { localDay, segmentOn } from "@/lib/working-days";
 import { isSessionEntry } from "@/lib/session-landing";
 import { useSoleLocation, useSoleStaff, useSoloPlan } from "@/lib/sole";
@@ -120,24 +122,18 @@ export const Route = createFileRoute("/")({
 
 type RangeKey = "month" | "30d" | "7d" | "all";
 
-function dashboardRange(key: RangeKey): { from?: string; to?: string; label: string } {
-  const now = new Date();
+/** Buckets are calendar periods in the business's zone, matching the Reports page. */
+function dashboardRange(
+  key: RangeKey,
+  timeZone: string,
+): { from?: string; to?: string; label: string } {
   if (key === "all") return { label: "All time" };
   if (key === "month") {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1);
-    const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return { from: from.toISOString(), to: to.toISOString(), label: "This month" };
+    return { ...currentMonthRange(timeZone), label: "This month" };
   }
   const days = key === "7d" ? 7 : 30;
-  const from = new Date(now);
-  from.setHours(0, 0, 0, 0);
-  from.setDate(from.getDate() - (days - 1));
-  const to = new Date(now);
-  to.setHours(0, 0, 0, 0);
-  to.setDate(to.getDate() + 1);
   return {
-    from: from.toISOString(),
-    to: to.toISOString(),
+    ...lastDaysRange(days, timeZone),
     label: key === "7d" ? "Last 7 days" : "Last 30 days",
   };
 }
@@ -181,6 +177,7 @@ function Home() {
 
 function Overview() {
   const tenant = useTenant();
+  const businessTimezone = tenant.business?.defaultTimezone ?? "Europe/London";
   // The page speaks the trade's language: a detailer completes jobs and fills a
   // diary; a trainer has attendance and seats in a session.
   const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
@@ -203,7 +200,10 @@ function Overview() {
   const [rangeKey, setRangeKey] = useState<RangeKey>("month");
   const today = isoDate(new Date());
 
-  const range = useMemo(() => dashboardRange(rangeKey), [rangeKey]);
+  const range = useMemo(
+    () => dashboardRange(rangeKey, businessTimezone),
+    [rangeKey, businessTimezone],
+  );
   const dashboard = useDashboard({ from: range.from, to: range.to });
   const waitlistSummary = useWaitlistSummary({ enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL) });
   const waiting = waitlistSummary.data?.waiting ?? 0;
@@ -218,7 +218,7 @@ function Overview() {
     .filter((b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business")
     // A multi-day job that skips today (the weekend between Fri and Mon) isn't today's work.
     .filter((b) => {
-      const zone = b.timezone || "Europe/London";
+      const zone = b.timezone || businessTimezone;
       return segmentOn(b, localDay(new Date().toISOString(), zone), zone) !== null;
     })
     .sort((a, b) => a.start.localeCompare(b.start));
@@ -415,6 +415,15 @@ function Overview() {
                   description={`Where the money came from · ${range.label.toLowerCase()}.`}
                   onHide={() => cards.hide("money")}
                 >
+                  {/* The card's promise, finally kept: card, cash and bank transfer (RECA-542). */}
+                  {dashboard.data.revenue.grossMinor > 0 ? (
+                    <div className="mb-5">
+                      <TakingsBreakdown
+                        revenue={dashboard.data.revenue}
+                        currency={dashboard.data.basis.currency}
+                      />
+                    </div>
+                  ) : null}
                   {moneyChart.every((d) => d.value === 0) ? (
                     <EmptyState
                       title="No money activity yet"

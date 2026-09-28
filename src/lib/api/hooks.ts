@@ -4700,15 +4700,25 @@ export async function uploadFileViaIntent(
   return completed.data.file;
 }
 
+export type ExportType = "customers" | "bookings" | "payments";
+
+/**
+ * `from`/`to` are a half-open ISO range; omit both for all time. Which column each type
+ * filters on differs — customers by when they were added, bookings by when the job is,
+ * payments by when the money arrived.
+ */
 export function useRequestExport() {
   const businessId = useBusinessId();
   return useMutation({
     mutationFn: createIdempotentMutationFn(
-      async (vars: { type: "customers" | "bookings" }, idempotencyKey: string) => {
+      async (vars: { type: ExportType; from?: string; to?: string }, idempotencyKey: string) => {
         const res = await api.post<{ export: ExportRequest; downloadUrl: string }>(
           `/api/v1/businesses/${businessId}/exports`,
           {},
-          { idempotencyKey, query: { type: vars.type } },
+          {
+            idempotencyKey,
+            query: { type: vars.type, from: vars.from, to: vars.to },
+          },
         );
         return res.data;
       },
