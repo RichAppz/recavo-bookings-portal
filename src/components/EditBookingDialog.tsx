@@ -49,7 +49,7 @@ import type { AmendBookingBody, Booking } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { paymentMethodLabel } from "@/lib/booking-changes";
-import { bookingJobMinutes } from "@/lib/booking-duration";
+import { bookingJobMinutes, MINUTES_PER_DAY, windowFit } from "@/lib/booking-duration";
 import { effectiveDepositMinor } from "@/lib/booking-payment";
 import {
   clientLiftFromDraft,
@@ -61,11 +61,14 @@ import {
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
+  addDays,
   formatBookingWhen,
   formatDurationLong,
   formatInTz,
   formatMoney,
+  isoDate,
   isoDateInTz,
+  parseIso,
   parseMoneyToMinor,
   timeInTz,
   todayLabelInTz,
@@ -436,12 +439,13 @@ export function EditBookingDialog({
       : {};
 
   // ---- Duration hint -------------------------------------------------------------
-  const newMinutes = picked.reduce((sum, p) => {
+  const serviceMinutes = (p: PickedService) => {
     const s = serviceById.get(p.serviceId);
-    if (!s) return sum;
+    if (!s) return 0;
     const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
-    return sum + (v?.durationMinutes ?? s.durationMinutes);
-  }, 0);
+    return v?.durationMinutes ?? s.durationMinutes;
+  };
+  const newMinutes = picked.reduce((sum, p) => sum + serviceMinutes(p), 0);
   const durationChanges = servicesChanged && !customWindow && newMinutes !== currentMinutes;
   // Previews follow the working days of whoever will do the job, as the API will.
   const workingSchedule = scheduleFor(
@@ -453,6 +457,25 @@ export function EditBookingDialog({
     ? layoutWorkingDuration(booking.start, newMinutes, workingSchedule, timezone, { allDay: false })
         .end
     : null;
+
+  // A custom window (all-day, or a hand-set length) survives a service change: the API
+  // keeps the days as they are and fits the main service into whatever is left after the
+  // others. Once those others fill the window on their own there is nothing left for the
+  // main service and the save is refused outright. Work it out here, where the job can
+  // still be given another day, rather than letting the server turn the save away.
+  const windowDays = booking.allDay
+    ? Math.max(
+        1,
+        Math.round((parseIso(whenLastDay).getTime() - parseIso(whenDate).getTime()) / DAY_MS) + 1,
+      )
+    : 0;
+  const { fits, daysNeeded } = windowFit({
+    windowMinutes: booking.allDay ? windowDays * MINUTES_PER_DAY : currentMinutes,
+    windowDays,
+    totalMinutes: newMinutes,
+    additionalMinutes: picked.slice(1).reduce((sum, p) => sum + serviceMinutes(p), 0),
+  });
+  const windowTooShort = servicesChanged && customWindow && !fits;
 
   // ---- The diff, for the summary and the notify default -----------------------------
   const staffName = (id: string) =>
@@ -656,6 +679,12 @@ export function EditBookingDialog({
   if (depositInvalid) blockers.push("Check the deposit");
   if (whenInvalid)
     blockers.push(booking.allDay ? "The last day can't be before the first" : "Check the date");
+  if (windowTooShort)
+    blockers.push(
+      booking.allDay
+        ? `The job needs ${daysNeeded} days to fit`
+        : "The job is longer than the time booked",
+    );
   if (priceBelowPaid)
     blockers.push(
       `The price can't be below the ${formatMoney(paidMinor, currency)} already paid — refund first`,
@@ -1041,7 +1070,38 @@ export function EditBookingDialog({
                     multi={isIndividual}
                     singleReason={isIndividual ? undefined : "A group session covers one service."}
                   />
-                  {servicesChanged ? (
+                  {windowTooShort ? (
+                    // The job no longer fits the days it has, which the server refuses
+                    // rather than quietly moving the end of the booking. Say so in terms
+                    // of days, and offer the fix instead of leaving them to find it.
+                    <div className="grid gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+                      <p className="text-xs text-destructive">
+                        {formatDurationLong(newMinutes)} of work won't fit{" "}
+                        {booking.allDay
+                          ? windowDays === 1
+                            ? "one day"
+                            : `${windowDays} days`
+                          : `the ${formatDurationLong(currentMinutes)} booked`}
+                        . {booking.allDay ? `It needs ${daysNeeded} days.` : "Reschedule it first."}
+                      </p>
+                      {booking.allDay ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="justify-self-start"
+                          onClick={() => {
+                            setWhenOpen(true);
+                            setWhenLastDay(
+                              isoDate(addDays(parseIso(whenDate), Math.max(0, daysNeeded - 1))),
+                            );
+                          }}
+                        >
+                          Give it {daysNeeded} days
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : servicesChanged ? (
                     <p className="text-xs text-muted-foreground">
                       {customWindow
                         ? `Keeps its ${booking.allDay ? "all-day" : formatDurationLong(currentMinutes)} window.`
