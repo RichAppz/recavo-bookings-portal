@@ -41,6 +41,7 @@ import {
 import { ApiError } from "@/lib/api/errors";
 import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
+import { monthStartIn, previousReportRange, reportRange, todayIn } from "@/lib/report-range";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reports")({
@@ -69,31 +70,6 @@ export const Route = createFileRoute("/reports")({
 
 const CHART_COLOURS = ["var(--color-chart-1)", "var(--color-chart-3)", "var(--color-chart-5)"];
 
-function defaultFrom() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-}
-
-function defaultTo() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toIsoRange(fromDate: string, toDate: string) {
-  return {
-    from: new Date(`${fromDate}T00:00:00`).toISOString(),
-    to: new Date(`${toDate}T23:59:59`).toISOString(),
-  };
-}
-
-function previousRange(fromDate: string, toDate: string) {
-  const from = new Date(`${fromDate}T00:00:00`);
-  const to = new Date(`${toDate}T23:59:59`);
-  const ms = to.getTime() - from.getTime() + 1;
-  const prevTo = new Date(from.getTime() - 1);
-  const prevFrom = new Date(prevTo.getTime() - ms + 1);
-  return { from: prevFrom.toISOString(), to: prevTo.toISOString() };
-}
-
 function pctChange(current: number, previous: number) {
   if (!previous) return undefined;
   return Math.round(((current - previous) / previous) * 1000) / 10;
@@ -118,16 +94,25 @@ function planGateMessage(error: unknown) {
 
 function ReportsPage() {
   const tenant = useTenant();
-  const [fromDate, setFromDate] = useState(defaultFrom);
-  const [toDate, setToDate] = useState(defaultTo);
+  // Reports are in the business's calendar, not the browser's: September for a London
+  // business is September in London wherever the owner is reading this from.
+  const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  const [fromDate, setFromDate] = useState(() => monthStartIn(timezone));
+  const [toDate, setToDate] = useState(() => todayIn(timezone));
   const [locationId, setLocationId] = useState<string>("all");
   const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>(
     [],
   );
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const range = useMemo(() => toIsoRange(fromDate, toDate), [fromDate, toDate]);
-  const prevRange = useMemo(() => previousRange(fromDate, toDate), [fromDate, toDate]);
+  const range = useMemo(
+    () => reportRange(fromDate, toDate, timezone),
+    [fromDate, toDate, timezone],
+  );
+  const prevRange = useMemo(
+    () => previousReportRange(fromDate, toDate, timezone),
+    [fromDate, toDate, timezone],
+  );
 
   const dashboard = useDashboard({
     from: range.from,
