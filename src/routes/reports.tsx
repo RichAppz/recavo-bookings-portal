@@ -10,11 +10,11 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
+import { ChartTooltip } from "@/components/ChartTooltip";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -367,14 +367,8 @@ function ReportsPage() {
                             <Cell key={i} fill={CHART_COLOURS[i % CHART_COLOURS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(v: number) => formatMoney(v, dashboard.data!.basis.currency)}
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: "1px solid var(--color-border)",
-                            background: "var(--color-card)",
-                            fontSize: 12,
-                          }}
+                        <ChartTooltip
+                          formatValue={(v) => formatMoney(v, dashboard.data!.basis.currency)}
                         />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
                       </PieChart>
@@ -390,11 +384,7 @@ function ReportsPage() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={attendanceBreakdown} margin={{ left: -20, right: 8, top: 8 }}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="var(--color-border)"
-                        vertical={false}
-                      />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
                       <YAxis
                         tickLine={false}
@@ -402,14 +392,7 @@ function ReportsPage() {
                         fontSize={12}
                         allowDecimals={false}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: "1px solid var(--color-border)",
-                          background: "var(--color-card)",
-                          fontSize: 12,
-                        }}
-                      />
+                      <ChartTooltip />
                       <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                         {attendanceBreakdown.map((_, i) => (
                           <Cell key={i} fill={CHART_COLOURS[i % CHART_COLOURS.length]} />
@@ -426,11 +409,7 @@ function ReportsPage() {
                 <div className="h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="var(--color-border)"
-                        horizontal={false}
-                      />
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
                       <YAxis
                         type="category"
@@ -440,24 +419,19 @@ function ReportsPage() {
                         fontSize={12}
                         width={110}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: "1px solid var(--color-border)",
-                          background: "var(--color-card)",
-                          fontSize: 12,
-                        }}
-                      />
+                      <ChartTooltip />
+                      {/* Raw tokens, not the `--color-*` aliases: an alias resolves once on
+                          `:root`, so the capacity bar came out near-white in dark mode. */}
                       <Bar
                         dataKey="capacity"
                         name="Capacity"
-                        fill="var(--color-secondary)"
+                        fill="var(--secondary)"
                         radius={[0, 8, 8, 0]}
                       />
                       <Bar
                         dataKey="booked"
                         name="Booked"
-                        fill="var(--color-primary)"
+                        fill="var(--primary)"
                         radius={[0, 8, 8, 0]}
                       />
                     </BarChart>

@@ -200,6 +200,31 @@
   border-radius: var(--radius-xl);
 }
 
+/* Charts (recharts, on the dashboard and the reports page). Recharts draws its grid,
+   axes and tick labels with fixed greys — `#ccc` and `#666` — which it sets as SVG
+   presentation attributes. On a dark card those come out as bright white dashes over
+   barely-legible labels. Any CSS rule outranks a presentation attribute, so restating
+   them here themes every chart at once, in both modes. The tooltip itself is drawn by
+   components/ChartTooltip.tsx.
+
+   These reach for `--border` rather than the `--color-*` alias: an alias declared on
+   `:root` is resolved there, so it inherits the light value into `.dark` and never
+   changes with the theme. Tailwind's own utilities compile to the raw token for the same
+   reason. */
+.recharts-cartesian-grid line,
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line,
+.recharts-polar-grid line {
+  stroke: var(--border);
+}
+.recharts-cartesian-axis-tick text,
+.recharts-polar-angle-axis-tick text {
+  fill: var(--muted-foreground);
+}
+.recharts-legend-item-text {
+  color: var(--muted-foreground) !important;
+}
+
 /* Toasts (components/ui/sonner.tsx). Sonner handles stacking, timers and swipe;
    these rules give the card its look, swap sonner's drop-down entrance for a slide
    in from the right, and draw a timer bar along the bottom edge. Sonner injects its

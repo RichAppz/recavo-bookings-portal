@@ -26,11 +26,11 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { AppShell } from "@/components/AppShell";
+import { ChartTooltip } from "@/components/ChartTooltip";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
 import { EventModal } from "@/components/EventModal";
@@ -442,10 +442,8 @@ function Overview() {
                             }
                             width={72}
                           />
-                          <Tooltip
-                            formatter={(v: number) =>
-                              formatMoney(v, dashboard.data!.basis.currency)
-                            }
+                          <ChartTooltip
+                            formatValue={(v) => formatMoney(v, dashboard.data!.basis.currency)}
                           />
                           <Bar dataKey="value" fill="var(--color-chart-1)" radius={[6, 6, 0, 0]} />
                         </BarChart>
@@ -500,7 +498,7 @@ function Overview() {
                               <Cell key={i} fill={CHART_COLOURS[i % CHART_COLOURS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip />
+                          <ChartTooltip />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
