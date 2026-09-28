@@ -92,15 +92,17 @@ export function ServiceMultiPicker({
   const picked = value.filter((p) => byId.has(p.serviceId));
   const isPicked = (id: string) => picked.some((p) => p.serviceId === id);
 
+  // A second service can only join an individual job; a group session or a job paid by
+  // credit is booked on its own, so a click there swaps rather than adds.
+  const mainService = picked[0] ? byId.get(picked[0].serviceId) : undefined;
+  const canAdd = multi && (mainService ? mainService.bookingMode === "individual" : true);
+
   const toggle = (s: CatalogueService) => {
     setNudge(null);
     if (isPicked(s.id)) {
       onChange(picked.filter((p) => p.serviceId !== s.id));
       return;
     }
-    // A second service can only join an individual job; otherwise the click swaps.
-    const main = picked[0] ? byId.get(picked[0].serviceId) : undefined;
-    const canAdd = multi && (main ? main.bookingMode === "individual" : true);
     if (picked.length === 0 || !canAdd) {
       if (picked.length > 0 && singleReason) setNudge(singleReason);
       onChange([{ serviceId: s.id, variantId: null }]);
@@ -432,6 +434,22 @@ export function ServiceMultiPicker({
             );
           })}
         </ul>
+      ) : null}
+
+      {/* Once something is picked, the trigger above reads as a summary of the job
+          ("Wax + 1 more") rather than a way in, so adding a second service meant
+          guessing that the summary was still a button. This bar is the obvious door:
+          it sits where the next service would appear and opens the same list. */}
+      {picked.length > 0 && canAdd ? (
+        <button
+          type="button"
+          data-svc-picker-add=""
+          onClick={() => onOpenChange(true)}
+          className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-sm text-muted-foreground hover:border-primary/60 hover:bg-secondary hover:text-foreground"
+        >
+          <Plus className="size-4 shrink-0" aria-hidden />
+          Add another {serviceNoun}
+        </button>
       ) : null}
 
       {nudge || picked.length > 1 ? (
