@@ -58,7 +58,14 @@ import {
   sameClientLift,
   type ClientLiftDraft,
 } from "@/lib/client-lift";
-import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
+import {
+  adjustmentLabel,
+  bookingPriceBreakdown,
+  formatAdjustment,
+  linePriceMinor,
+  linePricesMatch,
+  repricedLines,
+} from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import {
   addDays,
@@ -90,6 +97,14 @@ type Change = { label: string; from: string; to: string; clientVisible: boolean 
 
 function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Whole-map comparison of two sets of row prices, for tracking a refreshed booking. */
+function sameLinePrices(
+  a: Readonly<Record<string, string>>,
+  b: Readonly<Record<string, string>>,
+): boolean {
+  return linePricesMatch(a, b, [...new Set([...Object.keys(a), ...Object.keys(b)])]);
 }
 
 /**
@@ -220,6 +235,29 @@ export function EditBookingDialog({
       .map((serviceId) => ({ serviceId, variantId: null }));
     return [...originalPicked, ...extra];
   });
+  // Row prices the booking already has. A line charged away from its list price keeps
+  // that price in the form, so opening the dialog and saving never quietly puts it back
+  // to list — and neither does adding a service beside it, which makes the API rebuild
+  // every line from the catalogue.
+  const originalLinePrices = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const li of booking.lineItems ?? []) {
+      if (li.priceMinor !== li.listPriceMinor) out[li.serviceId] = (li.priceMinor / 100).toFixed(2);
+    }
+    return out;
+  }, [booking.lineItems]);
+  const [linePrices, setLinePrices] = useState<Record<string, string>>(originalLinePrices);
+  // A colleague re-pricing a service while this form is open refreshes the booking under
+  // it. Adopt their prices while nobody here has typed one, so saving an unrelated edit
+  // doesn't put their line back to list.
+  const seenLinePrices = useRef(originalLinePrices);
+  useEffect(() => {
+    if (sameLinePrices(seenLinePrices.current, originalLinePrices)) return;
+    setLinePrices((current) =>
+      sameLinePrices(current, seenLinePrices.current) ? originalLinePrices : current,
+    );
+    seenLinePrices.current = originalLinePrices;
+  }, [originalLinePrices]);
   // If the catalogue arrived after mount and remapped a stale variant id, carry that
   // into the untouched picker (a stale id in `picked` would otherwise read as a change).
   const seenOriginal = useRef(originalPicked);
@@ -345,6 +383,21 @@ export function EditBookingDialog({
     setPriceInput(null);
   };
 
+  // The two ways to price a job are exclusive: a whole-job total makes the API put every
+  // line back to catalogue and record one adjustment, which would throw the row prices
+  // away. So each route clears the other rather than silently losing to it.
+  const setLinePrice = (serviceId: string, value: string | null) => {
+    setPriceInput(null);
+    setDiscount(null);
+    setLinePrices((prev) => {
+      const next = { ...prev };
+      if (value === null) delete next[serviceId];
+      else next[serviceId] = value;
+      return next;
+    });
+  };
+  const clearLinePrices = () => setLinePrices({});
+
   // ---- Money --------------------------------------------------------------------
   // The API re-prices from the catalogue when services change and otherwise keeps
   // the snapshot, so "list" means whichever of those applies.
@@ -374,13 +427,29 @@ export function EditBookingDialog({
   const rolledTotalMinor = servicesChanged
     ? picked.reduce((sum, p, index) => sum + catalogueMinor(p, index), 0)
     : snapshotListMinor;
+  // Row prices: each row is charged at what staff typed (when valid), else its list
+  // price. Their sum is the total those edits imply — the job is simply what the
+  // services cost, with no discount line, which is what "charging £150 for the wheel
+  // coating" means rather than £200 less a £50 discount.
+  const lineMinorOf = (p: PickedService, index: number): number => {
+    const typed = linePriceMinor(linePrices[p.serviceId]);
+    return typeof typed === "number" ? typed : catalogueMinor(p, index);
+  };
+  const lineTotalMinor = picked.reduce((sum, p, index) => sum + lineMinorOf(p, index), 0);
+  const linePricesActive = picked.some((p) => linePrices[p.serviceId] !== undefined);
+  const lineInvalid = picked.some((p) => linePriceMinor(linePrices[p.serviceId]) === null);
+  const linePricesChanged = !linePricesMatch(
+    linePrices,
+    originalLinePrices,
+    picked.map((p) => p.serviceId),
+  );
   // The services keep their list prices and the API records the difference as a
   // discount line, so any total from zero up is valid — even below what the
   // additional services alone come to.
   const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
   const discountInvalid =
     discount !== null && discount.value.trim() !== "" && discountMinor === null;
-  const priceOverridden = priceInput !== null || discountMinor !== null;
+  const priceOverridden = priceInput !== null || discountMinor !== null || linePricesActive;
   const overridePriceMinor: number | null = (() => {
     if (priceInput !== null) {
       try {
@@ -391,6 +460,7 @@ export function EditBookingDialog({
       }
     }
     if (discountMinor !== null) return rolledTotalMinor - discountMinor;
+    if (linePricesActive) return lineInvalid ? null : lineTotalMinor;
     return null;
   })();
   const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
@@ -400,8 +470,21 @@ export function EditBookingDialog({
 
   // What to send for the price, if anything. Omitted = keep (or catalogue when the
   // services change); null = back to list; a number = an override.
+  // Row prices go to the API per line (`servicePriceMinor` for the main service,
+  // `additionalServices[].priceMinor` for the rest): a number re-prices that line, `null`
+  // puts it back to list. A typed total or a discount goes as the job's `priceMinor`
+  // instead — never both, because a job total makes the API return every line to
+  // catalogue and record the difference as one adjustment, which would wipe the rows.
+  const linePriceFor = (p: PickedService, index: number): number | null | undefined => {
+    const typed = linePriceMinor(linePrices[p.serviceId]);
+    const list = catalogueMinor(p, index);
+    if (typeof typed === "number") return typed === list ? undefined : typed;
+    // A price the booking had, now cleared: ask for list, or the line would keep it.
+    return originalLinePrices[p.serviceId] !== undefined ? null : undefined;
+  };
+
   const priceBody: { priceMinor?: number | null } = (() => {
-    if (credit) return {};
+    if (credit || linePricesActive) return {};
     if (servicesChanged) {
       return effectiveTotalMinor !== rolledTotalMinor ? { priceMinor: effectiveTotalMinor } : {};
     }
@@ -543,6 +626,24 @@ export function EditBookingDialog({
       to: formatMoney(effectiveTotalMinor, currency),
       clientVisible: true,
     });
+  }
+  // A row price can move without moving the total (£50 more on one service, £50 less on
+  // another), so name the rows that moved. Otherwise the form would look unchanged and
+  // refuse to save an edit that is real.
+  if (!credit) {
+    const rows = picked.map((p, index) => ({
+      serviceId: p.serviceId,
+      wasMinor: booking.lineItems?.find((li) => li.serviceId === p.serviceId)?.priceMinor,
+      listMinor: catalogueMinor(p, index),
+    }));
+    for (const line of repricedLines(rows, linePrices, originalLinePrices)) {
+      changes.push({
+        label: serviceById.get(line.serviceId)?.name ?? "Service price",
+        from: formatMoney(line.fromMinor, currency),
+        to: formatMoney(line.toMinor, currency),
+        clientVisible: true,
+      });
+    }
   }
   if (!credit && nextDepositMinor !== (booking.depositMinor ?? null)) {
     changes.push({
@@ -740,15 +841,23 @@ export function EditBookingDialog({
       }
     }
 
+    const primaryLinePrice = linePriceFor(primary, 0);
     const body: AmendBookingBody = {
-      ...(servicesChanged
+      // Row prices travel with the services, so the block also goes when only a price
+      // moved: the API needs the lines named to know which one to re-price.
+      ...(servicesChanged || linePricesChanged
         ? {
             serviceId: primary.serviceId,
             variantId: primary.variantId ?? null,
-            additionalServices: picked.slice(1).map((p) => ({
-              serviceId: p.serviceId,
-              ...(p.variantId ? { variantId: p.variantId } : {}),
-            })),
+            ...(primaryLinePrice !== undefined ? { servicePriceMinor: primaryLinePrice } : {}),
+            additionalServices: picked.slice(1).map((p, i) => {
+              const price = linePriceFor(p, i + 1);
+              return {
+                serviceId: p.serviceId,
+                ...(p.variantId ? { variantId: p.variantId } : {}),
+                ...(price !== undefined ? { priceMinor: price } : {}),
+              };
+            }),
           }
         : {}),
       ...(staffId !== booking.staffId ? { staffId } : {}),
@@ -1067,6 +1176,11 @@ export function EditBookingDialog({
                     value={picked}
                     onChange={setPicked}
                     pairingPrices={pairingPrices}
+                    // What each service is charged on this job. A job is often priced
+                    // per service rather than discounted as a whole — "£150 for the
+                    // wheel coating", not £200 with £50 off.
+                    linePrices={linePrices}
+                    onLinePriceChange={setLinePrice}
                     multi={isIndividual}
                     singleReason={isIndividual ? undefined : "A group session covers one service."}
                   />
@@ -1170,6 +1284,7 @@ export function EditBookingDialog({
                       onClick={() => {
                         setPriceInput(null);
                         setDiscount(null);
+                        clearLinePrices();
                       }}
                     >
                       List {formatMoney(rolledTotalMinor, currency)} · reset
@@ -1187,6 +1302,7 @@ export function EditBookingDialog({
                   onChange={(e) => {
                     setPriceInput(e.target.value);
                     setDiscount(null);
+                    clearLinePrices();
                   }}
                   aria-invalid={priceInvalid || priceBelowPaid}
                 />
@@ -1202,6 +1318,7 @@ export function EditBookingDialog({
                     value={discount?.value ?? ""}
                     onChange={(e) => {
                       setPriceInput(null);
+                      clearLinePrices();
                       setDiscount(
                         e.target.value.trim() === ""
                           ? null
@@ -1239,7 +1356,9 @@ export function EditBookingDialog({
                       ? discount!.mode === "percent"
                         ? "Enter a percentage between 0 and 100."
                         : `Enter an amount up to ${formatMoney(rolledTotalMinor, currency)}.`
-                      : "Enter an amount, or reset to the list price."}
+                      : lineInvalid
+                        ? "Check the price beside each service above."
+                        : "Enter an amount, or reset to the list price."}
                   </p>
                 ) : priceBelowPaid ? (
                   <p className="text-xs text-destructive">
@@ -1259,6 +1378,13 @@ export function EditBookingDialog({
                     Priced per service (list {formatMoney(rolledTotalMinor, currency)}). A different
                     total here puts the services back to list and records the difference as a
                     discount or price adjustment line.
+                  </p>
+                ) : linePricesActive ? (
+                  // Row prices and a job total are exclusive, so don't describe this one
+                  // as a discount off the list price: it is what the services cost here.
+                  <p className="text-xs text-muted-foreground">
+                    Priced per service above (list {formatMoney(rolledTotalMinor, currency)}) — no
+                    discount line. Typing a total here instead puts every service back to list.
                   </p>
                 ) : effectiveTotalMinor !== rolledTotalMinor ? (
                   <p className="text-xs text-muted-foreground">

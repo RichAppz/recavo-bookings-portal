@@ -128,3 +128,47 @@ export function linePriceMinor(input: string | undefined): number | null | undef
     return null;
   }
 }
+
+/**
+ * Have the row prices moved from what the booking arrived with? Only the services still
+ * on the job count: a price left behind by a service that has since been removed is not
+ * an edit to save.
+ */
+export function linePricesMatch(
+  typed: Readonly<Record<string, string>>,
+  original: Readonly<Record<string, string>>,
+  serviceIds: readonly string[],
+): boolean {
+  return serviceIds.every((id) => linePriceMinor(typed[id]) === linePriceMinor(original[id]));
+}
+
+/** One service row whose charged price staff have moved, for an edit form's change list. */
+export type RepricedLine = { serviceId: string; fromMinor: number; toMinor: number };
+
+/**
+ * Which rows are now charged differently, and from what. A row price can move without
+ * moving the job total (£50 more on one service, £50 less on another), so an edit form
+ * cannot tell whether anything changed from the total alone.
+ *
+ * `wasMinor` is what the booking charges for that row today — absent for a service being
+ * added, which the service change itself already reports. A row typed back to what it
+ * already costs, or half-typed, is not a change.
+ */
+export function repricedLines(
+  rows: readonly { serviceId: string; wasMinor?: number | undefined; listMinor: number }[],
+  typed: Readonly<Record<string, string>>,
+  original: Readonly<Record<string, string>>,
+): RepricedLine[] {
+  const out: RepricedLine[] = [];
+  for (const row of rows) {
+    if (row.wasMinor === undefined) continue;
+    const after = linePriceMinor(typed[row.serviceId]);
+    if (after === null) continue;
+    if (after === linePriceMinor(original[row.serviceId])) continue;
+    // Cleared back to list: the row goes to its catalogue price.
+    const toMinor = after ?? row.listMinor;
+    if (toMinor === row.wasMinor) continue;
+    out.push({ serviceId: row.serviceId, fromMinor: row.wasMinor, toMinor });
+  }
+  return out;
+}
