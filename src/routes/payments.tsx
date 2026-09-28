@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
@@ -40,6 +41,7 @@ import {
 import type { Payment } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
+import { connectOnboardingWorthRetrying, connectRejection } from "@/lib/connect-rejection";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 import { openHostedFlow } from "@/lib/native";
@@ -127,6 +129,8 @@ function PaymentsPage() {
     return { gross, refunded, count: list.length };
   }, [list]);
 
+  const rejection = connectRejection(connect.data);
+
   const nameFor = (id: string | null) => {
     if (!id) return "—";
     const c = customers.data?.items.find((x) => x.id === id);
@@ -152,6 +156,8 @@ function PaymentsPage() {
           action={
             connect.data?.onboardingState === "complete" ? (
               <StatusBadge status="active" />
+            ) : !connectOnboardingWorthRetrying(connect.data) ? (
+              <StatusBadge status="rejected" />
             ) : (
               <Button
                 size="sm"
@@ -192,6 +198,7 @@ function PaymentsPage() {
             </div>
           ) : (
             <div className="space-y-3">
+              {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
               <div className="flex flex-wrap gap-6 text-sm">
                 <span>
                   <span className="text-muted-foreground">Provider: </span>
@@ -205,13 +212,16 @@ function PaymentsPage() {
                   <span className="text-muted-foreground">Payouts: </span>
                   {connect.data.payoutsEnabled ? "Enabled" : "Disabled"}
                 </span>
-                {connect.data.requirementsDue.length > 0 ? (
+                {/* A rejected account's outstanding requirements are Stripe's internal
+                    appeal steps, which read as gibberish and imply the business can fix
+                    this by filling something in. The notice above says what happened. */}
+                {!rejection && connect.data.requirementsDue.length > 0 ? (
                   <span className="text-amber-600">
                     {connect.data.requirementsDue.length} outstanding requirement(s)
                   </span>
                 ) : null}
               </div>
-              {connect.data.requirementsDue.length > 0 ? (
+              {!rejection && connect.data.requirementsDue.length > 0 ? (
                 <ul className="list-inside list-disc text-xs text-muted-foreground">
                   {connect.data.requirementsDue.map((req) => (
                     <li key={req}>{req.replace(/_/g, " ")}</li>

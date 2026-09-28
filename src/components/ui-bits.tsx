@@ -135,6 +135,7 @@ const statusStyles: Record<string, string> = {
   failed: "bg-destructive-soft text-destructive",
   suspended: "bg-destructive-soft text-destructive",
   restricted: "bg-destructive-soft text-destructive",
+  rejected: "bg-destructive-soft text-destructive",
   disputed: "bg-destructive-soft text-destructive",
   anonymised: "bg-destructive-soft text-destructive",
   over_limit: "bg-destructive-soft text-destructive",
