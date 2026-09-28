@@ -6,6 +6,37 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-09-28",
+    title: "Every payment counted, and exports your accountant can use",
+    items: [
+      {
+        kind: "fixed",
+        text: "Revenue now counts every way you get paid. Cash, bank transfers and payments on your own card machine were missing from the figure, which only ever added up online card payments — so if you take money offline your totals will go up, including for months that have already been and gone.",
+        where: "Overview and Reports",
+      },
+      {
+        kind: "new",
+        text: "See how you were paid: your takings split by cash, bank transfer, online card and your own card machine, with each one's share of the total. Online card and your own machine are kept apart, so you can check a Stripe payout against the right line.",
+        where: "Reports → How you were paid",
+      },
+      {
+        kind: "new",
+        text: "Export your payments as a spreadsheet — every payment and refund with how it arrived, who paid, which job it was for and when, with refunds as negative amounts so the column adds up to what you actually took.",
+        where: "Reports → Export payments",
+      },
+      {
+        kind: "improved",
+        text: "Exports now cover the dates you've picked rather than everything you've ever had, and carry far more than they did. Bookings come with the client and their contact details, the service, who did it, where, what's been paid and what's still owed — as pounds and pence rather than raw numbers.",
+        where: "Reports → Export bookings or Export customers",
+      },
+      {
+        kind: "fixed",
+        text: "“This month” started on the last day of the previous month through the summer, so your figures quietly included a day that wasn't in the month. A month now begins on the 1st in your own time zone.",
+        where: "Overview and Reports",
+      },
+    ],
+  },
+  {
     date: "2026-09-27",
     title: "A full week offline, and an Overview in your own words",
     items: [
