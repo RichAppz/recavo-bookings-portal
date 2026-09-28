@@ -5,6 +5,8 @@ import {
   bookingPriceBreakdown,
   formatAdjustment,
   linePriceMinor,
+  linePricesMatch,
+  repricedLines,
 } from "./booking-price.ts";
 
 const fmt = (minor: number) => `£${(minor / 100).toFixed(2)}`;
@@ -185,5 +187,73 @@ describe("linePriceMinor", () => {
     assert.equal(linePriceMinor(""), null);
     assert.equal(linePriceMinor("abc"), null);
     assert.equal(linePriceMinor("-5"), null);
+  });
+});
+
+describe("linePricesMatch", () => {
+  it("holds for a form opened on a booking that already prices a service differently", () => {
+    assert.equal(
+      linePricesMatch({ svc_wheel: "150.00" }, { svc_wheel: "150.00" }, ["svc_wheel"]),
+      true,
+    );
+  });
+
+  it("holds when nothing on the job has a typed price", () => {
+    assert.equal(linePricesMatch({}, {}, ["svc_coat", "svc_wheel"]), true);
+  });
+
+  it("breaks when a row is typed away from what the booking charges", () => {
+    assert.equal(linePricesMatch({ svc_wheel: "150" }, { svc_wheel: "200" }, ["svc_wheel"]), false);
+  });
+
+  it("breaks when a repriced row is cleared back to list", () => {
+    assert.equal(linePricesMatch({}, { svc_wheel: "150.00" }, ["svc_wheel"]), false);
+  });
+
+  it("ignores a price left behind by a service since removed", () => {
+    assert.equal(linePricesMatch({ svc_gone: "10" }, {}, ["svc_wheel"]), true);
+  });
+});
+
+describe("repricedLines", () => {
+  // The live case: the wheel coating lists at £200 and this customer is charged £150.
+  const wheel = { serviceId: "svc_wheel", wasMinor: 20_000, listMinor: 20_000 };
+  const coat = { serviceId: "svc_coat", wasMinor: 40_000, listMinor: 40_000 };
+
+  it("reports a service charged below its list price", () => {
+    assert.deepEqual(repricedLines([coat, wheel], { svc_wheel: "150" }, {}), [
+      { serviceId: "svc_wheel", fromMinor: 20_000, toMinor: 15_000 },
+    ]);
+  });
+
+  it("reports both rows when the job total is left unchanged", () => {
+    // £50 off the wheel, £50 onto the coating: the total is still £600, but the job
+    // has changed and must be saveable.
+    assert.deepEqual(repricedLines([coat, wheel], { svc_coat: "450", svc_wheel: "150" }, {}), [
+      { serviceId: "svc_coat", fromMinor: 40_000, toMinor: 45_000 },
+      { serviceId: "svc_wheel", fromMinor: 20_000, toMinor: 15_000 },
+    ]);
+  });
+
+  it("reports a repriced row cleared back to its list price", () => {
+    const repriced = { serviceId: "svc_wheel", wasMinor: 15_000, listMinor: 20_000 };
+    assert.deepEqual(repricedLines([repriced], {}, { svc_wheel: "150.00" }), [
+      { serviceId: "svc_wheel", fromMinor: 15_000, toMinor: 20_000 },
+    ]);
+  });
+
+  it("reports nothing for a row typed back to what it already costs", () => {
+    assert.deepEqual(repricedLines([wheel], { svc_wheel: "200.00" }, {}), []);
+    assert.deepEqual(repricedLines([wheel], { svc_wheel: "£200" }, {}), []);
+  });
+
+  it("reports nothing while a price box holds no amount", () => {
+    assert.deepEqual(repricedLines([wheel], { svc_wheel: "" }, {}), []);
+    assert.deepEqual(repricedLines([wheel], { svc_wheel: "-" }, {}), []);
+  });
+
+  it("reports nothing for a service being added — the service change says that", () => {
+    const added = { serviceId: "svc_new", listMinor: 5_000 };
+    assert.deepEqual(repricedLines([wheel, added], { svc_new: "40" }, {}), []);
   });
 });
