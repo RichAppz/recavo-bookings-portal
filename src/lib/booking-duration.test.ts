@@ -7,6 +7,8 @@ import {
   describeAllDayBlock,
   formatAllDayDuration,
   lineItemJobMinutes,
+  MINUTES_PER_DAY,
+  windowFit,
 } from "./booking-duration.ts";
 
 // What the API returns for a 2-hour "5 year coating" booked with the All day tile:
@@ -139,5 +141,91 @@ describe("describeAllDayBlock — the hint under the duration", () => {
       describeAllDayBlock(120, 2880),
       "Blocks 2 whole days; the service itself takes 2 hrs.",
     );
+  });
+});
+
+describe("windowFit", () => {
+  // The live case that sent "The request was invalid" to a phone with no explanation:
+  // an all-day job on one day, 5 year coating (2 hrs) + Level 1 · M (24 hrs), and Wheel
+  // ceramic (4 hrs) added. The add-ons alone come to 28 hrs against a 24 hr window, so
+  // the API had no time left for the main service and refused the save.
+  it("refuses a one-day window once the other services fill it", () => {
+    const fit = windowFit({
+      windowMinutes: MINUTES_PER_DAY,
+      windowDays: 1,
+      totalMinutes: 120 + 1440 + 240,
+      additionalMinutes: 1440 + 240,
+    });
+    assert.equal(fit.fits, false);
+    assert.equal(fit.daysNeeded, 2);
+  });
+
+  it("holds the same job once it has the days it needs", () => {
+    const fit = windowFit({
+      windowMinutes: 2 * MINUTES_PER_DAY,
+      windowDays: 2,
+      totalMinutes: 120 + 1440 + 240,
+      additionalMinutes: 1440 + 240,
+    });
+    assert.equal(fit.fits, true);
+  });
+
+  it("fits when the others exactly fill the window, leaving the main service nothing", () => {
+    // The API's rule is `window - others >= 0`, so equal is allowed, not one minute over.
+    assert.equal(
+      windowFit({
+        windowMinutes: 1440,
+        windowDays: 1,
+        totalMinutes: 1500,
+        additionalMinutes: 1440,
+      }).fits,
+      true,
+    );
+    assert.equal(
+      windowFit({
+        windowMinutes: 1440,
+        windowDays: 1,
+        totalMinutes: 1501,
+        additionalMinutes: 1441,
+      }).fits,
+      false,
+    );
+  });
+
+  it("always asks for at least one more day than the job has", () => {
+    // Three days of work already spread over three days: suggesting "3 days" would be a
+    // button that changes nothing.
+    assert.equal(
+      windowFit({
+        windowMinutes: 3 * MINUTES_PER_DAY,
+        windowDays: 3,
+        totalMinutes: 3 * MINUTES_PER_DAY,
+        additionalMinutes: 3 * MINUTES_PER_DAY + 1,
+      }).daysNeeded,
+      4,
+    );
+  });
+
+  it("rounds part of a day up to a whole one", () => {
+    assert.equal(
+      windowFit({ windowMinutes: 1440, windowDays: 1, totalMinutes: 1441, additionalMinutes: 1441 })
+        .daysNeeded,
+      2,
+    );
+    assert.equal(
+      windowFit({ windowMinutes: 1440, windowDays: 1, totalMinutes: 2881, additionalMinutes: 2881 })
+        .daysNeeded,
+      3,
+    );
+  });
+
+  it("measures a timed booking against the length booked, with no days to suggest", () => {
+    const fit = windowFit({
+      windowMinutes: 180,
+      windowDays: 0,
+      totalMinutes: 300,
+      additionalMinutes: 240,
+    });
+    assert.equal(fit.fits, false);
   });
 });

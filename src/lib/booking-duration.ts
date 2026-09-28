@@ -89,3 +89,38 @@ export function describeAllDayBlock(jobMinutes: number, blockMinutes: number): s
   const block = days === 1 ? "the whole day" : `${days} whole days`;
   return `Blocks ${block}; the service itself takes ${formatDurationLong(jobMinutes)}.`;
 }
+
+/** A day's worth of diary, in minutes; an all-day booking blocks whole days of these. */
+export const MINUTES_PER_DAY = 24 * 60;
+
+/**
+ * Does a booking's window still hold its services after a change?
+ *
+ * A custom window — all-day, or a length set by hand — survives a service change: the
+ * API keeps the days as they are and fits the *main* service into whatever is left once
+ * the others have taken their time. So the moment the other services fill the window on
+ * their own there is nothing left for the main one, and the amend is refused with
+ * `end TOO_SHORT` ("the window is shorter than the additional services on the job")
+ * rather than the booking quietly growing. This mirrors `applyLineItemOverrides` in the
+ * API, and exists so the form can say so while the job can still be given another day.
+ *
+ * `daysNeeded` is enough whole days for the *whole* job, and always at least one more
+ * than it has now, so acting on it always changes something.
+ */
+export function windowFit(input: {
+  /** Minutes the booking currently occupies: whole days for all-day, else its length. */
+  windowMinutes: number;
+  /** Every picked service's duration summed. */
+  totalMinutes: number;
+  /** The same, excluding the main service — the part that must fit. */
+  additionalMinutes: number;
+  /** Whole days the booking blocks now; 0 when it is not an all-day job. */
+  windowDays: number;
+}): { fits: boolean; daysNeeded: number } {
+  const fits = input.additionalMinutes <= input.windowMinutes;
+  const daysNeeded = Math.max(
+    input.windowDays + 1,
+    Math.ceil(input.totalMinutes / MINUTES_PER_DAY),
+  );
+  return { fits, daysNeeded };
+}
