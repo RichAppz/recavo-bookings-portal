@@ -44,6 +44,7 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui-bits";
+import { TakingsBreakdown } from "@/components/TakingsBreakdown";
 import { PageGhost, StatsGhost, TableGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import {
@@ -415,6 +416,15 @@ function Overview() {
                   description={`Where the money came from · ${range.label.toLowerCase()}.`}
                   onHide={() => cards.hide("money")}
                 >
+                  {/* The card's promise, finally kept: card, cash and bank transfer (RECA-542). */}
+                  {dashboard.data.revenue.grossMinor > 0 ? (
+                    <div className="mb-5">
+                      <TakingsBreakdown
+                        revenue={dashboard.data.revenue}
+                        currency={dashboard.data.basis.currency}
+                      />
+                    </div>
+                  ) : null}
                   {moneyChart.every((d) => d.value === 0) ? (
                     <EmptyState
                       title="No money activity yet"

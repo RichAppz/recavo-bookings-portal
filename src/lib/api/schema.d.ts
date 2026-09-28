@@ -47138,12 +47138,27 @@ export interface components {
                 /** @description When false, open disputes/chargebacks are excluded from net and tracked as disputedMinor (RECA-439). */
                 includesDisputedRevenue: boolean;
             };
+            /** @description All money the business took, whatever way it arrived — card, cash and bank transfer alike (RECA-542). Folded from the settlement ledger, so the totals here are always the sum of byMethod. */
             revenue: {
                 grossMinor: number;
                 refundedMinor: number;
                 disputedMinor: number;
                 /** @description grossMinor - refundedMinor - disputedMinor */
                 netMinor: number;
+                /** @description Takings split by how the money arrived. Only methods with activity appear, in a fixed order so a chart legend does not reshuffle between ranges. The entries always sum to the totals above. */
+                byMethod: {
+                    /**
+                     * @description card_online went through the payment provider and carries fees and a payout; card_manual is the business’s own terminal. Both read as "card" when rolled up.
+                     * @enum {string}
+                     */
+                    method: "card_online" | "card_manual" | "cash" | "bank_transfer" | "other";
+                    grossMinor: number;
+                    refundedMinor: number;
+                    disputedMinor: number;
+                    netMinor: number;
+                    /** @description Payments taken this way, ignoring refunds and disputes. */
+                    count: number;
+                }[];
             };
             bookings: {
                 count: number;

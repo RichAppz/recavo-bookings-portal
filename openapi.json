@@ -272,11 +272,13 @@
           },
           "revenue": {
             "type": "object",
+            "description": "All money the business took, whatever way it arrived — card, cash and bank transfer alike (RECA-542). Folded from the settlement ledger, so the totals here are always the sum of byMethod.",
             "required": [
               "grossMinor",
               "refundedMinor",
               "disputedMinor",
-              "netMinor"
+              "netMinor",
+              "byMethod"
             ],
             "properties": {
               "grossMinor": {
@@ -291,6 +293,50 @@
               "netMinor": {
                 "type": "integer",
                 "description": "grossMinor - refundedMinor - disputedMinor"
+              },
+              "byMethod": {
+                "type": "array",
+                "description": "Takings split by how the money arrived. Only methods with activity appear, in a fixed order so a chart legend does not reshuffle between ranges. The entries always sum to the totals above.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "method",
+                    "grossMinor",
+                    "refundedMinor",
+                    "disputedMinor",
+                    "netMinor",
+                    "count"
+                  ],
+                  "properties": {
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "card_online",
+                        "card_manual",
+                        "cash",
+                        "bank_transfer",
+                        "other"
+                      ],
+                      "description": "card_online went through the payment provider and carries fees and a payout; card_manual is the business’s own terminal. Both read as \"card\" when rolled up."
+                    },
+                    "grossMinor": {
+                      "type": "integer"
+                    },
+                    "refundedMinor": {
+                      "type": "integer"
+                    },
+                    "disputedMinor": {
+                      "type": "integer"
+                    },
+                    "netMinor": {
+                      "type": "integer"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "description": "Payments taken this way, ignoring refunds and disputes."
+                    }
+                  }
+                }
               }
             }
           },

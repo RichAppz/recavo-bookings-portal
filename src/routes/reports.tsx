@@ -19,6 +19,7 @@ import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui-bits";
+import { TakingsBreakdown } from "@/components/TakingsBreakdown";
 import { StatsGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -325,6 +326,18 @@ function ReportsPage() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
+              <SectionCard
+                className="xl:col-span-2"
+                title="How you were paid"
+                description="Takings by payment method, split online card from your own card machine"
+              >
+                <TakingsBreakdown
+                  revenue={dashboard.data.revenue}
+                  currency={dashboard.data.basis.currency}
+                  detailed
+                />
+              </SectionCard>
+
               <SectionCard
                 title="Revenue breakdown"
                 description="Net, refunded and disputed for the selected range"
