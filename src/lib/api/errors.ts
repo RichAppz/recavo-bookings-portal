@@ -150,6 +150,54 @@ export function applyFormErrors(
   }
 }
 
+/** Field names as an owner would say them, for the few the API rejects by name. */
+const FIELD_LABELS: Record<string, string> = {
+  additionalServices: "Extra services",
+  amountMinor: "Amount",
+  depositMinor: "Deposit",
+  "If-Match": "Booking version",
+  "Idempotency-Key": "Request key",
+  leadCustomerId: "Client",
+  linkedRecordId: "Vehicle or record",
+  locationId: "Location",
+  notesInternal: "Internal notes",
+  paymentMethod: "Payment method",
+  priceMinor: "Price",
+  serviceId: "Service",
+  servicePriceMinor: "Service price",
+  staffId: "Staff member",
+  variantId: "Option",
+};
+
+const CODE_LABELS: Record<string, string> = {
+  CURRENCY_MISMATCH: "is in a different currency",
+  DUPLICATE: "has the same thing twice",
+  INVALID: "is not valid",
+  REQUIRED: "is missing",
+  TOO_LONG: "is too long",
+  USE_RESCHEDULE: "must be changed with Reschedule",
+};
+
+/**
+ * One line naming what the API refused. A `400` carries its reasons in `errors[]` and
+ * usually leaves `detail` empty, so a toast built from `detail` alone said only "The
+ * request was invalid" — which tells the person at the counter nothing about which field
+ * to fix, and leaves them stuck. Prefer the API's own sentence when it sent one.
+ */
+export function describeFieldErrors(errors: readonly ProblemFieldError[]): string {
+  const parts = errors
+    .map((fe) => {
+      if (fe.message?.trim()) return fe.message.trim();
+      if (!fe.field) return fe.code || "";
+      const label = FIELD_LABELS[fe.field] ?? fe.field;
+      const reason = CODE_LABELS[fe.code];
+      return reason ? `${label} ${reason}` : `${label}: ${fe.code || "invalid"}`;
+    })
+    .filter((p) => p !== "");
+  // Duplicates read as a stutter when several lines fail the same way.
+  return [...new Set(parts)].join(". ");
+}
+
 export function toastApiError(error: unknown, fallback = "Something went wrong") {
   if (error instanceof ApiError) {
     if (error.isMfaRequired) return;
@@ -159,7 +207,10 @@ export function toastApiError(error: unknown, fallback = "Something went wrong")
       });
       return;
     }
-    const description = [error.detail, error.requestId ? `Ref: ${error.requestId}` : null]
+    const description = [
+      error.detail || describeFieldErrors(error.fieldErrors) || null,
+      error.requestId ? `Ref: ${error.requestId}` : null,
+    ]
       .filter(Boolean)
       .join(" · ");
     toast.error(error.title || fallback, {

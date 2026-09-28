@@ -96,8 +96,11 @@ function Calendar({
         range_start: cn("bg-accent rounded-l-md", defaultClassNames.range_start),
         range_middle: cn("rounded-none", defaultClassNames.range_middle),
         range_end: cn("bg-accent rounded-r-md", defaultClassNames.range_end),
+        // A ring as well as the background, so today stays recognisable when it falls
+        // inside a selected range — that paints the same accent, and today is wanted as a
+        // fixed reference point, not only when nothing is chosen yet.
         today: cn(
-          "bg-accent text-accent-foreground rounded-md data-[selected=true]:rounded-none",
+          "bg-accent text-accent-foreground ring-primary/40 rounded-md ring-1 ring-inset data-[selected=true]:rounded-none",
           defaultClassNames.today,
         ),
         outside: cn(

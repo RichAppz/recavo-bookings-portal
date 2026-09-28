@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isoDateInTz, timeInTz, zonedDateTimeToIso } from "./format.ts";
+import { isoDateInTz, timeInTz, todayLabelInTz, zonedDateTimeToIso } from "./format.ts";
 
 // Staff type wall-clock dates in the business's zone. These must not depend on the
 // zone of the device running them (the phone abroad that put "13 Oct" on the 12th).
@@ -52,5 +52,30 @@ describe("isoDateInTz / timeInTz", () => {
     const end = "2026-10-13T23:00:00.000Z";
     const last = new Date(new Date(end).getTime() - 60_000).toISOString();
     assert.equal(isoDateInTz(last, "Europe/London"), "2026-10-13");
+  });
+});
+
+describe("todayLabelInTz", () => {
+  it("is the business's day, not the day on the device", () => {
+    // 02:00Z on the 29th is still the evening of the 28th in New York: a phone abroad
+    // must not tell the shop it is already tomorrow.
+    assert.equal(
+      todayLabelInTz("America/New_York", new Date("2026-09-29T02:00:00Z")),
+      "Mon 28 Sept",
+    );
+    assert.equal(
+      todayLabelInTz("Australia/Sydney", new Date("2026-09-28T20:00:00Z")),
+      "Tue 29 Sept",
+    );
+  });
+
+  it("rolls over at the business's midnight through a BST offset", () => {
+    // London is UTC+1 in September, so 23:30Z is already half past midnight on the 29th.
+    assert.equal(todayLabelInTz("Europe/London", new Date("2026-09-28T23:30:00Z")), "Tue 29 Sept");
+    assert.equal(todayLabelInTz("Europe/London", new Date("2026-09-28T12:00:00Z")), "Mon 28 Sept");
+  });
+
+  it("names the weekday, which is the part staff are orienting by", () => {
+    assert.match(todayLabelInTz("Europe/London", new Date("2026-09-28T12:00:00Z")), /^Mon /);
   });
 });

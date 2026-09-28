@@ -278,6 +278,16 @@ export const ukDate = (iso: string) =>
 export const ukDateLong = (iso: string) =>
   parseIso(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
+/**
+ * Today in `timeZone`, as `Sat 14 Mar`, for orienting a date field. The picker a phone
+ * opens for `<input type="date">` is OS chrome: it cannot be themed, and it opens on the
+ * month of whatever is already chosen — so a job months out shows a grid with no clue
+ * what today is. Staff pick dates relative to today ("a week from now"), so the
+ * reference point has to be on the form itself.
+ */
+export const todayLabelInTz = (timeZone: string, now: Date = new Date()) =>
+  ukDateLong(isoDateInTz(now.toISOString(), timeZone));
+
 export const ukDateFull = (iso: string) =>
   parseIso(iso).toLocaleDateString("en-GB", {
     weekday: "long",

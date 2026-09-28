@@ -145,6 +145,7 @@ import {
   isoDateInTz,
   parseMoneyToMinor,
   timeInTz,
+  todayLabelInTz,
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
@@ -2392,7 +2393,12 @@ function RescheduleDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="reschedule-date">{mode === "custom" ? "New start" : "Date"}</Label>
+              <div className="flex items-baseline justify-between gap-2">
+                <Label htmlFor="reschedule-date">{mode === "custom" ? "New start" : "Date"}</Label>
+                <span className="text-xs text-muted-foreground">
+                  Today {todayLabelInTz(timezone)}
+                </span>
+              </div>
               <div className="flex gap-2">
                 <input
                   id="reschedule-date"
