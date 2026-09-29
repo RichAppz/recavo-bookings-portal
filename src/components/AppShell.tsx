@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   BellRing,
+  BookOpen,
   Building2,
   CalendarDays,
   Car,
@@ -135,9 +136,6 @@ type NavGroup = {
   heading: string;
   items: NavItem[];
 };
-
-/** Flip to true once the Help centre points at real help content. */
-const SHOW_HELP_CENTRE = false;
 
 const NAV: NavGroup[] = [
   {
@@ -309,6 +307,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       })),
     ),
     { to: "/whats-new", label: "What's new", icon: Sparkles },
+    { to: "/support/guides", label: "Guides", icon: BookOpen },
     ...(tenant.businessId ? [{ to: "/support", label: "Support", icon: LifeBuoy }] : []),
   ];
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
@@ -511,21 +510,27 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
+          {/* Guides are the help centre: screenshot-led how-tos for this vertical. The
+              demo tour is still reachable from the setup checklist. */}
+          <Link
+            to="/support/guides"
+            onClick={() => setMobileNav(false)}
+            className={cn(
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              pathname.startsWith("/support/guides")
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            )}
+          >
+            <BookOpen
+              className={cn(
+                "size-4.5",
+                pathname.startsWith("/support/guides") && "text-sidebar-primary",
+              )}
+            />
+            Guides
+          </Link>
           {tenant.businessId ? <SupportNavLink onClick={() => setMobileNav(false)} /> : null}
-          {/* Help centre is hidden until it's hooked up to real help content. The
-              demo tour it opened is still reachable from the setup checklist. */}
-          {SHOW_HELP_CENTRE ? (
-            <button
-              onClick={() => {
-                setMobileNav(false);
-                setSetupOpenRequest((n) => n + 1);
-                setTourOpen(true);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-            >
-              <LifeBuoy className="size-4.5" /> Help centre
-            </button>
-          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -709,7 +714,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button>
+                  <Button aria-label="Create">
                     <Plus className="size-4" />
                     <span className="hidden sm:inline">Create</span>
                   </Button>

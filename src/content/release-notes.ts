@@ -7,8 +7,13 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-09-29",
-    title: "Shorten a moved job, pay after the job by default, and Support in the menu",
+    title: "Step-by-step guides, shorten a moved job, and Support in the menu",
     items: [
+      {
+        kind: "new",
+        text: "Guides: a set of step-by-step walkthroughs with screenshots for everything from opening hours to taking card payments, written for your kind of business — trainers see sessions and clients, detailers see jobs and vehicles — and with pictures that match whether you're on your phone or a computer. Search them from the Guides page or from the search bar.",
+        where: "Menu → Guides, or Support → Guides",
+      },
       {
         kind: "new",
         text: "When you move an all-day job you can now change its last day at the same time. A job booked as two days that only needs one can be moved and shortened in one go — or given an extra day. Leave the last day alone and the job keeps its length as before.",
