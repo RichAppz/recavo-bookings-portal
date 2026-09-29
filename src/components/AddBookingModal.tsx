@@ -250,17 +250,27 @@ export function AddBookingModal({
     defaultLinkedRecordId,
     timezone,
   ]);
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   // A detailer who is paid after the job should not have to pick that every time, so
-  // the payment method sticks per business.
-  const [lastMethod, setLastMethod] = useStoredState<RememberedMethod>(
+  // the payment method sticks per business. Until staff have picked one, automotive
+  // businesses default to paying after the job (the norm for that trade) and everyone
+  // else to payment up front. The business may still be loading when this mounts, so
+  // the default is derived here rather than baked into storage.
+  const [lastMethod, setLastMethod] = useStoredState<RememberedMethod | "unset">(
     `recavo.booking.payment.${tenant.businessId}`,
-    "none",
-    REMEMBERED_METHODS,
+    "unset",
+    [...REMEMBERED_METHODS, "unset"],
   );
   const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
   // Bank transfer may have been switched off since it was last used.
   const defaultMethod: PaymentMethod =
-    lastMethod === "bank_transfer" && !bankTransferEnabled ? "none" : lastMethod;
+    lastMethod === "unset"
+      ? isCarDetailing
+        ? "pay_later"
+        : "none"
+      : lastMethod === "bank_transfer" && !bankTransferEnabled
+        ? "none"
+        : lastMethod;
   const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(defaultMethod);
   const setPaymentMethod = (next: PaymentMethod) => {
     setPaymentMethodState(next);
@@ -298,7 +308,6 @@ export function AddBookingModal({
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [notes, setNotes] = useState("");
   // Automotive only: the client needs running somewhere once they've left the car.
-  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [lift, setLift] = useState<ClientLiftDraft>(EMPTY_LIFT_DRAFT);
   const clientLift = isCarDetailing ? clientLiftFromDraft(lift) : null;
   // How the client is told straight away (RECA-533): email, text, both or neither.
