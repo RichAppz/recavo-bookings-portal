@@ -42,6 +42,16 @@ android/app/src/main/assets/public/
 android/local.properties
 android/capacitor-cordova-android-plugins/
 
+# Android release signing. The upload keystore and its passwords live outside the
+# repo (~/.private_keys, like the App Store Connect key); keystore.properties only
+# points at them. Losing control of the key means losing the Play listing.
+android/keystore.properties
+*.jks
+*.keystore
+android/app/release/
+# Play Console service account key for fastlane supply
+fastlane/*.json
+
 # Fastlane
 fastlane/build/
 fastlane/report.xml

@@ -64,3 +64,71 @@ private_lane :cap_sync_production do
     sh("CAP_ENV=production npx cap sync ios")
   end
 end
+
+# ---------------------------------------------------------------------------------
+# Android → Google Play. The Play equivalent of TestFlight is the *internal testing*
+# track: up to 100 testers, live within minutes, no review. Promote from there in the
+# Play Console (or with `track_promote_to`) once a build is known good.
+#
+# Needs, outside the repo (see android/keystore.properties.example):
+#   ~/.private_keys/recavo-upload.jks                    upload keystore
+#   android/keystore.properties                          points Gradle at it
+#   ~/.private_keys/recavo-play-service-account.json     Play Console API key
+# ---------------------------------------------------------------------------------
+PLAY_JSON_KEY_PATH = File.expand_path("~/.private_keys/recavo-play-service-account.json")
+# Absolute: plain Ruby in a lane runs inside fastlane/, while action paths (below) are
+# resolved from the repo root.
+ANDROID_GRADLE_FILE = File.expand_path("../android/app/build.gradle", __dir__)
+ANDROID_AAB_PATH = "android/app/build/outputs/bundle/release/app-release.aab"
+
+platform :android do
+  desc "Push a new build to the Play internal testing track"
+  lane :internal do
+    # Play rejects a versionCode it has seen on any track, so go one past the highest
+    # anywhere — same idea as the TestFlight build number above.
+    play_codes = %w[internal alpha beta production].flat_map do |track|
+      google_play_track_version_codes(track: track, json_key: PLAY_JSON_KEY_PATH)
+    rescue StandardError
+      []
+    end
+    next_code = ([android_version_code] + play_codes).max + 1
+    set_android_version_code(next_code)
+
+    cap_sync_production_android
+
+    gradle(task: "clean bundleRelease", project_dir: "android")
+
+    upload_to_play_store(
+      track: "internal",
+      json_key: PLAY_JSON_KEY_PATH,
+      aab: ANDROID_AAB_PATH,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+    )
+  end
+
+  desc "Build a signed release bundle only (no upload) — for the first manual upload, or to check signing"
+  lane :build do
+    cap_sync_production_android
+    gradle(task: "clean bundleRelease", project_dir: "android")
+    UI.success("Bundle: #{ANDROID_AAB_PATH}")
+  end
+end
+
+private_lane :cap_sync_production_android do
+  Dir.chdir("..") do
+    sh("CAP_ENV=production npx cap sync android")
+  end
+end
+
+def android_version_code
+  File.read(ANDROID_GRADLE_FILE)[/^\s*versionCode\s+(\d+)/, 1].to_i
+end
+
+def set_android_version_code(code)
+  gradle = File.read(ANDROID_GRADLE_FILE)
+  File.write(ANDROID_GRADLE_FILE, gradle.sub(/^(\s*versionCode\s+)\d+/, "\\1#{code}"))
+  UI.message("versionCode → #{code}")
+end
