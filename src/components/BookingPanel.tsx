@@ -151,7 +151,12 @@ import {
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { isMessageHistoryEntry } from "@/lib/message-history";
-import { formatWorkingSpan } from "@/lib/working-days";
+import {
+  formatWorkingSpan,
+  layoutExplicitWindow,
+  layoutWorkingDuration,
+  scheduleFor,
+} from "@/lib/working-days";
 import {
   channelsLabel,
   channelsPhrase,
@@ -2198,6 +2203,10 @@ function RescheduleDialog({
   // (see AddBookingModal). A booking that is already a drop-in keeps that on the
   // server unless told otherwise, so this only needs asking for the new day.
   const [dropIn, setDropIn] = useState(false);
+  // All-day only: the job's new last day when staff override it. null = keep the
+  // job's day count and let the API lay it over working days from the new start
+  // (nothing is sent for `end`), so an untouched move behaves as it always has.
+  const [lastDay, setLastDay] = useState<string | null>(null);
   const [override, setOverride] = useState<{
     conflicts: BookingConflict[];
     body: Record<string, unknown>;
@@ -2209,6 +2218,7 @@ function RescheduleDialog({
       setDate(isoDateInTz(booking.start, timezone));
       setSlotStart(null);
       setDropIn(false);
+      setLastDay(null);
       setOverride(null);
       setMode(customLength ? "custom" : "slot");
       setTime(timeInTz(booking.start, timezone));
@@ -2216,7 +2226,7 @@ function RescheduleDialog({
   }, [open, booking.id, booking.staffId, booking.start, customLength, timezone]);
   useEffect(() => {
     setDropIn(false);
-  }, [date, staffId, mode]);
+  }, [date, staffId, mode, lastDay]);
 
   const customStart = booking.allDay
     ? zonedDateTimeToIso(date, "00:00", timezone)
@@ -2225,6 +2235,45 @@ function RescheduleDialog({
   const dayStartIso = zonedDateTimeToIso(date, "00:00", timezone);
   const dayStart = dayStartIso ? new Date(dayStartIso) : new Date(NaN);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  // The days this person works at the job's location, so the last day we show for an
+  // untouched move is the one the API will actually land on (a 2-day job from Friday
+  // ends Monday, not Saturday).
+  const locations = useLocationsList();
+  const scheduleStaff =
+    staffId !== "any" ? (staffOptions.find((s) => s.id === staffId) ?? null) : null;
+  const scheduleLocation = (locations.data ?? []).find((l) => l.id === booking.locationId) ?? null;
+  const workingSchedule = useMemo(
+    () => scheduleFor(scheduleStaff, scheduleLocation, timezone),
+    [scheduleStaff, scheduleLocation, timezone],
+  );
+  const keptLastDay =
+    booking.allDay && customStart
+      ? (layoutWorkingDuration(customStart, lengthMinutes, workingSchedule, timezone, {
+          allDay: true,
+        }).occupiedDays.at(-1) ?? date)
+      : date;
+  const effectiveLastDay = lastDay ?? keptLastDay;
+  const lastDayInvalid = booking.allDay && mode === "custom" && effectiveLastDay < date;
+  // Midday on the chosen last day: the API snaps it to the following local midnight.
+  const lastDayIso =
+    booking.allDay && lastDay !== null && !lastDayInvalid
+      ? zonedDateTimeToIso(lastDay, "12:00", timezone)
+      : null;
+  // How many working days the moved job will hold, for the readout below the fields.
+  const spanDays = (() => {
+    if (!booking.allDay || !customStart) return allDayBlockDays(lengthMinutes);
+    if (lastDay === null || lastDayInvalid) {
+      return layoutWorkingDuration(customStart, lengthMinutes, workingSchedule, timezone, {
+        allDay: true,
+      }).occupiedDays.length;
+    }
+    const lastMidnight = zonedDateTimeToIso(lastDay, "00:00", timezone);
+    if (!lastMidnight) return 1;
+    const endIso = new Date(new Date(lastMidnight).getTime() + 86_400_000).toISOString();
+    return layoutExplicitWindow(customStart, endIso, workingSchedule, timezone, { allDay: true })
+      .occupiedDays.length;
+  })();
 
   const availability = useAvailability({
     serviceId: booking.serviceSnapshot.serviceId,
@@ -2245,12 +2294,20 @@ function RescheduleDialog({
   );
   const selectedSlot = slots.find((s) => s.start === slotStart) ?? null;
   const customStaffId = staffId !== "any" ? staffId : null;
-  const canSubmit = mode === "slot" ? Boolean(selectedSlot) : Boolean(customStart && customStaffId);
+  const canSubmit =
+    mode === "slot"
+      ? Boolean(selectedSlot)
+      : Boolean(customStart && customStaffId) && !lastDayInvalid;
 
   // The diary on the target day(s), minus this booking: what the move would land on.
-  const spanEnd = booking.allDay
-    ? new Date(dayStart.getTime() + Math.max(1, Math.ceil(lengthMinutes / 1440)) * 86_400_000)
-    : dayEnd;
+  const spanEnd = (() => {
+    if (!booking.allDay) return dayEnd;
+    const lastMidnight = lastDayInvalid
+      ? null
+      : zonedDateTimeToIso(effectiveLastDay, "00:00", timezone);
+    const end = lastMidnight ? new Date(lastMidnight).getTime() + 86_400_000 : NaN;
+    return new Date(Number.isNaN(end) || end <= dayStart.getTime() ? dayEnd.getTime() : end);
+  })();
   const diary = useBookings({
     from: dayStart.toISOString(),
     to: spanEnd.toISOString(),
@@ -2328,10 +2385,18 @@ function RescheduleDialog({
       toast.error(!customStaffId ? `Choose a ${staffNoun.toLowerCase()}` : "Check the date");
       return;
     }
+    if (mode === "custom" && lastDayInvalid) {
+      toast.error("The last day can't be before the first");
+      return;
+    }
     await move({
       ...(mode === "slot"
         ? { start: selectedSlot!.start, staffId: selectedSlot!.staffId }
-        : { start: customStart!, staffId: customStaffId! }),
+        : {
+            start: customStart!,
+            staffId: customStaffId!,
+            ...(lastDayIso ? { end: lastDayIso } : {}),
+          }),
       ...(sendDropIn ? { dropIn: true } : {}),
     });
   };
@@ -2407,6 +2472,8 @@ function RescheduleDialog({
                   onChange={(e) => {
                     setDate(e.target.value);
                     setSlotStart(null);
+                    // Keep an overridden span whole when the first day passes the last.
+                    if (lastDay !== null && e.target.value > lastDay) setLastDay(e.target.value);
                   }}
                   className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
                 />
@@ -2425,13 +2492,44 @@ function RescheduleDialog({
 
           {mode === "custom" ? (
             <div className="grid gap-2">
+              {booking.allDay ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:col-start-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label htmlFor="reschedule-last-day">Last day</Label>
+                      {lastDay !== null ? (
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline-offset-4 hover:underline"
+                          onClick={() => setLastDay(null)}
+                        >
+                          Keep its length
+                        </button>
+                      ) : null}
+                    </div>
+                    <input
+                      id="reschedule-last-day"
+                      type="date"
+                      min={date}
+                      value={effectiveLastDay}
+                      onChange={(e) => setLastDay(e.target.value)}
+                      aria-invalid={lastDayInvalid}
+                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                    />
+                  </div>
+                </div>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 {booking.allDay
-                  ? `Stays an all-day job${
-                      allDayBlockDays(lengthMinutes) > 1
-                        ? ` across ${allDayBlockDays(lengthMinutes)} working days`
-                        : ""
-                    }, starting on the new date.`
+                  ? lastDayInvalid
+                    ? "The last day can't be before the first."
+                    : lastDay === null
+                      ? `Stays an all-day job${
+                          spanDays > 1 ? ` across ${spanDays} working days` : ""
+                        }, starting on the new date. Change the last day to shorten or extend it.`
+                      : spanDays > 1
+                        ? `Becomes an all-day job across ${spanDays} working days.`
+                        : "Becomes a one-day all-day job."
                   : `Keeps its ${formatDurationLong(lengthMinutes)} length from the new start${
                       lengthMinutes >= 1440 ? ", over working days only" : ""
                     }.`}
