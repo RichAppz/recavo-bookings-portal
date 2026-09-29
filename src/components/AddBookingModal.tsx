@@ -244,18 +244,29 @@ export function AddBookingModal({
     defaultLinkedRecordId,
     timezone,
   ]);
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   // A detailer who is paid after the job should not have to pick that every time, so
-  // the up-front / after-the-job choice sticks per business.
-  const [paymentTiming, setPaymentTiming] = useStoredState<PaymentTiming>(
+  // the up-front / after-the-job choice sticks per business. Until staff have picked
+  // one, automotive businesses default to paying after the job (the norm for that
+  // trade) and everyone else to payment up front. The business may still be loading
+  // when this mounts, so the default is derived here rather than baked into storage.
+  const [storedTiming, setStoredTiming] = useStoredState<PaymentTiming | "unset">(
     `recavo.booking.payment.${tenant.businessId}`,
-    "none",
-    TIMING_DEFAULTS,
+    "unset",
+    [...TIMING_DEFAULTS, "unset"],
   );
+  const paymentTiming: PaymentTiming =
+    storedTiming !== "unset" ? storedTiming : isCarDetailing ? "pay_later" : "none";
   const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(paymentTiming);
   const setPaymentMethod = (next: PaymentMethod) => {
     setPaymentMethodState(next);
-    if (next === "none" || next === "pay_later") setPaymentTiming(next);
+    if (next === "none" || next === "pay_later") setStoredTiming(next);
   };
+  // The form is fresh on every open, so start it on the remembered / default timing.
+  // This also picks up the automotive default if the business loaded after mount.
+  useEffect(() => {
+    if (open) setPaymentMethodState(paymentTiming);
+  }, [open, paymentTiming]);
   const connect = useConnectAccount();
   const cardPaymentsLive = connect.data?.chargesEnabled === true;
   // "Use package credit" only makes sense for a business that sells packages, and
@@ -280,7 +291,6 @@ export function AddBookingModal({
   const [linkedRecordId, setLinkedRecordId] = useState("none");
   const [notes, setNotes] = useState("");
   // Automotive only: the client needs running somewhere once they've left the car.
-  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [lift, setLift] = useState<ClientLiftDraft>(EMPTY_LIFT_DRAFT);
   const clientLift = isCarDetailing ? clientLiftFromDraft(lift) : null;
   // How the client is told straight away (RECA-533): email, text, both or neither.
