@@ -141,7 +141,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
     slug: "whats-new-and-support",
     title: "What's new, guides and support",
     summary:
-      "See what changed, find a guide, and get help from a person — all from the bottom of the sidebar.",
+      "See what changed from the sidebar, and find a guide or get help from a person from the ? button beside search.",
     category: "account",
     verticals: BOTH,
     minutes: 2,
@@ -171,7 +171,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Guides",
-        body: "**Guides** — where you are now — is step-by-step help with screenshots, written for your kind of business. Search it from the box at the top, or from the app's search (**⌘K** / **Ctrl K**) which finds guides alongside clients and bookings.",
+        body: "**Guides** — where you are now — is step-by-step help with screenshots, written for your kind of business. Open it from the **?** button beside the search bar. Search it from the box at the top, or from the app's search (**⌘K** / **Ctrl K**) which finds guides alongside clients and bookings.",
         image: {
           name: "guides",
           alt: "The Guides page with a search box and guides grouped by category.",
@@ -180,7 +180,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Ask a person",
-        body: "**Support** shows your requests and our replies. **New request** asks what it's about — a question, a problem, an idea — and for a short summary and the detail. We can see which business you're writing from, so there's no need to include that. Replies arrive here and by email, and the Support badge lights up when there's something to read.",
+        body: "**Support** (under the **?** button beside search) shows your requests and our replies. **New request** asks what it's about — a question, a problem, an idea — and for a short summary and the detail. We can see which business you're writing from, so there's no need to include that. Replies arrive here and by email, and a dot on the **?** button shows when there's something to read.",
         image: {
           name: "contact-support",
           alt: "The Contact support form with a type, subject and message.",
