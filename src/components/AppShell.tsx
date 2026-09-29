@@ -64,6 +64,7 @@ import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
+import { SupportNavLink } from "@/components/SupportNavLink";
 import { OfflinePack } from "@/components/OfflinePack";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
@@ -308,6 +309,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       })),
     ),
     { to: "/whats-new", label: "What's new", icon: Sparkles },
+    ...(tenant.businessId ? [{ to: "/support", label: "Support", icon: LifeBuoy }] : []),
   ];
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
@@ -509,6 +511,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
+          {tenant.businessId ? <SupportNavLink onClick={() => setMobileNav(false)} /> : null}
           {/* Help centre is hidden until it's hooked up to real help content. The
               demo tour it opened is still reachable from the setup checklist. */}
           {SHOW_HELP_CENTRE ? (
