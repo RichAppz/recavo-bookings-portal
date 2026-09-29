@@ -7,12 +7,12 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-09-29",
-    title: "Step-by-step guides, shorten a moved job, and Support in the menu",
+    title: "Step-by-step guides, shorten a moved job, and a Help button",
     items: [
       {
         kind: "new",
         text: "Guides: a set of step-by-step walkthroughs with screenshots for everything from opening hours to taking card payments, written for your kind of business — trainers see sessions and clients, detailers see jobs and vehicles — and with pictures that match whether you're on your phone or a computer. Search them from the Guides page or from the search bar.",
-        where: "Menu → Guides, or Support → Guides",
+        where: "? button beside search → Guides",
       },
       {
         kind: "new",
@@ -26,8 +26,8 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "new",
-        text: "Support has its own place in the menu, just under What's new, with a count when we've replied to you and you haven't seen it yet. You can also reach it from search.",
-        where: "Menu → Support",
+        text: "Support and Guides sit together under a ? button beside the search bar, so the menu stays short. The button shows a dot when we've replied to you and you haven't seen it yet. You can also reach both from search.",
+        where: "? button beside search → Support",
       },
       {
         kind: "new",

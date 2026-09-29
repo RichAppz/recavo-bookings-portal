@@ -133,7 +133,7 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "The bell",
-        body: "The bell in the top bar collects what's happened while you weren't looking: online bookings, cancellations, waitlist matches, replies from support. Click an item to jump to the booking or client it's about. Badges on **Waitlist**, **What's new** and **Support** in the sidebar count what's waiting there.",
+        body: "The bell in the top bar collects what's happened while you weren't looking: online bookings, cancellations, waitlist matches, replies from support. Click an item to jump to the booking or client it's about. Badges on **Waitlist** and **What's new** in the sidebar count what's waiting there, and a dot on the **?** button beside search means Support has replied.",
         link: { to: "/calendar", label: "Open Calendar" },
       },
       {

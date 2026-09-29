@@ -65,7 +65,7 @@ import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
-import { SupportNavLink } from "@/components/SupportNavLink";
+import { HelpMenu } from "@/components/HelpMenu";
 import { OfflinePack } from "@/components/OfflinePack";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
@@ -510,27 +510,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
-          {/* Guides are the help centre: screenshot-led how-tos for this vertical. The
-              demo tour is still reachable from the setup checklist. */}
-          <Link
-            to="/support/guides"
-            onClick={() => setMobileNav(false)}
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-              pathname.startsWith("/support/guides")
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            )}
-          >
-            <BookOpen
-              className={cn(
-                "size-4.5",
-                pathname.startsWith("/support/guides") && "text-sidebar-primary",
-              )}
-            />
-            Guides
-          </Link>
-          {tenant.businessId ? <SupportNavLink onClick={() => setMobileNav(false)} /> : null}
+          {/* Guides and Support live in the top bar's Help menu (HelpMenu). */}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -646,6 +626,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
 
             <GlobalSearch pages={searchablePages} />
+            <HelpMenu />
 
             <div className="ml-auto flex items-center gap-2">
               {/* A location filter only means something once there is more than one. */}
