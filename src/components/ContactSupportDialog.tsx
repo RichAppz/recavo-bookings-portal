@@ -1,6 +1,12 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { ArrowUpRight, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { GUIDES } from "@/content/guides";
+import { guidesFor, searchGuides, type Guide } from "@/lib/guides";
+import { useGuideCopy, useGuideVertical } from "@/lib/use-guides";
+import type { VerticalKey } from "@/lib/verticals";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +33,47 @@ import type { SupportRequest, SupportRequestCategory } from "@/lib/api/types";
 const SUBJECT_MAX = 200;
 const BODY_MAX = 5000;
 
+/** Guides worth offering before someone writes in, when the subject hasn't said much yet. */
+const GUIDES_BY_CATEGORY: Partial<Record<SupportRequestCategory, string[]>> = {
+  question: ["add-a-booking", "reschedule-a-booking", "record-a-payment"],
+  billing: ["choose-your-plan", "connect-stripe", "sms-credits"],
+  bug: ["working-offline"],
+};
+
+/**
+ * Up to three guides that might answer the request: matched on the subject once
+ * it says something, otherwise the usual suspects for the chosen category.
+ */
+function suggestedGuides(
+  category: SupportRequestCategory,
+  subject: string,
+  vertical: VerticalKey,
+): Guide[] {
+  const pool = guidesFor(GUIDES, vertical);
+  const words = subject
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  if (words.length > 0) {
+    // Any word may match: "deposit refund" should still find the deposit guide.
+    const seen = new Set<string>();
+    const hits: Guide[] = [];
+    for (const w of words) {
+      for (const g of searchGuides(pool, vertical, w)) {
+        if (!seen.has(g.slug)) {
+          seen.add(g.slug);
+          hits.push(g);
+        }
+      }
+    }
+    if (hits.length > 0) return hits.slice(0, 3);
+  }
+  return (GUIDES_BY_CATEGORY[category] ?? [])
+    .map((slug) => pool.find((g) => g.slug === slug))
+    .filter((g): g is Guide => g !== undefined)
+    .slice(0, 3);
+}
+
 /**
  * "New request" on the Support page. Posts to the business's support-requests
  * endpoint so the message shows up as a ticket in the RECAVO internal console,
@@ -49,6 +96,9 @@ export function ContactSupportDialog({
   const [imageWarning, setImageWarning] = useState<string | null>(null);
   const images = useSupportImages();
   const create = useCreateSupportRequest();
+  const { vertical } = useGuideVertical();
+  const t = useGuideCopy(vertical);
+  const suggestions = suggestedGuides(category, subject, vertical);
 
   const reset = () => {
     setCategory("question");
@@ -141,6 +191,27 @@ export function ContactSupportDialog({
               onChange={(e) => setSubject(e.target.value)}
             />
           </div>
+          {suggestions.length > 0 ? (
+            <div className="rounded-lg border bg-secondary/40 px-3 py-2.5">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <BookOpen className="size-3.5" /> This might answer it
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {suggestions.map((g) => (
+                  <li key={g.slug}>
+                    <Link
+                      to="/support/guides/$slug"
+                      params={{ slug: g.slug }}
+                      onClick={() => onOpenChange(false)}
+                      className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      {t(g.title)} <ArrowUpRight className="size-3.5" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="support-body">Message</Label>
             <Textarea

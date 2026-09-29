@@ -11,6 +11,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Clock,
+  BookOpen,
   CreditCard,
   ExternalLink,
   FileText,
@@ -306,6 +307,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       })),
     ),
     { to: "/whats-new", label: "What's new", icon: Sparkles },
+    { to: "/support/guides", label: "Guides", icon: BookOpen },
+    ...(tenant.businessId ? [{ to: "/support", label: "Support", icon: LifeBuoy }] : []),
   ];
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;

@@ -1,5 +1,4 @@
 import { toast } from "sonner";
-import { Workbox } from "workbox-window";
 
 /**
  * Registers /sw.js (built by scripts/build-sw.mjs) and handles updates.
@@ -8,6 +7,10 @@ import { Workbox } from "workbox-window";
  * them choose when to reload, so a half-filled form isn't lost to an update; the
  * next cold start picks it up regardless. Dev builds and environments without
  * service workers (Lovable preview, old WebViews) simply skip this.
+ *
+ * `workbox-window` is loaded only once those guards pass: it is a CommonJS
+ * package, and importing it at module level breaks the dev server's SSR pass
+ * ("Named export 'Workbox' not found") even though it is never used there.
  */
 let registered = false;
 
@@ -17,8 +20,14 @@ export function registerServiceWorker(): void {
   if (import.meta.env.DEV) return;
   registered = true;
 
-  const wb = new Workbox("/sw.js", { scope: "/" });
+  void import("workbox-window")
+    .then(({ Workbox }) => start(new Workbox("/sw.js", { scope: "/" })))
+    .catch(() => {
+      registered = false;
+    });
+}
 
+function start(wb: import("workbox-window").Workbox): void {
   // A worker is waiting either because we just found an update, or because one
   // was already parked from an earlier visit.
   wb.addEventListener("waiting", () => {
