@@ -390,7 +390,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Block availability quickly",
-        body: "The **Create** menu has **Block availability** for a quick one-off: pick the {staff}, day and hours and it's blocked without the ceremony of an event.",
+        body: "The **Create** menu has **Block availability** for a quick one-off: pick the {staff}, day and hours and it's blocked without the ceremony of an event. On the **Solo** plan, where there's no **{Staff}** page, this and **Add event** are how you take time off.",
       },
     ],
     related: ["add-staff-and-hours", "add-your-location"],
