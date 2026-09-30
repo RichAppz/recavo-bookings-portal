@@ -21,6 +21,7 @@ import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ConsumablesRouteImport } from './routes/consumables'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as FollowUpsRouteImport } from './routes/follow-ups'
+import { Route as ImpersonateRouteImport } from './routes/impersonate'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LocationsRouteImport } from './routes/locations'
 import { Route as LoginRouteImport } from './routes/login'
@@ -117,6 +118,11 @@ const EventsRoute = EventsRouteImport.update({
 const FollowUpsRoute = FollowUpsRouteImport.update({
   id: '/follow-ups',
   path: '/follow-ups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImpersonateRoute = ImpersonateRouteImport.update({
+  id: '/impersonate',
+  path: '/impersonate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -320,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/consumables': typeof ConsumablesRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
+  '/impersonate': typeof ImpersonateRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -370,6 +377,7 @@ export interface FileRoutesByTo {
   '/consumables': typeof ConsumablesRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
+  '/impersonate': typeof ImpersonateRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/consumables': typeof ConsumablesRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
+  '/impersonate': typeof ImpersonateRoute
   '/invite': typeof InviteRoute
   '/locations': typeof LocationsRoute
   '/login': typeof LoginRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/consumables'
     | '/events'
     | '/follow-ups'
+    | '/impersonate'
     | '/invite'
     | '/locations'
     | '/login'
@@ -525,6 +535,7 @@ export interface FileRouteTypes {
     | '/consumables'
     | '/events'
     | '/follow-ups'
+    | '/impersonate'
     | '/invite'
     | '/locations'
     | '/login'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/consumables'
     | '/events'
     | '/follow-ups'
+    | '/impersonate'
     | '/invite'
     | '/locations'
     | '/login'
@@ -628,6 +640,7 @@ export interface RootRouteChildren {
   ConsumablesRoute: typeof ConsumablesRoute
   EventsRoute: typeof EventsRoute
   FollowUpsRoute: typeof FollowUpsRoute
+  ImpersonateRoute: typeof ImpersonateRoute
   InviteRoute: typeof InviteRoute
   LocationsRoute: typeof LocationsRoute
   LoginRoute: typeof LoginRoute
@@ -742,6 +755,13 @@ declare module '@tanstack/react-router' {
       path: '/follow-ups'
       fullPath: '/follow-ups'
       preLoaderRoute: typeof FollowUpsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/impersonate': {
+      id: '/impersonate'
+      path: '/impersonate'
+      fullPath: '/impersonate'
+      preLoaderRoute: typeof ImpersonateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -1055,6 +1075,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConsumablesRoute: ConsumablesRoute,
   EventsRoute: EventsRoute,
   FollowUpsRoute: FollowUpsRoute,
+  ImpersonateRoute: ImpersonateRoute,
   InviteRoute: InviteRoute,
   LocationsRoute: LocationsRoute,
   LoginRoute: LoginRoute,

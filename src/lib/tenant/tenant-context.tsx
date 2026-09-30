@@ -20,6 +20,7 @@ import type {
 } from "@/lib/api/types";
 import { permissionsForRoles, type PermissionKey } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth/auth-store";
+import { isImpersonating, readImpersonation } from "@/lib/auth/impersonation";
 
 const BUSINESS_KEY = "recavo.activeBusinessId";
 const LOCATION_KEY = "recavo.activeLocationId";
@@ -51,6 +52,10 @@ const TenantContext = createContext<TenantContextValue | null>(null);
 
 function readStored(key: string): string | null {
   if (typeof window === "undefined") return null;
+  // A support session is pinned to the business it was opened for, and must not read
+  // (or, below, overwrite) whatever the admin's own sign-in on this origin remembered.
+  if (isImpersonating())
+    return key === BUSINESS_KEY ? (readImpersonation()?.businessId ?? null) : null;
   try {
     return localStorage.getItem(key);
   } catch {
@@ -60,6 +65,7 @@ function readStored(key: string): string | null {
 
 function writeStored(key: string, value: string | null) {
   if (typeof window === "undefined") return;
+  if (isImpersonating()) return;
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);

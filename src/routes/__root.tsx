@@ -16,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { RecoveryPending } from "@/components/RecoveryPending";
 import { NativeReturnGate } from "@/components/NativeReturnGate";
 import { OfflineProvider } from "@/components/OfflineProvider";
@@ -207,6 +208,7 @@ function RootComponent() {
       <ThemeProvider>
         <AuthProvider>
           <TenantProvider>
+            <ImpersonationBanner />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             {/* Native return is outermost: it consumes a one-shot handoff value and
                 leaves the page, so it must not be blocked by the recovery gate. */}
