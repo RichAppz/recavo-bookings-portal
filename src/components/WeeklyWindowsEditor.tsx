@@ -16,6 +16,7 @@ import {
 } from "@/lib/availability-windows";
 import { minutesToTime, parseTimeInput, timeToMinutes } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_START = timeToMinutes("09:00");
 const DEFAULT_END = timeToMinutes("17:00");
@@ -47,12 +48,15 @@ export function WeeklyWindowsEditor({
   error,
   businessHours,
   copy,
+  className,
 }: {
   windows: AvailabilityWindow[];
   onChange: (windows: AvailabilityWindow[]) => void;
   error?: string;
   businessHours?: BusinessHoursPreset;
   copy?: WeeklyWindowsCopy;
+  /** Overrides the default top rule, e.g. when nested under another section. */
+  className?: string;
 }) {
   // Copy follows the business's terminology: session/trainer for PT,
   // service/detailer for car detailing.
@@ -98,7 +102,7 @@ export function WeeklyWindowsEditor({
   };
 
   return (
-    <div className="grid gap-2 border-t pt-4">
+    <div className={cn("grid gap-2 border-t pt-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label>{text.label}</Label>
         <div className="flex gap-2">
