@@ -2643,7 +2643,19 @@ export function useCreateRefund() {
  * the fact and the date are shared; the portal hides "Connect Stripe" and points the
  * owner at support.
  */
-export type PaymentsHoldNotice = { since: string };
+export type PaymentsHoldNotice = {
+  since: string;
+  /**
+   * `notice`: tell the owner payments are off. `hidden`: Stripe is not shown to them at
+   * all. Absent from older API builds; treated as `notice`.
+   */
+  mode?: "notice" | "hidden";
+};
+
+/** RECAVO has decided this business never gets Stripe: show nothing about it. */
+export function stripeHidden(hold: PaymentsHoldNotice | null | undefined): boolean {
+  return hold?.mode === "hidden";
+}
 
 type ConnectAccountResponse = {
   account: ConnectAccount | null;

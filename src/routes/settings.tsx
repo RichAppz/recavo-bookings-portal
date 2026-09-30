@@ -60,6 +60,7 @@ import {
   useLatestPrivacyNotice,
   useMemberships,
   usePaymentsHold,
+  stripeHidden,
   usePolicyDocuments,
   usePublishPolicyDocument,
   usePublishPrivacyNotice,
@@ -1683,6 +1684,8 @@ function PaymentsTab() {
   const hold = usePaymentsHold().data ?? null;
   const loginLink = useConnectLoginLink();
   const rejection = connectRejection(connect.data);
+  // Never getting Stripe (RECAVO decision) and nothing connected: no Stripe card at all.
+  const hideStripe = stripeHidden(hold) && !connect.isLoading && !connect.data;
 
   const openStripeDashboard = async () => {
     const url = await loginLink.mutateAsync();
@@ -1693,61 +1696,63 @@ function PaymentsTab() {
     <>
       <TakePaymentOnlineSetting className="xl:col-span-2" />
       <BankTransferSetting className="xl:col-span-2" />
-      <SectionCard
-        title="Payment processing"
-        action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}
-      >
-        {!connect.data ? (
-          <div className="space-y-4">
-            {hold ? <PaymentsHoldNotice hold={hold} /> : null}
-            <EmptyState
-              icon={<CreditCard className="size-6" />}
-              title="No payout account connected"
-              description="Connect Stripe to take card payments. Recavo never stores your bank details."
-              action={
-                hold ? null : (
-                  <Button asChild variant="outline">
-                    <Link to="/payments">Set up payments</Link>
-                  </Button>
-                )
-              }
-            />
-            <StripeFeesNote />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {hold ? <PaymentsHoldNotice hold={hold} /> : null}
-            {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
-            <div className="flex items-start gap-4 rounded-xl border p-4">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                <CreditCard className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm font-medium">
-                  {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
-                  {connect.data.payoutsEnabled ? "enabled" : "disabled"}
-                </p>
-              </div>
+      {hideStripe ? null : (
+        <SectionCard
+          title="Payment processing"
+          action={connect.data ? <StatusBadge status={connect.data.onboardingState} /> : null}
+        >
+          {!connect.data ? (
+            <div className="space-y-4">
+              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
+              <EmptyState
+                icon={<CreditCard className="size-6" />}
+                title="No payout account connected"
+                description="Connect Stripe to take card payments. Recavo never stores your bank details."
+                action={
+                  hold ? null : (
+                    <Button asChild variant="outline">
+                      <Link to="/payments">Set up payments</Link>
+                    </Button>
+                  )
+                }
+              />
+              <StripeFeesNote />
             </div>
-            <StripeFeesNote connected />
-            <Can permission={PERMISSIONS.CONNECT_MANAGE}>
-              {connect.data.onboardingState !== "not_started" ? (
-                <Button
-                  size="sm"
-                  disabled={loginLink.isPending}
-                  onClick={() => void openStripeDashboard()}
-                >
-                  <Landmark className="size-4" />
-                  {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
-                </Button>
-              ) : null}
-            </Can>
-          </div>
-        )}
-      </SectionCard>
+          ) : (
+            <div className="space-y-4">
+              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
+              {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
+              <div className="flex items-start gap-4 rounded-xl border p-4">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                  <CreditCard className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium">
+                    {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Charges {connect.data.chargesEnabled ? "enabled" : "disabled"} · Payouts{" "}
+                    {connect.data.payoutsEnabled ? "enabled" : "disabled"}
+                  </p>
+                </div>
+              </div>
+              <StripeFeesNote connected />
+              <Can permission={PERMISSIONS.CONNECT_MANAGE}>
+                {connect.data.onboardingState !== "not_started" ? (
+                  <Button
+                    size="sm"
+                    disabled={loginLink.isPending}
+                    onClick={() => void openStripeDashboard()}
+                  >
+                    <Landmark className="size-4" />
+                    {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
+                  </Button>
+                ) : null}
+              </Can>
+            </div>
+          )}
+        </SectionCard>
+      )}
       <InvoicingSetting className="xl:col-span-2" />
     </>
   );

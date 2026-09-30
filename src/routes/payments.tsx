@@ -39,6 +39,7 @@ import {
   usePaymentsList,
   useStartConnectOnboarding,
   useSyncConnectAccount,
+  stripeHidden,
 } from "@/lib/api/hooks";
 import type { Payment } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
@@ -110,6 +111,10 @@ function PaymentsPage() {
   const connect = useConnectAccount();
   const paymentsHold = usePaymentsHold();
   const hold = paymentsHold.data ?? null;
+  // RECAVO has decided this business never gets Stripe: the payout-account card is not
+  // shown at all. An account that already exists stays visible so money already taken
+  // can still be paid out.
+  const hideStripe = stripeHidden(hold) && !connect.isLoading && !connect.data;
   const startOnboarding = useStartConnectOnboarding();
   const syncConnect = useSyncConnectAccount();
   const loginLink = useConnectLoginLink();
@@ -154,122 +159,124 @@ function PaymentsPage() {
       </div>
 
       <Can permission={PERMISSIONS.CONNECT_MANAGE}>
-        <SectionCard
-          title="Payout account"
-          description="Where your takings are sent"
-          action={
-            connect.data?.onboardingState === "complete" ? (
-              <StatusBadge status="active" />
-            ) : !connectOnboardingWorthRetrying(connect.data) ? (
-              <StatusBadge status="rejected" />
-            ) : hold ? null : (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={startOnboarding.isPending}
-                onClick={async () => {
-                  const result = await startOnboarding.mutateAsync();
-                  if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
-                  else toast.success("Onboarding started");
-                }}
-              >
-                <ExternalLink className="size-4" /> Finish onboarding
-              </Button>
-            )
-          }
-        >
-          {connect.isLoading ? (
-            <TableGhost rows={3} />
-          ) : connect.isError || !connect.data ? (
-            <div className="space-y-4">
-              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
-              <EmptyState
-                icon={<CreditCard className="size-6" />}
-                title="No payout account connected"
-                description="Connect Stripe to start taking card payments. Recavo never stores your bank details — Stripe handles onboarding and payouts."
-                action={
-                  hold ? null : (
-                    <Button
-                      disabled={startOnboarding.isPending}
-                      onClick={async () => {
-                        const result = await startOnboarding.mutateAsync();
-                        if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
-                      }}
-                    >
-                      Connect Stripe
-                    </Button>
-                  )
-                }
-              />
-              <StripeFeesNote />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
-              {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
-              <div className="flex flex-wrap gap-6 text-sm">
-                <span>
-                  <span className="text-muted-foreground">Provider: </span>
-                  {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
-                </span>
-                <span>
-                  <span className="text-muted-foreground">Charges: </span>
-                  {connect.data.chargesEnabled ? "Enabled" : "Disabled"}
-                </span>
-                <span>
-                  <span className="text-muted-foreground">Payouts: </span>
-                  {connect.data.payoutsEnabled ? "Enabled" : "Disabled"}
-                </span>
-                {/* A rejected account's outstanding requirements are Stripe's internal
-                    appeal steps, which read as gibberish and imply the business can fix
-                    this by filling something in. The notice above says what happened. */}
-                {!rejection && connect.data.requirementsDue.length > 0 ? (
-                  <span className="text-amber-600">
-                    {connect.data.requirementsDue.length} outstanding requirement(s)
-                  </span>
-                ) : null}
-              </div>
-              {!rejection && connect.data.requirementsDue.length > 0 ? (
-                <ul className="list-inside list-disc text-xs text-muted-foreground">
-                  {connect.data.requirementsDue.map((req) => (
-                    <li key={req}>{req.replace(/_/g, " ")}</li>
-                  ))}
-                </ul>
-              ) : null}
-              <StripeFeesNote connected />
-              {connect.data.payoutsEnabled ? (
-                <p className="text-xs text-muted-foreground">
-                  Payouts are automatic — Stripe pays your available balance to your bank on a
-                  rolling schedule. Use the dashboard to view your balance, see payout history,
-                  change your bank account or trigger an instant payout.
-                </p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                {connect.data.onboardingState !== "not_started" ? (
-                  <Button
-                    size="sm"
-                    disabled={loginLink.isPending}
-                    onClick={() => void openStripeDashboard()}
-                  >
-                    <Landmark className="size-4" />
-                    {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
-                  </Button>
-                ) : null}
+        {hideStripe ? null : (
+          <SectionCard
+            title="Payout account"
+            description="Where your takings are sent"
+            action={
+              connect.data?.onboardingState === "complete" ? (
+                <StatusBadge status="active" />
+              ) : !connectOnboardingWorthRetrying(connect.data) ? (
+                <StatusBadge status="rejected" />
+              ) : hold ? null : (
                 <Button
-                  variant="outline"
                   size="sm"
-                  disabled={syncConnect.isPending}
+                  variant="outline"
+                  disabled={startOnboarding.isPending}
                   onClick={async () => {
-                    await syncConnect.mutateAsync();
-                    toast.success("Account synced");
+                    const result = await startOnboarding.mutateAsync();
+                    if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
+                    else toast.success("Onboarding started");
                   }}
                 >
-                  <RotateCcw className="size-4" /> Sync account
+                  <ExternalLink className="size-4" /> Finish onboarding
                 </Button>
+              )
+            }
+          >
+            {connect.isLoading ? (
+              <TableGhost rows={3} />
+            ) : connect.isError || !connect.data ? (
+              <div className="space-y-4">
+                {hold ? <PaymentsHoldNotice hold={hold} /> : null}
+                <EmptyState
+                  icon={<CreditCard className="size-6" />}
+                  title="No payout account connected"
+                  description="Connect Stripe to start taking card payments. Recavo never stores your bank details — Stripe handles onboarding and payouts."
+                  action={
+                    hold ? null : (
+                      <Button
+                        disabled={startOnboarding.isPending}
+                        onClick={async () => {
+                          const result = await startOnboarding.mutateAsync();
+                          if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
+                        }}
+                      >
+                        Connect Stripe
+                      </Button>
+                    )
+                  }
+                />
+                <StripeFeesNote />
               </div>
-            </div>
-          )}
-        </SectionCard>
+            ) : (
+              <div className="space-y-3">
+                {hold ? <PaymentsHoldNotice hold={hold} /> : null}
+                {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
+                <div className="flex flex-wrap gap-6 text-sm">
+                  <span>
+                    <span className="text-muted-foreground">Provider: </span>
+                    {connect.data.provider === "stripe" ? "Stripe" : connect.data.provider}
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Charges: </span>
+                    {connect.data.chargesEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Payouts: </span>
+                    {connect.data.payoutsEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  {/* A rejected account's outstanding requirements are Stripe's internal
+                    appeal steps, which read as gibberish and imply the business can fix
+                    this by filling something in. The notice above says what happened. */}
+                  {!rejection && connect.data.requirementsDue.length > 0 ? (
+                    <span className="text-amber-600">
+                      {connect.data.requirementsDue.length} outstanding requirement(s)
+                    </span>
+                  ) : null}
+                </div>
+                {!rejection && connect.data.requirementsDue.length > 0 ? (
+                  <ul className="list-inside list-disc text-xs text-muted-foreground">
+                    {connect.data.requirementsDue.map((req) => (
+                      <li key={req}>{req.replace(/_/g, " ")}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <StripeFeesNote connected />
+                {connect.data.payoutsEnabled ? (
+                  <p className="text-xs text-muted-foreground">
+                    Payouts are automatic — Stripe pays your available balance to your bank on a
+                    rolling schedule. Use the dashboard to view your balance, see payout history,
+                    change your bank account or trigger an instant payout.
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {connect.data.onboardingState !== "not_started" ? (
+                    <Button
+                      size="sm"
+                      disabled={loginLink.isPending}
+                      onClick={() => void openStripeDashboard()}
+                    >
+                      <Landmark className="size-4" />
+                      {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe dashboard"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={syncConnect.isPending}
+                    onClick={async () => {
+                      await syncConnect.mutateAsync();
+                      toast.success("Account synced");
+                    }}
+                  >
+                    <RotateCcw className="size-4" /> Sync account
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+        )}
       </Can>
 
       <SectionCard
