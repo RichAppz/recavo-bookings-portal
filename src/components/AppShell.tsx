@@ -470,11 +470,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                               className={cn("size-4.5", active && "text-sidebar-primary")}
                             />
                             {label}
-                            {item.to === "/messages" && unread > 0 ? (
-                              <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground">
-                                {unread}
-                              </span>
-                            ) : null}
                             {item.to === "/waitlist" && waiting > 0 ? (
                               <span
                                 className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground"
@@ -672,7 +667,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     <Bell className="size-4" />
                     {unread > 0 ? (
-                      <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning" />
+                      <span
+                        className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-semibold text-amber-950"
+                        aria-label={`${unread} unread`}
+                      >
+                        {unread > 9 ? "9+" : unread}
+                      </span>
                     ) : null}
                   </Button>
                 </DropdownMenuTrigger>
