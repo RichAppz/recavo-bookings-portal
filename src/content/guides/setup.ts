@@ -74,6 +74,8 @@ export const SETUP_GUIDES: readonly Guide[] = [
       "time off",
       "holiday",
       "colour",
+      "solo",
+      "my hours",
     ],
     steps: [
       {
@@ -100,6 +102,11 @@ export const SETUP_GUIDES: readonly Guide[] = [
           name: "staff-hours",
           alt: "The weekly availability card for a staff member showing hours for each day.",
         },
+      },
+      {
+        heading: "On your own?",
+        body: "On the **Solo** plan there's no **{Staff}** page — you are the team. Your hours live on your {services} instead: open **{Services}**, edit any {service}, and set **Your availability**. It's one set of hours for everything you offer, so change it in one place and every {service} follows. **Use business hours** copies the location's opening times to start from.",
+        link: { to: "/services", label: "Open {Services}" },
       },
       {
         heading: "Time off and signing in",
@@ -134,6 +141,10 @@ export const SETUP_GUIDES: readonly Guide[] = [
       "catalogue",
       "bookable",
       "category",
+      "availability",
+      "hours",
+      "solo",
+      "offered",
     ],
     steps: [
       {
@@ -156,6 +167,15 @@ export const SETUP_GUIDES: readonly Guide[] = [
         image: {
           name: "service-form",
           alt: "The create service form with name, description, duration, price, deposit and booking rules.",
+        },
+      },
+      {
+        heading: "When it can be booked",
+        body: {
+          personal_training:
+            "**On your own?** The form has a **Your availability** grid: the hours clients can book you. It's the same hours whichever session you open — set it once and every session follows. Leave **Only offer this session at certain times** off unless this one really is narrower, like a Saturday-only class. **With a team**, each trainer's hours are set under **{Staff}**, and **When this session is offered** narrows just this session — leave it empty to offer it whenever a trainer is free.",
+          car_detailing:
+            "**On your own?** The form has a **Your availability** grid: the hours customers can book you. It's the same hours whichever service you open — set it once and every service follows. Leave **Only offer this service at certain times** off unless this one really is narrower, like a weekend-only wash. **With a team**, each {staff}'s hours are set under **{Staff}**, and **When this service is offered** narrows just this service — leave it empty to offer it whenever someone is free.",
         },
       },
       {
