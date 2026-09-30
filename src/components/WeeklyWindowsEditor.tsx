@@ -27,16 +27,32 @@ export type BusinessHoursPreset = {
   windows: AvailabilityWindow[];
 };
 
+/**
+ * Wording for what the windows mean. The default reads as a service's offer
+ * windows; a person's working hours pass their own copy.
+ */
+export type WeeklyWindowsCopy = {
+  label: string;
+  /** Shown when the rows match the business-hours preset. */
+  matchesPreset: (presetLabel: string) => string;
+  /** Shown otherwise, above the rows. */
+  hint: string;
+  /** Shown instead of the table when there are no rows. */
+  empty: string;
+};
+
 export function WeeklyWindowsEditor({
   windows,
   onChange,
   error,
   businessHours,
+  copy,
 }: {
   windows: AvailabilityWindow[];
   onChange: (windows: AvailabilityWindow[]) => void;
   error?: string;
   businessHours?: BusinessHoursPreset;
+  copy?: WeeklyWindowsCopy;
 }) {
   // Copy follows the business's terminology: session/trainer for PT,
   // service/detailer for car detailing.
@@ -47,6 +63,13 @@ export function WeeklyWindowsEditor({
       .trim()
       .toLowerCase() || "service";
   const staffLower = tenant.terminology.staff.trim().toLowerCase() || "staff member";
+  const text: WeeklyWindowsCopy = copy ?? {
+    label: `When this ${serviceLower} is offered`,
+    matchesPreset: (preset) =>
+      `Matches ${preset}'s opening hours. Adjust below, or leave empty to offer whenever the ${staffLower} is available.`,
+    hint: `Leave empty to offer whenever the ${staffLower} is available.`,
+    empty: `No days listed. Clients can book any time the ${staffLower} is free.`,
+  };
 
   const matchesBusinessHours =
     Boolean(businessHours) &&
@@ -77,7 +100,7 @@ export function WeeklyWindowsEditor({
   return (
     <div className="grid gap-2 border-t pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label>When this {serviceLower} is offered</Label>
+        <Label>{text.label}</Label>
         <div className="flex gap-2">
           {businessHours && businessHours.windows.length > 0 && !matchesBusinessHours ? (
             <Button
@@ -95,15 +118,11 @@ export function WeeklyWindowsEditor({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        {matchesBusinessHours
-          ? `Matches ${businessHours?.label}'s opening hours. Adjust below, or leave empty to offer whenever the ${staffLower} is available.`
-          : `Leave empty to offer whenever the ${staffLower} is available.`}
+        {matchesBusinessHours ? text.matchesPreset(businessHours?.label ?? "") : text.hint}
       </p>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {windows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No days listed. Clients can book any time the {staffLower} is free.
-        </p>
+        <p className="text-xs text-muted-foreground">{text.empty}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border/70">
           <div className="grid grid-cols-[1fr_1fr_1fr_2.25rem] gap-2 border-b bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground">
