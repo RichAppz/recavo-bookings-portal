@@ -145,6 +145,17 @@ function ServicesPage() {
   const locations = useLocationsList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
+  const { user } = useAuth();
+  // No offer windows on a one-person business means "whenever they're free" —
+  // say so in their words rather than the team wording.
+  const offeredLabel = (s: CatalogueService) => {
+    if (!soleStaff || s.availabilityWindows.length > 0) {
+      return formatAvailabilityWindows(s.availabilityWindows);
+    }
+    return soleStaff.userId === user?.id
+      ? "Whenever you're available"
+      : `Whenever ${soleStaff.displayName} is available`;
+  };
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   // "N consumables" on each card: the catalogue rows carry the services they're on,
@@ -341,10 +352,7 @@ function ServicesPage() {
                         label="Buffer"
                         value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
                       />
-                      <Row
-                        label="Offered"
-                        value={formatAvailabilityWindows(s.availabilityWindows)}
-                      />
+                      <Row label="Offered" value={offeredLabel(s)} />
                     </dl>
 
                     <div className="mt-5 flex items-center justify-between">
@@ -533,6 +541,13 @@ function ServiceDialog({
   const defaultWindows = (s: CatalogueService | null) =>
     s ? [...s.availabilityWindows] : [...(businessHours?.windows ?? [])];
   const [windows, setWindows] = useState<AvailabilityWindow[]>(() => defaultWindows(service));
+  // One person: their availability already says when they can be booked, so a
+  // second weekly grid for the session is noise. It stays behind a switch for the
+  // odd session that really is narrower (a Saturday-only class); off saves no
+  // windows, which the API reads as "whenever they're available".
+  const [restrictWindows, setRestrictWindows] = useState(
+    () => (service?.availabilityWindows.length ?? 0) > 0,
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // One-person business: the Staff page is hidden on Solo, so the only person's
@@ -623,6 +638,7 @@ function ServiceDialog({
     setPublicVisible(s?.publicVisible ?? true);
     setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
+    setRestrictWindows((s?.availabilityWindows.length ?? 0) > 0);
     setHours(defaultHours(soleStaff));
     setFieldErrors({});
     // Seed from whatever the usage query already holds. The adopt effect below
@@ -707,7 +723,8 @@ function ServiceDialog({
     // whatever the record already has rather than inventing a new value.
     const capacityMax = isDetailing ? (service?.capacityMax ?? 1) : Number(capacity) || 1;
 
-    if (windows.some((w) => !isValidAvailabilityWindow(w))) {
+    const offerWindows = soleStaff && !restrictWindows ? [] : windows;
+    if (offerWindows.some((w) => !isValidAvailabilityWindow(w))) {
       setFieldErrors((prev) => ({
         ...prev,
         availabilityWindows: "Each window needs a start time before its end.",
@@ -783,7 +800,7 @@ function ServiceDialog({
       publicVisible,
       depositMinor,
       variants: variantsPayload,
-      availabilityWindows: windows,
+      availabilityWindows: offerWindows,
       followUp: followUp.rule,
     };
 
@@ -1270,12 +1287,54 @@ function ServiceDialog({
             />
           ) : null}
 
-          <WeeklyWindowsEditor
-            windows={windows}
-            onChange={setWindows}
-            error={fieldErrors.availabilityWindows}
-            businessHours={businessHours}
-          />
+          {soleStaff ? (
+            <div className="grid gap-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Only offer this {lower} at certain times</p>
+                  <p className="text-xs text-muted-foreground">
+                    Off: clients can book it whenever {hoursOwnerIsMe ? "you're" : "they're"}{" "}
+                    available. On: narrow it further — a weekend-only class, early sessions.
+                  </p>
+                </div>
+                <Switch
+                  checked={restrictWindows}
+                  onCheckedChange={(on) => {
+                    setRestrictWindows(on);
+                    // Give them something to edit rather than an empty grid.
+                    if (on && windows.length === 0) {
+                      setWindows(
+                        businessHours?.windows.length ? [...businessHours.windows] : [...hours],
+                      );
+                    }
+                  }}
+                />
+              </div>
+              {restrictWindows ? (
+                <WeeklyWindowsEditor
+                  windows={windows}
+                  onChange={setWindows}
+                  error={fieldErrors.availabilityWindows}
+                  businessHours={businessHours}
+                  className="border-t-0 pt-0"
+                  copy={{
+                    label: `When this ${lower} is offered`,
+                    matchesPreset: (preset) =>
+                      `Matches ${preset}'s opening hours. Clients can only book this ${lower} inside these times.`,
+                    hint: `Clients can only book this ${lower} inside these times, and only when ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
+                    empty: `No times listed — turn the switch off to offer it whenever ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <WeeklyWindowsEditor
+              windows={windows}
+              onChange={setWindows}
+              error={fieldErrors.availabilityWindows}
+              businessHours={businessHours}
+            />
+          )}
 
           <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
             <div className="flex items-center justify-between rounded-xl border p-3">
