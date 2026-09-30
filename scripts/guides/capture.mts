@@ -19,8 +19,16 @@ import { chromium, type Browser, type BrowserContext, type Locator, type Page } 
 import sharp from "sharp";
 import { GUIDES } from "../../src/content/guides/index.ts";
 import { expectedImagePaths } from "../../src/lib/guides.ts";
-import { emailFor, loadEnv, type Vertical } from "./lib.mts";
-import { SHOTS, type ChipSpec, type Shot, type ShotContext, type Viewport } from "./shots.ts";
+import { Api, emailFor, loadEnv, signIn as apiSignIn, type Vertical } from "./lib.mts";
+import {
+  NAMES,
+  SHOTS,
+  type BusinessKind,
+  type ChipSpec,
+  type Shot,
+  type ShotContext,
+  type Viewport,
+} from "./shots.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const PUBLIC = join(ROOT, "public");
@@ -174,7 +182,27 @@ async function signIn(page: Page, vertical: Vertical): Promise<void> {
   }
 }
 
-function makeContext(page: Page, vertical: Vertical, viewport: Viewport): ShotContext {
+/** The account's team and one-person business ids, by the trading names the seed uses. */
+async function businessIds(vertical: Vertical): Promise<Record<BusinessKind, string>> {
+  const session = await apiSignIn(env, emailFor(env, vertical));
+  const api = new Api(env.API_BASE_URL, session.accessToken);
+  const mine = await api.get<{ businesses: { id: string; tradingName: string }[] }>(
+    "/api/v1/me/businesses",
+  );
+  const find = (name: string) => {
+    const hit = mine.businesses.find((b) => b.tradingName === name);
+    if (!hit) throw new Error(`${name} is not seeded for ${vertical} — run npm run guides:seed`);
+    return hit.id;
+  };
+  return { team: find(NAMES[vertical].business), solo: find(NAMES[vertical].soloBusiness) };
+}
+
+function makeContext(
+  page: Page,
+  vertical: Vertical,
+  viewport: Viewport,
+  businesses: Record<BusinessKind, string>,
+): ShotContext {
   const isMobile = VIEWPORTS[viewport].mobile;
   const settle = async (ms = 400) => {
     // Loading skeletons use animate-pulse; wait until none are visible (bounded).
@@ -207,7 +235,30 @@ function makeContext(page: Page, vertical: Vertical, viewport: Viewport): ShotCo
     if (spec.text) chips = chips.filter({ hasText: spec.text });
     return chips.nth(spec.nth ?? 0);
   };
-  return { page, vertical, viewport, isMobile, go, settle, openNav, calendarEvent, calendarChip };
+  // The portal remembers the active business in localStorage and re-reads it on a
+  // full navigation, which every shot's `go` performs. The location filter is reset
+  // too, since it would otherwise point at the other business's location.
+  const useBusiness = async (which: BusinessKind) => {
+    await page.evaluate(
+      ([id, locationKey]) => {
+        localStorage.setItem("recavo.activeBusinessId", id);
+        localStorage.setItem(locationKey, "all");
+      },
+      [businesses[which], "recavo.activeLocationId"] as const,
+    );
+  };
+  return {
+    page,
+    vertical,
+    viewport,
+    isMobile,
+    go,
+    settle,
+    openNav,
+    calendarEvent,
+    calendarChip,
+    useBusiness,
+  };
 }
 
 async function toWebp(png: Buffer, dest: string): Promise<number> {
@@ -225,6 +276,7 @@ async function toWebp(png: Buffer, dest: string): Promise<number> {
 async function captureShot(ctx: ShotContext, shot: Shot, dest: string): Promise<void> {
   const { page } = ctx;
   await page.emulateMedia({ colorScheme: shot.dark ? "dark" : "light" });
+  await ctx.useBusiness(shot.business ?? "team");
   await ctx.go(shot.route);
   if (shot.prepare) await shot.prepare(ctx);
   if (shot.offline) {
@@ -310,7 +362,7 @@ async function runAccount(
 
   console.log(`\n${vertical} · ${viewport}`);
   await signIn(page, vertical);
-  const ctx = makeContext(page, vertical, viewport);
+  const ctx = makeContext(page, vertical, viewport, await businessIds(vertical));
   let failures = 0;
   for (const shot of shots) {
     const dest = fileFor(folderFor(shot, vertical), shot.guide, shot.step, viewport);

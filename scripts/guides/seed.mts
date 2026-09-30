@@ -903,7 +903,10 @@ const AUTO: Plan = {
 
 // ---- Seeding --------------------------------------------------------------------
 
-async function ensureBusiness(api: Api, plan: Plan): Promise<Business> {
+async function ensureBusiness(
+  api: Api,
+  plan: Pick<Plan, "legalName" | "tradingName" | "vertical">,
+): Promise<Business> {
   const mine = await api.get<{ businesses: Business[] }>("/api/v1/me/businesses");
   const existing = mine.businesses.find((b) => b.tradingName === plan.tradingName);
   if (existing) {
@@ -928,34 +931,45 @@ async function ensureBusiness(api: Api, plan: Plan): Promise<Business> {
  * an active Business plan straight in the local database (owner role). Skipped
  * when GUIDES_DATABASE_URL is not set.
  */
-function grantSubscription(businessId: string): string {
+function grantSubscription(businessId: string, tier: "business" | "solo" = "business"): string {
   const url = env.GUIDES_DATABASE_URL;
   if (!url) return "skipped (GUIDES_DATABASE_URL not set)";
   if (!/localhost|127\.0\.0\.1/.test(url)) return "skipped (GUIDES_DATABASE_URL is not local)";
-  const sql = `
-    INSERT INTO business_saas_subscriptions
-      (id, business_id, plan_id, plan_version, status, access_state, stripe_customer_id,
-       stripe_price_id, current_period_start, current_period_end, entitlements, provider, provider_ref)
-    SELECT gen_random_uuid(), '${businessId}', p.id, 'business_v1', 'active', 'entitled',
-           'cus_guides_${businessId}', p.stripe_price_id,
-           now() - interval '12 days', now() + interval '18 days', '{}'::jsonb, 'stripe',
-           'sub_guides_${businessId}'
-    FROM saas_plans p WHERE p.code = 'business_month'
-    AND NOT EXISTS (
-      SELECT 1 FROM business_saas_subscriptions s
-      WHERE s.business_id = '${businessId}' AND s.status NOT IN ('cancelled', 'incomplete_expired')
-    );
+  // Solo carries the seat limit the portal reads to hide team UI; Business gets the
+  // invoicing add-on so those guides have something to show.
+  const entitlements =
+    tier === "solo"
+      ? `jsonb_build_object('limits', jsonb_build_object('staff', 1, 'services', 50, 'locations', 1), 'planId', p.id, 'status', 'active')`
+      : `'{}'::jsonb`;
+  const addOn =
+    tier === "business"
+      ? `
     INSERT INTO active_entitlements (id, business_id, feature_key, lookup_key, active, synced_at)
     SELECT gen_random_uuid(), '${businessId}', 'invoicing', 'recavo_addon_invoicing_gbp_month_v1', true, now()
     WHERE NOT EXISTS (
       SELECT 1 FROM active_entitlements e WHERE e.business_id = '${businessId}' AND e.feature_key = 'invoicing'
-    );`;
+    );`
+      : "";
+  const sql = `
+    INSERT INTO business_saas_subscriptions
+      (id, business_id, plan_id, plan_version, status, access_state, stripe_customer_id,
+       stripe_price_id, current_period_start, current_period_end, entitlements, provider, provider_ref)
+    SELECT gen_random_uuid(), '${businessId}', p.id, '${tier}_v1', 'active', 'entitled',
+           'cus_guides_${businessId}', p.stripe_price_id,
+           now() - interval '12 days', now() + interval '18 days', ${entitlements}, 'stripe',
+           'sub_guides_${businessId}'
+    FROM saas_plans p WHERE p.code = '${tier}_month'
+    AND NOT EXISTS (
+      SELECT 1 FROM business_saas_subscriptions s
+      WHERE s.business_id = '${businessId}' AND s.status NOT IN ('cancelled', 'incomplete_expired')
+    );${addOn}`;
   const result = spawnSync("psql", [url, "-v", "ON_ERROR_STOP=1", "-Atc", sql], {
     encoding: "utf8",
   });
   if (result.status !== 0) return `failed (${result.stderr.trim()})`;
   const inserted = (result.stdout.match(/INSERT 0 1/g) ?? []).length;
-  return inserted > 0 ? "Business plan (active) + invoicing add-on" : "already present";
+  if (inserted === 0) return "already present";
+  return tier === "solo" ? "Solo plan (active)" : "Business plan (active) + invoicing add-on";
 }
 
 async function seed(plan: Plan): Promise<void> {
@@ -1465,7 +1479,136 @@ async function seed(plan: Plan): Promise<void> {
   console.log(`  ✓ ${plan.tradingName} ready`);
 }
 
+/**
+ * A one-person business per vertical, owned by the same account as the team one,
+ * for the guides that show how Solo differs: no Staff page, availability set from
+ * the session form. Kept deliberately small — a location, the owner, one service.
+ */
+type SoloPlan = {
+  vertical: Vertical;
+  legalName: string;
+  tradingName: string;
+  slug: string;
+  location: { name: string; type: "physical" | "mobile"; hours: [number, number, number][] };
+  /** The owner's own hours; inside the location's. */
+  hours: [number, number, number][];
+  service: { name: string; description: string; minutes: number; price: number; colour: string };
+};
+
+// Trading names are repeated in scripts/guides/shots.ts NAMES so shots can switch to them.
+const SOLO_PLANS: readonly SoloPlan[] = [
+  {
+    vertical: "personal_training",
+    legalName: "Sam Okafor Coaching",
+    tradingName: "Okafor Coaching",
+    slug: "okafor-coaching",
+    location: { name: "Roundhay Park, Leeds", type: "physical", hours: PT_HOURS },
+    hours: [1, 2, 3, 4, 5].map((d) => [d, MIN(7), MIN(15)] as [number, number, number]),
+    service: {
+      name: "Outdoor PT session",
+      description: "One-to-one training in the park — bring water and layers.",
+      minutes: 60,
+      price: 4000,
+      colour: "#0f766e",
+    },
+  },
+  {
+    vertical: "car_detailing",
+    legalName: "Jordan Blake Valeting",
+    tradingName: "Blake Mobile Valeting",
+    slug: "blake-mobile-valeting",
+    location: { name: "Mobile — Leeds and Wakefield", type: "mobile", hours: AUTO_HOURS },
+    hours: [1, 2, 3, 4, 5].map((d) => [d, MIN(8), MIN(17)] as [number, number, number]),
+    service: {
+      name: "Maintenance wash",
+      description: "Safe two-bucket wash, wheels, tyres and glass at your door.",
+      minutes: 90,
+      price: 4500,
+      colour: "#1d4ed8",
+    },
+  },
+];
+
+async function seedSolo(plan: SoloPlan): Promise<void> {
+  console.log(`\n${plan.tradingName} (${plan.vertical}, solo)`);
+  const session = await signIn(env, emailFor(env, plan.vertical));
+  const api = new Api(env.API_BASE_URL, session.accessToken);
+  const business = await ensureBusiness(api, plan);
+  const B = `/api/v1/businesses/${business.id}`;
+  log("subscription", grantSubscription(business.id, "solo"));
+
+  if (business.slug !== plan.slug) {
+    try {
+      await api.patch(B, { slug: plan.slug }, { ifMatch: business.version });
+      log("slug", plan.slug);
+    } catch (err) {
+      log("slug", `skipped (${(err as Error).message})`);
+    }
+  }
+
+  const locations = await api.get<{ locations: Location[] }>(`${B}/locations`);
+  let location = locations.locations.find((l) => l.name === plan.location.name);
+  if (!location) {
+    location = (
+      await api.post<{ location: Location }>(`${B}/locations`, {
+        name: plan.location.name,
+        type: plan.location.type,
+        timezone: TZ,
+        openingHours: plan.location.hours.map(([dayOfWeek, openMinute, closeMinute]) => ({
+          dayOfWeek,
+          openMinute,
+          closeMinute,
+        })),
+        publicVisible: true,
+      })
+    ).location;
+  }
+  log("location", location.name);
+
+  // The owner's staff record is created with the business; only the hours are ours.
+  const staff = await api.get<{ staff: Staff[] }>(`${B}/staff`);
+  const owner = staff.staff[0];
+  if (owner) {
+    await api.patch(
+      `${B}/staff/${owner.id}`,
+      {
+        workingRules: plan.hours.map(([dayOfWeek, startMinute, endMinute]) => ({
+          dayOfWeek,
+          startMinute,
+          endMinute,
+          locationId: null,
+        })),
+      },
+      { ifMatch: owner.version },
+    );
+    log("owner hours", `${owner.displayName}, ${plan.hours.length} days`);
+  }
+
+  const services = await api.get<{ services: Service[] }>(`${B}/services`);
+  if (!services.services.some((s) => s.name === plan.service.name)) {
+    await api.post(`${B}/services`, {
+      name: plan.service.name,
+      description: plan.service.description,
+      durationMinutes: plan.service.minutes,
+      basePriceMinor: plan.service.price,
+      currency: "GBP",
+      capacityMax: 1,
+      locationIds: [location.id],
+      publicVisible: true,
+      colour: plan.service.colour,
+      bookingNoticeMinutes: 0,
+      bookingHorizonDays: 180,
+      availabilityWindows: [],
+    });
+  }
+  log("service", plan.service.name);
+  console.log(`  ✓ ${plan.tradingName} ready`);
+}
+
 const plans = [PT, AUTO].filter((p) => !only || p.vertical === only);
 for (const plan of plans) {
   await seed(plan);
+}
+for (const plan of SOLO_PLANS.filter((p) => !only || p.vertical === only)) {
+  await seedSolo(plan);
 }

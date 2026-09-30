@@ -27,7 +27,12 @@ export type ShotContext = {
   calendarEvent: (text: string | RegExp) => Locator;
   /** A calendar chip picked by accessible label, visible text and position among matches. */
   calendarChip: (spec: ChipSpec) => Locator;
+  /** Make the team business or the one-person business (both seeded) the active one. */
+  useBusiness: (which: BusinessKind) => Promise<void>;
 };
+
+/** The seed gives each account a team business and a one-person (Solo) business. */
+export type BusinessKind = "team" | "solo";
 
 /**
  * How to find one booking chip on the week calendar. Labels read like
@@ -42,6 +47,8 @@ export type Shot = {
   step: string;
   /** Verticals this shot applies to. Defaults to every vertical the guide names. */
   verticals?: Vertical[];
+  /** Which of the account's businesses to shoot as. Defaults to the team. */
+  business?: BusinessKind;
   route: string;
   prepare?: (ctx: ShotContext) => Promise<void>;
   /** Capture the whole scrollable page rather than the viewport. */
@@ -70,6 +77,8 @@ export const NAMES = {
     location: "Peak Studio, Leeds",
     packageName: "10-session block",
     event: "Level 3 CPD workshop",
+    business: "Peak Performance PT",
+    soloBusiness: "Okafor Coaching",
   },
   [AUTO]: {
     client: "Oliver Grant",
@@ -82,6 +91,8 @@ export const NAMES = {
     location: "Unit 4, Riverside Trading Estate",
     packageName: "",
     event: "Van MOT",
+    business: "Prestige Auto Care",
+    soloBusiness: "Blake Mobile Valeting",
   },
 } as const satisfies Record<Vertical, Record<string, string>>;
 
@@ -90,6 +101,14 @@ async function openDialog(ctx: ShotContext, name: string | RegExp): Promise<void
   await ctx.page.getByRole("button", { name }).first().click();
   await ctx.page.getByRole("dialog").first().waitFor({ timeout: 10_000 });
   await ctx.settle(400);
+}
+
+/** Scroll an open dialog so the section headed `label` sits at the top of the frame. */
+async function scrollDialogTo(ctx: ShotContext, label: string): Promise<void> {
+  const heading = ctx.page.getByRole("dialog").getByText(label, { exact: true }).first();
+  await heading.waitFor({ timeout: 10_000 });
+  await heading.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await ctx.settle(300);
 }
 
 /** Open a booking's side panel by clicking its chip on the calendar (matched by label). */
@@ -246,12 +265,32 @@ const SETUP: Shot[] = [
     },
     clip: (ctx) => card(ctx, /Weekly availability/i),
   },
+  {
+    guide: "add-staff-and-hours",
+    step: "solo-availability",
+    business: "solo",
+    route: "/services",
+    prepare: async (ctx) => {
+      await openDialog(ctx, /^Edit (session|service)$/i);
+      await scrollDialogTo(ctx, "Your availability");
+    },
+  },
   { guide: "create-your-services", step: "services", route: "/services" },
   {
     guide: "create-your-services",
     step: "service-form",
     route: "/services",
     prepare: (ctx) => openDialog(ctx, /Create session|Create service/i),
+  },
+  {
+    guide: "create-your-services",
+    step: "service-availability",
+    business: "solo",
+    route: "/services",
+    prepare: async (ctx) => {
+      await openDialog(ctx, /Create session|Create service/i);
+      await scrollDialogTo(ctx, "Your availability");
+    },
   },
   {
     guide: "share-your-booking-page",

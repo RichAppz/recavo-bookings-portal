@@ -51,6 +51,11 @@ with clients, a week of bookings either side of today, recorded payments, a wait
 entry and a bank-transfer booking. Re-running is safe: everything is looked up by name
 first, and bookings are only laid down once.
 
+Each account also gets a small **one-person business on the Solo plan** — "Okafor
+Coaching" and "Blake Mobile Valeting" — for the guide steps that show how Solo differs
+(no Staff page; availability set from the session form). A shot opts into it with
+`business: "solo"`; everything else is taken as the team business.
+
 The bookings are placed relative to the day you seed, and `scripts/guides/shots.ts`
 expects them where the seed put them (e.g. tomorrow 07:00 is the paid example). If the
 seed day is long past, re-seed into a fresh local database before capturing.

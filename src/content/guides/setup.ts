@@ -106,6 +106,15 @@ export const SETUP_GUIDES: readonly Guide[] = [
       {
         heading: "On your own?",
         body: "On the **Solo** plan there's no **{Staff}** page — you are the team. Your hours live on your {services} instead: open **{Services}**, edit any {service}, and set **Your availability**. It's one set of hours for everything you offer, so change it in one place and every {service} follows. **Use business hours** copies the location's opening times to start from.",
+        image: {
+          name: "solo-availability",
+          alt: {
+            personal_training:
+              "The Edit session panel for a one-person business, showing the Your availability grid with hours for each weekday.",
+            car_detailing:
+              "The Edit service panel for a one-person business, showing the Your availability grid with hours for each weekday.",
+          },
+        },
         link: { to: "/services", label: "Open {Services}" },
       },
       {
@@ -176,6 +185,15 @@ export const SETUP_GUIDES: readonly Guide[] = [
             "**On your own?** The form has a **Your availability** grid: the hours clients can book you. It's the same hours whichever session you open — set it once and every session follows. Leave **Only offer this session at certain times** off unless this one really is narrower, like a Saturday-only class. **With a team**, each trainer's hours are set under **{Staff}**, and **When this session is offered** narrows just this session — leave it empty to offer it whenever a trainer is free.",
           car_detailing:
             "**On your own?** The form has a **Your availability** grid: the hours customers can book you. It's the same hours whichever service you open — set it once and every service follows. Leave **Only offer this service at certain times** off unless this one really is narrower, like a weekend-only wash. **With a team**, each {staff}'s hours are set under **{Staff}**, and **When this service is offered** narrows just this service — leave it empty to offer it whenever someone is free.",
+        },
+        image: {
+          name: "service-availability",
+          alt: {
+            personal_training:
+              "The Create session form for a one-person business: the Your availability grid with the trainer's hours for each weekday, and the “Only offer this session at certain times” switch off beneath it.",
+            car_detailing:
+              "The Create service form for a one-person business: the Your availability grid with the owner's hours for each weekday, and the “Only offer this service at certain times” switch off beneath it.",
+          },
         },
       },
       {
