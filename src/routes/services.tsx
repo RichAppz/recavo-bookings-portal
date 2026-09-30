@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useAuth } from "@/lib/auth/auth-store";
 import {
   useConsumables,
   useCreateService,
@@ -45,6 +46,7 @@ import {
   useServices,
   useStaffList,
   useUpdateService,
+  useUpdateStaff,
 } from "@/lib/api/hooks";
 import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
 import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
@@ -74,6 +76,11 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
+import {
+  sameWorkingHours,
+  windowsToWorkingRules,
+  workingRulesToWindows,
+} from "@/lib/working-hours";
 import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
@@ -138,6 +145,17 @@ function ServicesPage() {
   const locations = useLocationsList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
+  const { user } = useAuth();
+  // No offer windows on a one-person business means "whenever they're free" —
+  // say so in their words rather than the team wording.
+  const offeredLabel = (s: CatalogueService) => {
+    if (!soleStaff || s.availabilityWindows.length > 0) {
+      return formatAvailabilityWindows(s.availabilityWindows);
+    }
+    return soleStaff.userId === user?.id
+      ? "Whenever you're available"
+      : `Whenever ${soleStaff.displayName} is available`;
+  };
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   // "N consumables" on each card: the catalogue rows carry the services they're on,
@@ -334,10 +352,7 @@ function ServicesPage() {
                         label="Buffer"
                         value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
                       />
-                      <Row
-                        label="Offered"
-                        value={formatAvailabilityWindows(s.availabilityWindows)}
-                      />
+                      <Row label="Offered" value={offeredLabel(s)} />
                     </dl>
 
                     <div className="mt-5 flex items-center justify-between">
@@ -526,7 +541,42 @@ function ServiceDialog({
   const defaultWindows = (s: CatalogueService | null) =>
     s ? [...s.availabilityWindows] : [...(businessHours?.windows ?? [])];
   const [windows, setWindows] = useState<AvailabilityWindow[]>(() => defaultWindows(service));
+  // One person: their availability already says when they can be booked, so a
+  // second weekly grid for the session is noise. It stays behind a switch for the
+  // odd session that really is narrower (a Saturday-only class); off saves no
+  // windows, which the API reads as "whenever they're available".
+  const [restrictWindows, setRestrictWindows] = useState(
+    () => (service?.availabilityWindows.length ?? 0) > 0,
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // One-person business: the Staff page is hidden on Solo, so the only person's
+  // working hours are set here too — without them nothing is ever bookable, however
+  // the session itself is configured. Someone who has never set hours starts from
+  // the business's opening hours so saving the session makes them bookable at once.
+  const { user } = useAuth();
+  const updateStaff = useUpdateStaff();
+  const defaultHours = (member: Staff | null) =>
+    member
+      ? member.workingRules.length > 0
+        ? workingRulesToWindows(member.workingRules)
+        : [...(businessHours?.windows ?? [])]
+      : [];
+  const [hours, setHours] = useState<AvailabilityWindow[]>(() => defaultHours(soleStaff));
+  const hoursOwnerIsMe = Boolean(soleStaff && user && soleStaff.userId === user.id);
+  const hoursCopy = useMemo(() => {
+    const who = hoursOwnerIsMe ? "you" : (soleStaff?.displayName ?? "they");
+    const whose = hoursOwnerIsMe ? "your" : `${soleStaff?.displayName ?? "their"}'s`;
+    return {
+      label: hoursOwnerIsMe
+        ? "Your availability"
+        : `${soleStaff?.displayName ?? "Their"} availability`,
+      matchesPreset: (preset: string) =>
+        `Matches ${preset}'s opening hours. These are the hours clients can book ${who} for any ${lower}.`,
+      hint: `The hours clients can book ${who}. Applies to every ${lower}, not just this one.`,
+      empty: `No hours set — clients can't book ${who} until ${whose} hours are added.`,
+    };
+  }, [hoursOwnerIsMe, soleStaff?.displayName, lower]);
 
   // Consumables used (detailing only): the materials a job of this service uses by
   // default, saved through their own endpoint once the service itself has saved.
@@ -568,6 +618,7 @@ function ServiceDialog({
   const submitting =
     createService.isPending ||
     updateService.isPending ||
+    updateStaff.isPending ||
     replaceServiceUsage.isPending ||
     replaceUpsells.isPending;
 
@@ -587,6 +638,8 @@ function ServiceDialog({
     setPublicVisible(s?.publicVisible ?? true);
     setVariants(toVariantRows(s));
     setWindows(defaultWindows(s));
+    setRestrictWindows((s?.availabilityWindows.length ?? 0) > 0);
+    setHours(defaultHours(soleStaff));
     setFieldErrors({});
     // Seed from whatever the usage query already holds. The adopt effect below
     // can't be relied on here: it runs in the same commit as this reset and its
@@ -611,6 +664,13 @@ function ServiceDialog({
     // resetFrom closes over fresh setters each render; the service is what matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, service?.id, service?.version]);
+
+  // The staff list can land after the dialog opens (and re-lands after a save
+  // bumps the version), so the hours follow the person rather than the service.
+  useEffect(() => {
+    if (open) setHours(defaultHours(soleStaff));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, soleStaff?.id, soleStaff?.version]);
 
   const updateVariant = (index: number, patch: Partial<VariantRow>) => {
     setVariants((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -663,12 +723,24 @@ function ServiceDialog({
     // whatever the record already has rather than inventing a new value.
     const capacityMax = isDetailing ? (service?.capacityMax ?? 1) : Number(capacity) || 1;
 
-    if (windows.some((w) => !isValidAvailabilityWindow(w))) {
+    const offerWindows = soleStaff && !restrictWindows ? [] : windows;
+    if (offerWindows.some((w) => !isValidAvailabilityWindow(w))) {
       setFieldErrors((prev) => ({
         ...prev,
         availabilityWindows: "Each window needs a start time before its end.",
       }));
       toast.error(`Check the ${lower} offer windows`);
+      throw new Error("validation");
+    }
+
+    // The sole person's hours save alongside the session, only when they changed.
+    const hoursChanged = soleStaff ? !sameWorkingHours(hours, soleStaff.workingRules) : false;
+    if (hoursChanged && hours.some((w) => !isValidAvailabilityWindow(w))) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        workingRules: "Each day needs a start time before its end.",
+      }));
+      toast.error("Check the availability hours");
       throw new Error("validation");
     }
 
@@ -728,11 +800,21 @@ function ServiceDialog({
       publicVisible,
       depositMinor,
       variants: variantsPayload,
-      availabilityWindows: windows,
+      availabilityWindows: offerWindows,
       followUp: followUp.rule,
     };
 
     setFieldErrors({});
+    // Hours go first: saving the service can itself touch the staff record (to add
+    // the service to a restricted list), which would stale the If-Match we hold.
+    // The hook toasts failures and refetches on 409; the dialog stays open.
+    if (hoursChanged && soleStaff) {
+      await updateStaff.mutateAsync({
+        staffId: soleStaff.id,
+        version: soleStaff.version,
+        body: { workingRules: windowsToWorkingRules(hours, soleStaff.workingRules) },
+      });
+    }
     try {
       let saved: CatalogueService;
       if (service) {
@@ -1195,12 +1277,64 @@ function ServiceDialog({
             </div>
           )}
 
-          <WeeklyWindowsEditor
-            windows={windows}
-            onChange={setWindows}
-            error={fieldErrors.availabilityWindows}
-            businessHours={businessHours}
-          />
+          {soleStaff ? (
+            <WeeklyWindowsEditor
+              windows={hours}
+              onChange={setHours}
+              error={fieldErrors.workingRules}
+              businessHours={businessHours}
+              copy={hoursCopy}
+            />
+          ) : null}
+
+          {soleStaff ? (
+            <div className="grid gap-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Only offer this {lower} at certain times</p>
+                  <p className="text-xs text-muted-foreground">
+                    Off: clients can book it whenever {hoursOwnerIsMe ? "you're" : "they're"}{" "}
+                    available. On: narrow it further — a weekend-only class, early sessions.
+                  </p>
+                </div>
+                <Switch
+                  checked={restrictWindows}
+                  onCheckedChange={(on) => {
+                    setRestrictWindows(on);
+                    // Give them something to edit rather than an empty grid.
+                    if (on && windows.length === 0) {
+                      setWindows(
+                        businessHours?.windows.length ? [...businessHours.windows] : [...hours],
+                      );
+                    }
+                  }}
+                />
+              </div>
+              {restrictWindows ? (
+                <WeeklyWindowsEditor
+                  windows={windows}
+                  onChange={setWindows}
+                  error={fieldErrors.availabilityWindows}
+                  businessHours={businessHours}
+                  className="border-t-0 pt-0"
+                  copy={{
+                    label: `When this ${lower} is offered`,
+                    matchesPreset: (preset) =>
+                      `Matches ${preset}'s opening hours. Clients can only book this ${lower} inside these times.`,
+                    hint: `Clients can only book this ${lower} inside these times, and only when ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
+                    empty: `No times listed — turn the switch off to offer it whenever ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : (
+            <WeeklyWindowsEditor
+              windows={windows}
+              onChange={setWindows}
+              error={fieldErrors.availabilityWindows}
+              businessHours={businessHours}
+            />
+          )}
 
           <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
             <div className="flex items-center justify-between rounded-xl border p-3">

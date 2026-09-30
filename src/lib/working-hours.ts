@@ -1,4 +1,49 @@
 import type { Staff } from "@/lib/api/types";
+import type { AvailabilityWindow } from "./availability-windows.ts";
+
+type WorkingRule = Staff["workingRules"][number];
+
+/**
+ * A person's working rules as plain weekly windows, so the same editor that sets a
+ * session's offer windows can set their hours. The per-row location is dropped here
+ * and restored by `windowsToWorkingRules`.
+ */
+export function workingRulesToWindows(rules: readonly WorkingRule[]): AvailabilityWindow[] {
+  return [...rules]
+    .map((r) => ({ dayOfWeek: r.dayOfWeek, startMinute: r.startMinute, endMinute: r.endMinute }))
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinute - b.startMinute);
+}
+
+/**
+ * Windows back to working rules. A one-person business is at one place (or works
+ * anywhere), so a single shared location on the existing rules is kept; mixed
+ * locations can't be expressed by the windows editor and become "any location".
+ */
+export function windowsToWorkingRules(
+  windows: readonly AvailabilityWindow[],
+  previous: readonly WorkingRule[],
+): WorkingRule[] {
+  const locations = new Set(previous.map((r) => r.locationId ?? null));
+  const locationId = locations.size === 1 ? [...locations][0]! : null;
+  return windows.map((w) => ({
+    dayOfWeek: w.dayOfWeek,
+    startMinute: w.startMinute,
+    endMinute: w.endMinute,
+    locationId,
+  }));
+}
+
+/** True when the windows would save the same hours the rules already hold. */
+export function sameWorkingHours(
+  windows: readonly AvailabilityWindow[],
+  rules: readonly WorkingRule[],
+): boolean {
+  if (windows.length !== rules.length) return false;
+  const key = (w: AvailabilityWindow) => `${w.dayOfWeek}:${w.startMinute}:${w.endMinute}`;
+  const a = windows.map(key).sort();
+  const b = workingRulesToWindows(rules).map(key).sort();
+  return a.every((k, i) => k === b[i]);
+}
 
 /** Local weekday (1 = Monday … 7 = Sunday) and minutes past midnight of an instant. */
 function localClock(iso: string, timeZone: string): { dayOfWeek: number; minute: number } {
