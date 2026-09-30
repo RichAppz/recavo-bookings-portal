@@ -3,7 +3,12 @@ import { AlertTriangle, ArrowRight, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { useConnectAccount, usePaymentsHold, useUpdateConfiguration } from "@/lib/api/hooks";
+import {
+  stripeHidden,
+  useConnectAccount,
+  usePaymentsHold,
+  useUpdateConfiguration,
+} from "@/lib/api/hooks";
 import type { BusinessConfiguration } from "@/lib/api/types";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -33,6 +38,8 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
   // While RECAVO has payments on hold the API refuses new card payments, so Stripe
   // does not count as a way to pay even if the account itself is live.
   const chargesReady = connect.data?.chargesEnabled === true && !paymentsHold.data;
+  // Don't tell a business RECAVO has hidden Stripe from to "connect Stripe".
+  const noStripe = stripeHidden(paymentsHold.data);
   // Bank transfer is a valid way to pay a gated booking (RECA-522), so it counts
   // as "payment is set up" alongside Stripe.
   const bankReady = tenant.configuration?.bankTransfer?.enabled === true;
@@ -124,8 +131,10 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
         <p className="mt-3 text-sm text-amber-950 dark:text-amber-50">
           {enabled
             ? "Clients still cannot pay online — at least one payment method must be set up."
-            : "Set up a way to get paid first — connect Stripe or add bank transfer details."}
-          {onPaymentSettings ? " Both are below." : null}
+            : noStripe
+              ? "Set up a way to get paid first — add your bank transfer details."
+              : "Set up a way to get paid first — connect Stripe or add bank transfer details."}
+          {onPaymentSettings ? (noStripe ? " It's below." : " Both are below.") : null}
         </p>
       ) : null}
       {onPaymentSettings ? null : (
