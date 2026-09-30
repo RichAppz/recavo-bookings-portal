@@ -151,7 +151,7 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Your own account",
-        body: "Your name, phone, language and timezone are under **Settings → Account**. These are yours, not the business's — the name clients see when they book with you is on your {staff} record.",
+        body: "Your name, phone, language and timezone are under **Settings → Account**. These are yours, not the business's — the name clients see when they book with you is on your {staff} record. **Emails from RECAVO** on the same tab switches off the tips and getting-started notes we send in your first weeks; billing notices about your subscription are always sent.",
         link: { to: "/settings", search: { tab: "account" }, label: "Open Account" },
       },
     ],
