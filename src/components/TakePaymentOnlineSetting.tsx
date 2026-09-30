@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { useConnectAccount, useUpdateConfiguration } from "@/lib/api/hooks";
+import { useConnectAccount, usePaymentsHold, useUpdateConfiguration } from "@/lib/api/hooks";
 import type { BusinessConfiguration } from "@/lib/api/types";
 import { isOnlinePaymentRequired } from "@/lib/booking-payment";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 export function TakePaymentOnlineSetting({ className }: { className?: string }) {
   const tenant = useTenant();
   const connect = useConnectAccount();
+  const paymentsHold = usePaymentsHold();
   const update = useUpdateConfiguration();
   // Stripe Connect and bank details both live on Settings → Payments; no point
   // sending people there when they're already looking at it.
@@ -29,7 +30,9 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
       (s.location.search as { tab?: string }).tab === "payments",
   });
   const enabled = isOnlinePaymentRequired(tenant.configuration);
-  const chargesReady = connect.data?.chargesEnabled === true;
+  // While RECAVO has payments on hold the API refuses new card payments, so Stripe
+  // does not count as a way to pay even if the account itself is live.
+  const chargesReady = connect.data?.chargesEnabled === true && !paymentsHold.data;
   // Bank transfer is a valid way to pay a gated booking (RECA-522), so it counts
   // as "payment is set up" alongside Stripe.
   const bankReady = tenant.configuration?.bankTransfer?.enabled === true;

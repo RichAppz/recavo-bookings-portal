@@ -7,6 +7,7 @@ import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { AppShell } from "@/components/AppShell";
 import { BrandingLogoField } from "@/components/BrandingLogoField";
 import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
+import { PaymentsHoldNotice } from "@/components/PaymentsHoldNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
@@ -58,6 +59,7 @@ import {
   useInviteStaff,
   useLatestPrivacyNotice,
   useMemberships,
+  usePaymentsHold,
   usePolicyDocuments,
   usePublishPolicyDocument,
   usePublishPrivacyNotice,
@@ -1678,6 +1680,7 @@ function AuditTab() {
 
 function PaymentsTab() {
   const connect = useConnectAccount();
+  const hold = usePaymentsHold().data ?? null;
   const loginLink = useConnectLoginLink();
   const rejection = connectRejection(connect.data);
 
@@ -1696,20 +1699,24 @@ function PaymentsTab() {
       >
         {!connect.data ? (
           <div className="space-y-4">
+            {hold ? <PaymentsHoldNotice hold={hold} /> : null}
             <EmptyState
               icon={<CreditCard className="size-6" />}
               title="No payout account connected"
               description="Connect Stripe to take card payments. Recavo never stores your bank details."
               action={
-                <Button asChild variant="outline">
-                  <Link to="/payments">Set up payments</Link>
-                </Button>
+                hold ? null : (
+                  <Button asChild variant="outline">
+                    <Link to="/payments">Set up payments</Link>
+                  </Button>
+                )
               }
             />
             <StripeFeesNote />
           </div>
         ) : (
           <div className="space-y-4">
+            {hold ? <PaymentsHoldNotice hold={hold} /> : null}
             {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
             <div className="flex items-start gap-4 rounded-xl border p-4">
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">

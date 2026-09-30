@@ -2638,17 +2638,46 @@ export function useCreateRefund() {
   });
 }
 
+/**
+ * RECAVO has switched online payments off for this business (support decision). Only
+ * the fact and the date are shared; the portal hides "Connect Stripe" and points the
+ * owner at support.
+ */
+export type PaymentsHoldNotice = { since: string };
+
+type ConnectAccountResponse = {
+  account: ConnectAccount | null;
+  /** Absent from older API builds; treated as no hold. */
+  paymentsHold?: PaymentsHoldNotice | null;
+};
+
+function connectAccountQuery(businessId: string) {
+  return {
+    queryKey: queryKeys.connectAccount(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async (): Promise<ConnectAccountResponse> => {
+      const res = await api.get<ConnectAccountResponse>(
+        `/api/v1/businesses/${businessId}/connect/account`,
+      );
+      return res.data;
+    },
+  };
+}
+
 export function useConnectAccount() {
   const businessId = useBusinessId();
   return useQuery({
-    queryKey: queryKeys.connectAccount(businessId),
-    enabled: Boolean(businessId),
-    queryFn: async () => {
-      const res = await api.get<{ account: ConnectAccount | null }>(
-        `/api/v1/businesses/${businessId}/connect/account`,
-      );
-      return res.data.account;
-    },
+    ...connectAccountQuery(businessId),
+    select: (data) => data.account,
+  });
+}
+
+/** Same request as `useConnectAccount`, different slice; null when payments are on. */
+export function usePaymentsHold() {
+  const businessId = useBusinessId();
+  return useQuery({
+    ...connectAccountQuery(businessId),
+    select: (data) => data.paymentsHold ?? null,
   });
 }
 
@@ -2683,7 +2712,10 @@ export function useSyncConnectAccount() {
       return res.data.account;
     },
     onSuccess: (account) => {
-      qc.setQueryData(queryKeys.connectAccount(businessId), account);
+      qc.setQueryData<ConnectAccountResponse>(queryKeys.connectAccount(businessId), (prev) => ({
+        ...(prev ?? {}),
+        account,
+      }));
       invalidateOnboarding(qc, businessId);
     },
     onError: (err) => toastApiError(err),

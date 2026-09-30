@@ -52,6 +52,7 @@ import {
   useLinkedRecordDefinition,
   useLocationsList,
   usePackages,
+  usePaymentsHold,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
@@ -257,7 +258,10 @@ export function AddBookingModal({
     if (next === "none" || next === "pay_later") setPaymentTiming(next);
   };
   const connect = useConnectAccount();
-  const cardPaymentsLive = connect.data?.chargesEnabled === true;
+  const paymentsHold = usePaymentsHold();
+  // A RECAVO payments hold means the API will not issue pay-online links, whatever
+  // Stripe says about the account.
+  const cardPaymentsLive = connect.data?.chargesEnabled === true && !paymentsHold.data;
   // "Use package credit" only makes sense for a business that sells packages, and
   // only for a client who actually holds credit. Hidden (not disabled) otherwise: a
   // detailer with no packages should never see the option at all.

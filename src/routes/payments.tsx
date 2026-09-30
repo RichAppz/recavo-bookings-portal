@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
+import { PaymentsHoldNotice } from "@/components/PaymentsHoldNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
 import { EmptyState, PageHeader, SectionCard, StatCard, StatusBadge } from "@/components/ui-bits";
@@ -34,6 +35,7 @@ import {
   useCreateRefund,
   useCustomers,
   usePaymentReceipt,
+  usePaymentsHold,
   usePaymentsList,
   useStartConnectOnboarding,
   useSyncConnectAccount,
@@ -106,6 +108,8 @@ function PaymentsPage() {
   });
   const customers = useCustomers();
   const connect = useConnectAccount();
+  const paymentsHold = usePaymentsHold();
+  const hold = paymentsHold.data ?? null;
   const startOnboarding = useStartConnectOnboarding();
   const syncConnect = useSyncConnectAccount();
   const loginLink = useConnectLoginLink();
@@ -158,7 +162,7 @@ function PaymentsPage() {
               <StatusBadge status="active" />
             ) : !connectOnboardingWorthRetrying(connect.data) ? (
               <StatusBadge status="rejected" />
-            ) : (
+            ) : hold ? null : (
               <Button
                 size="sm"
                 variant="outline"
@@ -178,26 +182,30 @@ function PaymentsPage() {
             <TableGhost rows={3} />
           ) : connect.isError || !connect.data ? (
             <div className="space-y-4">
+              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
               <EmptyState
                 icon={<CreditCard className="size-6" />}
                 title="No payout account connected"
                 description="Connect Stripe to start taking card payments. Recavo never stores your bank details — Stripe handles onboarding and payouts."
                 action={
-                  <Button
-                    disabled={startOnboarding.isPending}
-                    onClick={async () => {
-                      const result = await startOnboarding.mutateAsync();
-                      if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
-                    }}
-                  >
-                    Connect Stripe
-                  </Button>
+                  hold ? null : (
+                    <Button
+                      disabled={startOnboarding.isPending}
+                      onClick={async () => {
+                        const result = await startOnboarding.mutateAsync();
+                        if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
+                      }}
+                    >
+                      Connect Stripe
+                    </Button>
+                  )
                 }
               />
               <StripeFeesNote />
             </div>
           ) : (
             <div className="space-y-3">
+              {hold ? <PaymentsHoldNotice hold={hold} /> : null}
               {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
               <div className="flex flex-wrap gap-6 text-sm">
                 <span>
