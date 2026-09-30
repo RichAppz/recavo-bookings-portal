@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Copy, CreditCard, Landmark, Sparkles } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { DeleteAccountSection } from "@/components/DeleteAccountSection";
+import { EmailPreferencesSetting } from "@/components/EmailPreferencesSetting";
 import { AppShell } from "@/components/AppShell";
 import { BrandingLogoField } from "@/components/BrandingLogoField";
 import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
@@ -395,6 +396,7 @@ function AccountProfileTab() {
         <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
         {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
       </SectionCard>
+      <EmailPreferencesSetting />
       <DeleteAccountSection />
     </div>
   );

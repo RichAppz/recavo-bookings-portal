@@ -6,3 +6,7 @@ for_platform :ios do
     app_identifier("com.richappz.recavo")
   end
 end
+
+for_platform :android do
+  package_name("com.richappz.recavo")
+end

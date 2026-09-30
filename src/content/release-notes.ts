@@ -22,6 +22,67 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     ],
   },
   {
+    date: "2026-09-29",
+    title: "Step-by-step guides, shorten a moved job, and a Help button",
+    items: [
+      {
+        kind: "new",
+        text: "Guides: a set of step-by-step walkthroughs with screenshots for everything from opening hours to taking card payments, written for your kind of business — trainers see sessions and clients, detailers see jobs and vehicles — and with pictures that match whether you're on your phone or a computer. Search them from the Guides page or from the search bar.",
+        where: "? button beside search → Guides",
+      },
+      {
+        kind: "new",
+        text: "When you move an all-day job you can now change its last day at the same time. A job booked as two days that only needs one can be moved and shortened in one go — or given an extra day. Leave the last day alone and the job keeps its length as before.",
+        where: "Open a booking → Reschedule → Move the day",
+      },
+      {
+        kind: "improved",
+        text: "Automotive businesses now start every new booking on “Pay after the job” instead of asking for payment up front. Pick the other option once and it's remembered for next time, exactly as before.",
+        where: "Add booking → Payment",
+      },
+      {
+        kind: "new",
+        text: "Support and Guides sit together under a ? button beside the search bar, so the menu stays short. The button shows a dot when we've replied to you and you haven't seen it yet. You can also reach both from search.",
+        where: "? button beside search → Support",
+      },
+      {
+        kind: "new",
+        text: "Change what a single service costs on an existing booking — a £200 wheel coating you're doing for £150 — with the same per-service price boxes as Add booking, rather than only the job total.",
+        where: "Open a booking → Edit",
+      },
+      {
+        kind: "improved",
+        text: "An “Add another service” bar now sits under the services you've picked, so adding a second service to a job no longer means guessing that the summary above is a button.",
+        where: "Add booking and Edit booking",
+      },
+      {
+        kind: "improved",
+        text: "Today's date is shown beside the date fields when you add, edit or reschedule a booking, so you have a reference point when the phone's date picker opens on another month.",
+        where: "Add booking, Edit booking and Reschedule",
+      },
+      {
+        kind: "fixed",
+        text: "Adding services to an all-day job that no longer fit its days used to fail with “The request was invalid”. The form now tells you how many days the job needs and offers to extend it.",
+        where: "Open a booking → Edit",
+      },
+      {
+        kind: "fixed",
+        text: "If Stripe has rejected your payout account you now see the reason and a clear Rejected badge, instead of a “pending” state and a Finish onboarding button that couldn't help.",
+        where: "Payments and Settings → Payments",
+      },
+      {
+        kind: "fixed",
+        text: "When something you've entered is refused, the message now names the field and what was wrong with it rather than only “The request was invalid”.",
+        where: "Everywhere",
+      },
+      {
+        kind: "fixed",
+        text: "Chart hover labels are readable in dark mode and name the figure properly, rather than showing a white box with grey text.",
+        where: "Overview and Reports",
+      },
+    ],
+  },
+  {
     date: "2026-09-28",
     title: "Every payment counted, and exports your accountant can use",
     items: [

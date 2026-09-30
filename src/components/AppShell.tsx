@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   BellRing,
+  BookOpen,
   Building2,
   CalendarDays,
   Car,
@@ -64,6 +65,7 @@ import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
 import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
+import { HelpMenu } from "@/components/HelpMenu";
 import { OfflinePack } from "@/components/OfflinePack";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
@@ -134,9 +136,6 @@ type NavGroup = {
   heading: string;
   items: NavItem[];
 };
-
-/** Flip to true once the Help centre points at real help content. */
-const SHOW_HELP_CENTRE = false;
 
 const NAV: NavGroup[] = [
   {
@@ -308,6 +307,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       })),
     ),
     { to: "/whats-new", label: "What's new", icon: Sparkles },
+    { to: "/support/guides", label: "Guides", icon: BookOpen },
+    ...(tenant.businessId ? [{ to: "/support", label: "Support", icon: LifeBuoy }] : []),
   ];
   const unread = (notifications.data?.notifications ?? []).filter((n) => !n.readAt).length;
   const noStaffBusiness = !tenant.isLoading && tenant.businesses.length === 0;
@@ -509,20 +510,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
-          {/* Help centre is hidden until it's hooked up to real help content. The
-              demo tour it opened is still reachable from the setup checklist. */}
-          {SHOW_HELP_CENTRE ? (
-            <button
-              onClick={() => {
-                setMobileNav(false);
-                setSetupOpenRequest((n) => n + 1);
-                setTourOpen(true);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-            >
-              <LifeBuoy className="size-4.5" /> Help centre
-            </button>
-          ) : null}
+          {/* Guides and Support live in the top bar's Help menu (HelpMenu). */}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -638,6 +626,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
 
             <GlobalSearch pages={searchablePages} />
+            <HelpMenu />
 
             <div className="ml-auto flex items-center gap-2">
               {/* A location filter only means something once there is more than one. */}
@@ -706,7 +695,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button>
+                  <Button aria-label="Create">
                     <Plus className="size-4" />
                     <span className="hidden sm:inline">Create</span>
                   </Button>
