@@ -4679,12 +4679,36 @@ export async function uploadFileViaIntent(
   owner?: FileOwner,
   onProgress?: (pct: number) => void,
 ): Promise<FileResource> {
+  return uploadViaSignedIntent(
+    {
+      intentUrl: `/api/v1/businesses/${businessId}/files`,
+      completeUrl: (fileId) => `/api/v1/businesses/${businessId}/files/${fileId}/complete`,
+      extraIntentFields: owner,
+    },
+    file,
+    onProgress,
+  );
+}
+
+/**
+ * The signed-intent upload dance against any pair of intent/complete endpoints (general
+ * files, support images): declare → PUT bytes → register checksum.
+ */
+export async function uploadViaSignedIntent(
+  endpoints: {
+    intentUrl: string;
+    completeUrl: (fileId: string) => string;
+    extraIntentFields?: Record<string, unknown> | undefined;
+  },
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<FileResource> {
   const intent = await api.post<{ file: FileResource; uploadUrl: string }>(
-    `/api/v1/businesses/${businessId}/files`,
+    endpoints.intentUrl,
     {
       contentType: file.type || "application/octet-stream",
       sizeBytes: file.size,
-      ...owner,
+      ...endpoints.extraIntentFields,
     },
     { idempotencyKey: newIdempotencyKey() },
   );
@@ -4693,7 +4717,7 @@ export async function uploadFileViaIntent(
   const checksum = await sha256Hex(file);
 
   const completed = await api.post<{ file: FileResource }>(
-    `/api/v1/businesses/${businessId}/files/${intent.data.file.id}/complete`,
+    endpoints.completeUrl(intent.data.file.id),
     { checksum },
     { idempotencyKey: newIdempotencyKey() },
   );

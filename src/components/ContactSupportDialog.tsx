@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { SupportImagePicker } from "@/components/SupportImages";
+import { useSupportImages } from "@/hooks/use-support-images";
 import { SUPPORT_CATEGORIES, useCreateSupportRequest } from "@/lib/api/support";
 import type { SupportRequest, SupportRequestCategory } from "@/lib/api/types";
 
@@ -44,12 +46,16 @@ export function ContactSupportDialog({
   const [category, setCategory] = useState<SupportRequestCategory>("question");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [imageWarning, setImageWarning] = useState<string | null>(null);
+  const images = useSupportImages();
   const create = useCreateSupportRequest();
 
   const reset = () => {
     setCategory("question");
     setSubject("");
     setBody("");
+    setImageWarning(null);
+    images.reset();
   };
 
   const close = () => {
@@ -57,11 +63,15 @@ export function ContactSupportDialog({
     reset();
   };
 
+  // Words or pictures — a screenshot alone is a perfectly good bug report.
+  const hasContent = body.trim().length > 0 || images.fileIds.length > 0;
   const valid =
     subject.trim().length > 0 &&
     subject.trim().length <= SUBJECT_MAX &&
-    body.trim().length > 0 &&
-    body.trim().length <= BODY_MAX;
+    hasContent &&
+    body.trim().length <= BODY_MAX &&
+    !images.uploading &&
+    !images.failed;
 
   return (
     <Dialog
@@ -85,7 +95,12 @@ export function ContactSupportDialog({
             e.preventDefault();
             if (!valid || create.isPending) return;
             create.mutate(
-              { category, subject: subject.trim(), body: body.trim() },
+              {
+                category,
+                subject: subject.trim(),
+                body: body.trim(),
+                attachmentFileIds: images.fileIds,
+              },
               {
                 onSuccess: (request) => {
                   toast.success("Message sent", {
@@ -140,12 +155,28 @@ export function ContactSupportDialog({
               {body.length.toLocaleString()} / {BODY_MAX.toLocaleString()}
             </p>
           </div>
+          <div className="space-y-2">
+            <Label>Screenshots or photos</Label>
+            <SupportImagePicker
+              idPrefix="support-new"
+              images={images.images}
+              onAdd={(files) => setImageWarning(images.add(files))}
+              onRemove={(key) => {
+                images.remove(key);
+                setImageWarning(null);
+              }}
+              disabled={create.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              {imageWarning ?? "Optional. Up to 5 images, 10 MB each."}
+            </p>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close} disabled={create.isPending}>
               Cancel
             </Button>
             <Button type="submit" disabled={!valid || create.isPending}>
-              {create.isPending ? "Sending…" : "Send"}
+              {create.isPending ? "Sending…" : images.uploading ? "Uploading…" : "Send"}
             </Button>
           </DialogFooter>
         </form>
