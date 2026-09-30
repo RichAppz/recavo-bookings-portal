@@ -3,13 +3,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, LifeBuoy } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { SupportAttachmentGallery, SupportImagePicker } from "@/components/SupportImages";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useSupportImages } from "@/hooks/use-support-images";
 import { ApiError } from "@/lib/api";
 import { useReplyToSupportRequest, useSupportRequest } from "@/lib/api/support";
-import type { SupportMessage, SupportRequest } from "@/lib/api/types";
+import type { SupportAttachment, SupportMessage, SupportRequest } from "@/lib/api/types";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { formatInTz } from "@/lib/format";
 import { categoryLabel } from "@/lib/support";
@@ -110,6 +112,7 @@ function SupportThreadPage() {
               at={request.createdAt}
               timezone={timezone}
               body={request.body}
+              attachments={request.attachments}
               ours={false}
             />
           </li>
@@ -120,6 +123,7 @@ function SupportThreadPage() {
                 at={m.createdAt}
                 timezone={timezone}
                 body={m.body}
+                attachments={m.attachments}
                 ours={m.authorType === "platform"}
               />
             </li>
@@ -143,12 +147,14 @@ function Bubble({
   at,
   timezone,
   body,
+  attachments,
   ours,
 }: {
   who: string;
   at: string;
   timezone: string;
   body: string;
+  attachments: SupportAttachment[];
   ours: boolean;
 }) {
   return (
@@ -166,17 +172,24 @@ function Bubble({
           {formatInTz(at, timezone)}
         </time>
       </header>
-      <p className="text-sm leading-relaxed whitespace-pre-wrap">{body}</p>
+      {body ? <p className="text-sm leading-relaxed whitespace-pre-wrap">{body}</p> : null}
+      <SupportAttachmentGallery attachments={attachments} className={body ? "mt-3" : ""} />
     </article>
   );
 }
 
 function ReplyBox({ request, messages }: { request: SupportRequest; messages: SupportMessage[] }) {
   const [body, setBody] = useState("");
+  const [imageWarning, setImageWarning] = useState<string | null>(null);
+  const images = useSupportImages();
   const reply = useReplyToSupportRequest(request.id);
   const resolved = request.status === "resolved";
   const trimmed = body.trim();
-  const valid = trimmed.length > 0 && trimmed.length <= BODY_MAX;
+  const valid =
+    (trimmed.length > 0 || images.fileIds.length > 0) &&
+    trimmed.length <= BODY_MAX &&
+    !images.uploading &&
+    !images.failed;
   const awaitingUs =
     !resolved && (messages.length === 0 || messages[messages.length - 1]?.authorType === "user");
 
@@ -186,14 +199,19 @@ function ReplyBox({ request, messages }: { request: SupportRequest; messages: Su
       onSubmit={(e) => {
         e.preventDefault();
         if (!valid || reply.isPending) return;
-        reply.mutate(trimmed, {
-          onSuccess: () => {
-            setBody("");
-            toast.success(resolved ? "Reopened and sent" : "Reply sent", {
-              description: "The RECAVO team has been notified.",
-            });
+        reply.mutate(
+          { body: trimmed, attachmentFileIds: images.fileIds },
+          {
+            onSuccess: () => {
+              setBody("");
+              setImageWarning(null);
+              images.reset();
+              toast.success(resolved ? "Reopened and sent" : "Reply sent", {
+                description: "The RECAVO team has been notified.",
+              });
+            },
           },
-        });
+        );
       }}
     >
       <div className="space-y-1">
@@ -214,12 +232,28 @@ function ReplyBox({ request, messages }: { request: SupportRequest; messages: Su
         placeholder="Write your reply…"
         onChange={(e) => setBody(e.target.value)}
       />
+      <SupportImagePicker
+        idPrefix="support-reply"
+        images={images.images}
+        onAdd={(files) => setImageWarning(images.add(files))}
+        onRemove={(key) => {
+          images.remove(key);
+          setImageWarning(null);
+        }}
+        disabled={reply.isPending}
+      />
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          {body.length.toLocaleString()} / {BODY_MAX.toLocaleString()}
+          {imageWarning ?? `${body.length.toLocaleString()} / ${BODY_MAX.toLocaleString()}`}
         </p>
         <Button type="submit" disabled={!valid || reply.isPending}>
-          {reply.isPending ? "Sending…" : resolved ? "Reopen and send" : "Send reply"}
+          {reply.isPending
+            ? "Sending…"
+            : images.uploading
+              ? "Uploading…"
+              : resolved
+                ? "Reopen and send"
+                : "Send reply"}
         </Button>
       </div>
     </form>

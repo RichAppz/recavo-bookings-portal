@@ -52,6 +52,8 @@ export type SupportRequest = schemas["SupportRequest"];
 export type SupportRequestCategory = SupportRequest["category"];
 /** A reply on a support request thread — ours (`platform`) or the business's (`user`). */
 export type SupportMessage = schemas["SupportMessage"];
+/** An image on a support message: `scanning` → `ready` (signed `url`) or `blocked`. */
+export type SupportAttachment = schemas["SupportAttachment"];
 /** Staff-side "event" on the diary (dentist, school run) that keeps jobs off the slot (RECA-531). */
 export type CalendarBlock = schemas["CalendarBlock"];
 /** One service on a booking (RECA-516). Item 0 is the primary; totals roll up across items. */

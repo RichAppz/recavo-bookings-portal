@@ -2,9 +2,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
 import { toastApiError } from "./errors";
-import { useBusinessId } from "./hooks";
+import { uploadViaSignedIntent, useBusinessId } from "./hooks";
 import { queryKeys } from "./query-keys";
-import type { SupportMessage, SupportRequest, SupportRequestCategory } from "./types";
+import type {
+  FileResource,
+  SupportAttachment,
+  SupportMessage,
+  SupportRequest,
+  SupportRequestCategory,
+} from "./types";
+
+/** What the API accepts on a support thread; mirrors its allow-list. */
+export const SUPPORT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+export const SUPPORT_MAX_IMAGES = 5;
+export const SUPPORT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export const SUPPORT_CATEGORIES: ReadonlyArray<{ value: SupportRequestCategory; label: string }> = [
   { value: "question", label: "Question" },
@@ -18,9 +29,47 @@ export type CreateSupportRequestInput = {
   category: SupportRequestCategory;
   subject: string;
   body: string;
+  /** Ids from {@link uploadSupportImage}; up to five. */
+  attachmentFileIds?: string[];
+};
+
+export type SupportReplyInput = {
+  body: string;
+  attachmentFileIds?: string[];
 };
 
 export type SupportThread = { request: SupportRequest; messages: SupportMessage[] };
+
+/** True while any image on the thread is still being scanned, so the page keeps polling. */
+export function threadHasScanning(thread: SupportThread | undefined): boolean {
+  if (!thread) return false;
+  const scanning = (a: SupportAttachment) => a.state === "scanning";
+  return (
+    thread.request.attachments.some(scanning) ||
+    thread.messages.some((m) => m.attachments.some(scanning))
+  );
+}
+
+/**
+ * Upload one image for a support message: signed intent → PUT → checksum. Returns the
+ * file whose id goes in `attachmentFileIds`. The API scans it after the message is sent,
+ * so it shows as "scanning" on the thread for a few seconds.
+ */
+export function uploadSupportImage(
+  businessId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<FileResource> {
+  return uploadViaSignedIntent(
+    {
+      intentUrl: `/api/v1/businesses/${businessId}/support-attachments`,
+      completeUrl: (fileId) =>
+        `/api/v1/businesses/${businessId}/support-attachments/${fileId}/complete`,
+    },
+    file,
+    onProgress,
+  );
+}
 
 /** Every request this business has raised, newest first. */
 export function useSupportRequests() {
@@ -49,6 +98,8 @@ export function useSupportRequest(requestId: string | undefined) {
       );
       return res.data;
     },
+    // Images appear once the malware scan passes; keep asking until none are pending.
+    refetchInterval: (query) => (threadHasScanning(query.state.data) ? 4_000 : false),
   });
 }
 
@@ -80,11 +131,15 @@ export function useCreateSupportRequest() {
 export function useReplyToSupportRequest(requestId: string) {
   const businessId = useBusinessId();
   const qc = useQueryClient();
-  return useMutation<{ request: SupportRequest; message: SupportMessage }, Error, string>({
-    mutationFn: async (body) => {
+  return useMutation<
+    { request: SupportRequest; message: SupportMessage },
+    Error,
+    SupportReplyInput
+  >({
+    mutationFn: async (input) => {
       const res = await api.post<{ request: SupportRequest; message: SupportMessage }>(
         `/api/v1/businesses/${businessId}/support-requests/${requestId}/messages`,
-        { body },
+        input,
       );
       return res.data;
     },
