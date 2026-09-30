@@ -2,6 +2,7 @@ import type { Query } from "@tanstack/react-query";
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 import { del, get, set } from "idb-keyval";
 import { OFFLINE_CACHE_MAX_AGE_MS } from "@/lib/query-client";
+import { isImpersonating } from "@/lib/auth/impersonation";
 
 /**
  * The query cache, saved to the device.
@@ -26,6 +27,9 @@ function hasIndexedDb(): boolean {
 export const queryPersister: Persister = {
   async persistClient(client: PersistedClient) {
     if (!hasIndexedDb()) return;
+    // A support session shares this origin with the admin's own sign-in: never write
+    // the impersonated business into (or over) their saved cache.
+    if (isImpersonating()) return;
     try {
       await set(KEY, client);
     } catch {
@@ -34,6 +38,7 @@ export const queryPersister: Persister = {
   },
   async restoreClient() {
     if (!hasIndexedDb()) return undefined;
+    if (isImpersonating()) return undefined;
     try {
       // IndexedDB can stall indefinitely in some WebViews (WebKit after a
       // background relaunch, a database mid-upgrade in another tab). The whole
@@ -62,6 +67,7 @@ export const queryPersister: Persister = {
  * `meta: { persist: false }` (one-off lookups, availability probes, exports).
  */
 export function shouldPersistQuery(query: Query): boolean {
+  if (isImpersonating()) return false;
   if (query.state.status !== "success") return false;
   if (query.meta?.persist === false) return false;
   return true;

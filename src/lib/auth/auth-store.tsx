@@ -38,6 +38,13 @@ import {
   runNativeOAuth,
 } from "@/lib/native";
 import { emailReturnUrl } from "@/lib/auth/email-redirect";
+import {
+  IMPERSONATE_PATH,
+  clearImpersonation,
+  consumeImpersonationHandoff,
+  readImpersonation,
+  type ImpersonationInfo,
+} from "@/lib/auth/impersonation";
 import { toast } from "sonner";
 import { toastDuration } from "@/lib/toast";
 
@@ -119,6 +126,14 @@ type AuthContextValue = {
   /** True after the first listFactors (or sign-out) so gates do not flash. */
   mfaStatusReady: boolean;
   clearMfa: () => void;
+  /**
+   * Set while this tab is a platform support session ("log in as" from the internal
+   * console): the API authenticates us as the member for one business and records the
+   * admin on every audit row. Supabase is not involved in this tab at all.
+   */
+  impersonation: ImpersonationInfo | null;
+  /** End the support session (server + tab). The token stops working immediately. */
+  endImpersonation: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -266,16 +281,22 @@ async function beginTotpEnrollment(): Promise<MfaEnrollment | null> {
   };
 }
 
+type MeEnvelope = { user: User; impersonation?: ImpersonationInfo };
+
 async function fetchMe(signal?: AbortSignal): Promise<User> {
+  return (await fetchMeEnvelope(signal)).user;
+}
+
+async function fetchMeEnvelope(signal?: AbortSignal): Promise<MeEnvelope> {
   const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   try {
-    const res = await api.get<{ user: User }>("/api/v1/me", { signal });
+    const res = await api.get<MeEnvelope>("/api/v1/me", { signal });
     authLog("fetchMe ok", {
       ms: Math.round(
         (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
       ),
     });
-    return res.data.user;
+    return res.data;
   } catch (err) {
     authLog("fetchMe failed", {
       ms: Math.round(
@@ -300,6 +321,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaStatusReady, setMfaStatusReady] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState<boolean>(() => readRecoveryFlag());
+  const [impersonation, setImpersonation] = useState<ImpersonationInfo | null>(null);
+  // Read once, synchronously, so the very first effects know which mode this tab is in.
+  const impersonationRef = useRef<boolean>(false);
   const clearPasswordRecovery = useCallback(() => {
     writeRecoveryFlag(false);
     setPasswordRecovery(false);
@@ -373,6 +397,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [challengeMfa]);
 
   const ensureAal2 = useCallback(async () => {
+    // The admin already stepped up to start the support session; the API carries that.
+    if (impersonationRef.current) return true;
     try {
       const supabase = getSupabase();
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -574,7 +600,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient, challengeMfa, refreshMfaStatus],
   );
 
+  // Drop the support session on this tab only: nothing here touches Supabase, the
+  // admin's own persisted cache, or their remembered business — none of it was ours.
+  const leaveImpersonation = useCallback(() => {
+    clearImpersonation();
+    impersonationRef.current = false;
+    loadedForUserIdRef.current = null;
+    inFlightUserIdRef.current = null;
+    setAccessToken(null);
+    setImpersonation(null);
+    setUser(null);
+    setSession(null);
+    setMfaEnrolled(false);
+    setMfaStatusReady(true);
+    setStatus("unauthenticated");
+    queryClient.clear();
+    // Land on the "session ended" page with a clean load: whatever was on screen
+    // belonged to the member, and RequireAuth would otherwise bounce to /login.
+    if (typeof window !== "undefined" && window.location.pathname !== IMPERSONATE_PATH) {
+      window.location.replace(IMPERSONATE_PATH);
+    }
+  }, [queryClient]);
+
+  const bootstrapImpersonation = useCallback(
+    async (token: string) => {
+      setAccessToken(token);
+      try {
+        const me = await fetchMeEnvelope(AbortSignal.timeout(SESSION_BOOTSTRAP_TIMEOUT_MS));
+        if (!me.impersonation) {
+          // A token the API no longer treats as a support session is not one we keep.
+          authLog("impersonation bootstrap: /me had no impersonation block");
+          leaveImpersonation();
+          return;
+        }
+        setUser(me.user);
+        setImpersonation(me.impersonation);
+        setMfaEnrolled(false);
+        setMfaStatusReady(true);
+        loadedForUserIdRef.current = `impersonation:${me.impersonation.sessionId}`;
+        setStatus("authenticated");
+        authLog("impersonation bootstrap → authenticated", {
+          userId: me.user.id,
+          businessId: me.impersonation.businessId,
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.isUnauthenticated) {
+          leaveImpersonation();
+          return;
+        }
+        authLog("impersonation bootstrap failed", err);
+        setUser(null);
+        setMfaStatusReady(true);
+        setStatus("unauthenticated");
+        toastApiError(err, "Couldn't reach the API — please try again once it's back.");
+      }
+    },
+    [leaveImpersonation],
+  );
+
   useEffect(() => {
+    // Support session? Then this tab is the impersonated member and Supabase stays out
+    // of it entirely — including any session the admin has on this origin.
+    const handoff = consumeImpersonationHandoff() ?? readImpersonation();
+    if (handoff) {
+      impersonationRef.current = true;
+      void bootstrapImpersonation(handoff.token);
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       setStatus("unconfigured");
       return;
@@ -633,13 +726,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (graceTimer) clearTimeout(graceTimer);
       sub.subscription.unsubscribe();
     };
-  }, [applySession]);
+  }, [applySession, bootstrapImpersonation]);
+
+  // A support session has a fixed end; leave a little after it rather than letting
+  // the next request 401 into a confusing error.
+  useEffect(() => {
+    if (!impersonation) return;
+    const msLeft = new Date(impersonation.expiresAt).getTime() - Date.now();
+    const timer = setTimeout(() => leaveImpersonation(), Math.max(msLeft, 0) + 1_000);
+    return () => clearTimeout(timer);
+  }, [impersonation, leaveImpersonation]);
 
   // MFA interceptor: privileged actions return 403 MFA_REQUIRED only when a
   // factor is already enrolled. Challenge that factor, then retry. Never enrol
   // here — TOTP is optional and lives in account settings, not on checkout.
+  // A support session cannot step up (no Supabase here); let the 403 surface.
   useEffect(() => {
-    setMfaHandler(() => stepUpIfEnrolled());
+    setMfaHandler(() => (impersonationRef.current ? Promise.resolve(false) : stepUpIfEnrolled()));
     return () => setMfaHandler(null);
   }, [stepUpIfEnrolled]);
 
@@ -647,39 +750,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // every focus refetch 401s at once, and they should all wait on ONE refresh
   // rather than each triggering their own.
   const authRefreshRef = useRef<Promise<boolean> | null>(null);
-  const refreshAfter401 = useCallback((staleToken: string): Promise<boolean> => {
-    if (!isSupabaseConfigured()) return Promise.resolve(false);
-    if (!authRefreshRef.current) {
-      authRefreshRef.current = (async () => {
-        try {
-          const supabase = getSupabase();
-          // The visibility handler or another tab may have refreshed already —
-          // getSession() also refreshes itself when the stored token is expired.
-          const { data } = await supabase.auth.getSession();
-          let next = data.session;
-          if (!next || next.access_token === staleToken) {
-            const { data: refreshed, error } = await supabase.auth.refreshSession();
-            if (error) {
-              authLog("refreshAfter401: refresh failed", error);
-              return false;
+  const refreshAfter401 = useCallback(
+    (staleToken: string): Promise<boolean> => {
+      // An `imp_` token that 401s is ended or expired; there is nothing to refresh.
+      if (impersonationRef.current) {
+        leaveImpersonation();
+        return Promise.resolve(false);
+      }
+      if (!isSupabaseConfigured()) return Promise.resolve(false);
+      if (!authRefreshRef.current) {
+        authRefreshRef.current = (async () => {
+          try {
+            const supabase = getSupabase();
+            // The visibility handler or another tab may have refreshed already —
+            // getSession() also refreshes itself when the stored token is expired.
+            const { data } = await supabase.auth.getSession();
+            let next = data.session;
+            if (!next || next.access_token === staleToken) {
+              const { data: refreshed, error } = await supabase.auth.refreshSession();
+              if (error) {
+                authLog("refreshAfter401: refresh failed", error);
+                return false;
+              }
+              next = refreshed.session;
             }
-            next = refreshed.session;
+            if (!next?.access_token || next.access_token === staleToken) return false;
+            setAccessToken(next.access_token);
+            setSession(next);
+            authLog("refreshAfter401: replaced stale token");
+            return true;
+          } catch (err) {
+            authLog("refreshAfter401 failed", err);
+            return false;
+          } finally {
+            authRefreshRef.current = null;
           }
-          if (!next?.access_token || next.access_token === staleToken) return false;
-          setAccessToken(next.access_token);
-          setSession(next);
-          authLog("refreshAfter401: replaced stale token");
-          return true;
-        } catch (err) {
-          authLog("refreshAfter401 failed", err);
-          return false;
-        } finally {
-          authRefreshRef.current = null;
-        }
-      })();
-    }
-    return authRefreshRef.current;
-  }, []);
+        })();
+      }
+      return authRefreshRef.current;
+    },
+    [leaveImpersonation],
+  );
 
   // 401 interceptor: refresh the session once and let the API client replay the
   // request, instead of stranding the user on an error screen a reload fixes.
@@ -1003,7 +1114,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const endImpersonation = useCallback(async () => {
+    if (!impersonationRef.current) return;
+    try {
+      await api.post("/api/v1/auth/impersonation/end");
+    } catch (err) {
+      // Already ended or expired server-side: the outcome is the same for this tab.
+      authLog("endImpersonation: server call failed (leaving anyway)", err);
+    }
+    leaveImpersonation();
+  }, [leaveImpersonation]);
+
   const signOut = useCallback(async () => {
+    // Signing out of a support session ends the session, not the admin's own login.
+    if (impersonationRef.current) {
+      await endImpersonation();
+      return;
+    }
     // Drop local state before calling Supabase. A rejected sign-out (offline, or
     // a session the server already considers gone) must not strand the user in a
     // signed-in shell with no route back to /login.
@@ -1031,7 +1158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authLog("signOut: supabase sign-out failed (local session cleared)", err);
       }
     }
-  }, [queryClient]);
+  }, [queryClient, endImpersonation]);
 
   const resetPassword = useCallback(async (email: string) => {
     const supabase = getSupabase();
@@ -1121,6 +1248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mfaEnrolled,
       mfaStatusReady,
       clearMfa,
+      impersonation,
+      endImpersonation,
     }),
     [
       status,
@@ -1151,6 +1280,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mfaEnrolled,
       mfaStatusReady,
       clearMfa,
+      impersonation,
+      endImpersonation,
     ],
   );
 
