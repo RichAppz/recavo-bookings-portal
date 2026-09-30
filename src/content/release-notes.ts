@@ -6,6 +6,22 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-09-30",
+    title: "On your own? Set your hours where you set up what clients book",
+    items: [
+      {
+        kind: "new",
+        text: "If you're the only person in the business, your availability now lives in the session or service form. Open any one (or create one) and set the hours clients can book you — one set of hours for everything you offer. Start from “Use business hours” to copy your location's opening times. Until hours are set nothing can be booked, so if your booking page has been showing no times, this is the fix.",
+        where: "Sessions or Services → Edit → Your availability",
+      },
+      {
+        kind: "improved",
+        text: "The second weekly grid, “When this session is offered”, is out of the way for one-person businesses. It's behind a switch — “Only offer this at certain times” — for the odd session or service that really is narrower, like a Saturday-only class. Off, it's offered whenever you're available, and its card says so.",
+        where: "Sessions or Services",
+      },
+    ],
+  },
+  {
     date: "2026-09-28",
     title: "Every payment counted, and exports your accountant can use",
     items: [
