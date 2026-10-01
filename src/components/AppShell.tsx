@@ -433,7 +433,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => setMobileNav(false)}
             aria-label="Close navigation"
           >
-            <X className="size-4" />
+            <X className="size-5" />
           </Button>
         </div>
 
@@ -460,14 +460,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                             key={item.to}
                             to={item.to}
                             className={cn(
-                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                              // Finger-height rows and larger glyphs in the phone drawer;
+                              // the desktop sidebar keeps its denser spacing.
+                              "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium transition-colors lg:py-2.5 lg:text-sm",
                               active
                                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                                 : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                             )}
                           >
                             <item.icon
-                              className={cn("size-4.5", active && "text-sidebar-primary")}
+                              className={cn("size-5 lg:size-4.5", active && "text-sidebar-primary")}
                             />
                             {label}
                             {item.to === "/waitlist" && waiting > 0 ? (
@@ -491,9 +493,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           {canViewPlatform ? (
             <Link
               to="/platform"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              className="flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground lg:py-2.5 lg:text-sm"
             >
-              <Building2 className="size-4.5" /> Platform view
+              <Building2 className="size-5 lg:size-4.5" /> Platform view
             </Link>
           ) : null}
           <SetupNavCard
@@ -513,9 +515,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 setSetupOpenRequest((n) => n + 1);
                 setTourOpen(true);
               }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground lg:py-2.5 lg:text-sm"
             >
-              <LifeBuoy className="size-4.5" /> Help centre
+              <LifeBuoy className="size-5 lg:size-4.5" /> Help centre
             </button>
           ) : null}
 
@@ -622,7 +624,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               onClick={() => setMobileNav(true)}
               aria-label="Open navigation"
             >
-              <Menu className="size-5" />
+              <Menu className="size-6 sm:size-5" />
             </Button>
 
             <SetupHeaderButton
@@ -706,8 +708,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button>
-                    <Plus className="size-4" />
+                  <Button className="h-10 w-10 px-0 [&_svg]:size-5 sm:h-9 sm:w-auto sm:px-4 sm:[&_svg]:size-4">
+                    <Plus />
                     <span className="hidden sm:inline">Create</span>
                   </Button>
                 </DropdownMenuTrigger>

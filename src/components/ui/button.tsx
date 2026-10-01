@@ -24,7 +24,10 @@ const buttonVariants = cva(
         // radius used around it — the form-control `rounded-md` reads as too tight at
         // this width — and is tall enough to be a comfortable tap target on a phone.
         xl: "h-12 rounded-xl px-6 text-base",
-        icon: "h-9 w-9",
+        // Icon-only buttons are the main nav controls on a phone (menu, search,
+        // bell, close); a 36px square with a 16px glyph is a mouse target, not a
+        // finger one, so they grow to 40px / 20px below the `sm` breakpoint.
+        icon: "h-10 w-10 [&_svg]:size-5 sm:h-9 sm:w-9 sm:[&_svg]:size-4",
       },
     },
     defaultVariants: {
