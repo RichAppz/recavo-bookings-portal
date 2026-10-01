@@ -72,11 +72,14 @@ const SheetContent = React.forwardRef<
     >
       <SheetPrimitive.Close
         className={cn(
-          "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:size-9",
+          "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
           side !== "bottom" && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
         )}
       >
-        <X className="size-5 sm:size-4" />
+        {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
+        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+          <X className="size-4.5 sm:size-4" />
+        </span>
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
       {children}
