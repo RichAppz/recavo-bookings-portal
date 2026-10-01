@@ -38,13 +38,16 @@ export function WhatsNewNavLink({ onClick }: { onClick?: () => void }) {
       to="/whats-new"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium transition-colors lg:py-2.5 lg:text-sm",
         active
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
       )}
     >
-      <Sparkles className={cn("size-4.5", active && "text-sidebar-primary")} aria-hidden />
+      <Sparkles
+        className={cn("size-5 lg:size-4.5", active && "text-sidebar-primary")}
+        aria-hidden
+      />
       What's new
       {unseen > 0 ? (
         <span
