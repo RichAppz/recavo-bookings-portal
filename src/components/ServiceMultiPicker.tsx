@@ -187,6 +187,9 @@ export function ServiceMultiPicker({
   const body = (
     <Command
       shouldFilter={false}
+      // Finger, not mouse: don't move the highlight on pointer-move (a tap fires one
+      // first), so a row can't shift under the finger before the tap lands.
+      disablePointerSelection={isPhone}
       className={cn("min-h-0 flex-1", isPhone && "h-auto")}
       data-svc-picker-body=""
     >
@@ -210,6 +213,12 @@ export function ServiceMultiPicker({
                     onSelect={() => toggle(s)}
                     aria-checked={on}
                     role="option"
+                    // The whole row is the target: full width, a finger-height
+                    // minimum on phones, and pressed feedback so a tap reads as one.
+                    className={cn(
+                      "w-full cursor-pointer active:bg-accent",
+                      isPhone && "min-h-12 px-3 py-2.5",
+                    )}
                   >
                     <span
                       className={cn(
