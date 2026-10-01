@@ -55,8 +55,10 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-safe-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-4 w-4" />
+      {/* A finger-sized square (44px on phones, 36px with a pointer) around the
+          glyph; the bare 16px icon it replaces was the only thing you could hit. */}
+      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:size-9">
+        <X className="size-5 sm:size-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
