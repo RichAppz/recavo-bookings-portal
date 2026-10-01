@@ -114,9 +114,14 @@ type NotifyPref = (typeof NOTIFY_PREFS)[number];
  * payment reminder or take it in person later); `credit` / `bank_transfer` as named.
  */
 type PaymentMethod = "none" | "credit" | "bank_transfer" | "pay_later";
-/** The two "no money yet" choices; the last one used is remembered per business. */
-const TIMING_DEFAULTS = ["none", "pay_later"] as const;
-type PaymentTiming = (typeof TIMING_DEFAULTS)[number];
+/**
+ * Choices worth remembering per business so the form opens on what was used last.
+ * Package credit is left out: it depends on the client, not the business's habits.
+ */
+const REMEMBERED_METHODS = ["none", "pay_later", "bank_transfer"] as const;
+type RememberedMethod = (typeof REMEMBERED_METHODS)[number];
+const isRemembered = (m: PaymentMethod): m is RememberedMethod =>
+  (REMEMBERED_METHODS as readonly string[]).includes(m);
 
 const DATE_INPUT =
   "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
@@ -246,17 +251,26 @@ export function AddBookingModal({
     timezone,
   ]);
   // A detailer who is paid after the job should not have to pick that every time, so
-  // the up-front / after-the-job choice sticks per business.
-  const [paymentTiming, setPaymentTiming] = useStoredState<PaymentTiming>(
+  // the payment method sticks per business.
+  const [lastMethod, setLastMethod] = useStoredState<RememberedMethod>(
     `recavo.booking.payment.${tenant.businessId}`,
     "none",
-    TIMING_DEFAULTS,
+    REMEMBERED_METHODS,
   );
-  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(paymentTiming);
+  const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
+  // Bank transfer may have been switched off since it was last used.
+  const defaultMethod: PaymentMethod =
+    lastMethod === "bank_transfer" && !bankTransferEnabled ? "none" : lastMethod;
+  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(defaultMethod);
   const setPaymentMethod = (next: PaymentMethod) => {
     setPaymentMethodState(next);
-    if (next === "none" || next === "pay_later") setPaymentTiming(next);
+    if (isRemembered(next)) setLastMethod(next);
   };
+  // The remembered choice can arrive after mount (its storage key needs the business,
+  // which loads asynchronously), so keep the closed form in step with it.
+  useEffect(() => {
+    if (!open) setPaymentMethodState(defaultMethod);
+  }, [open, defaultMethod]);
   const connect = useConnectAccount();
   const paymentsHold = usePaymentsHold();
   // A RECAVO payments hold means the API will not issue pay-online links, whatever
@@ -276,8 +290,8 @@ export function AddBookingModal({
   // Never leave the form on a hidden option: fall back to the remembered up-front /
   // after-the-job choice, which is always available.
   useEffect(() => {
-    if (paymentMethod === "credit" && !creditOffered) setPaymentMethodState(paymentTiming);
-  }, [paymentMethod, creditOffered, paymentTiming]);
+    if (paymentMethod === "credit" && !creditOffered) setPaymentMethodState(defaultMethod);
+  }, [paymentMethod, creditOffered, defaultMethod]);
   // Deposit override (pounds, as typed). null = follow the services' configured
   // deposits; "" = staff cleared it, i.e. no deposit / full amount up front.
   const [depositInput, setDepositInput] = useState<string | null>(null);
@@ -421,7 +435,6 @@ export function AddBookingModal({
   }, [open, locationId, locationList, tenant.currentLocationId]);
   const setupBlocked = noServices || noLocations || noClients;
 
-  const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
   const hasLinkedRecords = Boolean(linkedRecordDefinition.data?.definition);
   const recordTerm = tenant.terminology.linkedRecord;
   const recordTermLower = recordTerm.toLowerCase();
@@ -936,7 +949,7 @@ export function AddBookingModal({
     setStaffId("all");
     setLocationId("");
     setSlotKey(null);
-    setPaymentMethodState(paymentTiming);
+    setPaymentMethodState(defaultMethod);
     setDepositInput(null);
     setPriceInput(null);
     setDiscount(null);
