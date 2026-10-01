@@ -19,6 +19,7 @@ import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ConsumablesRouteImport } from './routes/consumables'
+import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as FollowUpsRouteImport } from './routes/follow-ups'
 import { Route as ImpersonateRouteImport } from './routes/impersonate'
@@ -108,6 +109,11 @@ const ConnectRoute = ConnectRouteImport.update({
 const ConsumablesRoute = ConsumablesRouteImport.update({
   id: '/consumables',
   path: '/consumables',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeleteAccountRoute = DeleteAccountRouteImport.update({
+  id: '/delete-account',
+  path: '/delete-account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventsRoute = EventsRouteImport.update({
@@ -324,6 +330,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/impersonate': typeof ImpersonateRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/impersonate': typeof ImpersonateRoute
@@ -428,6 +436,7 @@ export interface FileRoutesById {
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
   '/consumables': typeof ConsumablesRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/events': typeof EventsRoute
   '/follow-ups': typeof FollowUpsRoute
   '/impersonate': typeof ImpersonateRoute
@@ -482,6 +491,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/delete-account'
     | '/events'
     | '/follow-ups'
     | '/impersonate'
@@ -533,6 +543,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/delete-account'
     | '/events'
     | '/follow-ups'
     | '/impersonate'
@@ -585,6 +596,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/connect'
     | '/consumables'
+    | '/delete-account'
     | '/events'
     | '/follow-ups'
     | '/impersonate'
@@ -638,6 +650,7 @@ export interface RootRouteChildren {
   CalendarRoute: typeof CalendarRoute
   ConnectRoute: typeof ConnectRouteWithChildren
   ConsumablesRoute: typeof ConsumablesRoute
+  DeleteAccountRoute: typeof DeleteAccountRoute
   EventsRoute: typeof EventsRoute
   FollowUpsRoute: typeof FollowUpsRoute
   ImpersonateRoute: typeof ImpersonateRoute
@@ -741,6 +754,13 @@ declare module '@tanstack/react-router' {
       path: '/consumables'
       fullPath: '/consumables'
       preLoaderRoute: typeof ConsumablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/delete-account': {
+      id: '/delete-account'
+      path: '/delete-account'
+      fullPath: '/delete-account'
+      preLoaderRoute: typeof DeleteAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events': {
@@ -1073,6 +1093,7 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarRoute: CalendarRoute,
   ConnectRoute: ConnectRouteWithChildren,
   ConsumablesRoute: ConsumablesRoute,
+  DeleteAccountRoute: DeleteAccountRoute,
   EventsRoute: EventsRoute,
   FollowUpsRoute: FollowUpsRoute,
   ImpersonateRoute: ImpersonateRoute,
