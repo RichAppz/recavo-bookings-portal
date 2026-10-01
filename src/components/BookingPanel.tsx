@@ -62,6 +62,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { BookingInvoices } from "@/components/BookingInvoices";
@@ -2129,19 +2130,30 @@ function RecordPaymentDialog({
             ) : null}
           </div>
           <div className="grid gap-2">
-            <Label>How was it paid?</Label>
-            <Select value={method} onValueChange={(v) => setMethod(v as RecordPaymentMethod)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RECORD_METHODS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label id="record-method-label">How was it paid?</Label>
+            {/* Plain buttons rather than a dropdown: one tap on a phone, and no
+                second floating layer stacked inside this drawer inside the booking
+                drawer, which is where a stuck "can't tap anything" state can come from. */}
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={method}
+              onValueChange={(v) => {
+                if (v) setMethod(v as RecordPaymentMethod);
+              }}
+              aria-labelledby="record-method-label"
+              className="grid grid-cols-2 gap-2"
+            >
+              {RECORD_METHODS.map((m) => (
+                <ToggleGroupItem
+                  key={m.value}
+                  value={m.value}
+                  className="h-11 w-full justify-start px-3 data-[state=on]:border-primary data-[state=on]:bg-primary-soft data-[state=on]:text-foreground"
+                >
+                  {m.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         </div>
         <DialogFooter>

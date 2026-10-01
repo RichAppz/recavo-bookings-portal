@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { useDialogKeyboardGuard } from "@/hooks/use-dialog-keyboard-guard";
 import {
   Outlet,
   Link,
@@ -194,6 +195,7 @@ function PasswordRecoveryGate({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useDialogKeyboardGuard();
 
   // The mobile app runs Stripe in a browser sheet; when it is dismissed by hand
   // the plan, cards or Connect status may have changed behind our cache.
