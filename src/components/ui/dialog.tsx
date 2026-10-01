@@ -56,9 +56,13 @@ const DialogContent = React.forwardRef<
     >
       {children}
       {/* A finger-sized square (44px on phones, 36px with a pointer) around the
-          glyph; the bare 16px icon it replaces was the only thing you could hit. */}
-      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:size-9">
-        <X className="size-5 sm:size-4" />
+          glyph; the bare 16px icon it replaces was the only thing you could hit.
+          On phones the glyph sits in a grey disc, the way iOS draws a sheet's
+          close control, and the header drops below it (see DialogHeader). */}
+      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground">
+        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+          <X className="size-4.5 sm:size-4" />
+        </span>
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -66,15 +70,31 @@ const DialogContent = React.forwardRef<
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+/**
+ * Phones get the iOS sheet layout: the close disc alone in the top row and a
+ * large bold title underneath it, so the header clears the control with a
+ * margin (not padding — consumers that zero the content padding set their own
+ * safe-area padding on the header, and a margin stacks with it instead of
+ * fighting it). With a pointer the title shares the row and leaves room on the
+ * right for the close button.
+ */
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex shrink-0 flex-col space-y-1.5 pr-8 text-left", className)} {...props} />
+  <div
+    className={cn(
+      "flex shrink-0 flex-col space-y-1.5 pr-8 text-left max-sm:mt-9 max-sm:space-y-2 max-sm:pr-0",
+      className,
+    )}
+    {...props}
+  />
 );
 DialogHeader.displayName = "DialogHeader";
 
+/* Phones: actions stack full width at iOS button height, primary on top. */
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
       "mt-auto flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0",
+      "max-sm:[&>a]:h-12 max-sm:[&>a]:rounded-xl max-sm:[&>a]:text-base max-sm:[&>button]:h-12 max-sm:[&>button]:rounded-xl max-sm:[&>button]:text-base",
       className,
     )}
     {...props}
@@ -88,7 +108,10 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn(
+      "text-lg font-semibold leading-none tracking-tight max-sm:text-[28px] max-sm:font-bold max-sm:leading-tight",
+      className,
+    )}
     {...props}
   />
 ));
@@ -100,7 +123,10 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn(
+      "text-sm text-muted-foreground max-sm:text-[15px] max-sm:leading-snug",
+      className,
+    )}
     {...props}
   />
 ));
