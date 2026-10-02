@@ -18,15 +18,16 @@ import { SectionCard } from "@/components/ui-bits";
 import { toastApiError } from "@/lib/api";
 import { useAccountDeletionPreview, useDeleteAccount } from "@/lib/api/hooks";
 import { useAuth } from "@/lib/auth/auth-store";
-import { useIsNativeApp } from "@/hooks/use-native-app";
+import { storeCopyFor, type StoreCopy } from "@/lib/store-copy";
 
 const CONFIRM_WORD = "DELETE";
 
 /**
  * Self-serve account deletion, reachable from Settings › Account on every surface.
- * App Store guideline 5.1.1(v) requires it in-app once the app offers sign-up; the
- * confirmation spells out exactly what goes (businesses nobody else owns are
- * closed) and what does not (an App Store subscription only Apple can cancel).
+ * App Store guideline 5.1.1(v) and Google Play's account-deletion policy require it
+ * in-app once the app offers sign-up; the confirmation spells out exactly what goes
+ * (businesses nobody else owns are closed) and what does not (an App Store or
+ * Google Play subscription only the store can cancel).
  */
 export function DeleteAccountSection() {
   return (
@@ -64,11 +65,18 @@ export function DeleteAccountDialog({ trigger }: { trigger: ReactElement }) {
   const deleteAccount = useDeleteAccount();
   const { signOut } = useAuth();
   const navigate = useNavigate();
-  const native = useIsNativeApp();
 
   const closing = preview.data?.closingBusinesses ?? [];
   const leaving = preview.data?.leavingBusinessIds ?? [];
-  const appleBilled = closing.filter((b) => b.appleSubscription);
+  // Older API responses carry only the Apple boolean; newer ones name the store.
+  const storeBilled = closing
+    .map((b) => ({
+      name: b.name,
+      store: storeCopyFor(b.storeSubscription ?? (b.appleSubscription ? "apple" : null)),
+    }))
+    .filter((b): b is { name: string; store: StoreCopy } => b.store !== null);
+  const storeNames = [...new Set(storeBilled.map((b) => b.store.name))];
+  const managePaths = [...new Set(storeBilled.map((b) => b.store.managePath))];
   const confirmed = typed.trim().toUpperCase() === CONFIRM_WORD;
   const busy = deleteAccount.isPending;
 
@@ -136,17 +144,14 @@ export function DeleteAccountDialog({ trigger }: { trigger: ReactElement }) {
                       ; they carry on without you.
                     </p>
                   ) : null}
-                  {appleBilled.length > 0 ? (
+                  {storeBilled.length > 0 ? (
                     <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
-                      {appleBilled.length === 1
-                        ? `${appleBilled[0].name} is billed through your Apple ID.`
-                        : "Some of these businesses are billed through your Apple ID."}{" "}
-                      Deleting your account does <strong>not</strong> cancel an App Store
-                      subscription — cancel it in{" "}
-                      {native
-                        ? "Settings › Apple ID › Subscriptions"
-                        : "iOS Settings › Apple ID › Subscriptions"}{" "}
-                      or you will keep being charged.
+                      {storeBilled.length === 1
+                        ? `${storeBilled[0].name} is billed through the ${storeBilled[0].store.name}.`
+                        : `Some of these businesses are billed through the ${storeNames.join(" or ")}.`}{" "}
+                      Deleting your account does <strong>not</strong> cancel a{" "}
+                      {storeNames.join(" or ")} subscription — cancel it in{" "}
+                      {managePaths.join(", or ")} or you will keep being charged.
                     </p>
                   ) : null}
                   <p>

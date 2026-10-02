@@ -12,6 +12,7 @@ import { bundleLabel, smsCreditsLevel } from "@/lib/billing/sms-credits";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
 import { billingSurface } from "@/lib/native";
+import { currentStoreCopy } from "@/lib/store-copy";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
@@ -38,8 +39,8 @@ export function SmsCreditsCard({ className }: { className?: string }) {
 
   const current = subscription.data?.subscription ?? null;
   // Bundles are consumables, not part of the plan, so they sell on every surface
-  // that can sell at all: Stripe Checkout on the web, StoreKit in the iOS app
-  // (at the App Store's price), nothing in a store app without In-App Purchase.
+  // that can sell at all: Stripe Checkout on the web, StoreKit / Play Billing in
+  // the store apps (at the store's price), nothing in a store app without IAP.
   const surface = billingSurface();
   const sellsHere = surface !== "none";
   const iap = useIapProducts();
@@ -129,7 +130,7 @@ export function SmsCreditsCard({ className }: { className?: string }) {
           {canBuy ? (
             <Button disabled={buying} onClick={() => void buy()}>
               {iapFlow.state === "purchasing"
-                ? "Waiting for App Store…"
+                ? `Waiting for ${currentStoreCopy().name}…`
                 : iapFlow.state === "reconciling"
                   ? "Adding credits…"
                   : checkout.isPending

@@ -3313,6 +3313,11 @@ export type ClosingBusinessSummary = {
   name: string;
   /** Live App Store subscription RECAVO cannot cancel — the user must, in iOS Settings. */
   appleSubscription: boolean;
+  /**
+   * Which store bills a live subscription RECAVO cannot cancel (`apple` or `google`);
+   * null for Stripe or none. Optional because older API builds send only the boolean.
+   */
+  storeSubscription?: "apple" | "google" | null;
 };
 
 export type AccountDeletionPreview = {

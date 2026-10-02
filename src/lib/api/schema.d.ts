@@ -2349,7 +2349,7 @@ export interface paths {
         post?: never;
         /**
          * Delete the authenticated user’s account
-         * @description Self-serve account deletion (App Store guideline 5.1.1(v)). Deletes the sign-in identity, closes every business the caller is the only owner of through the normal closure workflow (export window, Stripe cancellation, retention anonymisation), suspends their other memberships, revokes sessions and scrubs all personal data from the user record. App Store subscriptions are not cancelled by this call — the user must cancel them in iOS Settings. Irreversible.
+         * @description Self-serve account deletion (App Store guideline 5.1.1(v)). Deletes the sign-in identity, closes every business the caller is the only owner of through the normal closure workflow (export window, Stripe cancellation, retention anonymisation), suspends their other memberships, revokes sessions and scrubs all personal data from the user record. App Store and Google Play subscriptions are not cancelled by this call — the user must cancel them in iOS Settings or Google Play. Irreversible.
          */
         delete: {
             parameters: {
@@ -2381,8 +2381,13 @@ export interface paths {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
-                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. Equivalent to `storeSubscription === "apple"`; kept for older clients. */
                                 appleSubscription: boolean;
+                                /**
+                                 * @description Set when the business has a live subscription billed by a store, which RECAVO cannot cancel: `apple` (iOS Settings › Apple ID › Subscriptions) or `google` (Google Play › Payments & subscriptions). Null for Stripe or no subscription.
+                                 * @enum {string|null}
+                                 */
+                                storeSubscription: "apple" | "google" | null;
                             }[];
                             leavingBusinessIds: string[];
                         };
@@ -2826,8 +2831,13 @@ export interface paths {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
-                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. */
+                                /** @description True when the business has a live App Store subscription. RECAVO cannot cancel it; the user must, in iOS Settings › Apple ID › Subscriptions. Equivalent to `storeSubscription === "apple"`; kept for older clients. */
                                 appleSubscription: boolean;
+                                /**
+                                 * @description Set when the business has a live subscription billed by a store, which RECAVO cannot cancel: `apple` (iOS Settings › Apple ID › Subscriptions) or `google` (Google Play › Payments & subscriptions). Null for Stripe or no subscription.
+                                 * @enum {string|null}
+                                 */
+                                storeSubscription: "apple" | "google" | null;
                             }[];
                             /** @description Businesses the user only belongs to; they lose their membership. */
                             leavingBusinessIds: string[];
@@ -25857,7 +25867,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Connected account (null if none) */
+                /** @description Connected account (null if none) and whether RECAVO has paused payments */
                 200: {
                     headers: {
                         "x-request-id": components["headers"]["X-Request-Id"];
@@ -25866,6 +25876,16 @@ export interface paths {
                     content: {
                         "application/json": {
                             account: components["schemas"]["ConnectAccount"] | null;
+                            /** @description Set when RECAVO has switched online payments off for this business. Hide “Connect Stripe” and point the owner at support (mode notice) or hide Stripe entirely (mode hidden); the reason is never shared. */
+                            paymentsHold: {
+                                /** Format: date-time */
+                                since: string;
+                                /**
+                                 * @description How the business sees the hold. notice: told that online payments are switched off (a review that may be lifted). hidden: Stripe is not shown to them at all. Bank transfer is unaffected either way.
+                                 * @enum {string}
+                                 */
+                                mode: "notice" | "hidden";
+                            } | null;
                         };
                     };
                 };
@@ -30004,10 +30024,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -30392,10 +30412,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -30603,10 +30623,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -31387,10 +31407,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -31568,8 +31588,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * App Store In-App Purchase config
-         * @description RevenueCat App User ID for this business plus the App Store product catalogue (product id → plan/interval, add-on or SMS bundle). Member-readable. Prices are never returned — the app reads them from StoreKit.
+         * In-App Purchase config (App Store / Google Play)
+         * @description RevenueCat App User ID for this business plus the store product catalogue (product id → plan/interval, add-on or SMS bundle), shared by both stores. Member-readable. Prices are never returned — the app reads them from the store SDK.
          */
         get: {
             parameters: {
@@ -31767,10 +31787,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -32148,10 +32168,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -32372,10 +32392,10 @@ export interface paths {
                                 /** @enum {string} */
                                 accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                 /**
-                                 * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                 * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                  * @enum {string}
                                  */
-                                provider?: "stripe" | "apple";
+                                provider?: "stripe" | "apple" | "google";
                                 planVersion?: string | null;
                                 /** Format: date-time */
                                 currentPeriodStart?: string | null;
@@ -32802,10 +32822,10 @@ export interface paths {
                                     /** @enum {string} */
                                     accessState?: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                                     /**
-                                     * @description Who bills the subscription: Stripe (web Checkout) or Apple (App Store In-App Purchase). Stripe self-serve endpoints return 409 for Apple-billed businesses.
+                                     * @description Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses.
                                      * @enum {string}
                                      */
-                                    provider?: "stripe" | "apple";
+                                    provider?: "stripe" | "apple" | "google";
                                     planVersion?: string | null;
                                     /** Format: date-time */
                                     currentPeriodStart?: string | null;
@@ -32984,7 +33004,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * RevenueCat webhook (App Store In-App Purchase)
+         * RevenueCat webhook (App Store / Google Play In-App Purchase)
          * @description Public endpoint verified by the shared secret RevenueCat sends in the Authorization header; no bearer auth. Deliveries are recorded in the provider-event inbox and projected by a durable job.
          */
         post: {
@@ -35992,6 +36012,777 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/businesses/{id}/content-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Content flags for one business (platform admin)
+         * @description What this business wrote on its pages that a screening rule caught — explicit or prohibited services, drugs, hate, off-platform payment hints, placeholder names. Worst first. Defaults to open flags; pass `status` for dismissed/actioned/resolved. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated or repeated. Defaults to `open`. */
+                    status?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Flags */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            flags: components["schemas"]["ContentFlag"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/content-flags/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-screen one business now (platform admin)
+         * @description Runs the screening rules over everything the business has written right now, rather than waiting for the next sweep (CONTENT_SCREENING_POLL_MS). Returns what changed and the open flags afterwards. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Scan result */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Pieces of text looked at. */
+                            screened: number;
+                            /** @description New or reopened flags. */
+                            created: number;
+                            /** @description Flags whose text is gone. */
+                            resolved: number;
+                            flags: components["schemas"]["ContentFlag"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/content-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Content flag queue across every business (platform admin)
+         * @description Worst first, then newest. Filter with `status` (default open), `severity` and `businessId`. Each flag carries its business so the queue can link to it. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Comma-separated or repeated. Defaults to `open`. */
+                    status?: string;
+                    severity?: "critical" | "warning" | "info";
+                    businessId?: string;
+                    /** @description Page size (default 50, max 200). */
+                    limit?: components["parameters"]["Limit"];
+                    /** @description Opaque cursor from a previous page `nextCursor`. Do not parse or construct client-side. Omit on the first page; do not reuse across different filter sets. */
+                    cursor?: components["parameters"]["Cursor"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Flag page */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            flags: components["schemas"]["ContentFlag"][];
+                            nextCursor: components["schemas"]["NextCursor"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/content-flags/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open content flag counts (platform admin)
+         * @description Cheap enough to poll; drives the badge on the console’s Flags menu item. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Counts */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ContentFlagSummary"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/content-flags/{flagId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Review a content flag (platform admin)
+         * @description `dismissed` = a person looked and it is fine (sticks until the text changes); `actioned` = dealt with (business suspended, service removed…); `open` reopens. Audited as platform.content.<status> on the business. Requires PLATFORM_ADMIN_USER_IDS allow-list membership (+ MFA when MFA_REQUIRED_FOR_PRIVILEGED is on). Not available to business owners.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    flagId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "open" | "dismissed" | "actioned";
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated flag */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            flag: components["schemas"]["ContentFlag"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/platform/businesses/{id}/referral-program": {
         parameters: {
             query?: never;
@@ -36318,6 +37109,308 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/v1/platform/businesses/{id}/payments-hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch a business’s payments off (place a payments hold)
+         * @description Platform admin. While held, Stripe Connect onboarding and every new card payment or payment link are refused (403) and the public booking page stops asking for a card. The Stripe account itself is untouched (payouts still reachable). Placing again updates the reason and/or mode (omitted mode keeps the current one; default notice). Audited as platform.payments_hold.placed / .updated.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                        /**
+                         * @description How the business sees the hold. notice: told that online payments are switched off (a review that may be lifted). hidden: Stripe is not shown to them at all. Bank transfer is unaffected either way.
+                         * @enum {string}
+                         */
+                        mode?: "notice" | "hidden";
+                    };
+                };
+            };
+            responses: {
+                /** @description The hold now in force */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            hold: components["schemas"]["PaymentsHold"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Switch a business’s payments back on (release the hold)
+         * @description Platform admin. Needs a reason; audited as platform.payments_hold.released. `released` is false when there was no hold.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Hold released (or none to release) */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            released: boolean;
+                            hold: null;
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/platform/revenue/sync": {
@@ -50128,11 +51221,84 @@ export interface components {
             /** @enum {string} */
             severity: "critical" | "warning" | "info";
             /** @enum {string} */
-            area: "business" | "billing" | "team" | "payments" | "jobs" | "setup";
+            area: "business" | "billing" | "team" | "payments" | "jobs" | "setup" | "content";
             /** @description Stable key, e.g. `billing.access_restricted`. */
             code: string;
             title: string;
             detail: string | null;
+        };
+        /** @description One piece of tenant-written text that tripped a screening rule (service name, package link, staff bio, business name…). Keyed on the exact text: a dismissed flag stays dismissed until the text changes; edited or deleted text resolves the flag. */
+        ContentFlag: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            businessId: string;
+            /** @enum {string} */
+            targetType: "business" | "service" | "package" | "package_link" | "staff" | "location";
+            /** Format: uuid */
+            targetId: string;
+            /** @description Name of the thing when last seen. */
+            targetLabel: string;
+            /** @description name, description, category, bio, tradingName, variant:<name>… */
+            field: string;
+            /** @description The offending text, up to 280 characters. */
+            excerpt: string;
+            /** @enum {string} */
+            severity: "critical" | "warning" | "info";
+            /** @description Highest-ranked category: content.sexual, content.drugs, content.weapons_violence, content.hate, content.profanity, content.scam, content.placeholder. */
+            category: string;
+            categoryLabel: string;
+            matches: {
+                code: string;
+                /** @enum {string} */
+                severity: "critical" | "warning" | "info";
+                /** @description The word or phrase that matched. */
+                term: string;
+            }[];
+            /** @description True when the text is live on the public booking page. */
+            publicVisible: boolean;
+            /** @enum {string} */
+            status: "open" | "dismissed" | "actioned" | "resolved";
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            /** Format: date-time */
+            reviewedAt: string | null;
+            /** Format: uuid */
+            reviewedByUserId: string | null;
+            reviewNote: string | null;
+            /** Format: date-time */
+            resolvedAt: string | null;
+            /** @description Present on platform-wide lists. */
+            business?: {
+                /** Format: uuid */
+                id: string;
+                tradingName: string;
+                slug: string;
+            } | null;
+        };
+        ContentFlagSummary: {
+            open: number;
+            critical: number;
+            warning: number;
+            info: number;
+            /** @description Distinct businesses with an open flag. */
+            businesses: number;
+        };
+        /** @description RECAVO has switched this business’s payments off: Stripe Connect onboarding and new card payments / payment links are refused, and the booking page stops asking for a card. Placed and released by a platform admin with a reason; audited as platform.payments_hold.*. */
+        PaymentsHold: {
+            /** @description Internal; never shown to the business. */
+            reason: string;
+            /**
+             * @description How the business sees the hold. notice: told that online payments are switched off (a review that may be lifted). hidden: Stripe is not shown to them at all. Bank transfer is unaffected either way.
+             * @enum {string}
+             */
+            mode: "notice" | "hidden";
+            /** Format: uuid */
+            placedByUserId: string | null;
+            /** Format: date-time */
+            placedAt: string;
         };
         /** @description “Is anything wrong with this business?” — ranked issues plus the rows behind them (failed jobs, failing/dead-letter outbox events, recent audit trail, open support sessions), read by the internal console. */
         PlatformBusinessHealth: {
@@ -50149,7 +51315,7 @@ export interface components {
                 /** @enum {string} */
                 severity: "critical" | "warning" | "info";
                 /** @enum {string} */
-                area: "business" | "billing" | "team" | "payments" | "jobs" | "setup";
+                area: "business" | "billing" | "team" | "payments" | "jobs" | "setup" | "content";
                 /** @description Stable key, e.g. `billing.access_restricted`. */
                 code: string;
                 title: string;
@@ -50190,6 +51356,7 @@ export interface components {
                 requirementsDue: string[];
                 disabledReason: string | null;
                 rejectionReasonCode: string | null;
+                hold: components["schemas"]["PaymentsHold"] | null;
             };
             setup: {
                 status: string;
@@ -50234,6 +51401,10 @@ export interface components {
             };
             impersonation: {
                 active: components["schemas"]["ImpersonationSession"][];
+            };
+            /** @description Open content flags: explicit, suspicious or placeholder text on their pages. */
+            content?: {
+                flags: components["schemas"]["ContentFlag"][];
             };
         };
         OnboardingStep: {
@@ -52090,7 +53261,7 @@ export interface components {
                 accessState: "none" | "pending" | "trial" | "entitled" | "grace" | "restricted" | "ended";
                 subscriptionStatus: string | null;
                 /** @enum {string|null} */
-                provider: "stripe" | "apple" | null;
+                provider: "stripe" | "apple" | "google" | null;
                 planCode: string | null;
                 planName: string | null;
                 priceMinor: number | null;
@@ -52114,6 +53285,8 @@ export interface components {
                 lastBookingAt: string | null;
             };
             openSupportRequests: number;
+            /** @description Open content flags: explicit or nonsense text on their pages. */
+            openContentFlags: number;
             referral: components["schemas"]["PlatformBusinessReferral"];
         };
         /** @description Which referral programme this business’s code is on and how it has performed. */
@@ -52131,6 +53304,7 @@ export interface components {
             programChangedAt: string | null;
         };
         PlatformBusinessDetail: components["schemas"]["PlatformBusinessSummary"] & {
+            paymentsHold: components["schemas"]["PaymentsHold"] | null;
             /** @description Businesses that signed up with this one’s code, newest first. */
             referred: components["schemas"]["PlatformReferredBusiness"][];
             referredBy: components["schemas"]["PlatformReferredBy"] | null;
@@ -52401,7 +53575,7 @@ export interface components {
                 }[];
             };
         };
-        /** @description What the business has paid us, net of refunds, from the revenue ledger (saas_revenue_events: Stripe charges + App Store purchases). Minor units. */
+        /** @description What the business has paid us, net of refunds, from the revenue ledger (saas_revenue_events: Stripe charges + App Store / Google Play purchases). Minor units. */
         PlatformBusinessRevenue: {
             /** @description Lifetime value. */
             lifetimeMinor: number;
@@ -52418,7 +53592,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            provider: "stripe" | "apple";
+            provider: "stripe" | "apple" | "google";
             /**
              * @description `subscription` — plan / bolt-on invoice; `one_off` — SMS bundle or other single payment.
              * @enum {string}

@@ -55,6 +55,7 @@ import type {
 import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
 import {
   isBillingBlocked,
+  isStoreBilled,
   subscriptionAccessState,
   subscriptionManagedHere,
   subscriptionProvider,
@@ -64,6 +65,7 @@ import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { openIapManagement, planOrder, type IapProduct } from "@/lib/iap";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
 import { billingSurface } from "@/lib/native";
+import { currentStoreCopy, storeCopyFor } from "@/lib/store-copy";
 import { UPSELLS_ADDON_KEY } from "@/lib/api/upsells";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -313,17 +315,21 @@ function AddonsCard({
   currentPlanName,
   disabled,
   managedHere = true,
+  provider,
 }: {
   addons: SubscriptionAddon[];
   currentPlanName: string | null;
   disabled: boolean;
-  /** False when the subscription is billed elsewhere (App Store): show state only. */
+  /** False when the subscription is billed elsewhere (a store): show state only. */
   managedHere?: boolean;
+  /** Which store bills it when not managed here. */
+  provider?: string | null;
 }) {
   const add = useAddSubscriptionAddon();
   const remove = useRemoveSubscriptionAddon();
   if (addons.length === 0) return null;
   const busy = add.isPending || remove.isPending;
+  const store = storeCopyFor(provider);
 
   return (
     <SectionCard
@@ -331,7 +337,9 @@ function AddonsCard({
       description={
         managedHere
           ? "Extras you can switch on without changing plan. Prorated onto your current bill."
-          : "Extras on this subscription. It is billed through the App Store, so add or remove them from Billing in the Recavo iPhone app."
+          : store
+            ? `Extras on this subscription. It is billed through the ${store.name}, so add or remove them from Billing in the ${store.appName}.`
+            : "Extras on this subscription. It is billed on the website, where they are added or removed."
       }
     >
       <div className="grid gap-3">
@@ -469,8 +477,8 @@ function DiscountBanner({
 }
 
 export function BillingPage() {
-  // Three surfaces (see billingSurface): the web sells through Stripe, the iOS
-  // app through In-App Purchase, and a store app that cannot sell shows plan
+  // Three surfaces (see billingSurface): the web sells through Stripe, the store
+  // apps through In-App Purchase, and a store app that cannot sell shows plan
   // state only. Stable for the life of the page, so choosing here is safe.
   const surface = billingSurface();
   if (surface === "web") return <WebBillingPage />;
@@ -537,8 +545,6 @@ function InAppBillingPage() {
   );
 }
 
-/** Apple's standard EULA — App Store Review requires a Terms of Use link beside subscription pricing. */
-const APPLE_STANDARD_EULA_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 const PRIVACY_POLICY_URL = "https://recavo.app/privacy";
 
 function planTitle(item: IapProduct): string {
@@ -546,7 +552,7 @@ function planTitle(item: IapProduct): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
-/** StoreKit says this Apple ID gets a free introductory period on the product. */
+/** The store says this account gets a free introductory period on the product. */
 function isFreeIntro(item: IapProduct): boolean {
   return Boolean(item.introOffer) && /^[^\d]*0+([.,]0+)?[^\d]*$/.test(item.introOffer!.priceString);
 }
@@ -561,15 +567,16 @@ function describeIsoPeriod(iso: string): string {
 }
 
 /**
- * Billing in the iOS app: plans, bolt-ons and text bundles bought through
- * StoreKit (App Store Review Guideline 3.1.1). Every price on this screen is
- * the App Store's own, read from the product; the Stripe catalogue is never
- * shown. Plan changes and cancellation happen on Apple's subscription page —
- * the app reflects them once RevenueCat tells the API.
+ * Billing in a store app: plans, bolt-ons and text bundles bought through
+ * StoreKit or Google Play Billing (App Store Review Guideline 3.1.1, Play
+ * Payments policy). Every price on this screen is the store's own, read from
+ * the product; the Stripe catalogue is never shown. Plan changes and
+ * cancellation happen on the store's subscription page — the app reflects them
+ * once RevenueCat tells the API.
  *
- * A business billed through Stripe sees its plan read-only here (the API
- * refuses a second provider) but may still buy text bundles, which are
- * consumables and provider-agnostic.
+ * A business billed through Stripe, or through the *other* store, sees its plan
+ * read-only here (the API refuses a second provider) but may still buy text
+ * bundles, which are consumables and provider-agnostic.
  */
 function StoreBillingPage() {
   const tenant = useTenant();
@@ -589,7 +596,9 @@ function StoreBillingPage() {
     blocked,
   });
   const managedHere = subscriptionManagedHere(current, "store");
-  const stripeBilled = Boolean(current) && !blocked && subscriptionProvider(current) === "stripe";
+  // Billed somewhere this app cannot manage: Stripe, or the other platform's store.
+  const billedElsewhere = Boolean(current) && !blocked && !managedHere;
+  const store = currentStoreCopy();
 
   const planItems = useMemo(
     () =>
@@ -622,7 +631,7 @@ function StoreBillingPage() {
     isFreeIntro(item)
       ? `${item.introOffer!.cycles > 1 ? `${item.introOffer!.cycles} × ` : ""}${describeIsoPeriod(item.introOffer!.period)} free, then `
       : "";
-  // Only promise a trial StoreKit actually offers this Apple ID: eligibility is the
+  // Only promise a trial the store actually offers this account: eligibility is the
   // store's call (used trials, no intro offer configured, other storefront).
   const anyTrial = planItems.some(isFreeIntro);
 
@@ -635,8 +644,8 @@ function StoreBillingPage() {
             {subscriptionAccessState(current) === "ended"
               ? "Your subscription has ended. Choose a plan to reopen the console."
               : anyTrial
-                ? "Choose a plan to start your free trial. Billed through your Apple ID; cancel any time in Settings before the trial ends and you won’t be charged."
-                : "Choose a plan. Billed through your Apple ID; cancel any time in Settings › Apple ID › Subscriptions."}
+                ? `Choose a plan to start your free trial. Billed through ${store.account}; cancel any time in ${store.managePath} before the trial ends and you won’t be charged.`
+                : `Choose a plan. Billed through ${store.account}; cancel any time in ${store.managePath}.`}
           </p>
         </div>
       ) : null}
@@ -666,9 +675,11 @@ function StoreBillingPage() {
                 Auto-renew is off — access ends with the current period
               </p>
             ) : null}
-            {stripeBilled ? (
+            {billedElsewhere ? (
               <p className="text-muted-foreground">
-                This subscription is billed on the website, where the plan and bolt-ons are managed.
+                {storeCopyFor(subscriptionProvider(current))
+                  ? `This subscription is billed through the ${storeCopyFor(subscriptionProvider(current))!.name}. Change plan, add bolt-ons or cancel from Billing in the ${storeCopyFor(subscriptionProvider(current))!.appName}.`
+                  : "This subscription is billed on the website, where the plan and bolt-ons are managed."}
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -687,12 +698,13 @@ function StoreBillingPage() {
       ) : null}
 
       {!blocked && current && addonRows.length ? (
-        stripeBilled ? (
+        billedElsewhere ? (
           <AddonsCard
             addons={addonRows}
             currentPlanName={plan?.name ?? null}
             disabled
             managedHere={false}
+            provider={current.provider}
           />
         ) : (
           <StoreAddonsCard
@@ -732,7 +744,7 @@ function StoreBillingPage() {
           ) : planItems.length === 0 ? (
             <EmptyState
               title="Plans unavailable"
-              description="The App Store didn’t return any plans. Check you’re signed in to the App Store and try again."
+              description={`The ${store.name} didn’t return any plans. Check you’re signed in to the ${store.name} and try again.`}
               action={
                 <Button variant="outline" onClick={() => void iap.refetch()}>
                   Try again
@@ -806,7 +818,7 @@ function StoreBillingPage() {
                           }
                         >
                           {flow.state === "purchasing"
-                            ? "Waiting for App Store…"
+                            ? `Waiting for ${currentStoreCopy().name}…`
                             : flow.state === "reconciling"
                               ? "Activating…"
                               : blocked
@@ -825,20 +837,22 @@ function StoreBillingPage() {
 
           <div className="space-y-2 text-xs text-muted-foreground">
             <p>
-              Payment is charged to your Apple ID at confirmation. Subscriptions renew automatically
-              at the same price unless auto-renew is turned off at least 24 hours before the end of
-              the current period. Any unused portion of a free trial is forfeited when you
-              subscribe. Manage or cancel in Settings › Apple ID › Subscriptions.
+              Payment is charged to {store.account} at confirmation. Subscriptions renew
+              automatically at the same price unless auto-renew is turned off at least 24 hours
+              before the end of the current period. Any unused portion of a free trial is forfeited
+              when you subscribe. Manage or cancel in {store.managePath}.
             </p>
             <p className="flex flex-wrap gap-x-3">
-              <a
-                className="underline underline-offset-2"
-                href={APPLE_STANDARD_EULA_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Terms of Use
-              </a>
+              {store.eulaUrl ? (
+                <a
+                  className="underline underline-offset-2"
+                  href={store.eulaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Terms of Use
+                </a>
+              ) : null}
               <a
                 className="underline underline-offset-2"
                 href={PRIVACY_POLICY_URL}
@@ -865,7 +879,7 @@ function StoreBillingPage() {
   );
 }
 
-/** Bolt-ons bought through StoreKit. Removal happens on Apple's subscription page. */
+/** Bolt-ons bought through the store. Removal happens on the store's subscription page. */
 function StoreAddonsCard({
   addons,
   currentPlanName,
@@ -881,7 +895,7 @@ function StoreAddonsCard({
   return (
     <SectionCard
       title="Add-ons"
-      description="Extras you can switch on without changing plan. Billed monthly through your Apple ID."
+      description={`Extras you can switch on without changing plan. Billed monthly through ${currentStoreCopy().account}.`}
     >
       <div className="grid gap-3">
         {addons.map((addon) => {
@@ -907,7 +921,7 @@ function StoreAddonsCard({
                           : "Active."
                         : price
                           ? copy.available(price)
-                          : "Not available from the App Store right now."}
+                          : `Not available from the ${currentStoreCopy().name} right now.`}
                   </p>
                 </div>
               </div>
@@ -928,7 +942,7 @@ function StoreAddonsCard({
                     onClick={() => void flow.purchase(item, copy.addedTitle)}
                   >
                     {flow.state === "purchasing"
-                      ? "Waiting for App Store…"
+                      ? `Waiting for ${currentStoreCopy().name}…`
                       : flow.state === "reconciling"
                         ? "Activating…"
                         : `Add for ${price}`}
@@ -967,9 +981,10 @@ function WebBillingPage() {
     roleKeys: tenant.roleKeys,
     blocked,
   });
-  // An App Store subscription is Apple's to change; the website shows it but
+  // A store subscription is the store's to change; the website shows it but
   // offers no Stripe buttons or plan chooser for it (the API would refuse).
-  const appleBilled = Boolean(current) && !blocked && subscriptionProvider(current) === "apple";
+  const storeBilled = Boolean(current) && !blocked && isStoreBilled(current);
+  const storeCopy = storeCopyFor(subscriptionProvider(current));
 
   const plans = useMemo(() => {
     const list = [...(catalogue.data ?? [])];
@@ -1069,10 +1084,11 @@ function WebBillingPage() {
             {current.cancelAtPeriodEnd ? (
               <p className="text-amber-700 dark:text-amber-400">Cancels at period end</p>
             ) : null}
-            {appleBilled ? (
+            {storeBilled && storeCopy ? (
               <p className="text-muted-foreground">
-                Billed through the App Store. Change plan, add bolt-ons or cancel from Billing in
-                the Recavo iPhone app, or in Settings › Apple ID › Subscriptions on your iPhone.
+                Billed through the {storeCopy.name}. Change plan, add bolt-ons or cancel from
+                Billing in the {storeCopy.appName}, or in {storeCopy.managePath} on your{" "}
+                {storeCopy.name === "Google Play" ? "Android device" : "iPhone"}.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -1139,14 +1155,15 @@ function WebBillingPage() {
         <AddonsCard
           addons={addonRows}
           currentPlanName={currentPlan?.name ?? plan?.name ?? null}
-          disabled={!canManage || appleBilled}
-          managedHere={!appleBilled}
+          disabled={!canManage || storeBilled}
+          managedHere={!storeBilled}
+          provider={current.provider}
         />
       ) : null}
 
       {!blocked && current ? <SmsCreditsCard /> : null}
 
-      {appleBilled ? null : (
+      {storeBilled ? null : (
         <>
           {/* scroll-mt clears the sticky header when the "Upgrade plan" button jumps here. */}
           <div

@@ -33,6 +33,7 @@ import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
 import { billingSurface } from "@/lib/native";
 import { openIapManagement } from "@/lib/iap";
 import { subscriptionManagedHere } from "@/lib/billing/access";
+import { currentStoreCopy, storeCopyFor } from "@/lib/store-copy";
 import {
   DEFAULT_DUE_DAYS,
   DEFAULT_NUMBER_PREFIX,
@@ -141,8 +142,8 @@ export function InvoicingSetting({ className }: { className?: string }) {
   };
 
   // Bolt-on control. Bought and removed where the subscription is billed: Stripe
-  // on the web, the App Store in the iOS app (at the store's price, removed via
-  // Apple's subscription page). A store app that cannot sell shows state only.
+  // on the web, the store in a store app (at the store's price, removed via the
+  // store's subscription page). A store app that cannot sell shows state only.
   const current = subscription.data?.subscription ?? null;
   const surface = billingSurface();
   const sellsHere = surface !== "none";
@@ -218,7 +219,7 @@ export function InvoicingSetting({ className }: { className?: string }) {
         </span>
         {canManageBilling && surface === "store" ? (
           <Button variant="outline" size="sm" onClick={() => void openIapManagement()}>
-            Manage in App Store
+            Manage in {currentStoreCopy().name}
           </Button>
         ) : canManageBilling ? (
           <AlertDialog>
@@ -259,7 +260,7 @@ export function InvoicingSetting({ className }: { className?: string }) {
     entitlementControl = canManageBilling ? (
       <Button size="sm" disabled={addonBusy || !current} onClick={() => void buy()}>
         {iapFlow.state === "purchasing"
-          ? "Waiting for App Store…"
+          ? `Waiting for ${currentStoreCopy().name}…`
           : addAddon.isPending || iapFlow.state === "reconciling"
             ? "Adding…"
             : `Add invoicing — ${price}`}
@@ -269,8 +270,8 @@ export function InvoicingSetting({ className }: { className?: string }) {
         {!sellsHere
           ? "Not on your plan"
           : current && !managedHere
-            ? surface === "web"
-              ? "Not on your plan — add it in the iPhone app"
+            ? storeCopyFor(current.provider)
+              ? `Not on your plan — add it in the ${storeCopyFor(current.provider)!.appName}`
               : "Not on your plan — add it on the website"
             : "Not on your plan — ask the owner"}
       </span>

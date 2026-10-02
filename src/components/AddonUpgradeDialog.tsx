@@ -17,6 +17,7 @@ import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
 import { isBillingBlocked, subscriptionManagedHere } from "@/lib/billing/access";
 import { formatMoney } from "@/lib/format";
 import { billingSurface } from "@/lib/native";
+import { currentStoreCopy, storeCopyFor } from "@/lib/store-copy";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
@@ -77,7 +78,7 @@ export function AddonUpgradeDialog({
     blocked,
   });
   // Where we are decides both the price shown and how the bolt-on is bought:
-  // Stripe on the web, StoreKit in the iOS app (with the App Store's own price),
+  // Stripe on the web, StoreKit / Play Billing in the store apps (at the store's price),
   // nothing in a store app that cannot sell. And a subscription is only ever
   // changed where it is billed, so the other surface just points across.
   const surface = billingSurface();
@@ -118,19 +119,19 @@ export function AddonUpgradeDialog({
     body = <>{sentence(copy.noun)} isn’t included on this workspace’s plan.</>;
     actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
   } else if (live && !managedHere) {
-    body =
-      surface === "web" ? (
-        <>
-          {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
-          through the App Store, so add the {copy.noun} bolt-on from Billing in the Recavo iPhone
-          app.
-        </>
-      ) : (
-        <>
-          {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
-          on the website, so add the {copy.noun} bolt-on from Billing there.
-        </>
-      );
+    const otherStore = storeCopyFor(current?.provider);
+    body = otherStore ? (
+      <>
+        {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
+        through the {otherStore.name}, so add the {copy.noun} bolt-on from Billing in the{" "}
+        {otherStore.appName}.
+      </>
+    ) : (
+      <>
+        {sentence(copy.noun)} isn’t included on this workspace’s plan. This subscription is billed
+        on the website, so add the {copy.noun} bolt-on from Billing there.
+      </>
+    );
     actions = <Button onClick={() => onOpenChange(false)}>OK</Button>;
   } else if (!canManage) {
     body = (
@@ -160,7 +161,7 @@ export function AddonUpgradeDialog({
       <>
         Your plan doesn’t include {copy.noun}. Add the bolt-on for {price}
         {surface === "store"
-          ? ", billed through your Apple ID and cancellable any time in Settings, "
+          ? `, billed through ${currentStoreCopy().account} and cancellable any time in ${currentStoreCopy().managePath}, `
           : " — prorated onto your current bill — "}
         to {copy.pitch}. Or move to {copy.includedIn}, which includes it.
       </>
@@ -181,7 +182,7 @@ export function AddonUpgradeDialog({
             }}
           >
             {iapFlow.state === "purchasing"
-              ? "Waiting for App Store…"
+              ? `Waiting for ${currentStoreCopy().name}…`
               : iapFlow.state === "reconciling"
                 ? "Activating…"
                 : `${copy.addLabel} · ${price}`}

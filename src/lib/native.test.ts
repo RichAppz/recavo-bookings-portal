@@ -4,8 +4,10 @@ import {
   billingSurface,
   clientPlatform,
   clientPlatformFor,
+  revenueCatApiKey,
   saasPurchasesAllowedInApp,
 } from "./native.ts";
+import { subscriptionManagedHere } from "./billing/access.ts";
 
 describe("billingSurface", () => {
   it("is the web (Stripe) in a browser tab whatever the store readiness", () => {
@@ -13,7 +15,7 @@ describe("billingSurface", () => {
     assert.equal(billingSurface(false, true), "web");
   });
 
-  it("is the store (In-App Purchase) in the iOS app once RevenueCat is configured", () => {
+  it("is the store (In-App Purchase) in a store app once RevenueCat is configured", () => {
     assert.equal(billingSurface(true, true), "store");
   });
 
@@ -32,7 +34,7 @@ describe("saasPurchasesAllowedInApp", () => {
     assert.equal(saasPurchasesAllowedInApp(false), true);
   });
 
-  it("allows them in the iOS app through In-App Purchase", () => {
+  it("allows them in a store app through In-App Purchase", () => {
     assert.equal(saasPurchasesAllowedInApp(true, true), true);
   });
 
@@ -63,5 +65,42 @@ describe("clientPlatformFor", () => {
 
   it("sends nothing during the server render, where there is no device", () => {
     assert.equal(clientPlatform(), undefined);
+  });
+});
+
+describe("revenueCatApiKey", () => {
+  it("has no key outside a store app, so a browser can never configure the SDK", () => {
+    // Node has no import.meta.env, so both store keys read as unset too.
+    assert.equal(revenueCatApiKey(undefined), undefined);
+    assert.equal(revenueCatApiKey("apple"), undefined);
+    assert.equal(revenueCatApiKey("google"), undefined);
+  });
+});
+
+describe("subscriptionManagedHere", () => {
+  const stripe = { provider: "stripe" as const };
+  const apple = { provider: "apple" as const };
+  const google = { provider: "google" as const };
+
+  it("lets the web manage Stripe only, and a fresh business start anywhere that sells", () => {
+    assert.equal(subscriptionManagedHere(stripe, "web"), true);
+    assert.equal(subscriptionManagedHere(apple, "web"), false);
+    assert.equal(subscriptionManagedHere(google, "web"), false);
+    assert.equal(subscriptionManagedHere(null, "web"), true);
+    assert.equal(subscriptionManagedHere(null, "store", "google"), true);
+    assert.equal(subscriptionManagedHere(null, "none"), false);
+  });
+
+  it("lets each store app manage only its own store's subscription", () => {
+    assert.equal(subscriptionManagedHere(apple, "store", "apple"), true);
+    assert.equal(subscriptionManagedHere(google, "store", "google"), true);
+    assert.equal(subscriptionManagedHere(apple, "store", "google"), false);
+    assert.equal(subscriptionManagedHere(google, "store", "apple"), false);
+    assert.equal(subscriptionManagedHere(stripe, "store", "google"), false);
+  });
+
+  it("treats rows without a provider as Stripe", () => {
+    assert.equal(subscriptionManagedHere({}, "web"), true);
+    assert.equal(subscriptionManagedHere({}, "store", "apple"), false);
   });
 });
