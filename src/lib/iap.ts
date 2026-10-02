@@ -1,10 +1,12 @@
 /**
- * In-App Purchase for the store apps (App Store Review Guideline 3.1.1).
+ * In-App Purchase for the store apps (App Store Review Guideline 3.1.1, Google
+ * Play Payments policy).
  *
  * Recavo's own plans, bolt-ons and text bundles are digital services sold to
- * individuals, so inside the iOS app they must be bought with StoreKit. This
- * module wraps the RevenueCat Capacitor plugin: it is the only place that talks
- * to the store, and every purchase is bound to the *business* (RevenueCat App
+ * individuals, so inside the iOS app they must be bought with StoreKit and inside
+ * the Android app with Google Play Billing. This module wraps the RevenueCat
+ * Capacitor plugin, which fronts both: it is the only place that talks to a
+ * store, and every purchase is bound to the *business* (RevenueCat App
  * User ID `biz:<business id>`, handed to us by the API) rather than the
  * signed-in person, because the subscription entitles the business. After a
  * purchase or restore the caller asks the API to reconcile, which pulls the
@@ -18,8 +20,9 @@
 import type { CustomerInfo, PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import type { AppStoreConfig, AppStoreProduct } from "@/lib/api/hooks";
 import { billingSurface, isNativeApp, revenueCatApiKey } from "@/lib/native";
+import { currentStoreCopy } from "@/lib/store-copy";
 
-/** Whether this surface sells through the store at all (native iOS + key set). */
+/** Whether this surface sells through a store at all (store app + its key set). */
 export function iapAvailable(): boolean {
   return billingSurface() === "store";
 }
@@ -81,7 +84,7 @@ export async function resetIap(): Promise<void> {
 }
 
 /**
- * A store product joined to what it buys. The price fields come from StoreKit
+ * A store product joined to what it buys. The price fields come from the store
  * already localised for the user's storefront; they are the only prices the
  * app may show for Recavo's own services.
  */
@@ -91,14 +94,15 @@ export type IapProduct = {
   store: PurchasesStoreProduct;
   /** e.g. "£22.99" */
   priceString: string;
-  /** Free trial / intro offer StoreKit says this user is eligible for, if any. */
+  /** Free trial / intro offer the store says this user is eligible for, if any. */
   introOffer: { priceString: string; period: string; cycles: number } | null;
 };
 
 /**
- * Fetches StoreKit products for the API's catalogue. Products missing from the
- * store (not yet approved, wrong bundle id, sandbox not signed in) are simply
- * absent; callers hide what they cannot price.
+ * Fetches store products for the API's catalogue (the same product ids exist in
+ * both stores). Products missing from the store (not yet approved, wrong bundle
+ * id / package name, sandbox or license tester not signed in) are simply absent;
+ * callers hide what they cannot price.
  */
 export async function loadIapProducts(config: AppStoreConfig): Promise<IapProduct[]> {
   if (!iapAvailable()) return [];
@@ -132,7 +136,7 @@ export type IapPurchaseResult =
   | { status: "cancelled" }
   | { status: "error"; message: string };
 
-/** Runs the StoreKit payment sheet for one product. */
+/** Runs the store's payment sheet for one product. */
 export async function purchaseIapProduct(item: IapProduct): Promise<IapPurchaseResult> {
   if (!iapAvailable()) return { status: "error", message: "Purchases are not available here." };
   const { plugin: Purchases } = await purchases();
@@ -145,7 +149,7 @@ export async function purchaseIapProduct(item: IapProduct): Promise<IapPurchaseR
   }
 }
 
-/** Re-syncs receipts already on this Apple ID (new device, reinstall, second owner). */
+/** Re-syncs receipts already on this store account (new device, reinstall, second owner). */
 export async function restoreIapPurchases(): Promise<IapPurchaseResult> {
   if (!iapAvailable()) return { status: "error", message: "Purchases are not available here." };
   const { plugin: Purchases } = await purchases();
@@ -158,11 +162,12 @@ export async function restoreIapPurchases(): Promise<IapPurchaseResult> {
 }
 
 /**
- * Apple's subscription management page for this account. Auto-renewal is turned
- * off there, not in the app: StoreKit owns the subscription, we only reflect it.
+ * The store's subscription management page for this account. Auto-renewal is
+ * turned off there, not in the app: the store owns the subscription, we only
+ * reflect it.
  */
 export async function iapManagementUrl(): Promise<string> {
-  const fallback = "https://apps.apple.com/account/subscriptions";
+  const fallback = currentStoreCopy().managementUrl;
   if (!iapAvailable()) return fallback;
   try {
     const { plugin: Purchases } = await purchases();
@@ -198,7 +203,7 @@ function purchaseErrorMessage(err: unknown): string {
       ? (err as { message: string }).message
       : "";
   if (/network|offline|connection/i.test(raw))
-    return "Couldn't reach the App Store. Check your connection and try again.";
+    return `Couldn't reach the ${currentStoreCopy().name}. Check your connection and try again.`;
   if (/not allowed|restricted|parental/i.test(raw))
     return "Purchases are restricted on this device.";
   if (/already (purchased|subscribed)|already owns/i.test(raw))

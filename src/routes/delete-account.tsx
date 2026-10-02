@@ -96,8 +96,9 @@ function DeleteAccountPage() {
             </li>
             <li>You’re removed from businesses other people own; they carry on without you.</li>
             <li>
-              A subscription billed through your Apple ID is <strong>not</strong> cancelled by
-              deleting your account — cancel it in iOS Settings › Apple ID › Subscriptions.
+              A subscription billed through the App Store or Google Play is <strong>not</strong>{" "}
+              cancelled by deleting your account — cancel it in iOS Settings › Apple ID ›
+              Subscriptions, or in Google Play › Payments &amp; subscriptions › Subscriptions.
             </li>
           </ul>
           <p className="text-sm text-muted-foreground">Deletion can’t be undone.</p>

@@ -14,10 +14,11 @@ import {
 import { queryKeys } from "@/lib/api/query-keys";
 import { toastApiError } from "@/lib/api/errors";
 import { billingSurface } from "@/lib/native";
+import { currentStoreCopy } from "@/lib/store-copy";
 
 /**
- * StoreKit products for the active business, priced by the App Store. Empty
- * (and never fetched) anywhere but the iOS app with In-App Purchase configured.
+ * Store products for the active business, priced by the App Store or Google Play.
+ * Empty (and never fetched) anywhere but a store app with In-App Purchase configured.
  * Configures the RevenueCat SDK for the business as a side effect so a purchase
  * can follow straight away.
  */
@@ -134,12 +135,12 @@ export function useIapPurchase() {
 }
 
 /**
- * Apple applies a plan change immediately only when it is an upgrade within the
- * subscription group; a downgrade (or a crossgrade to a different period) is
+ * The stores apply a plan change immediately only when it is an upgrade within
+ * the subscription group; a downgrade (or a crossgrade to a different period) is
  * scheduled for the next renewal, and the payment sheet says "Starting on …".
- * StoreKit still reports success, but the new product is not active yet, so
+ * The store still reports success, but the new product is not active yet, so
  * "Switched to Business" would be a lie. Detect that and say what really
- * happened; RevenueCat's webhook will move the plan over when Apple does.
+ * happened; RevenueCat's webhook will move the plan over when the store does.
  */
 function deferredPlanChange(
   item: IapProduct,
@@ -155,8 +156,7 @@ function deferredPlanChange(
     : "at the end of your current billing period";
   return {
     title: `${planTitle(item)} starts ${when}`,
-    description:
-      "Apple keeps your current plan until then, so nothing changes yet. You can review or cancel the switch under Manage subscription.",
+    description: `${currentStoreCopy().name} keeps your current plan until then, so nothing changes yet. You can review or cancel the switch under Manage subscription.`,
   };
 }
 

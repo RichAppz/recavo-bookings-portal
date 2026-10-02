@@ -48,6 +48,24 @@ export function isNativeIOS(): boolean {
   return isNativeApp() && capacitor()?.getPlatform?.() === "ios";
 }
 
+export function isNativeAndroid(): boolean {
+  return isNativeApp() && capacitor()?.getPlatform?.() === "android";
+}
+
+/** Which store's billing provider the running app belongs to (see `nativeStore`). */
+export type NativeStore = "apple" | "google";
+
+/**
+ * The store that distributed this build, and so the only one it may sell through:
+ * `apple` in the iOS app, `google` in the Android app, undefined in a browser. The
+ * API's subscription `provider` uses the same two values for store-billed rows.
+ */
+export function nativeStore(): NativeStore | undefined {
+  if (isNativeIOS()) return "apple";
+  if (isNativeAndroid()) return "google";
+  return undefined;
+}
+
 export type ClientPlatform = "web" | "ios" | "android";
 
 /** Header every API request carries so the API can tell the apps from a browser tab. */
@@ -72,29 +90,43 @@ export function clientPlatformFor(native: boolean, platform: string | undefined)
 }
 
 /**
- * RevenueCat *public* SDK key for the Apple app (starts `appl_`). Public by
- * design — it identifies the app, it does not authorise anything. Set per
- * environment in .env.staging / .env.production; unset means the store apps
- * cannot sell and fall back to the read-only billing view.
+ * RevenueCat *public* SDK key for the app we are running in: the Apple key
+ * (`appl_…`) on iOS, the Google key (`goog_…`) on Android. Public by design — it
+ * identifies the app, it does not authorise anything. Set per environment in
+ * .env.staging / .env.production; unset means that store app cannot sell and
+ * falls back to the read-only billing view.
  */
-export function revenueCatApiKey(): string | undefined {
+export function revenueCatApiKey(
+  store: NativeStore | undefined = nativeStore(),
+): string | undefined {
   // `import.meta.env` is Vite's; the unit tests run this file under plain Node.
   const env = (import.meta as { env?: Record<string, string | undefined> }).env;
-  const key = env?.VITE_REVENUECAT_IOS_API_KEY;
+  const key =
+    store === "apple"
+      ? env?.VITE_REVENUECAT_IOS_API_KEY
+      : store === "google"
+        ? env?.VITE_REVENUECAT_ANDROID_API_KEY
+        : undefined;
   return key && key.length > 0 ? key : undefined;
+}
+
+/** A store app whose RevenueCat key is configured, and so can sell. */
+function storeReadyNow(): boolean {
+  return nativeStore() !== undefined && revenueCatApiKey() !== undefined;
 }
 
 /**
  * Where Recavo's own plans, bolt-ons and text bundles are sold on this surface.
  *
  * - `web`: a browser tab — Stripe Checkout and the Billing Portal.
- * - `store`: the iOS app with In-App Purchase wired up — StoreKit via
- *   RevenueCat (App Store Review Guideline 3.1.1 requires it for anything an
- *   individual can buy inside the app, and 3.1.3 forbids steering to another
- *   purchase route, so the app never shows a Stripe price or link).
- * - `none`: a store app that cannot sell (Android today, or the RevenueCat key
- *   is not configured). It shows plan state only: no prices, no purchase
- *   buttons, no "buy on the website" pointer.
+ * - `store`: a store app with In-App Purchase wired up — StoreKit or Google
+ *   Play Billing via RevenueCat (App Store Review Guideline 3.1.1 and the Play
+ *   Payments policy require it for anything an individual can buy inside the
+ *   app, and both forbid steering to another purchase route, so the app never
+ *   shows a Stripe price or link).
+ * - `none`: a store app that cannot sell (its RevenueCat key is not
+ *   configured). It shows plan state only: no prices, no purchase buttons, no
+ *   "buy on the website" pointer.
  *
  * Payments a business takes from its own clients are unaffected by any of this.
  *
@@ -104,7 +136,7 @@ export type BillingSurface = "web" | "store" | "none";
 
 export function billingSurface(
   native: boolean = isNativeApp(),
-  storeReady: boolean = isNativeIOS() && revenueCatApiKey() !== undefined,
+  storeReady: boolean = storeReadyNow(),
 ): BillingSurface {
   if (!native) return "web";
   return storeReady ? "store" : "none";
@@ -116,7 +148,7 @@ export function billingSurface(
  */
 export function saasPurchasesAllowedInApp(
   native: boolean = isNativeApp(),
-  storeReady: boolean = isNativeIOS() && revenueCatApiKey() !== undefined,
+  storeReady: boolean = storeReadyNow(),
 ): boolean {
   return billingSurface(native, storeReady) !== "none";
 }
