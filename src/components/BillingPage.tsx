@@ -600,14 +600,21 @@ function StoreBillingPage() {
   const billedElsewhere = Boolean(current) && !blocked && !managedHere;
   const store = currentStoreCopy();
 
-  const planItems = useMemo(
-    () =>
-      iap
-        .byKind("plan")
-        .filter((p) => p.product.interval === interval)
-        .sort((a, b) => planOrder(a.product) - planOrder(b.product)),
-    [iap, interval],
-  );
+  // One card per tier for the chosen period. A tier the store only sells at the
+  // other period (Growth yearly is over Google Play's price cap) keeps its card,
+  // shown at the period that exists, rather than disappearing from the grid.
+  const planItems = useMemo(() => {
+    const plans = iap.byKind("plan");
+    const tiers = [...new Set(plans.map((p) => p.product.plan))];
+    return tiers
+      .map(
+        (tier) =>
+          plans.find((p) => p.product.plan === tier && p.product.interval === interval) ??
+          plans.find((p) => p.product.plan === tier),
+      )
+      .filter((p): p is IapProduct => p !== undefined)
+      .sort((a, b) => planOrder(a.product) - planOrder(b.product));
+  }, [iap, interval]);
   const hasYearly = iap.byKind("plan").some((p) => p.product.interval === "year");
   const currentProductId =
     current && typeof current === "object" && "planVersion" in current
@@ -788,6 +795,12 @@ function StoreBillingPage() {
                         /{item.product.interval ?? interval}
                       </span>
                     </p>
+                    {item.product.interval !== interval ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {interval === "year" ? "Yearly" : "Monthly"} billing for {planTitle(item)}{" "}
+                        isn’t offered on {store.name}.
+                      </p>
+                    ) : null}
                     {blocked && item.introOffer ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {trialLine(item)}
