@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAppStoreConfig, useAppStoreReconcile, useBusinessId } from "@/lib/api/hooks";
 import {
+  catalogueProductId,
   configureIap,
   iapAvailable,
   loadIapProducts,
@@ -147,7 +148,9 @@ function deferredPlanChange(
   customerInfo: CustomerInfo,
 ): { title: string; description: string } | undefined {
   if (item.product.kind !== "plan") return undefined;
-  if (customerInfo.activeSubscriptions.includes(item.productId)) return undefined;
+  if (customerInfo.activeSubscriptions.some((id) => catalogueProductId(id) === item.productId)) {
+    return undefined;
+  }
   const currentPlan = customerInfo.activeSubscriptions.find((id) => /\.plan\./.test(id));
   if (!currentPlan) return undefined;
   const expiry = customerInfo.allExpirationDates?.[currentPlan];

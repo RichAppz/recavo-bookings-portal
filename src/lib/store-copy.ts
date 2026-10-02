@@ -1,4 +1,4 @@
-import { nativeStore, type NativeStore } from "@/lib/native";
+import { nativeStore, type NativeStore } from "./native.ts";
 
 /**
  * Store-specific wording for In-App Purchase screens, keyed by the billing

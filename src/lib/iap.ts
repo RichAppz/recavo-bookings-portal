@@ -19,8 +19,8 @@
 
 import type { CustomerInfo, PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import type { AppStoreConfig, AppStoreProduct } from "@/lib/api/hooks";
-import { billingSurface, isNativeApp, revenueCatApiKey } from "@/lib/native";
-import { currentStoreCopy } from "@/lib/store-copy";
+import { billingSurface, isNativeApp, revenueCatApiKey } from "./native.ts";
+import { currentStoreCopy } from "./store-copy.ts";
 
 /** Whether this surface sells through a store at all (store app + its key set). */
 export function iapAvailable(): boolean {
@@ -99,6 +99,17 @@ export type IapProduct = {
 };
 
 /**
+ * RevenueCat identifies a Google Play subscription by its base plan as
+ * `<subscription_id>:<base_plan_id>`, both on `StoreProduct.identifier` and in
+ * `CustomerInfo`. Our catalogue ids never contain ':', so the subscription id on
+ * its own is the catalogue id. App Store ids and Play consumables pass through.
+ */
+export function catalogueProductId(storeProductId: string): string {
+  const colon = storeProductId.indexOf(":");
+  return colon === -1 ? storeProductId : storeProductId.slice(0, colon);
+}
+
+/**
  * Fetches store products for the API's catalogue (the same product ids exist in
  * both stores). Products missing from the store (not yet approved, wrong bundle
  * id / package name, sandbox or license tester not signed in) are simply absent;
@@ -112,10 +123,10 @@ export async function loadIapProducts(config: AppStoreConfig): Promise<IapProduc
   const byId = new Map(config.products.map((p) => [p.productId, p]));
   const out: IapProduct[] = [];
   for (const store of products) {
-    const product = byId.get(store.identifier);
+    const product = byId.get(catalogueProductId(store.identifier));
     if (!product) continue;
     out.push({
-      productId: store.identifier,
+      productId: product.productId,
       product,
       store,
       priceString: store.priceString,
