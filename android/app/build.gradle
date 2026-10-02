@@ -16,7 +16,12 @@ android {
         applicationId "com.richappz.recavo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
+        // Play rejects any versionCode it has seen before, so derive one from the build
+        // time (yyMMddHH, e.g. 26100212) — always increasing, well under the 2.1bn cap —
+        // unless overridden with -PversionCode=N.
+        versionCode project.hasProperty('versionCode')
+            ? project.property('versionCode').toInteger()
+            : new Date().format('yyMMddHH').toInteger()
         versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
