@@ -17,9 +17,13 @@
  * lazily so the SSR render and the web bundle never load it.
  */
 
-import type { CustomerInfo, PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
+import type {
+  CustomerInfo,
+  PurchaseStoreProductOptions,
+  PurchasesStoreProduct,
+} from "@revenuecat/purchases-capacitor";
 import type { AppStoreConfig, AppStoreProduct } from "@/lib/api/hooks";
-import { billingSurface, isNativeApp, revenueCatApiKey } from "./native.ts";
+import { billingSurface, isNativeApp, nativeStore, revenueCatApiKey } from "./native.ts";
 import { currentStoreCopy } from "./store-copy.ts";
 
 /** Whether this surface sells through a store at all (store app + its key set). */
@@ -40,12 +44,12 @@ let configuredFor: string | undefined;
  * Promise machinery read `.then` and the bridge throws
  * `"Purchases.then()" is not implemented on ios` (same trap as appleSignInPlugin).
  */
-async function purchases(): Promise<{ plugin: PurchasesPlugin }> {
+async function purchases(): Promise<{ plugin: PurchasesPlugin; module: PurchasesModule }> {
   if (!modulePromise) {
     modulePromise = import("@revenuecat/purchases-capacitor");
   }
-  const { Purchases } = await modulePromise;
-  return { plugin: Purchases };
+  const module = await modulePromise;
+  return { plugin: module.Purchases, module };
 }
 
 /**
@@ -147,12 +151,77 @@ export type IapPurchaseResult =
   | { status: "cancelled" }
   | { status: "error"; message: string };
 
+type PlanIdentity = { plan: "solo" | "business" | "growth"; interval: "month" | "year" };
+
+/** `recavo.plan.<code>.<interval>` (base-plan suffix tolerated) → its tier and period. */
+export function planFromProductId(storeProductId: string): PlanIdentity | undefined {
+  const m = /^recavo\.plan\.(solo|business|growth)\.(month|year)$/.exec(
+    catalogueProductId(storeProductId),
+  );
+  return m
+    ? { plan: m[1] as PlanIdentity["plan"], interval: m[2] as PlanIdentity["interval"] }
+    : undefined;
+}
+
+export type PlayReplacementMode = "CHARGE_PRORATED_PRICE" | "DEFERRED";
+
+/**
+ * How Google Play should swap one plan for another. Apple does this itself inside a
+ * subscription group: upgrades apply now with the difference charged, downgrades and
+ * crossgrades wait for the renewal. Play needs telling, so mirror that: a higher tier
+ * (or month → year, which always costs more) is charged pro rata immediately; a lower
+ * tier or year → month is deferred so nobody pays twice for the same period.
+ */
+export function playReplacementMode(from: PlanIdentity, to: PlanIdentity): PlayReplacementMode {
+  const tier = (p: PlanIdentity) => (p.plan === "solo" ? 0 : p.plan === "business" ? 1 : 2);
+  if (from.interval === "year" && to.interval === "month") return "DEFERRED";
+  if (tier(to) < tier(from) && to.interval === from.interval) return "DEFERRED";
+  return "CHARGE_PRORATED_PRICE";
+}
+
+/**
+ * The active Play plan a new plan purchase must replace, if any. Without this Google
+ * would sell a second subscription alongside the first; the App Store never does.
+ */
+export function playPlanReplacement(
+  item: IapProduct,
+  activeSubscriptions: readonly string[],
+): { oldProductIdentifier: string; replacementMode: PlayReplacementMode } | undefined {
+  if (item.product.kind !== "plan") return undefined;
+  const to = planFromProductId(item.productId);
+  if (!to) return undefined;
+  for (const id of activeSubscriptions) {
+    if (catalogueProductId(id) === item.productId) continue;
+    const from = planFromProductId(id);
+    if (!from) continue;
+    return {
+      oldProductIdentifier: catalogueProductId(id),
+      replacementMode: playReplacementMode(from, to),
+    };
+  }
+  return undefined;
+}
+
 /** Runs the store's payment sheet for one product. */
 export async function purchaseIapProduct(item: IapProduct): Promise<IapPurchaseResult> {
   if (!iapAvailable()) return { status: "error", message: "Purchases are not available here." };
-  const { plugin: Purchases } = await purchases();
+  const { plugin: Purchases, module } = await purchases();
   try {
-    const { customerInfo } = await Purchases.purchaseStoreProduct({ product: item.store });
+    let storeProductChangeInfo: PurchaseStoreProductOptions["storeProductChangeInfo"];
+    if (nativeStore() === "google" && item.product.kind === "plan") {
+      const { customerInfo } = await Purchases.getCustomerInfo();
+      const replacement = playPlanReplacement(item, customerInfo.activeSubscriptions);
+      if (replacement) {
+        storeProductChangeInfo = {
+          oldProductIdentifier: replacement.oldProductIdentifier,
+          replacementMode: module.STORE_REPLACEMENT_MODE[replacement.replacementMode],
+        };
+      }
+    }
+    const { customerInfo } = await Purchases.purchaseStoreProduct({
+      product: item.store,
+      storeProductChangeInfo,
+    });
     return { status: "purchased", customerInfo };
   } catch (err) {
     if (isUserCancelled(err)) return { status: "cancelled" };
