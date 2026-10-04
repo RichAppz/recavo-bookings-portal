@@ -135,9 +135,6 @@ type NavGroup = {
   items: NavItem[];
 };
 
-/** Flip to true once the Help centre points at real help content. */
-const SHOW_HELP_CENTRE = false;
-
 const NAV: NavGroup[] = [
   {
     heading: "Schedule",
@@ -506,19 +503,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
-          {/* Help centre is hidden until it's hooked up to real help content. The
-              demo tour it opened is still reachable from the setup checklist. */}
-          {SHOW_HELP_CENTRE ? (
-            <button
-              onClick={() => {
-                setMobileNav(false);
-                setSetupOpenRequest((n) => n + 1);
-                setTourOpen(true);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground lg:py-2.5 lg:text-sm"
+          {/* Support must be one tap from the phone drawer, so it gets its own row
+              rather than living only inside the account menu below. The demo tour
+              is still reachable from the setup checklist. */}
+          {tenant.businessId ? (
+            <Link
+              to="/support"
+              onClick={() => setMobileNav(false)}
+              className={cn(
+                "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium transition-colors lg:py-2.5 lg:text-sm",
+                pathname.startsWith("/support")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+              )}
             >
-              <LifeBuoy className="size-5 lg:size-4.5" /> Help centre
-            </button>
+              <LifeBuoy
+                className={cn(
+                  "size-5 lg:size-4.5",
+                  pathname.startsWith("/support") && "text-sidebar-primary",
+                )}
+              />
+              Help & support
+            </Link>
           ) : null}
 
           <DropdownMenu>
