@@ -6,6 +6,89 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-05",
+    title: "A quicker Edit booking, and messages that name every service",
+    items: [
+      {
+        kind: "improved",
+        text: "Edit booking now fits on one phone screen: the date, the services, the price and a tick to send the client the new details. Client, vehicle, lift, staff, discount, payment method, deposit and notes are tucked under “More options” — it opens itself when something in there needs a look before you can save, and tells you how many changes are hiding in it.",
+        where: "Bookings → open a booking → Edit booking",
+      },
+      {
+        kind: "fixed",
+        text: "A job with several services only ever told the client about the first one. Confirmations, reminders and the updated-details message now list every service on the booking, so the message matches what's been charged.",
+        where: "Client emails and texts",
+      },
+      {
+        kind: "improved",
+        text: "The confirmation message leads with a single line — “Hi Sam, your booking with Shine Valeting on Sat 10 Oct, 8:00pm is all set — £700 in total” — with the details link at the bottom. The text version no longer itemises the job, so it reads like a note from you rather than a receipt.",
+        where: "Client emails and texts",
+      },
+    ],
+  },
+  {
+    date: "2026-10-04",
+    title: "Help & support, one tap away",
+    items: [
+      {
+        kind: "improved",
+        text: "Help & support has its own row at the bottom of the menu, so on a phone it's one tap from the drawer rather than hidden behind your name.",
+        where: "Menu → Help & support",
+      },
+    ],
+  },
+  {
+    date: "2026-10-02",
+    title: "Subscribe on Android, and events beside all-day jobs",
+    items: [
+      {
+        kind: "new",
+        text: "The Android app now takes subscriptions through Google Play, the same way the iPhone app does through the App Store. A subscription is managed in the store that billed it, and Billing says which one that is.",
+        where: "Android app → Billing",
+      },
+      {
+        kind: "fixed",
+        text: "You can now put an event — a break, an errand, a half-day — on a day that already holds an all-day job. A holiday that would swallow the whole day the job holds is still refused, as is anything that overlaps timed work.",
+        where: "Calendar → Add event",
+      },
+    ],
+  },
+  {
+    date: "2026-10-01",
+    title: "Easier on the phone",
+    items: [
+      {
+        kind: "improved",
+        text: "Forms on phones now look and feel like the ones built into your phone: a big bold title, a grey close disc, finger-height inputs, switches and checkboxes, and full-width buttons along the bottom. Nothing changes on a laptop.",
+        where: "Every form and dialog on a phone",
+      },
+      {
+        kind: "improved",
+        text: "Menu, search, bell, Create and every close button are bigger on phones, and the rows in the menu drawer are finger-height.",
+        where: "Phone navigation",
+      },
+      {
+        kind: "fixed",
+        text: "Record a payment could lock up on iPhone — the drawer painted in one place and listened in another, so nothing responded. The payment method is now a row of buttons rather than a dropdown and the page puts itself right once the keyboard closes.",
+        where: "Bookings → open a booking → Record a payment",
+      },
+      {
+        kind: "fixed",
+        text: "Each service in the picker is a full-width, finger-sized row that stays put under your thumb, so taps near the edge or on the second line don't miss.",
+        where: "Add booking and Edit booking → Services",
+      },
+      {
+        kind: "fixed",
+        text: "Add booking opens on the payment method you used last — including bank transfer — instead of always falling back to “Request payment up front”.",
+        where: "Create → Add booking",
+      },
+      {
+        kind: "fixed",
+        text: "A dialog that was closing could occasionally leave the page dimmed and unresponsive on iPhone. The app now notices and frees the page itself.",
+      },
+    ],
+  },
+  {
     date: "2026-09-30",
     title: "On your own? Set your hours where you set up what clients book",
     items: [
@@ -18,6 +101,26 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         kind: "improved",
         text: "The second weekly grid, “When this session is offered”, is out of the way for one-person businesses. It's behind a switch — “Only offer this at certain times” — for the odd session or service that really is narrower, like a Saturday-only class. Off, it's offered whenever you're available, and its card says so.",
         where: "Sessions or Services",
+      },
+      {
+        kind: "new",
+        text: "Attach screenshots to a support request or a reply — up to five images at a time. They show in the thread once they've been checked, and we can send images back to you the same way.",
+        where: "Help & support",
+      },
+      {
+        kind: "fixed",
+        text: "When we reply to your support request you now get an email about it, not just a line in the thread.",
+        where: "Help & support",
+      },
+      {
+        kind: "new",
+        text: "New businesses get a short series of plain emails from Rich over the first month — a welcome, a nudge towards whatever's left to set up, how to get paid and share your booking link. Every one has a “Turn off tips emails” link at the bottom.",
+        where: "Your inbox",
+      },
+      {
+        kind: "fixed",
+        text: "The Messages badge in the menu was counting unread bell notifications, so it pointed at an empty inbox. The count now sits on the bell where it belongs.",
+        where: "Menu",
       },
     ],
   },
@@ -50,6 +153,40 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "“This month” started on the last day of the previous month through the summer, so your figures quietly included a day that wasn't in the month. A month now begins on the 1st in your own time zone.",
         where: "Overview and Reports",
       },
+      {
+        kind: "new",
+        text: "Change a service's price on a booking that already exists — the same per-service price boxes Add booking has. Charging £150 for a coating that lists at £200 is now a price, not a discount line.",
+        where: "Bookings → open a booking → Edit booking",
+      },
+      {
+        kind: "new",
+        text: "An “Add another service” bar sits under the services you've picked, so adding a second one is obvious rather than a guess at tapping the summary above.",
+        where: "Add booking and Edit booking",
+      },
+      {
+        kind: "improved",
+        text: "Today's date is shown beside the date fields, in your business's time zone, so you've a reference point when the phone's picker opens on some other month.",
+        where: "Add booking, Reschedule and Edit booking",
+      },
+      {
+        kind: "fixed",
+        text: "Adding services that no longer fit an all-day job used to fail with “The request was invalid”. The form now says how many days the job needs and offers to give it them.",
+        where: "Edit booking",
+      },
+      {
+        kind: "fixed",
+        text: "When something's refused, the message names the field and the reason instead of just “The request was invalid”.",
+      },
+      {
+        kind: "fixed",
+        text: "If Stripe rejects your payout account you now see why, with a red Rejected badge, instead of “pending” forever and a Finish onboarding button that couldn't help.",
+        where: "Payments · Settings → Payments",
+      },
+      {
+        kind: "fixed",
+        text: "Chart hovers are readable in dark mode — no more light-grey text on a white box.",
+        where: "Overview and Reports",
+      },
     ],
   },
   {
@@ -75,6 +212,26 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         kind: "fixed",
         text: "The text-credits alert now says “run out” at zero instead of “running low”, and is cleared automatically the moment you buy more.",
         where: "Notifications",
+      },
+      {
+        kind: "new",
+        text: "An Events page lists every holiday, break and appointment you've blocked out, with search and filters, and “Add event” is in the Create menu.",
+        where: "Events · Create → Add event",
+      },
+      {
+        kind: "new",
+        text: "Set or change a booking's deposit after the fact. If a client has already paid one by the time the job is written up, it now has somewhere to go.",
+        where: "Bookings → open a booking → Edit booking → Deposit",
+      },
+      {
+        kind: "fixed",
+        text: "A client's lifetime spend now counts cash, bank transfers and deposits you've recorded, not just card payments — so a regular who always pays cash no longer shows £0.00.",
+        where: "Clients → open a client",
+      },
+      {
+        kind: "fixed",
+        text: "Forgot your password? The reset link takes you to a page to choose a new one, then signs you in fresh.",
+        where: "Sign in → Forgot password",
       },
     ],
   },
