@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, Lock, Pencil, Plus } from "lucide-react";
+import { CalendarClock, ChevronDown, Lock, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   CustomerSearchPicker,
@@ -309,6 +309,9 @@ export function EditBookingDialog({
   const quickAdd = useRef<QuickAddLinkedRecordHandle | null>(null);
   const [quickAddPending, setQuickAddPending] = useState(false);
   const onQuickAddInput = useCallback((has: boolean) => setQuickAddPending(has), []);
+  // Opens on a pay-by-bank booking still waiting for the money: swapping the way of
+  // paying is the likeliest reason to be here, and that control lives inside.
+  const [moreOpen, setMoreOpen] = useState(bankPending);
   const [submitting, setSubmitting] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // What to do once the person agrees to drop their edits: close, or open Reschedule.
@@ -793,6 +796,40 @@ export function EditBookingDialog({
   if (!dirty) blockers.push("Nothing has changed");
   const blocked = blockers.length > 0;
 
+  // ---- More options: what is folded away, and when it must show itself ----------------
+  const moreLabels = new Set([
+    "Client",
+    recordTerm,
+    "Lift",
+    "Location",
+    staffNoun,
+    "Payment",
+    "Deposit",
+    "Internal notes",
+  ]);
+  const moreChanges = changes.filter((c) => moreLabels.has(c.label)).length;
+  // A decision the save depends on can't sit behind a closed toggle: a required
+  // vehicle still to pick, or an amount in there that won't save.
+  const moreNeedsAttention =
+    (recordRequired && nextRecordId === null && !quickAddPending) ||
+    depositInvalid ||
+    discountInvalid;
+  const moreVisible = moreOpen || moreNeedsAttention;
+  const moreSummary = [
+    clientLocked ? null : "client",
+    hasLinkedRecords ? recordTermLower : null,
+    isCarDetailing ? "lift" : null,
+    soleLocation ? null : "location",
+    soleStaff ? null : staffLower,
+    credit ? null : "discount",
+    "payment",
+    depositApplies ? "deposit" : null,
+    "notes",
+  ]
+    .filter((x): x is string => x !== null)
+    .map((x, i) => (i === 0 ? sentence(x) : x))
+    .join(", ");
+
   // Esc, the backdrop, Cancel and the Reschedule hand-off all land here: edits in
   // progress ask first, an untouched form goes straight through.
   const guard = (then: () => void) => {
@@ -937,8 +974,8 @@ export function EditBookingDialog({
         <DialogHeader>
           <DialogTitle>Edit booking</DialogTitle>
           <DialogDescription>
-            Change what's booked, who's doing it or the price. Payments already taken stay on the
-            booking.
+            Change the services or the price and save. Client, staff, payment and notes are under
+            More options. Payments already taken stay on the booking.
           </DialogDescription>
         </DialogHeader>
 
@@ -1054,109 +1091,6 @@ export function EditBookingDialog({
             </div>
 
             <div className="grid gap-2">
-              <Label>Client</Label>
-              {clientLocked ? (
-                <div className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {originalCustomer.data ? customerDisplayName(originalCustomer.data) : "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {credit
-                        ? "Paid with a package credit, so the booking stays with this client."
-                        : `${formatMoney(paidMinor, currency)} has been paid, so the booking stays with this client. Refund it first, or cancel and rebook.`}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <CustomerSearchPicker
-                  value={selectedCustomer}
-                  suggestions={customerList}
-                  placeholder="Choose or search for a client"
-                  onSelect={(c) => {
-                    setCustomerId(c.id);
-                    // A record belongs to one client, so it can't survive a client change.
-                    if (c.id !== booking.leadCustomerId) setLinkedRecordId("none");
-                    else setLinkedRecordId(booking.linkedRecordId ?? "none");
-                    setQuickAddOpen(false);
-                  }}
-                />
-              )}
-            </div>
-
-            {hasLinkedRecords ? (
-              <div className="grid gap-2">
-                <Label>
-                  {recordTerm}
-                  {recordRequired ? <span className="text-destructive"> *</span> : null}
-                </Label>
-                {quickAddOpen || (customerRecords.isSuccess && activeRecords.length === 0) ? (
-                  <QuickAddLinkedRecord
-                    key={customerId}
-                    customerId={customerId}
-                    fields={recordFields}
-                    term={recordTerm}
-                    handleRef={quickAdd}
-                    onInputChange={onQuickAddInput}
-                    inputHint="Saved with the booking."
-                    autoFocus={quickAddOpen}
-                    onCancel={
-                      activeRecords.length > 0
-                        ? () => {
-                            setQuickAddOpen(false);
-                            setQuickAddPending(false);
-                          }
-                        : undefined
-                    }
-                    onAdded={(record) => {
-                      setLinkedRecordId(record.id);
-                      setQuickAddOpen(false);
-                      setQuickAddPending(false);
-                      toast.success(`${recordTerm} added`, {
-                        description: `${record.displayLabel} is on this booking.`,
-                      });
-                    }}
-                  />
-                ) : (
-                  <div className="flex gap-2">
-                    <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
-                      <SelectTrigger className="flex-1">
-                        <SelectValue
-                          placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {recordRequired ? null : (
-                          <SelectItem value="none">No {recordTermLower}</SelectItem>
-                        )}
-                        {activeRecords.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {r.displayLabel}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={() => setQuickAddOpen(true)}
-                      aria-label={`Add another ${recordTermLower}`}
-                    >
-                      <Plus className="size-4" />
-                      Add
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {isCarDetailing ? (
-              <ClientLiftFields value={lift} onChange={setLift} idPrefix="edit-booking" />
-            ) : null}
-
-            <div className="grid gap-2">
               <Label>Services</Label>
               {credit ? (
                 <div className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
@@ -1228,51 +1162,6 @@ export function EditBookingDialog({
               )}
             </div>
 
-            {soleLocation && soleStaff ? null : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {soleLocation ? null : (
-                  <div className="grid gap-2">
-                    <Label>Location</Label>
-                    <Select value={locationId} onValueChange={setLocationId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locationList.map((l) => (
-                          <SelectItem key={l.id} value={l.id}>
-                            {l.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                {soleStaff ? null : (
-                  <div className="grid gap-2">
-                    <Label>{staffNoun}</Label>
-                    <Select value={staffId} onValueChange={setStaffId} disabled={!isIndividual}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffList.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.displayName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {staffId !== booking.staffId ? (
-                      <p className="text-xs text-muted-foreground">
-                        {staffName(staffId)} must be free for the whole job and able to do{" "}
-                        {picked.length > 1 ? "every service on it" : "this service"}.
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            )}
-
             {credit ? null : (
               <div className="grid gap-2 rounded-xl border p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -1306,59 +1195,13 @@ export function EditBookingDialog({
                   }}
                   aria-invalid={priceInvalid || priceBelowPaid}
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Label htmlFor="edit-booking-discount" className="text-xs text-muted-foreground">
-                    Discount
-                  </Label>
-                  <Input
-                    id="edit-booking-discount"
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="h-8 w-20"
-                    value={discount?.value ?? ""}
-                    onChange={(e) => {
-                      setPriceInput(null);
-                      clearLinePrices();
-                      setDiscount(
-                        e.target.value.trim() === ""
-                          ? null
-                          : { mode: discount?.mode ?? "percent", value: e.target.value },
-                      );
-                    }}
-                    aria-invalid={discountInvalid}
-                  />
-                  <Tabs
-                    value={discount?.mode ?? "percent"}
-                    onValueChange={(mode) => {
-                      setPriceInput(null);
-                      setDiscount({ mode: mode as Discount["mode"], value: discount?.value ?? "" });
-                    }}
-                  >
-                    <TabsList className="h-8">
-                      <TabsTrigger value="percent" className="px-2.5 text-xs">
-                        % off
-                      </TabsTrigger>
-                      <TabsTrigger value="amount" className="px-2.5 text-xs">
-                        £ off
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  {discountMinor !== null && overridePriceMinor !== null ? (
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {discountLabel(discount!, (m) => formatMoney(m, currency))} · −
-                      {formatMoney(discountMinor, currency)}
-                    </span>
-                  ) : null}
-                </div>
-                {priceInvalid ? (
+                {discountInvalid ? (
+                  <p className="text-xs text-destructive">Check the discount under More options.</p>
+                ) : priceInvalid ? (
                   <p className="text-xs text-destructive">
-                    {discountInvalid
-                      ? discount!.mode === "percent"
-                        ? "Enter a percentage between 0 and 100."
-                        : `Enter an amount up to ${formatMoney(rolledTotalMinor, currency)}.`
-                      : lineInvalid
-                        ? "Check the price beside each service above."
-                        : "Enter an amount, or reset to the list price."}
+                    {lineInvalid
+                      ? "Check the price beside each service above."
+                      : "Enter an amount, or reset to the list price."}
                   </p>
                 ) : priceBelowPaid ? (
                   <p className="text-xs text-destructive">
@@ -1400,117 +1243,6 @@ export function EditBookingDialog({
               </div>
             )}
 
-            <div className="grid gap-2">
-              <Label>Payment method</Label>
-              {paymentEditable ? (
-                <Select
-                  value={paymentMethod}
-                  onValueChange={(v) => setPaymentMethod(v as Booking["paymentMethod"])}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pay_later">
-                      Pay after the job
-                      {booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
-                        ? ` — ${formatMoney(booking.depositMinor, currency)} deposit now`
-                        : " — confirmation only"}
-                    </SelectItem>
-                    <SelectItem value="none">Request payment up front</SelectItem>
-                    {tenant.configuration?.bankTransfer?.enabled === true ||
-                    booking.paymentMethod === "bank_transfer" ? (
-                      <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
-                        Bank transfer
-                      </SelectItem>
-                    ) : null}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="font-medium">
-                      {sentence(paymentMethodLabel(booking.paymentMethod))}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {credit
-                        ? "Package credit can't be swapped for another way of paying."
-                        : "Can be changed once the booking is confirmed."}
-                    </p>
-                  </div>
-                </div>
-              )}
-              {leavesBankPending ? (
-                <p className="text-xs text-muted-foreground">
-                  The booking is confirmed straight away — no bank transfer needed to secure it.{" "}
-                  {paymentMethod === "pay_later"
-                    ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
-                      ? `The ${formatMoney(booking.depositMinor, currency)} deposit is requested; the balance is taken when the job is done.`
-                      : "Take payment when the job is done."
-                    : "The client is sent a payment request for the balance."}{" "}
-                  Tick “Send the client the updated details” below so they know not to transfer
-                  anything.
-                </p>
-              ) : paymentEditable && paymentMethod !== booking.paymentMethod ? (
-                <p className="text-xs text-muted-foreground">
-                  {paymentMethod === "pay_later"
-                    ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
-                      ? `The ${formatMoney(booking.depositMinor, currency)} deposit still secures the date; the balance is taken when the job is done.`
-                      : "No payment is asked for up front; take it when the job is done."
-                    : paymentMethod === "none"
-                      ? "The next message to the client is a payment request for the balance."
-                      : "The client is asked to pay by bank transfer using your account details."}
-                </p>
-              ) : null}
-            </div>
-
-            {depositApplies ? (
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="edit-booking-deposit">Deposit to secure (£)</Label>
-                  {depositInput.trim() !== "" ? (
-                    <button
-                      type="button"
-                      className="text-xs text-primary underline-offset-4 hover:underline"
-                      onClick={() => setDepositInput("")}
-                    >
-                      No deposit
-                    </button>
-                  ) : null}
-                </div>
-                <Input
-                  id="edit-booking-deposit"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={depositInput}
-                  onChange={(e) => setDepositInput(e.target.value)}
-                  aria-invalid={depositInvalid}
-                />
-                <p
-                  className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
-                >
-                  {depositInvalid
-                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, currency)}, or clear it for no deposit.`
-                    : nextDepositMinor === null
-                      ? `No deposit — the full ${formatMoney(effectiveTotalMinor, currency)} is due${paymentMethod === "pay_later" ? " after the job" : ""}.`
-                      : paidMinor >= nextDepositMinor
-                        ? `Already covered by the ${formatMoney(paidMinor, currency)} received — ${formatMoney(Math.max(0, effectiveTotalMinor - paidMinor), currency)} left to collect.`
-                        : `${formatMoney(nextDepositMinor, currency)} due up front, ${formatMoney(effectiveTotalMinor - nextDepositMinor, currency)} balance later. Already paid it? Save, then use “Deposit taken” on the booking to record the money.`}
-                </p>
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <Label htmlFor="edit-booking-notes">Internal notes</Label>
-              <Textarea
-                id="edit-booking-notes"
-                placeholder="Visible to staff only"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-
             <label
               className={cn(
                 "flex items-start gap-3 rounded-lg border p-3 text-sm",
@@ -1531,6 +1263,372 @@ export function EditBookingDialog({
                 <span className="mt-0.5 block text-xs text-muted-foreground">{notifyHint}</span>
               </span>
             </label>
+
+            {/* Everything staff rarely touch at the counter lives behind one toggle, so the
+                form reads: when, what, how much, tell the client. It stays mounted while
+                closed so a typed deposit or discount survives collapsing it, and it opens
+                itself when something inside needs a decision before saving. */}
+            <div className="rounded-xl border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm"
+                aria-expanded={moreVisible}
+                aria-controls="edit-booking-more"
+                onClick={() => setMoreOpen((o) => !o)}
+              >
+                <span className="min-w-0">
+                  <span className="font-medium">More options</span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block truncate text-xs",
+                      moreNeedsAttention ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
+                    {moreNeedsAttention
+                      ? "Something in here needs a look before saving."
+                      : moreChanges > 0 && !moreVisible
+                        ? `${moreChanges} ${moreChanges === 1 ? "change" : "changes"} · ${moreSummary}`
+                        : moreSummary}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "size-4 shrink-0 text-muted-foreground transition-transform",
+                    moreVisible && "rotate-180",
+                  )}
+                />
+              </button>
+              <div
+                id="edit-booking-more"
+                hidden={!moreVisible}
+                className="grid min-w-0 grid-cols-1 gap-4 border-t px-3 pt-3 pb-3 **:min-w-0"
+              >
+                <div className="grid gap-2">
+                  <Label>Client</Label>
+                  {clientLocked ? (
+                    <div className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+                      <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
+                          {originalCustomer.data ? customerDisplayName(originalCustomer.data) : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {credit
+                            ? "Paid with a package credit, so the booking stays with this client."
+                            : `${formatMoney(paidMinor, currency)} has been paid, so the booking stays with this client. Refund it first, or cancel and rebook.`}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <CustomerSearchPicker
+                      value={selectedCustomer}
+                      suggestions={customerList}
+                      placeholder="Choose or search for a client"
+                      onSelect={(c) => {
+                        setCustomerId(c.id);
+                        // A record belongs to one client, so it can't survive a client change.
+                        if (c.id !== booking.leadCustomerId) setLinkedRecordId("none");
+                        else setLinkedRecordId(booking.linkedRecordId ?? "none");
+                        setQuickAddOpen(false);
+                      }}
+                    />
+                  )}
+                </div>
+
+                {hasLinkedRecords ? (
+                  <div className="grid gap-2">
+                    <Label>
+                      {recordTerm}
+                      {recordRequired ? <span className="text-destructive"> *</span> : null}
+                    </Label>
+                    {quickAddOpen || (customerRecords.isSuccess && activeRecords.length === 0) ? (
+                      <QuickAddLinkedRecord
+                        key={customerId}
+                        customerId={customerId}
+                        fields={recordFields}
+                        term={recordTerm}
+                        handleRef={quickAdd}
+                        onInputChange={onQuickAddInput}
+                        inputHint="Saved with the booking."
+                        autoFocus={quickAddOpen}
+                        onCancel={
+                          activeRecords.length > 0
+                            ? () => {
+                                setQuickAddOpen(false);
+                                setQuickAddPending(false);
+                              }
+                            : undefined
+                        }
+                        onAdded={(record) => {
+                          setLinkedRecordId(record.id);
+                          setQuickAddOpen(false);
+                          setQuickAddPending(false);
+                          toast.success(`${recordTerm} added`, {
+                            description: `${record.displayLabel} is on this booking.`,
+                          });
+                        }}
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue
+                              placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {recordRequired ? null : (
+                              <SelectItem value="none">No {recordTermLower}</SelectItem>
+                            )}
+                            {activeRecords.map((r) => (
+                              <SelectItem key={r.id} value={r.id}>
+                                {r.displayLabel}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => setQuickAddOpen(true)}
+                          aria-label={`Add another ${recordTermLower}`}
+                        >
+                          <Plus className="size-4" />
+                          Add
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {isCarDetailing ? (
+                  <ClientLiftFields value={lift} onChange={setLift} idPrefix="edit-booking" />
+                ) : null}
+
+                {soleLocation && soleStaff ? null : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {soleLocation ? null : (
+                      <div className="grid gap-2">
+                        <Label>Location</Label>
+                        <Select value={locationId} onValueChange={setLocationId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a location" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {locationList.map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {soleStaff ? null : (
+                      <div className="grid gap-2">
+                        <Label>{staffNoun}</Label>
+                        <Select value={staffId} onValueChange={setStaffId} disabled={!isIndividual}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {staffList.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {staffId !== booking.staffId ? (
+                          <p className="text-xs text-muted-foreground">
+                            {staffName(staffId)} must be free for the whole job and able to do{" "}
+                            {picked.length > 1 ? "every service on it" : "this service"}.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {credit ? null : (
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-booking-discount">Discount</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        id="edit-booking-discount"
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="h-9 w-24"
+                        value={discount?.value ?? ""}
+                        onChange={(e) => {
+                          setPriceInput(null);
+                          clearLinePrices();
+                          setDiscount(
+                            e.target.value.trim() === ""
+                              ? null
+                              : { mode: discount?.mode ?? "percent", value: e.target.value },
+                          );
+                        }}
+                        aria-invalid={discountInvalid}
+                      />
+                      <Tabs
+                        value={discount?.mode ?? "percent"}
+                        onValueChange={(mode) => {
+                          setPriceInput(null);
+                          setDiscount({
+                            mode: mode as Discount["mode"],
+                            value: discount?.value ?? "",
+                          });
+                        }}
+                      >
+                        <TabsList className="h-8">
+                          <TabsTrigger value="percent" className="px-2.5 text-xs">
+                            % off
+                          </TabsTrigger>
+                          <TabsTrigger value="amount" className="px-2.5 text-xs">
+                            £ off
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                    {discountInvalid ? (
+                      <p className="text-xs text-destructive">
+                        {discount!.mode === "percent"
+                          ? "Enter a percentage between 0 and 100."
+                          : `Enter an amount up to ${formatMoney(rolledTotalMinor, currency)}.`}
+                      </p>
+                    ) : discountMinor !== null && overridePriceMinor !== null ? (
+                      <p className="text-xs text-muted-foreground">
+                        {discountLabel(discount!, (m) => formatMoney(m, currency))} · −
+                        {formatMoney(discountMinor, currency)} — takes the price to{" "}
+                        {formatMoney(overridePriceMinor, currency)}. The services stay at list and
+                        the discount shows as its own line.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Off the {formatMoney(rolledTotalMinor, currency)} list price. To charge a
+                        different amount instead, just type the price above.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label>Payment method</Label>
+                  {paymentEditable ? (
+                    <Select
+                      value={paymentMethod}
+                      onValueChange={(v) => setPaymentMethod(v as Booking["paymentMethod"])}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* Short labels: the deposit detail reads better as the hint below
+                            than squeezed into an option that truncates on a phone. */}
+                        <SelectItem value="pay_later">Pay after the job</SelectItem>
+                        <SelectItem value="none">Request payment up front</SelectItem>
+                        {tenant.configuration?.bankTransfer?.enabled === true ||
+                        booking.paymentMethod === "bank_transfer" ? (
+                          <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
+                            Bank transfer
+                          </SelectItem>
+                        ) : null}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+                      <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {sentence(paymentMethodLabel(booking.paymentMethod))}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {credit
+                            ? "Package credit can't be swapped for another way of paying."
+                            : "Can be changed once the booking is confirmed."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {leavesBankPending ? (
+                    <p className="text-xs text-muted-foreground">
+                      The booking is confirmed straight away — no bank transfer needed to secure it.{" "}
+                      {paymentMethod === "pay_later"
+                        ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                          ? `The ${formatMoney(booking.depositMinor, currency)} deposit is requested; the balance is taken when the job is done.`
+                          : "Take payment when the job is done."
+                        : "The client is sent a payment request for the balance."}{" "}
+                      Tick “Send the client the updated details” below so they know not to transfer
+                      anything.
+                    </p>
+                  ) : paymentEditable && paymentMethod !== booking.paymentMethod ? (
+                    <p className="text-xs text-muted-foreground">
+                      {paymentMethod === "pay_later"
+                        ? booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                          ? `The ${formatMoney(booking.depositMinor, currency)} deposit still secures the date; the balance is taken when the job is done.`
+                          : "No payment is asked for up front; take it when the job is done."
+                        : paymentMethod === "none"
+                          ? "The next message to the client is a payment request for the balance."
+                          : "The client is asked to pay by bank transfer using your account details."}
+                    </p>
+                  ) : paymentEditable && paymentMethod === "pay_later" ? (
+                    <p className="text-xs text-muted-foreground">
+                      {booking.depositMinor != null && booking.depositMinor < effectiveTotalMinor
+                        ? `${formatMoney(booking.depositMinor, currency)} deposit up front, the balance when the job is done.`
+                        : "Nothing up front; take payment when the job is done."}
+                    </p>
+                  ) : null}
+                </div>
+
+                {depositApplies ? (
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="edit-booking-deposit">Deposit to secure (£)</Label>
+                      {depositInput.trim() !== "" ? (
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline-offset-4 hover:underline"
+                          onClick={() => setDepositInput("")}
+                        >
+                          No deposit
+                        </button>
+                      ) : null}
+                    </div>
+                    <Input
+                      id="edit-booking-deposit"
+                      inputMode="decimal"
+                      placeholder="0"
+                      value={depositInput}
+                      onChange={(e) => setDepositInput(e.target.value)}
+                      aria-invalid={depositInvalid}
+                    />
+                    <p
+                      className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {depositInvalid
+                        ? `Enter an amount under ${formatMoney(effectiveTotalMinor, currency)}, or clear it for no deposit.`
+                        : nextDepositMinor === null
+                          ? `No deposit — the full ${formatMoney(effectiveTotalMinor, currency)} is due${paymentMethod === "pay_later" ? " after the job" : ""}.`
+                          : paidMinor >= nextDepositMinor
+                            ? `Already covered by the ${formatMoney(paidMinor, currency)} received — ${formatMoney(Math.max(0, effectiveTotalMinor - paidMinor), currency)} left to collect.`
+                            : `${formatMoney(nextDepositMinor, currency)} due up front, ${formatMoney(effectiveTotalMinor - nextDepositMinor, currency)} balance later. Already paid it? Save, then use “Deposit taken” on the booking to record the money.`}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-booking-notes">Internal notes</Label>
+                  <Textarea
+                    id="edit-booking-notes"
+                    placeholder="Visible to staff only"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
 
             {dirty ? (
               <div className="rounded-lg bg-secondary/60 p-3">
