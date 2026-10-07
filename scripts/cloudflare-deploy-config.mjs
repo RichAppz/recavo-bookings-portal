@@ -149,8 +149,10 @@ function assertBundleMatchesTarget() {
   const supabaseRefs = new Set();
   const apiHosts = new Set();
   const devRuntimeFiles = [];
+  let namesExpectedSupabase = false;
   for (const file of walk(".output")) {
     const source = readFileSync(file, "utf8");
+    if (source.includes(expectedSupabase)) namesExpectedSupabase = true;
     // The dev transform imports "react/jsx-dev-runtime" (bundled as
     // `import_jsx_dev_runtime.jsxDEV`). A production bundle never names that
     // module; the only `jsxDEV` a good build contains is the string inside
@@ -176,10 +178,13 @@ function assertBundleMatchesTarget() {
   // is as wrong as a foreign host: `import.meta.env.VITE_API_BASE_URL` is
   // inlined at build time, so a bundle built against a localhost API simply
   // contains no recognisable API host at all.
+  // The expected Supabase URL may be a custom domain (production uses
+  // auth.recavo.app), in which case the bundle should name it and contain no
+  // *.supabase.co project URL at all; any that appears is a foreign project.
   const wrongSupabase = [...supabaseRefs].filter((url) => url !== expectedSupabase);
   const wrongApi = [...apiHosts].filter((url) => url !== expectedApi);
   const problems = [];
-  if (supabaseRefs.size === 0) problems.push("no Supabase project URL found in the bundle");
+  if (!namesExpectedSupabase) problems.push(`bundle never names ${expectedSupabase}`);
   if (wrongSupabase.length > 0) problems.push(`foreign Supabase URL: ${wrongSupabase.join(", ")}`);
   if (apiHosts.size === 0) {
     problems.push(
@@ -194,7 +199,7 @@ function assertBundleMatchesTarget() {
     fail([
       `Refusing to deploy ${targetName}: the built bundle does not match ${target.envFile}.`,
       ...problems.map((p) => `  - ${p}`),
-      `  expected Supabase ${expectedSupabase}, found ${[...supabaseRefs].join(", ") || "none"}`,
+      `  expected Supabase ${expectedSupabase}${namesExpectedSupabase ? " (present)" : " (absent)"}; project URLs found: ${[...supabaseRefs].join(", ") || "none"}`,
       `  expected API      ${expectedApi}, found ${[...apiHosts].join(", ") || "none"}`,
       `  Rebuild with a clean shell (no VITE_* set): npm run deploy:${targetName}`,
     ]);
