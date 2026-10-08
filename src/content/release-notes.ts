@@ -47,8 +47,6 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
     ],
   },
-    ],
-  },
   {
     date: "2026-10-02",
     title: "Subscribe on Android, and events beside all-day jobs",
