@@ -18,6 +18,7 @@ import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/Add
 import { CalendarColoursDialog, PublicHolidaysSelect } from "@/components/CalendarColoursSetting";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
+import { PendingPackageRequestsBanner } from "@/components/PendingPackageRequestsBanner";
 import {
   defaultEventColour,
   eventColourFor,
@@ -721,6 +722,8 @@ function CalendarPage() {
           </div>
         }
       />
+
+      <PendingPackageRequestsBanner />
 
       <div className="surface-card flex flex-wrap items-center gap-2 p-2 sm:gap-3 sm:p-3">
         <div className="flex items-center gap-1">

@@ -88,6 +88,7 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
 import { useLiveUpdates } from "@/lib/live/use-live-updates";
 import { hiddenNavFrom, navFeatureForPath } from "@/lib/nav-features";
+import { notificationHref } from "@/lib/notification-link";
 import { markSessionLanded } from "@/lib/session-landing";
 import { useSoloPlan } from "@/lib/sole";
 import { cn } from "@/lib/utils";
@@ -687,19 +688,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
-                    // A follow-up coming due opens the follow-ups list; other items just mark read.
-                    const followUp = n.templateKey === "service_follow_up_staff";
+                    // The API says where each alert leads (a package request opens that
+                    // request, a follow-up the follow-ups list). Older rows about a booking
+                    // open the booking. Anything else just marks itself read.
+                    const href = notificationHref(n);
                     return (
                       <DropdownMenuItem
                         key={n.id}
                         className="flex-col items-start gap-0.5"
                         onClick={() => {
                           if (!n.readAt) markNotificationRead.mutate(n.id);
-                          if (followUp) void navigate({ to: "/follow-ups" });
+                          if (href) void navigate({ href });
                         }}
                       >
                         <span className="flex items-center gap-1.5 text-sm font-medium">
-                          {followUp ? <BellRing className="size-3.5 text-primary" /> : null}
+                          {href ? <BellRing className="size-3.5 text-primary" /> : null}
                           {n.subject}
                         </span>
                         <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>

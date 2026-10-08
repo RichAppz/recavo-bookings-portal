@@ -5332,11 +5332,14 @@ export type PackageRequest = {
   updatedAt: string;
 };
 
-export function usePackageRequests(status?: PackageRequestStatus) {
+export function usePackageRequests(
+  status?: PackageRequestStatus,
+  options: { enabled?: boolean } = {},
+) {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: queryKeys.packageRequests(businessId, status ?? "all"),
-    enabled: Boolean(businessId),
+    enabled: Boolean(businessId) && (options.enabled ?? true),
     queryFn: async () => {
       const qs = status ? `?status=${status}` : "";
       const res = await api.get<{ requests: PackageRequest[] }>(
