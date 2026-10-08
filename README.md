@@ -39,15 +39,17 @@ aliases (`staging-dashboard`, `staging-book`). `npm run deploy:staging` and
 
 ## Scripts
 
-| Script                      | Purpose                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `npm run dev`               | Local Vite/TanStack Start server                                              |
-| `npm run build`             | Production build                                                              |
-| `npm run deploy:staging`    | Build and deploy to `staging.bookings.recavo.app` + `staging.book.recavo.app` |
-| `npm run deploy:production` | Build and deploy to `bookings.recavo.app` + `book.recavo.app`                 |
-| `npm run gen:api`           | Regenerates API types from `openapi.json`                                     |
-| `npm test`                  | Unit tests (API client / problem+json)                                        |
-| `npm run lint`              | ESLint                                                                        |
+| Script                      | Purpose                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `npm run dev`               | Local Vite/TanStack Start server                                                |
+| `npm run build`             | Production build                                                                |
+| `npm run deploy:staging`    | Build and deploy to `staging.bookings.recavo.app` + `staging.book.recavo.app`   |
+| `npm run deploy:production` | Build and deploy to `bookings.recavo.app` + `book.recavo.app`                   |
+| `npm run gen:api`           | Regenerates API types from `openapi.json`                                       |
+| `npm test`                  | Unit tests (API client / problem+json)                                          |
+| `npm run lint`              | ESLint                                                                          |
+| `npm run guides:seed`       | Builds the two fictional businesses the guide screenshots come from (local API) |
+| `npm run guides:shots`      | Re-takes the `/support/guides` screenshots; see `scripts/guides/README.md`      |
 
 ## Surfaces
 

@@ -51,6 +51,7 @@ import type {
   CustomerNote,
   CustomerTag,
   Dashboard,
+  EmailPreferences,
   Entitlement,
   EntitlementView,
   ExportRequest,
@@ -3355,6 +3356,37 @@ export function useDeleteAccount() {
       });
       return res.data;
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// RECAVO's own emails to the signed-in user (tips, getting started, milestones)
+// ---------------------------------------------------------------------------
+
+export function useEmailPreferences() {
+  return useQuery({
+    queryKey: queryKeys.emailPreferences(),
+    queryFn: async () => {
+      const res = await api.get<{ preferences: EmailPreferences }>("/api/v1/me/email-preferences");
+      return res.data.preferences;
+    },
+  });
+}
+
+export function useUpdateEmailPreferences() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: EmailPreferences) => {
+      const res = await api.patch<{ preferences: EmailPreferences }>(
+        "/api/v1/me/email-preferences",
+        body,
+      );
+      return res.data.preferences;
+    },
+    onSuccess: (preferences) => {
+      qc.setQueryData(queryKeys.emailPreferences(), preferences);
+    },
+    onError: (err) => toastApiError(err, "Couldn't save your email preferences."),
   });
 }
 

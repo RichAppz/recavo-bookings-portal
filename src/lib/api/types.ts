@@ -3,6 +3,8 @@ import type { components, paths } from "./schema";
 export type schemas = components["schemas"];
 
 export type User = schemas["User"];
+/** RECAVO's own tips and getting-started emails to the signed-in user. Billing notices always go out. */
+export type EmailPreferences = schemas["EmailPreferences"];
 export type Business = schemas["Business"];
 export type BusinessSummary = schemas["BusinessSummary"];
 export type BusinessConfiguration = schemas["BusinessConfiguration"];

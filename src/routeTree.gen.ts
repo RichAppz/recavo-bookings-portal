@@ -60,6 +60,8 @@ import { Route as BillingSmsCreditsCancelRouteImport } from './routes/billing.sm
 import { Route as BillingSmsCreditsSuccessRouteImport } from './routes/billing.sms-credits.success'
 import { Route as ConnectRefreshBusinessIdRouteImport } from './routes/connect.refresh.$businessId'
 import { Route as ConnectReturnBusinessIdRouteImport } from './routes/connect.return.$businessId'
+import { Route as SupportGuidesIndexRouteImport } from './routes/support.guides.index'
+import { Route as SupportGuidesSlugRouteImport } from './routes/support.guides.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -318,6 +320,16 @@ const ConnectReturnBusinessIdRoute = ConnectReturnBusinessIdRouteImport.update({
   path: '/return/$businessId',
   getParentRoute: () => ConnectRoute,
 } as any)
+const SupportGuidesIndexRoute = SupportGuidesIndexRouteImport.update({
+  id: '/support/guides/',
+  path: '/support/guides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportGuidesSlugRoute = SupportGuidesSlugRouteImport.update({
+  id: '/support/guides/$slug',
+  path: '/support/guides/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -370,7 +382,9 @@ export interface FileRoutesByFullPath {
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/support/guides/$slug': typeof SupportGuidesSlugRoute
   '/billing/sms-credits/': typeof BillingSmsCreditsIndexRoute
+  '/support/guides/': typeof SupportGuidesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -422,7 +436,9 @@ export interface FileRoutesByTo {
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/support/guides/$slug': typeof SupportGuidesSlugRoute
   '/billing/sms-credits': typeof BillingSmsCreditsIndexRoute
+  '/support/guides': typeof SupportGuidesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -476,7 +492,9 @@ export interface FileRoutesById {
   '/billing/sms-credits/success': typeof BillingSmsCreditsSuccessRoute
   '/connect/refresh/$businessId': typeof ConnectRefreshBusinessIdRoute
   '/connect/return/$businessId': typeof ConnectReturnBusinessIdRoute
+  '/support/guides/$slug': typeof SupportGuidesSlugRoute
   '/billing/sms-credits/': typeof BillingSmsCreditsIndexRoute
+  '/support/guides/': typeof SupportGuidesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -531,7 +549,9 @@ export interface FileRouteTypes {
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/support/guides/$slug'
     | '/billing/sms-credits/'
+    | '/support/guides/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -583,7 +603,9 @@ export interface FileRouteTypes {
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/support/guides/$slug'
     | '/billing/sms-credits'
+    | '/support/guides'
   id:
     | '__root__'
     | '/'
@@ -636,7 +658,9 @@ export interface FileRouteTypes {
     | '/billing/sms-credits/success'
     | '/connect/refresh/$businessId'
     | '/connect/return/$businessId'
+    | '/support/guides/$slug'
     | '/billing/sms-credits/'
+    | '/support/guides/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -682,6 +706,8 @@ export interface RootRouteChildren {
   ClientsIndexRoute: typeof ClientsIndexRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
   SupportIndexRoute: typeof SupportIndexRoute
+  SupportGuidesSlugRoute: typeof SupportGuidesSlugRoute
+  SupportGuidesIndexRoute: typeof SupportGuidesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1043,6 +1069,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectReturnBusinessIdRouteImport
       parentRoute: typeof ConnectRoute
     }
+    '/support/guides/': {
+      id: '/support/guides/'
+      path: '/support/guides'
+      fullPath: '/support/guides/'
+      preLoaderRoute: typeof SupportGuidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support/guides/$slug': {
+      id: '/support/guides/$slug'
+      path: '/support/guides/$slug'
+      fullPath: '/support/guides/$slug'
+      preLoaderRoute: typeof SupportGuidesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1125,6 +1165,8 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsIndexRoute: ClientsIndexRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
   SupportIndexRoute: SupportIndexRoute,
+  SupportGuidesSlugRoute: SupportGuidesSlugRoute,
+  SupportGuidesIndexRoute: SupportGuidesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
