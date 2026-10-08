@@ -11,6 +11,7 @@ import { PaymentsHoldNotice } from "@/components/PaymentsHoldNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { BookingRemindersSetting } from "@/components/BookingRemindersSetting";
+import { PushNotificationsSetting } from "@/components/PushNotificationsSetting";
 import { CalendarColoursSetting } from "@/components/CalendarColoursSetting";
 import { MenuVisibilitySetting } from "@/components/MenuVisibilitySetting";
 import { MessageTemplatesSetting } from "@/components/MessageTemplatesSetting";
@@ -332,6 +333,7 @@ function SettingsPage() {
             <PrivacyTab />
           </TabsContent>
           <TabsContent value="notifications" className="mt-4 grid gap-5">
+            <PushNotificationsSetting />
             <BookingRemindersSetting />
             <MessageTemplatesSetting />
           </TabsContent>

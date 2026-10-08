@@ -27,6 +27,7 @@ import {
   stashPendingProfile,
 } from "@/lib/auth/pending-profile";
 import { resetIap } from "@/lib/iap";
+import { forgetPushDeviceForSignOut } from "@/lib/push/push-client";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { clearPersistedQueries } from "@/lib/offline/persist";
 import { forgetMe, recallMe, rememberMe } from "@/lib/auth/last-known-me";
@@ -1131,6 +1132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await endImpersonation();
       return;
     }
+    // Revoke this device's push registration while the session can still
+    // authorise it; otherwise the next person to sign in here gets these alerts.
+    await Promise.race([
+      forgetPushDeviceForSignOut(),
+      new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+    ]);
     // Drop local state before calling Supabase. A rejected sign-out (offline, or
     // a session the server already considers gone) must not strand the user in a
     // signed-in shell with no route back to /login.

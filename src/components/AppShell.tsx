@@ -53,6 +53,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
+import { PushBellPrompt } from "@/components/PushBellPrompt";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { EventModal } from "@/components/EventModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
@@ -686,6 +687,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <PushBellPrompt />
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
                     // A follow-up coming due opens the follow-ups list; other items just mark read.
                     const followUp = n.templateKey === "service_follow_up_staff";

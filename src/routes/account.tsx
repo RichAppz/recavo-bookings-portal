@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
+import { PushNotificationsSetting } from "@/components/PushNotificationsSetting";
 import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
 import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
@@ -149,9 +150,12 @@ function AccountPage() {
   if (view === "profile") {
     return (
       <AccountShell view={view} title={copy.title} description={copy.description}>
-        <SectionCard title="Your details" className="max-w-xl">
-          <AccountProfileForm />
-        </SectionCard>
+        <div className="grid max-w-xl gap-5">
+          <SectionCard title="Your details">
+            <AccountProfileForm />
+          </SectionCard>
+          <PushNotificationsSetting />
+        </div>
       </AccountShell>
     );
   }
