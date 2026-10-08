@@ -508,29 +508,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
           <WhatsNewNavLink onClick={() => setMobileNav(false)} />
-          {/* Support must be one tap from the phone drawer, so it gets its own row
-              rather than living only inside the account menu below. The demo tour
-              is still reachable from the setup checklist. */}
-          {tenant.businessId ? (
-            <Link
-              to="/support"
-              onClick={() => setMobileNav(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium transition-colors lg:py-2.5 lg:text-sm",
-                pathname.startsWith("/support")
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-              )}
-            >
-              <LifeBuoy
-                className={cn(
-                  "size-5 lg:size-4.5",
-                  pathname.startsWith("/support") && "text-sidebar-primary",
-                )}
-              />
-              Help & support
-            </Link>
-          ) : null}
+          {/* Guides and Support live in the top bar's Help menu (HelpMenu). The demo
+              tour is still reachable from the setup checklist. */}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

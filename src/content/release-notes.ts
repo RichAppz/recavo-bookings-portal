@@ -47,15 +47,6 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
     ],
   },
-  {
-    date: "2026-10-04",
-    title: "Help & support, one tap away",
-    items: [
-      {
-        kind: "improved",
-        text: "Help & support has its own row at the bottom of the menu, so on a phone it's one tap from the drawer rather than hidden behind your name.",
-        where: "Menu → Help & support",
-      },
     ],
   },
   {
