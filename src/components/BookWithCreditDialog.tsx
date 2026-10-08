@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -14,23 +15,16 @@ import {
   usePublicAvailability,
   usePublicLocations,
   usePublicServices,
-  type PortalCredit,
 } from "@/lib/api/hooks";
 import type { AvailabilitySlot } from "@/lib/api/types";
 import { formatDuration, formatInTz, isoDate } from "@/lib/format";
+import { creditBalance, creditsLeftLabel, usableCredits } from "@/lib/portal-credits";
 import { toast } from "sonner";
 
 function addDays(base: Date, days: number) {
   const d = new Date(base);
   d.setDate(d.getDate() + days);
   return d;
-}
-
-function usableCredits(credits: PortalCredit[] | undefined): PortalCredit[] {
-  const now = Date.now();
-  return (credits ?? [])
-    .filter((c) => c.status === "active" && c.available > 0 && Date.parse(c.expiresAt) > now)
-    .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
 }
 
 export function BookWithCreditDialog({
@@ -60,6 +54,9 @@ export function BookWithCreditDialog({
   }, [credits.data, services.data]);
 
   const activeService = bookable.length === 1 ? bookable[0].id : serviceId;
+  // Shown beside the book button so the client knows whether this is their last one.
+  const balance = creditBalance(credits.data, activeService);
+
   const locationList = locations.data ?? [];
   const activeLocation = locationList.length === 1 ? locationList[0].id : locationId;
 
@@ -84,7 +81,9 @@ export function BookWithCreditDialog({
       { slotToken: selectedSlot.slotToken },
       {
         onSuccess: () => {
-          toast.success("Booked", { description: "One credit has been used." });
+          toast.success("Booked", {
+            description: `One credit used · ${creditsLeftLabel(Math.max(balance.available - 1, 0)).toLowerCase()}.`,
+          });
           onOpenChange(false);
         },
         onError: (err) => {
@@ -103,6 +102,15 @@ export function BookWithCreditDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Book with a credit</DialogTitle>
+          {balance.available > 0 ? (
+            <DialogDescription className="tabular-nums">
+              {creditsLeftLabel(balance.available)}
+              {activeService && balance.restricted ? " for this service" : ""}
+              {balance.nextExpiresAt
+                ? ` · next expires ${formatInTz(balance.nextExpiresAt, "Europe/London", { day: "numeric", month: "short" })}`
+                : ""}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
 
         {bookable.length === 0 ? (
