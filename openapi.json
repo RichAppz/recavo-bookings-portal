@@ -5483,6 +5483,14 @@
               null
             ]
           },
+          "link": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Portal-relative path to open when a staff notification is tapped (for example `/packages?request=<id>`). Null for customer messages and alerts with no destination.",
+            "example": "/packages?request=0192b1c0-1111-7000-8000-000000000001"
+          },
           "readAt": {
             "type": [
               "string",

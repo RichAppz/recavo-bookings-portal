@@ -52288,6 +52288,11 @@ export interface components {
             requestedChannel?: "email" | "in_app" | "sms" | null;
             /** @enum {string|null} */
             fallbackReason?: "no_phone" | "opted_out" | "no_credits" | "not_entitled" | "sms_unavailable" | null;
+            /**
+             * @description Portal-relative path to open when a staff notification is tapped (for example `/packages?request=<id>`). Null for customer messages and alerts with no destination.
+             * @example /packages?request=0192b1c0-1111-7000-8000-000000000001
+             */
+            link?: string | null;
             /** Format: date-time */
             readAt: string | null;
             /** Format: date-time */

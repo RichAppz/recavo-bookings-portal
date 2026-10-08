@@ -12,6 +12,7 @@ import {
   Lock,
   MessageSquarePlus,
   Package,
+  PackageCheck,
   Sparkles,
   TrendingUp,
   UserPlus,
@@ -36,6 +37,7 @@ import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/Add
 import { EventModal } from "@/components/EventModal";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { BookingPanel } from "@/components/BookingPanel";
+import { PendingPackageRequestsBanner } from "@/components/PendingPackageRequestsBanner";
 import {
   EmptyState,
   PageHeader,
@@ -73,6 +75,7 @@ import {
   useCustomer,
   useDashboard,
   useLocationsList,
+  usePackageRequests,
   useStaffList,
   useWaitlistSummary,
 } from "@/lib/api/hooks";
@@ -211,6 +214,10 @@ function Overview() {
     enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL),
   });
   const addOnRequests = upsellSummary.data?.requested ?? 0;
+  const pendingPackageRequests = usePackageRequests("pending", {
+    enabled: tenant.can(PERMISSIONS.PACKAGE_MANAGE),
+  });
+  const packageRequests = pendingPackageRequests.data?.length ?? 0;
   // On Solo the Staff menu item is hidden; this task is the owner's way to their hours.
   const soloPlan = useSoloPlan();
   const todays = useBookings({ ...todayRange(), enabled: true });
@@ -265,6 +272,8 @@ function Overview() {
           </>
         }
       />
+
+      <PendingPackageRequestsBanner />
 
       <Can
         permission={PERMISSIONS.REPORT_READ}
@@ -572,6 +581,17 @@ function Overview() {
             <SectionCard title="Tasks requiring attention" onHide={() => cards.hide("tasks")}>
               <ul className="space-y-3">
                 {[
+                  // Real, live: purchases a client asked for that still need confirming.
+                  ...(packageRequests > 0
+                    ? [
+                        {
+                          icon: PackageCheck,
+                          text: `${packageRequests} package ${packageRequests === 1 ? "purchase" : "purchases"} to confirm`,
+                          to: "/packages" as const,
+                          tone: "warning",
+                        },
+                      ]
+                    : []),
                   // Real, live: clients who asked for an add-on from their offer email.
                   ...(addOnRequests > 0
                     ? [
