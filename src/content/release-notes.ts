@@ -6,6 +6,27 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-08",
+    title: "Package requests you can't miss, and credits clients can see",
+    items: [
+      {
+        kind: "new",
+        text: "A package a client has asked for but nobody has confirmed now sits at the top of Overview and Calendar until you deal with it — who asked, for what, how long ago — with a button straight to that request. No more finding out a fortnight later.",
+        where: "Overview and Calendar",
+      },
+      {
+        kind: "fixed",
+        text: "Tapping an alert in the bell used to do nothing. It now takes you to the thing it's about: a package request opens that request, a new booking opens the booking, a text-credit warning opens Text credits.",
+        where: "Bell menu",
+      },
+      {
+        kind: "improved",
+        text: "Clients booking with a package can now see how many credits they have left — under “Book with 1 credit”, in the confirmation, and beside the calendar — so they know when they're running low before the last one goes.",
+        where: "Client account → Calendar",
+      },
+    ],
+  },
+  {
     date: "2026-10-05",
     title: "A quicker Edit booking, and messages that name every service",
     items: [
