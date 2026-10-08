@@ -110,6 +110,11 @@ export type ConnectAccount = schemas["ConnectAccount"];
 export type Conversation = schemas["Conversation"];
 export type ConversationMessage = schemas["ConversationMessage"];
 export type Notification = schemas["Notification"];
+/** A phone or browser the signed-in user has turned push notifications on for. */
+export type PushDevice = schemas["PushDevice"];
+export type PushPlatform = PushDevice["platform"];
+/** Which push providers this deployment can deliver through, and the VAPID key for browsers. */
+export type PushConfig = schemas["PushConfig"];
 export type Dashboard = schemas["Dashboard"];
 export type FileResource = schemas["File"];
 export type Resource = schemas["Resource"];
