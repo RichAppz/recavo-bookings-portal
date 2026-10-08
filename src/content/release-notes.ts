@@ -146,6 +146,37 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     ],
   },
   {
+    date: "2026-09-29",
+    title: "Step-by-step guides, shorten a moved job, and a Help button",
+    items: [
+      {
+        kind: "new",
+        text: "Guides: a set of step-by-step walkthroughs with screenshots for everything from opening hours to taking card payments, written for your kind of business — trainers see sessions and clients, detailers see jobs and vehicles — and with pictures that match whether you're on your phone or a computer. Search them from the Guides page or from the search bar.",
+        where: "? button beside search → Guides",
+      },
+      {
+        kind: "new",
+        text: "Support and Guides sit together under a ? button beside the search bar. The button shows a dot when we've replied to you and you haven't seen it yet. You can also reach both from search.",
+        where: "? button beside search → Support",
+      },
+      {
+        kind: "new",
+        text: "When you move an all-day job you can now change its last day at the same time. A job booked as two days that only needs one can be moved and shortened in one go — or given an extra day. Leave the last day alone and the job keeps its length as before.",
+        where: "Open a booking → Reschedule → Move the day",
+      },
+      {
+        kind: "improved",
+        text: "Automotive businesses now start every new booking on “Pay after the job” instead of asking for payment up front. Pick the other option once and it's remembered for next time, exactly as before.",
+        where: "Add booking → Payment",
+      },
+      {
+        kind: "new",
+        text: "A switch for RECAVO's tips emails under Settings → Account, alongside the unsubscribe link every one of those emails carries.",
+        where: "Settings → Account",
+      },
+    ],
+  },
+  {
     date: "2026-09-28",
     title: "Every payment counted, and exports your accountant can use",
     items: [
