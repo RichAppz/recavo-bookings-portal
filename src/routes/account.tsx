@@ -18,6 +18,7 @@ import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
 import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
 import { businessIdPendingCardReturn } from "@/components/BookingFlow";
 import { CalendarDayBooker } from "@/components/CalendarDayBooker";
+import { CreditBalanceStrip } from "@/components/CreditBalanceStrip";
 import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
 import { SessionCalendar, type CalendarSession } from "@/components/SessionCalendar";
@@ -332,6 +333,7 @@ function AccountContent({
             hideSelectedList
             aside={
               <>
+                <CreditBalanceStrip credits={usable} />
                 <CalendarDayManage
                   date={calDay}
                   bookings={live}

@@ -12,6 +12,12 @@ import {
 import { queryKeys } from "@/lib/api/query-keys";
 import type { AvailabilitySlot } from "@/lib/api/types";
 import { formatInTz, isoDate } from "@/lib/format";
+import {
+  creditBalance,
+  creditsCovering,
+  creditsLeftLabel,
+  usableCredits,
+} from "@/lib/portal-credits";
 import { toast } from "sonner";
 
 export type CalendarPaidSlot = {
@@ -27,20 +33,6 @@ type DaySlot = AvailabilitySlot & {
   serviceName: string;
   locationName: string;
 };
-
-function usableCredits(credits: readonly PortalCredit[]): PortalCredit[] {
-  const now = Date.now();
-  return credits.filter(
-    (c) => c.status === "active" && c.available > 0 && Date.parse(c.expiresAt) > now,
-  );
-}
-
-/** Empty eligibleServiceIds means the credit works on every session. */
-function creditsCoverService(credits: readonly PortalCredit[], serviceId: string): boolean {
-  return usableCredits(credits).some(
-    (c) => c.eligibleServiceIds.length === 0 || c.eligibleServiceIds.includes(serviceId),
-  );
-}
 
 function slotOnDate(slot: AvailabilitySlot, date: string): boolean {
   return (
@@ -177,16 +169,23 @@ function StudioDaySlots({
     return [...map.values()];
   }, [slots]);
 
-  const covers = picked ? creditsCoverService(credits, picked.serviceId) : false;
+  // Only packs that cover the picked session count, so a PT bundle is not shown as
+  // spendable on a massage. `total` is what the client has across every pack.
+  const forPicked = picked ? creditBalance(credits, picked.serviceId) : null;
+  const covers = picked ? creditsCovering(credits, picked.serviceId).length > 0 : false;
+  const total = creditBalance(credits).available;
   const hasAnyCredit = usableCredits(credits).length > 0;
 
   const submitCredit = () => {
     if (!picked) return;
+    const leftAfter = Math.max(total - 1, 0);
     book.mutate(
       { slotToken: picked.slotToken },
       {
         onSuccess: () => {
-          toast.success("Session booked", { description: "One credit has been used." });
+          toast.success("Session booked", {
+            description: `One credit used · ${creditsLeftLabel(leftAfter).toLowerCase()}.`,
+          });
           setPicked(null);
           void queryClient.invalidateQueries({
             queryKey: queryKeys.publicAvailabilityAll(studio.id),
@@ -251,10 +250,21 @@ function StudioDaySlots({
         </div>
       ))}
       {picked ? (
-        covers ? (
-          <Button className="w-full" disabled={book.isPending} onClick={submitCredit}>
-            {book.isPending ? "Booking…" : "Book with 1 credit"}
-          </Button>
+        covers && forPicked ? (
+          <div className="space-y-1.5">
+            <Button className="w-full" disabled={book.isPending} onClick={submitCredit}>
+              {book.isPending ? "Booking…" : "Book with 1 credit"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground tabular-nums">
+              {forPicked.restricted && forPicked.available !== total
+                ? `${creditsLeftLabel(forPicked.available)} for ${picked.serviceName}`
+                : creditsLeftLabel(forPicked.available)}
+              {" · "}
+              {forPicked.available - 1 === 0
+                ? "this is your last one"
+                : `${forPicked.available - 1} after this booking`}
+            </p>
+          </div>
         ) : (
           <Button
             className="w-full"
@@ -275,7 +285,7 @@ function StudioDaySlots({
       ) : (
         <p className="text-xs text-muted-foreground">
           {hasAnyCredit
-            ? "Pick a time to use a credit — any open slot is available."
+            ? `Pick a time to use a credit — you have ${total} left.`
             : "Pick a time to book."}
         </p>
       )}
