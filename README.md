@@ -91,6 +91,10 @@ Needs Rust (`curl https://sh.rustup.rs -sSf | sh`) and Xcode command line tools.
 | `npm run desktop:build:production` | Same, against production (`src-tauri/tauri.production.conf.json`)                |
 | `npm run desktop:test`             | Rust unit tests for the navigation / deep-link rules                             |
 
+Run the build from a terminal you can interact with: the `.dmg` step scripts Finder to lay out the
+drag-to-Applications window, and macOS asks once to allow that (without it the `.app` is built and
+the `.dmg` step fails with "AppleEvent timed out").
+
 Builds are only ad-hoc signed unless a Developer ID certificate is available. To ship a `.dmg` people
 can open without Gatekeeper warnings, set `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`
 (app-specific) and `APPLE_TEAM_ID` before `desktop:build:production`; Tauri signs and notarises as
