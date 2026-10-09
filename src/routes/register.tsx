@@ -27,6 +27,7 @@ import {
   readPendingReferral,
   stashPendingReferral,
 } from "@/lib/auth/pending-referral";
+import { settleSocialSignIn } from "@/lib/auth/social-sign-in";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
 const searchSchema = z.object({
@@ -121,9 +122,9 @@ function RegisterPage() {
       stashPendingProfile({ name: name.trim() });
     }
     try {
-      // In the mobile app the sheet can be dismissed without signing in,
-      // in which case this page stays put and must come back to life.
-      if ((await start()) === "cancelled") setBusy(false);
+      // In the apps this page can stay put (sheet dismissed, or sign-in handed
+      // to the browser) and must come back to life.
+      setBusy(settleSocialSignIn(await start()).busy);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : failureMessage);
       setBusy(false);

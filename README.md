@@ -72,6 +72,31 @@ PUBLIC_APP_URL=http://localhost:8080
 
 Or set `BILLING_SUCCESS_URL` / `BILLING_CANCEL_URL` to `http://localhost:8080/billing/success` and `…/billing/cancel`. Staging/production should use the real portal origin. Without these, Checkout returns 403 and unpaid businesses stay unrestricted on the API (the portal still gates the UI).
 
+## Desktop app (macOS)
+
+`src-tauri/` is a [Tauri v2](https://v2.tauri.app) shell around the hosted portal: the window loads
+`staging.bookings.recavo.app` (or production for release builds) and ships no web bundle of its own,
+so it picks up every web deploy without an app update. It is the desktop twin of the Capacitor
+shell (`capacitor.config.ts`): the WebView stays on our origin and Stripe, anything else opens in the
+default browser, and Google/Apple sign-in runs in the browser and returns through the
+`com.richappz.recavo://` URL scheme (see `src-tauri/src/lib.rs`).
+
+Needs Rust (`curl https://sh.rustup.rs -sSf | sh`) and Xcode command line tools.
+
+| Script                             | Purpose                                                                          |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run desktop:dev`              | Run the shell against staging (sign-in deep links only work in a bundled `.app`) |
+| `npm run desktop:dev:local`        | Run the shell against the local dev server on `localhost:8080`                   |
+| `npm run desktop:build`            | Build `RECAVO.app` + `.dmg` against staging → `src-tauri/target/release/bundle/` |
+| `npm run desktop:build:production` | Same, against production (`src-tauri/tauri.production.conf.json`)                |
+| `npm run desktop:test`             | Rust unit tests for the navigation / deep-link rules                             |
+
+Builds are only ad-hoc signed unless a Developer ID certificate is available. To ship a `.dmg` people
+can open without Gatekeeper warnings, set `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`
+(app-specific) and `APPLE_TEAM_ID` before `desktop:build:production`; Tauri signs and notarises as
+part of the build. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` per
+release.
+
 ## Lovable
 
 This project is connected to [Lovable](https://lovable.dev). Avoid rewriting published git history on the connected branch.
