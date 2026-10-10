@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { DialogTrigger } from "@radix-ui/react-dialog";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
 import { QuickAddServiceDialog } from "@/components/QuickAddServiceDialog";
@@ -106,7 +106,8 @@ export function ServiceMultiPicker({
     if (picked.length === 0 || !canAdd) {
       if (picked.length > 0 && singleReason) setNudge(singleReason);
       onChange([{ serviceId: s.id, variantId: null }]);
-      if (!multi) setOpen(false);
+      // With options to choose, stay open so one can be picked in the same go.
+      if (!multi && s.variants.length === 0) setOpen(false);
       return;
     }
     if (s.bookingMode !== "individual") {
@@ -119,6 +120,8 @@ export function ServiceMultiPicker({
 
   const setVariant = (serviceId: string, variantId: string | null) =>
     onChange(picked.map((p) => (p.serviceId === serviceId ? { ...p, variantId } : p)));
+  const variantOf = (serviceId: string) =>
+    picked.find((p) => p.serviceId === serviceId)?.variantId ?? null;
 
   const needle = search.trim().toLowerCase();
   const matches = needle
@@ -206,42 +209,90 @@ export function ServiceMultiPicker({
             >
               {group.items.map((s) => {
                 const on = isPicked(s.id);
+                const chosenVariant = on ? variantOf(s.id) : null;
                 return (
-                  <CommandItem
-                    key={s.id}
-                    value={s.id}
-                    onSelect={() => toggle(s)}
-                    aria-checked={on}
-                    role="option"
-                    // The whole row is the target: full width, a finger-height
-                    // minimum on phones, and pressed feedback so a tap reads as one.
-                    className={cn(
-                      "w-full cursor-pointer active:bg-accent",
-                      isPhone && "min-h-12 px-3 py-2.5",
-                    )}
-                  >
-                    <span
+                  <Fragment key={s.id}>
+                    <CommandItem
+                      value={s.id}
+                      onSelect={() => toggle(s)}
+                      aria-checked={on}
+                      role="option"
+                      // The whole row is the target: full width, a finger-height
+                      // minimum on phones, and pressed feedback so a tap reads as one.
                       className={cn(
-                        "flex size-4 shrink-0 items-center justify-center rounded-sm border",
-                        on ? "border-primary bg-primary text-primary-foreground" : "bg-card",
+                        "w-full cursor-pointer active:bg-accent",
+                        isPhone && "min-h-12 px-3 py-2.5",
                       )}
-                      aria-hidden
                     >
-                      {on ? <Check className="size-3" /> : null}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{s.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
+                      <span
+                        className={cn(
+                          "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+                          on ? "border-primary bg-primary text-primary-foreground" : "bg-card",
+                        )}
+                        aria-hidden
+                      >
+                        {on ? <Check className="size-3" /> : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{s.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[
+                            formatDuration(s.durationMinutes),
+                            formatMoney(s.basePriceMinor, s.currency),
+                            grouped ? null : s.category,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    </CommandItem>
+                    {/* The option can be picked here without closing the list; the
+                      row under the picker still offers the same choice. Outside the
+                      item so a tap on an option doesn't untick the service. */}
+                    {on && s.variants.length > 0 ? (
+                      <div
+                        role="radiogroup"
+                        aria-label={`${s.name} option`}
+                        className="flex flex-wrap gap-1.5 pt-0.5 pr-2 pb-2 pl-8"
+                      >
                         {[
-                          formatDuration(s.durationMinutes),
-                          formatMoney(s.basePriceMinor, s.currency),
-                          grouped ? null : s.category,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                  </CommandItem>
+                          { id: null, label: "Default" },
+                          ...s.variants.map((x) => ({
+                            id: x.id as string | null,
+                            label: [
+                              x.name,
+                              x.priceMinor != null ? formatMoney(x.priceMinor, s.currency) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · "),
+                          })),
+                        ].map((opt) => {
+                          const active = chosenVariant === opt.id;
+                          return (
+                            <button
+                              key={opt.id ?? "default"}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              onClick={() => {
+                                setVariant(s.id, opt.id);
+                                if (!multi) setOpen(false);
+                              }}
+                              className={cn(
+                                "cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors",
+                                active
+                                  ? "border-primary bg-primary-soft text-primary"
+                                  : "hover:bg-secondary",
+                                isPhone && "px-3 py-1.5",
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </CommandGroup>
