@@ -6,6 +6,27 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-10",
+    title: "A quicker Add booking",
+    items: [
+      {
+        kind: "improved",
+        text: "Payment is now a short list to pick from — pay after the job, pay up front, package credit or bank transfer — with the deposit split shown in one line underneath, instead of paragraphs explaining each one.",
+        where: "Add booking → Payment method",
+      },
+      {
+        kind: "improved",
+        text: "Tick a service that comes in options (small car, large car…) and the options appear right under it in the list, so you can pick one before closing. The option is still on the booking form too if you'd rather change it there.",
+        where: "Add booking → Services",
+      },
+      {
+        kind: "improved",
+        text: "Tap a day on the calendar that's already held all day and the booking goes straight in as a drop-in: the free times show without asking whether you meant to squeeze one in.",
+        where: "Calendar → tap a full day → Booking",
+      },
+    ],
+  },
+  {
     date: "2026-10-08",
     title: "Package requests you can't miss, and credits clients can see",
     items: [
