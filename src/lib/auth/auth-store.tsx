@@ -31,6 +31,7 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { clearPersistedQueries } from "@/lib/offline/persist";
 import { forgetMe, recallMe, rememberMe } from "@/lib/auth/last-known-me";
 import {
+  isDesktopApp,
   isNativeApp,
   isNativeIOS,
   nativeAuthRedirectUrl,
@@ -53,10 +54,13 @@ export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "unco
 /**
  * How a Google sign-in attempt ended.
  * - `redirecting`: web — the page is navigating to Google; nothing more to do.
+ * - `in-browser`: desktop — Google opened in the default browser; this page stays
+ *   put and is reloaded by the shell once the sign-in comes back. Tell the person
+ *   where to look, and let them try again if they close the browser instead.
  * - `signed-in`: native — the session was established; auth state follows.
  * - `cancelled`: native — the user closed the sign-in sheet; reset the UI.
  */
-export type SocialSignInOutcome = "redirecting" | "signed-in" | "cancelled";
+export type SocialSignInOutcome = "redirecting" | "in-browser" | "signed-in" | "cancelled";
 
 export type MfaMode = "challenge" | "enroll";
 
@@ -950,14 +954,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return "signed-in";
       }
 
+      // The desktop shell's WebView is no better a home for Google's page, and
+      // it has no in-app browser sheet, so the provider opens in the default
+      // browser (a new-window request is how the page asks the shell for that)
+      // with Supabase sent back to the same https bounce page as the mobile
+      // apps. The shell receives the deep link it relays to and loads the
+      // callback into this WebView on our origin, where it is picked up on
+      // load exactly like a browser-tab sign-in.
+      const desktop = isDesktopApp();
+
       // Build the URL without navigating so a misconfigured provider surfaces
       // as a toast here rather than stranding the user on Supabase's JSON error.
-      authLog(`${label}: starting OAuth redirect`);
+      authLog(`${label}: starting OAuth ${desktop ? "in the default browser" : "redirect"}`);
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo:
-            redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined),
+          redirectTo: desktop
+            ? nativeAuthRedirectUrl()
+            : (redirectTo ?? (typeof window !== "undefined" ? window.location.origin : undefined)),
           queryParams,
           skipBrowserRedirect: true,
         },
@@ -965,6 +979,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       if (!data.url) throw new Error("Sign-in did not return an authorisation URL");
       await assertOAuthAvailable(data.url, providerName);
+      if (desktop) {
+        window.open(data.url, "_blank", "noopener");
+        return "in-browser";
+      }
       window.location.assign(data.url);
       return "redirecting";
     },

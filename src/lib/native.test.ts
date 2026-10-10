@@ -4,6 +4,8 @@ import {
   billingSurface,
   clientPlatform,
   clientPlatformFor,
+  desktopShell,
+  isDesktopApp,
   revenueCatApiKey,
   saasPurchasesAllowedInApp,
 } from "./native.ts";
@@ -65,6 +67,34 @@ describe("clientPlatformFor", () => {
 
   it("sends nothing during the server render, where there is no device", () => {
     assert.equal(clientPlatform(), undefined);
+  });
+});
+
+describe("isDesktopApp", () => {
+  const withWindow = (value: unknown, run: () => void) => {
+    const g = globalThis as { window?: unknown };
+    g.window = value;
+    try {
+      run();
+    } finally {
+      delete g.window;
+    }
+  };
+
+  it("is false during the server render and in a plain browser tab", () => {
+    assert.equal(isDesktopApp(), false);
+    withWindow({}, () => assert.equal(isDesktopApp(), false));
+  });
+
+  it("is true once the desktop shell's initialization script has set its marker", () => {
+    const shell = { platform: "macos", version: "0.1.0" };
+    withWindow({ __RECAVO_DESKTOP__: shell }, () => {
+      assert.equal(isDesktopApp(), true);
+      assert.deepEqual(desktopShell(), shell);
+      // The desktop app is not a store app: it sells through Stripe like the web.
+      assert.equal(billingSurface(), "web");
+      assert.equal(clientPlatform(), "web");
+    });
   });
 });
 

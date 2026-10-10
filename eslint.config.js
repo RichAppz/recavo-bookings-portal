@@ -8,7 +8,17 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // android/ and ios/ are generated Capacitor native projects, not web source;
   // schema.d.ts is openapi-typescript output (npm run gen:api), never hand-edited.
-  { ignores: ["dist", ".output", ".vinxi", "android", "ios", "src/lib/api/schema.d.ts"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vinxi",
+      "android",
+      "ios",
+      "src-tauri/target",
+      "src/lib/api/schema.d.ts",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
