@@ -43,7 +43,6 @@ import {
   useAvailability,
   useBookings,
   useCalendarBlocks,
-  useConnectAccount,
   useCreateBooking,
   useCustomerCredits,
   useCustomerLinkedRecords,
@@ -52,7 +51,6 @@ import {
   useLinkedRecordDefinition,
   useLocationsList,
   usePackages,
-  usePaymentsHold,
   useServices,
   useStaffList,
 } from "@/lib/api/hooks";
@@ -153,6 +151,7 @@ export function AddBookingModal({
   defaultLinkedRecordId,
   waitlistEntryId,
   onNoAvailability,
+  assumeDropIn,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -170,6 +169,11 @@ export function AddBookingModal({
    * once the booking exists. Nothing else about the form changes.
    */
   waitlistEntryId?: string;
+  /**
+   * Staff picked `defaultDate` on the calendar, where they could already see it was
+   * held all day. If it is, book a drop-in straight away without the prompt or notes.
+   */
+  assumeDropIn?: boolean;
   /**
    * Shown as "Add to waitlist instead" when the chosen day has no availability. Called
    * with what staff had already picked so the waitlist form opens prefilled.
@@ -281,11 +285,6 @@ export function AddBookingModal({
   useEffect(() => {
     if (!open) setPaymentMethodState(defaultMethod);
   }, [open, defaultMethod]);
-  const connect = useConnectAccount();
-  const paymentsHold = usePaymentsHold();
-  // A RECAVO payments hold means the API will not issue pay-online links, whatever
-  // Stripe says about the account.
-  const cardPaymentsLive = connect.data?.chargesEnabled === true && !paymentsHold.data;
   // "Use package credit" only makes sense for a business that sells packages, and
   // only for a client who actually holds credit. Hidden (not disabled) otherwise: a
   // detailer with no packages should never see the option at all.
@@ -856,6 +855,20 @@ export function AddBookingModal({
   // still something on the diary to share with.
   const sendDropIn =
     dropIn && (scheduling === "slot" || holds.length > 0 || (allDay && timedOnDay.length > 0));
+  // On the calendar day they picked, a full day means a drop-in: switch to it as
+  // soon as the hold shows up rather than asking. A slot pick only switches once
+  // the ordinary quote is empty, so a day with room left books as normal.
+  const pickedHeldDay = Boolean(assumeDropIn) && date === defaultDate && holds.length > 0;
+  const autoDropIn =
+    pickedHeldDay &&
+    !dropIn &&
+    (scheduling === "custom"
+      ? !allDay || timedOnDay.length === 0
+      : availability.isSuccess && slots.length === 0);
+  useEffect(() => {
+    if (open && autoDropIn) setDropIn(true);
+  }, [open, autoDropIn]);
+  const quietDropIn = pickedHeldDay && dropIn;
 
   // The API sums the booked services' deposits unless staff override it here.
   const defaultDepositMinor = configuredDepositMinor(
@@ -1812,7 +1825,7 @@ export function AddBookingModal({
                         </div>
                       )
                     ) : null}
-                    {holds.length > 0 ? (
+                    {holds.length > 0 && !quietDropIn ? (
                       dropIn ? (
                         <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
                           {holdNote}.{" "}
@@ -1860,7 +1873,7 @@ export function AddBookingModal({
                         {/* Held by all-day work: say so, and offer to squeeze the job in
                             beside it. Picking that re-quotes the day ignoring the hold
                             (timed jobs and events still block). */}
-                        {holds.length > 0 && !dropIn ? (
+                        {holds.length > 0 && !dropIn && !pickedHeldDay ? (
                           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
                             <span className="text-muted-foreground">
                               {holdNote}. Squeeze in a drop-in?
@@ -1885,6 +1898,10 @@ export function AddBookingModal({
                               </Button>
                             </span>
                           </div>
+                        ) : pickedHeldDay ? (
+                          <p className="text-xs text-muted-foreground">
+                            No free times left this day — try another day.
+                          </p>
                         ) : dropIn ? (
                           <p className="text-xs text-muted-foreground">
                             {`No room for a drop-in${customStaff ? ` for ${customStaff.displayName}` : ""} — timed work, an event or working hours are in the way. `}
@@ -1909,7 +1926,11 @@ export function AddBookingModal({
                           </div>
                         ) : null}
                         {/* Nothing suits: capture them instead of losing the enquiry. */}
-                        {onNoAvailability && validDate && customerId && serviceId && !dropIn ? (
+                        {onNoAvailability &&
+                        validDate &&
+                        customerId &&
+                        serviceId &&
+                        (!dropIn || pickedHeldDay) ? (
                           <p className="text-xs text-muted-foreground">
                             Can't find a time?{" "}
                             <button
@@ -1961,7 +1982,7 @@ export function AddBookingModal({
                         <AllDayTile onPick={pickAllDay} />
                       </div>
                     )}
-                    {scheduling === "slot" && dropIn && slots.length > 0 ? (
+                    {scheduling === "slot" && dropIn && !quietDropIn && slots.length > 0 ? (
                       <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
                         {holds.length > 0 ? `${holdNote}. ` : ""}
                         Times shown are for a drop-in alongside the all-day job.{" "}
@@ -2025,58 +2046,23 @@ export function AddBookingModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pay_later">
-                    Pay after the job
-                    {service && depositMinor != null
-                      ? ` — ${formatMoney(depositMinor, service.currency)} deposit now`
-                      : " — confirmation only"}
-                    {service ? ` (${formatMoney(effectiveTotalMinor, service.currency)})` : ""}
-                  </SelectItem>
-                  <SelectItem value="none">
-                    Request payment up front
-                    {service ? ` — ${formatMoney(effectiveTotalMinor, service.currency)}` : ""}
-                  </SelectItem>
+                  <SelectItem value="pay_later">Pay after the job</SelectItem>
+                  <SelectItem value="none">Pay up front</SelectItem>
                   {creditOffered ? (
                     <SelectItem value="credit" disabled={additional.length > 0}>
-                      Use package credit
+                      Package credit
                     </SelectItem>
                   ) : null}
                   {bankTransferEnabled ? (
                     <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
-                      Bank transfer — awaits payment
+                      Bank transfer
                     </SelectItem>
                   ) : null}
                 </SelectContent>
               </Select>
-              {paymentMethod === "pay_later" && depositMinor != null && service ? (
-                <p className="text-xs text-muted-foreground">
-                  The client gets a request for the {formatMoney(depositMinor, service.currency)}{" "}
-                  deposit{cardPaymentsLive ? " with a pay-online link" : ""}; the balance of{" "}
-                  {formatMoney(effectiveTotalMinor - depositMinor, service.currency)} is taken after
-                  the job. Nothing chases the balance beforehand — use “Send payment reminder” on
-                  the booking if it's still unpaid afterwards.
-                </p>
-              ) : paymentMethod === "pay_later" ? (
-                <p className="text-xs text-muted-foreground">
-                  The client gets a plain booking confirmation — no payment request, pay link or
-                  deposit. Take payment when the job is done, or use “Send payment reminder” on the
-                  booking if it's still unpaid afterwards.
-                </p>
-              ) : paymentMethod === "none" && effectiveTotalMinor > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  The confirmation is a payment request showing the amount due
-                  {cardPaymentsLive ? " with a pay-online link" : ""}. Nothing is taken now — use
-                  “Take card payment” or “Record payment” on the booking when the money arrives.
-                </p>
-              ) : null}
               {paymentMethod === "bank_transfer" ? (
                 <p className="text-xs text-muted-foreground">
-                  The booking waits as “awaiting payment”
-                  {depositMinor != null && service
-                    ? ` until the ${formatMoney(depositMinor, service.currency)} deposit arrives`
-                    : ""}
-                  . You'll get the account details and reference to read out, and the customer is
-                  emailed them too.
+                  You'll get the account details to read out; they're emailed too.
                 </p>
               ) : null}
             </div>
@@ -2113,14 +2099,10 @@ export function AddBookingModal({
                   className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
                 >
                   {depositInvalid
-                    ? `Enter an amount under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it to ${paymentMethod === "pay_later" ? "send a plain confirmation" : "take the full amount"}.`
-                    : paymentMethod === "pay_later"
-                      ? depositMinor != null
-                        ? `Requested now with the confirmation; the rest (${formatMoney(effectiveTotalMinor - depositMinor, service.currency)}) is taken after the job.`
-                        : "No deposit — plain confirmation, and the full amount is taken after the job."
-                      : depositMinor != null
-                        ? `${formatMoney(depositMinor, service.currency)} now, ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} balance to collect later.`
-                        : `No deposit — the full ${formatMoney(effectiveTotalMinor, service.currency)} is due.`}
+                    ? `Must be under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it for no deposit.`
+                    : depositMinor != null
+                      ? `${formatMoney(depositMinor, service.currency)} now · ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} ${paymentMethod === "pay_later" ? "after the job" : "later"}`
+                      : "No deposit"}
                 </p>
               </div>
             ) : null}

@@ -317,6 +317,8 @@ function CalendarPage() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState<string | undefined>(undefined);
+  // Started by tapping a day on the grid, so staff have already seen what's on it.
+  const [addFromDay, setAddFromDay] = useState(false);
   // "Add to waitlist instead" from the booking form when the day has no availability.
   const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const [coloursOpen, setColoursOpen] = useState(false);
@@ -327,8 +329,9 @@ function CalendarPage() {
   const [eventOpen, setEventOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarBlock | null>(null);
   /** Open Add booking on a given day (defaults to the day in view, or today). */
-  const openAdd = (iso?: string) => {
+  const openAdd = (iso?: string, fromDay = false) => {
     setAddDate(iso);
+    setAddFromDay(fromDay);
     setAddOpen(true);
   };
   const openAddEvent = (iso?: string, time?: string) => {
@@ -1501,7 +1504,7 @@ function CalendarPage() {
         time={addTime}
         onBooking={() => {
           setChooserOpen(false);
-          openAdd(addDate);
+          openAdd(addDate, true);
         }}
         onEvent={() => {
           setChooserOpen(false);
@@ -1513,6 +1516,7 @@ function CalendarPage() {
         onOpenChange={setAddOpen}
         defaultDate={addDate}
         defaultStaffId={staffFilter !== "all" ? staffFilter : undefined}
+        assumeDropIn={addFromDay}
         onNoAvailability={(picked) => {
           setAddOpen(false);
           setWaitlistDefaults({ ...picked, from: picked.date });
