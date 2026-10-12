@@ -38,6 +38,7 @@ import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import { bookingSettlement } from "@/lib/booking-payment";
 import { formatDuration, formatInTz, formatMoney, isoDate, spansDays } from "@/lib/format";
+import { describeDiscount, discountedMinor } from "@/lib/offer-discount";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { packageSummary, validityLabel } from "@/lib/packages";
 import { toast } from "sonner";
@@ -119,6 +120,58 @@ function offerIntro(studioName: string | null, hasSessions: boolean, hasPackages
     return `${who} sent you a choice of sessions. Pick one, choose a time, and you're booked.`;
   }
   return `${who} sent you a choice of packages. Pick one, pay securely, and your credits are ready to book.`;
+}
+
+/**
+ * "Price £50 / Offer discount −£10" rows ahead of a summary's total when the price was
+ * booked from a higher list price. Nothing when there is no saving to show.
+ */
+function savingRows(
+  listMinor: number | undefined,
+  priceMinor: number,
+  currency: string,
+  label = "Offer discount",
+): { list: string; label: string; off: string } | undefined {
+  if (listMinor === undefined || listMinor <= priceMinor) return undefined;
+  return {
+    list: formatMoney(listMinor, currency),
+    label,
+    off: `−${formatMoney(listMinor - priceMinor, currency)}`,
+  };
+}
+
+/** A booking's saving: lines are kept at list and the difference sits on `adjustmentMinor`. */
+function bookingSaving(
+  booking: Pick<Booking, "priceMinor" | "currency"> & { adjustmentMinor?: number },
+) {
+  const adjustment = booking.adjustmentMinor ?? 0;
+  if (adjustment >= 0) return undefined;
+  return savingRows(booking.priceMinor - adjustment, booking.priceMinor, booking.currency);
+}
+
+/** List price struck through beside what the offer charges; just the price when they match. */
+function OfferPrice({
+  listMinor,
+  priceMinor,
+  currency,
+  className,
+}: {
+  listMinor: number;
+  priceMinor: number;
+  currency: string;
+  className?: string;
+}) {
+  if (priceMinor >= listMinor) {
+    return <span className={className}>{formatMoney(priceMinor, currency)}</span>;
+  }
+  return (
+    <span className={className}>
+      <s className="mr-1.5 text-sm font-normal text-muted-foreground">
+        {formatMoney(listMinor, currency)}
+      </s>
+      {formatMoney(priceMinor, currency)}
+    </span>
+  );
 }
 
 type Hold = {
@@ -361,6 +414,10 @@ export function BookingFlow({
     false;
   // Only sent to the API while the link is live; a dead code is simply not mentioned.
   const linkCode = offerActive ? offerCode : null;
+  // Money off everything the link names. The API prices slots, holds and package checkout
+  // with it; the page only previews the saving on the cards. Older API builds omit it.
+  const offerDiscount = offerActive ? (offer.data?.link.discount ?? null) : null;
+  const offerCurrency = visibleServices[0]?.currency ?? visiblePackages[0]?.currency ?? "GBP";
 
   // Both lists are searched: a session reached through a link may be on no public list.
   const service =
@@ -945,6 +1002,16 @@ export function BookingFlow({
                 {offerIntro(studioName, visibleServices.length > 0, visiblePackages.length > 0)}
               </p>
             ) : null}
+            {offerDiscount ? (
+              <p className="flex items-center gap-2 text-sm">
+                <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                  {describeDiscount(offerDiscount, offerCurrency)}
+                </span>
+                <span className="text-muted-foreground">
+                  Already taken off the prices below when you book through this link.
+                </span>
+              </p>
+            ) : null}
             {offerGone ? (
               <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
                 That link is no longer active, so here is everything
@@ -1008,9 +1075,12 @@ export function BookingFlow({
                             </span>
                           </span>
                           <span className="text-right whitespace-nowrap">
-                            <span className="block text-lg font-semibold">
-                              {formatMoney(s.basePriceMinor, s.currency)}
-                            </span>
+                            <OfferPrice
+                              className="block text-lg font-semibold"
+                              listMinor={s.basePriceMinor}
+                              priceMinor={discountedMinor(offerDiscount, s.basePriceMinor)}
+                              currency={s.currency}
+                            />
                             {s.depositMinor && s.depositMinor < s.basePriceMinor ? (
                               <span className="block text-xs text-muted-foreground">
                                 {formatMoney(s.depositMinor, s.currency)} deposit
@@ -1298,9 +1368,12 @@ export function BookingFlow({
                         {packageSummary(p)}
                       </span>
                     </span>
-                    <span className="text-lg font-semibold whitespace-nowrap">
-                      {formatMoney(p.priceMinor, p.currency)}
-                    </span>
+                    <OfferPrice
+                      className="text-lg font-semibold whitespace-nowrap"
+                      listMinor={p.listPriceMinor ?? p.priceMinor}
+                      priceMinor={p.priceMinor}
+                      currency={p.currency}
+                    />
                   </button>
                 ))}
               </div>
@@ -1427,6 +1500,11 @@ export function BookingFlow({
                 end={selectedSlot.end}
                 timezone={selectedSlot.displayTimezone}
                 price={formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
+                saving={savingRows(
+                  selectedSlot.listPriceMinor,
+                  selectedSlot.priceMinor,
+                  selectedSlot.currency,
+                )}
                 deposit={
                   service.depositMinor && service.depositMinor < selectedSlot.priceMinor
                     ? {
@@ -1540,6 +1618,7 @@ export function BookingFlow({
                 end={hold.booking.end}
                 timezone={hold.booking.timezone}
                 price={formatMoney(hold.booking.priceMinor, hold.booking.currency)}
+                saving={bookingSaving(hold.booking)}
                 deposit={depositRows(hold.booking)}
               />
             ) : null}
@@ -1719,6 +1798,7 @@ export function BookingFlow({
                 end={confirmedBooking.end}
                 timezone={confirmedBooking.timezone}
                 price={formatMoney(confirmedBooking.priceMinor, confirmedBooking.currency)}
+                saving={bookingSaving(confirmedBooking)}
                 deposit={depositRows(confirmedBooking)}
               />
             ) : null}
@@ -1861,13 +1941,25 @@ function Back({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** "Price / Offer discount" rows ahead of a total, or nothing. */
+function savingLines(saving: ReturnType<typeof savingRows>): string[][] {
+  return saving
+    ? [
+        ["Price", saving.list],
+        [saving.label, saving.off],
+      ]
+    : [];
+}
+
 function PackageSummary({ pkg }: { pkg: PublicPackage }) {
+  const saving = savingRows(pkg.listPriceMinor, pkg.priceMinor, pkg.currency);
   return (
     <dl className="surface-card space-y-2 p-5 text-left text-sm">
       {[
         ["Package", pkg.name],
         ["Credits", String(pkg.creditsIssued)],
         ["Valid for", validityLabel(pkg.validity)],
+        ...savingLines(saving),
         ["Total", formatMoney(pkg.priceMinor, pkg.currency)],
       ].map(([k, v]) => (
         <div key={k} className="flex justify-between gap-4">
@@ -1899,6 +1991,7 @@ function Summary({
   end,
   timezone,
   price,
+  saving,
   deposit,
 }: {
   serviceName: string;
@@ -1909,6 +2002,8 @@ function Summary({
   end?: string;
   timezone: string;
   price: string;
+  /** Present when the total was booked from a higher list price (an offer link's discount). */
+  saving?: ReturnType<typeof savingRows>;
   /** Present when a deposit secures the booking and the balance is paid later. */
   deposit?: { dueNow: string; balance: string };
 }) {
@@ -1928,6 +2023,7 @@ function Summary({
         ["Where", locationName],
         [multiDay ? "Drop off" : "When", formatInTz(start, timezone, whenOpts)],
         ...(multiDay && end ? [["Ready by", formatInTz(end, timezone, whenOpts)]] : []),
+        ...savingLines(saving),
         ["Total", price],
         ...(deposit
           ? [

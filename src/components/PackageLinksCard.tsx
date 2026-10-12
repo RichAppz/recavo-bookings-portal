@@ -40,6 +40,7 @@ import type { CatalogueService, Customer, Package, PackageLink } from "@/lib/api
 import { customerDisplayName } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
+import { describeDiscount, discountedMinor, parseDiscountInput } from "@/lib/offer-discount";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 /** The URL a client opens: the booking page, narrowed to what the link names. */
@@ -54,6 +55,15 @@ function copyLink(url: string, message = "Link copied") {
     // The natural next step after copying is to see what the client will see.
     action: { label: "Preview", onClick: () => window.open(url, "_blank", "noreferrer") },
   });
+}
+
+/** "£" for GBP, "€" for EUR — the bare symbol for the discount toggle label. */
+function currencySymbol(currency: string): string {
+  return (
+    new Intl.NumberFormat("en-GB", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
+      .formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? currency
+  );
 }
 
 /** "Session" for PT, "Service" for detailing — the same trick the Sessions page uses. */
@@ -87,6 +97,9 @@ export function PackageLinksCard({ slug }: { slug: string }) {
     (packages.data ?? []).find((p) => p.id === id)?.name ?? "Removed package";
   const contents = (link: PackageLink) => {
     const items = [...link.serviceIds.map(serviceName), ...link.packageIds.map(packageName)];
+    // Older API builds predate discounts; a link without the field is at list price.
+    const saving = describeDiscount(link.discount ?? null, tenant.business?.currency ?? "GBP");
+    if (saving) items.unshift(saving);
     const n = link.customerIds.length;
     // Assigned from the client profile; shown here so the PT can see a link is in use.
     if (n > 0) items.push(`sent to ${n} ${n === 1 ? "client" : "clients"}`);
@@ -326,7 +339,7 @@ function ChoiceRow({
   checked: boolean;
   order: number;
   name: string;
-  price: string;
+  price: React.ReactNode;
   onToggle: () => void;
 }) {
   return (
@@ -358,6 +371,8 @@ function CreateLinkDialog({
   packages: Package[];
   onClose: () => void;
 }) {
+  const tenant = useTenant();
+  const currency = tenant.business?.currency ?? "GBP";
   const create = useCreatePackageLink();
   const [name, setName] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
@@ -366,6 +381,11 @@ function CreateLinkDialog({
   // Whether the page offers "Looking for something else? See everything … offers".
   // On by default: most links are a shortcut, not a wall.
   const [showFullCatalogue, setShowFullCatalogue] = useState(true);
+  // Money off through the link. Kept as the raw field so a half-typed "1" is not
+  // rejected mid-keystroke; parsed (and refused) only on submit.
+  const [discountMode, setDiscountMode] = useState<"none" | "percent" | "amount">("none");
+  const [discountValue, setDiscountValue] = useState("");
+  const discount = parseDiscountInput(discountMode, discountValue);
   // Paused items would show nothing on the page, so they are not offered here.
   const serviceChoices = services.filter((s) => s.active);
   const packageChoices = packages.filter((p) => p.active);
@@ -378,8 +398,24 @@ function CreateLinkDialog({
       setPackageIds([]);
       setClients([]);
       setShowFullCatalogue(true);
+      setDiscountMode("none");
+      setDiscountValue("");
     }
   }, [open]);
+
+  /** The row's price as the client will see it: struck-through list, then the offer price. */
+  const priceLabel = (listMinor: number, itemCurrency: string, picked: boolean) => {
+    const list = formatMoney(listMinor, itemCurrency);
+    if (!picked || !discount) return list;
+    const offer = discountedMinor(discount, listMinor);
+    if (offer === listMinor) return list;
+    return (
+      <>
+        <span className="font-normal text-muted-foreground line-through">{list}</span>{" "}
+        {formatMoney(offer, itemCurrency)}
+      </>
+    );
+  };
 
   const toggleIn = (set: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) =>
     set((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
@@ -395,6 +431,14 @@ function CreateLinkDialog({
       toast.error(`Choose at least one ${nouns.lower} or package`);
       return;
     }
+    if (discount === undefined) {
+      toast.error(
+        discountMode === "percent"
+          ? "Enter a whole percentage between 1 and 100"
+          : "Enter an amount to take off",
+      );
+      return;
+    }
     try {
       const link = await create.mutateAsync({
         name: name.trim(),
@@ -402,6 +446,7 @@ function CreateLinkDialog({
         packageIds,
         customerIds: clients.map((c) => c.id),
         showFullCatalogue,
+        discount,
       });
       // Straight to the clipboard: the next thing the PT does is paste it into a message.
       copyLink(
@@ -456,7 +501,7 @@ function CreateLinkDialog({
                     checked={serviceIds.includes(s.id)}
                     order={serviceIds.indexOf(s.id)}
                     name={s.name}
-                    price={formatMoney(s.basePriceMinor, s.currency)}
+                    price={priceLabel(s.basePriceMinor, s.currency, serviceIds.includes(s.id))}
                     onToggle={() => toggleService(s.id)}
                   />
                 ))}
@@ -474,7 +519,7 @@ function CreateLinkDialog({
                     checked={packageIds.includes(p.id)}
                     order={packageIds.indexOf(p.id)}
                     name={p.name}
-                    price={formatMoney(p.priceMinor, p.currency)}
+                    price={priceLabel(p.priceMinor, p.currency, packageIds.includes(p.id))}
                     onToggle={() => togglePackage(p.id)}
                   />
                 ))}
@@ -487,6 +532,61 @@ function CreateLinkDialog({
               Tick things in the order you want them shown. You can mix {nouns.pluralLower} and
               packages, or pick just one kind.
             </p>
+          )}
+
+          {nothingToShare ? null : (
+            <div className="grid gap-2">
+              <Label>Discount (optional)</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="flex rounded-xl border p-0.5"
+                  role="radiogroup"
+                  aria-label="Discount"
+                >
+                  {(
+                    [
+                      ["none", "None"],
+                      ["percent", "% off"],
+                      ["amount", `${currencySymbol(currency)} off`],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="radio"
+                      aria-checked={discountMode === mode}
+                      onClick={() => setDiscountMode(mode)}
+                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${
+                        discountMode === mode
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {discountMode !== "none" ? (
+                  <Input
+                    id="pl-discount"
+                    inputMode="decimal"
+                    className="w-28"
+                    aria-label={discountMode === "percent" ? "Percent off" : "Amount off"}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    placeholder={discountMode === "percent" ? "20" : "10.00"}
+                    autoFocus
+                  />
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {discountMode === "none"
+                  ? "Take something off everything in this link for whoever books through it. Prices on your booking page are unchanged."
+                  : discountMode === "percent"
+                    ? `A whole percentage off each ${nouns.lower} and package in the link.`
+                    : `Taken off each booking and each package bought through the link — once per booking, never below free.`}
+              </p>
+            </div>
           )}
 
           {nothingToShare ? null : (

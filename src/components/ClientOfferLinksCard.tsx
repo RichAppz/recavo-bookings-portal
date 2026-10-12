@@ -6,6 +6,8 @@ import { SectionCard } from "@/components/ui-bits";
 import { useAssignPackageLink, usePackageLinks, usePackages, useServices } from "@/lib/api/hooks";
 import type { PackageLink } from "@/lib/api/types";
 import { bookingUrlFor } from "@/lib/hosts";
+import { describeDiscount } from "@/lib/offer-discount";
+import { useTenant } from "@/lib/tenant/tenant-context";
 
 /**
  * Hand a client one of the business's offer links. Assigned links show up under
@@ -26,16 +28,21 @@ export function ClientOfferLinksCard({
   const services = useServices();
   const packages = usePackages();
   const assign = useAssignPackageLink();
+  const tenant = useTenant();
+  const currency = tenant.business?.currency ?? "GBP";
 
   const contents = (link: PackageLink) =>
     [
+      describeDiscount(link.discount ?? null, currency),
       ...link.serviceIds.map(
         (id) => (services.data ?? []).find((s) => s.id === id)?.name ?? "Removed session",
       ),
       ...link.packageIds.map(
         (id) => (packages.data ?? []).find((p) => p.id === id)?.name ?? "Removed package",
       ),
-    ].join(" · ");
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   const toggle = (link: PackageLink, assigned: boolean) =>
     assign.mutate(

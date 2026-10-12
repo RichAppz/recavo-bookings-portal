@@ -71,6 +71,7 @@ import type {
   OutboxEvent,
   Package,
   PackageLink,
+  PackageLinkDiscount,
   PackagePurchase,
   Payment,
   PaymentReceipt,
@@ -2490,6 +2491,8 @@ export function useCreatePackageLink() {
       customerIds?: string[];
       /** Offer the visitor a way out to the full booking page. Default true. */
       showFullCatalogue?: boolean;
+      /** Money off everything the link names; omitted = list prices. */
+      discount?: PackageLinkDiscount | null;
     }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
@@ -5181,7 +5184,13 @@ export type PublicPackage = {
   id: string;
   name: string;
   description: string | null;
+  /** What the buyer pays — already discounted when seen through an offer link. */
   priceMinor: number;
+  /**
+   * The usual price, sent only when resolved through an offer link so the page can
+   * strike it through. Equals `priceMinor` unless the link carries a discount.
+   */
+  listPriceMinor?: number;
   currency: string;
   creditsIssued: number;
   /** Empty means the credits work on any service. */
@@ -5216,8 +5225,16 @@ export function usePublicPackages(businessId: string | undefined) {
 
 /** A shared package link as the visitor sees it: a heading plus the sessions and packages it names. */
 export type PublicPackageLink = PublicPackageCatalogue & {
-  /** `showFullCatalogue` is absent from API builds before it existed; treat as shown. */
-  link: { code: string; name: string; showFullCatalogue?: boolean };
+  /**
+   * `showFullCatalogue` and `discount` are absent from API builds before they
+   * existed; treat as shown / no discount.
+   */
+  link: {
+    code: string;
+    name: string;
+    showFullCatalogue?: boolean;
+    discount?: PackageLinkDiscount | null;
+  };
   services: PublicService[];
 };
 

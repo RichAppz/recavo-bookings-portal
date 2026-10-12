@@ -1062,7 +1062,12 @@
             "type": "integer"
           },
           "priceMinor": {
-            "type": "integer"
+            "type": "integer",
+            "description": "What booking this slot costs, after any offer-link discount when the public search carried a `linkCode`. The hold charges exactly this."
+          },
+          "listPriceMinor": {
+            "type": "integer",
+            "description": "The catalogue price of the same job; equals `priceMinor` unless discounted."
           },
           "currency": {
             "type": "string",
@@ -6980,6 +6985,7 @@
           "packageIds",
           "customerIds",
           "showFullCatalogue",
+          "discount",
           "revokedAt",
           "createdAt",
           "updatedAt"
@@ -6996,6 +7002,54 @@
           "code": {
             "type": "string",
             "description": "Append as `?offer={code}` to the business booking page URL."
+          },
+          "discount": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "percent"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "percent"
+                    ]
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "amountMinor"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "amount"
+                    ]
+                  },
+                  "amountMinor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Taken once per booking or package, in the business’s minor units."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices."
           },
           "name": {
             "type": "string",
@@ -15634,7 +15688,8 @@
                       "required": [
                         "code",
                         "name",
-                        "showFullCatalogue"
+                        "showFullCatalogue",
+                        "discount"
                       ],
                       "properties": {
                         "code": {
@@ -15646,6 +15701,54 @@
                         "showFullCatalogue": {
                           "type": "boolean",
                           "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
+                        },
+                        "discount": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "required": [
+                                "kind",
+                                "percent"
+                              ],
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "percent"
+                                  ]
+                                },
+                                "percent": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 100
+                                }
+                              }
+                            },
+                            {
+                              "type": "object",
+                              "required": [
+                                "kind",
+                                "amountMinor"
+                              ],
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "amount"
+                                  ]
+                                },
+                                "amountMinor": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "description": "Taken once per booking or package, in the business’s minor units."
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The link’s discount, for display (\"20% off\"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted."
                         }
                       }
                     },
@@ -15665,7 +15768,8 @@
                           "priceMinor",
                           "currency",
                           "creditsIssued",
-                          "validity"
+                          "validity",
+                          "listPriceMinor"
                         ],
                         "properties": {
                           "id": {
@@ -15680,7 +15784,8 @@
                             "nullable": true
                           },
                           "priceMinor": {
-                            "type": "integer"
+                            "type": "integer",
+                            "description": "What the buyer pays through this link, after its discount."
                           },
                           "currency": {
                             "type": "string"
@@ -15713,6 +15818,10 @@
                                 "type": "integer"
                               }
                             }
+                          },
+                          "listPriceMinor": {
+                            "type": "integer",
+                            "description": "The package’s usual price; equals `priceMinor` unless discounted."
                           }
                         }
                       }
@@ -20252,7 +20361,8 @@
                             "required": [
                               "code",
                               "name",
-                              "showFullCatalogue"
+                              "showFullCatalogue",
+                              "discount"
                             ],
                             "properties": {
                               "code": {
@@ -20264,6 +20374,54 @@
                               "showFullCatalogue": {
                                 "type": "boolean",
                                 "description": "Show the \"Looking for something else? See everything … offers\" way out to the full booking page. When false the page shows only what the link names."
+                              },
+                              "discount": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "required": [
+                                      "kind",
+                                      "percent"
+                                    ],
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "percent"
+                                        ]
+                                      },
+                                      "percent": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 100
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": [
+                                      "kind",
+                                      "amountMinor"
+                                    ],
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "amount"
+                                        ]
+                                      },
+                                      "amountMinor": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "description": "Taken once per booking or package, in the business’s minor units."
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "The link’s discount, for display (\"20% off\"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted."
                               }
                             }
                           },
@@ -20283,7 +20441,8 @@
                                 "priceMinor",
                                 "currency",
                                 "creditsIssued",
-                                "validity"
+                                "validity",
+                                "listPriceMinor"
                               ],
                               "properties": {
                                 "id": {
@@ -20298,7 +20457,8 @@
                                   "nullable": true
                                 },
                                 "priceMinor": {
-                                  "type": "integer"
+                                  "type": "integer",
+                                  "description": "What the buyer pays through this link, after its discount."
                                 },
                                 "currency": {
                                   "type": "string"
@@ -20331,6 +20491,10 @@
                                       "type": "integer"
                                     }
                                   }
+                                },
+                                "listPriceMinor": {
+                                  "type": "integer",
+                                  "description": "The package’s usual price; equals `priceMinor` unless discounted."
                                 }
                               }
                             }
@@ -46208,6 +46372,54 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Offer visitors a way out to the full booking page (\"Looking for something else?\"). Omit or true = shown; false keeps the offer private."
+                  },
+                  "discount": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "percent"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "percent"
+                            ]
+                          },
+                          "percent": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "amountMinor"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "amount"
+                            ]
+                          },
+                          "amountMinor": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Taken once per booking or package, in the business’s minor units."
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices."
                   }
                 }
               }

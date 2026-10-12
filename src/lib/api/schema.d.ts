@@ -3944,6 +3944,17 @@ export interface paths {
                                 name: string;
                                 /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
                                 showFullCatalogue: boolean;
+                                /** @description The link’s discount, for display ("20% off"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted. */
+                                discount: {
+                                    /** @enum {string} */
+                                    kind: "percent";
+                                    percent: number;
+                                } | {
+                                    /** @enum {string} */
+                                    kind: "amount";
+                                    /** @description Taken once per booking or package, in the business’s minor units. */
+                                    amountMinor: number;
+                                } | null;
                             };
                             services: components["schemas"]["CatalogueService"][];
                             packages: {
@@ -3951,6 +3962,7 @@ export interface paths {
                                 id: string;
                                 name: string;
                                 description?: string | null;
+                                /** @description What the buyer pays through this link, after its discount. */
                                 priceMinor: number;
                                 currency: string;
                                 creditsIssued: number;
@@ -3960,6 +3972,8 @@ export interface paths {
                                     kind: "calendar_months" | "days";
                                     amount: number;
                                 };
+                                /** @description The package’s usual price; equals `priceMinor` unless discounted. */
+                                listPriceMinor: number;
                             }[];
                         };
                     };
@@ -7123,6 +7137,17 @@ export interface paths {
                                     name: string;
                                     /** @description Show the "Looking for something else? See everything … offers" way out to the full booking page. When false the page shows only what the link names. */
                                     showFullCatalogue: boolean;
+                                    /** @description The link’s discount, for display ("20% off"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted. */
+                                    discount: {
+                                        /** @enum {string} */
+                                        kind: "percent";
+                                        percent: number;
+                                    } | {
+                                        /** @enum {string} */
+                                        kind: "amount";
+                                        /** @description Taken once per booking or package, in the business’s minor units. */
+                                        amountMinor: number;
+                                    } | null;
                                 };
                                 services: components["schemas"]["CatalogueService"][];
                                 packages: {
@@ -7130,6 +7155,7 @@ export interface paths {
                                     id: string;
                                     name: string;
                                     description?: string | null;
+                                    /** @description What the buyer pays through this link, after its discount. */
                                     priceMinor: number;
                                     currency: string;
                                     creditsIssued: number;
@@ -7139,6 +7165,8 @@ export interface paths {
                                         kind: "calendar_months" | "days";
                                         amount: number;
                                     };
+                                    /** @description The package’s usual price; equals `priceMinor` unless discounted. */
+                                    listPriceMinor: number;
                                 }[];
                             }[];
                         };
@@ -24040,6 +24068,17 @@ export interface paths {
                          * @default true
                          */
                         showFullCatalogue?: boolean;
+                        /** @description Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices. */
+                        discount?: {
+                            /** @enum {string} */
+                            kind: "percent";
+                            percent: number;
+                        } | {
+                            /** @enum {string} */
+                            kind: "amount";
+                            /** @description Taken once per booking or package, in the business’s minor units. */
+                            amountMinor: number;
+                        } | null;
                     };
                 };
             };
@@ -51043,7 +51082,10 @@ export interface components {
             /** Format: uuid */
             locationId: string;
             remainingCapacity: number;
+            /** @description What booking this slot costs, after any offer-link discount when the public search carried a `linkCode`. The hold charges exactly this. */
             priceMinor: number;
+            /** @description The catalogue price of the same job; equals `priceMinor` unless discounted. */
+            listPriceMinor?: number;
             /** @example GBP */
             currency: string;
             /** @description HMAC-signed, expiring quote token; revalidated on hold/book. */
@@ -52720,6 +52762,17 @@ export interface components {
             businessId: string;
             /** @description Append as `?offer={code}` to the business booking page URL. */
             code: string;
+            /** @description Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices. */
+            discount: {
+                /** @enum {string} */
+                kind: "percent";
+                percent: number;
+            } | {
+                /** @enum {string} */
+                kind: "amount";
+                /** @description Taken once per booking or package, in the business’s minor units. */
+                amountMinor: number;
+            } | null;
             /** @description Staff-facing label; also shown to the buyer. */
             name: string;
             /** @description Sessions shown to the visitor, in this order. */

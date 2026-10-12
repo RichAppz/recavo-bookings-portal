@@ -99,6 +99,8 @@ export type CustomerNote = schemas["CustomerNote"];
 export type CustomerTag = schemas["CustomerTag"];
 export type Package = schemas["Package"];
 export type PackageLink = schemas["PackageLink"];
+/** Money off through an offer link: a whole percentage, or a fixed amount in minor units. */
+export type PackageLinkDiscount = NonNullable<PackageLink["discount"]>;
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];
