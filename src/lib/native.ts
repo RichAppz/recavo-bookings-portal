@@ -52,6 +52,28 @@ export function isNativeAndroid(): boolean {
   return isNativeApp() && capacitor()?.getPlatform?.() === "android";
 }
 
+/**
+ * Set on `window` by the desktop shell's initialization script before any page
+ * script runs (see src-tauri/src/lib.rs). The shell has no bridge of its own:
+ * this marker is the only thing it tells the page.
+ */
+export type DesktopShell = { readonly platform: "macos"; readonly version: string };
+
+export function desktopShell(): DesktopShell | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as { __RECAVO_DESKTOP__?: DesktopShell }).__RECAVO_DESKTOP__;
+}
+
+/**
+ * Running inside the Tauri desktop app. Distinct from {@link isNativeApp}: the
+ * desktop app is not a store app, so it sells through Stripe like a browser tab
+ * and has no in-app browser sheet — only sign-in needs to know (see
+ * `signInWithOAuthProvider`).
+ */
+export function isDesktopApp(): boolean {
+  return desktopShell() !== undefined;
+}
+
 /** Which store's billing provider the running app belongs to (see `nativeStore`). */
 export type NativeStore = "apple" | "google";
 

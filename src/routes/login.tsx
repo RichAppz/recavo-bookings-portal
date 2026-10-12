@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
 import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
 import { stashPendingReferral } from "@/lib/auth/pending-referral";
+import { settleSocialSignIn } from "@/lib/auth/social-sign-in";
 import { isCustomerHost } from "@/lib/hosts";
 
 /** Must match the Supabase project's "OTP Length" auth setting (currently 8). */
@@ -133,9 +134,9 @@ function StaffLogin() {
   async function startSocial(start: () => Promise<SocialSignInOutcome>, failureMessage: string) {
     setBusy(true);
     try {
-      // In the mobile app the sheet can be dismissed without signing in,
-      // in which case this page stays put and must come back to life.
-      if ((await start()) === "cancelled") setBusy(false);
+      // In the apps this page can stay put (sheet dismissed, or sign-in handed
+      // to the browser) and must come back to life.
+      setBusy(settleSocialSignIn(await start()).busy);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : failureMessage);
       setBusy(false);

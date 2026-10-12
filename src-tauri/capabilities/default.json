@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window shows the hosted portal over https. Remote pages get no IPC access (there is no `remote` block here on purpose): the shell talks to the page only through its initialization script, and the page talks back only by navigating.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
