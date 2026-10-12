@@ -6,6 +6,17 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-12",
+    title: "Money off through an offer link",
+    items: [
+      {
+        kind: "new",
+        text: "An offer link can now carry a discount — a percentage or a fixed amount off — on every session and package it names. Anyone booking through the link sees the full price struck through next to what they'll actually pay, and the saving is taken off the booking or the package checkout for you. Hand the link to a few clients, or to everyone; prices away from the link don't change.",
+        where: "Offer links → New link → Discount",
+      },
+    ],
+  },
+  {
     date: "2026-10-10",
     title: "A quicker Add booking",
     items: [
