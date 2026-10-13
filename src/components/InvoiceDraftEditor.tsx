@@ -201,100 +201,126 @@ export function InvoiceDraftEditor({
               {lines.length}/{INVOICE_LINE_LIMITS.maxLines}
             </span>
           </div>
-          <div className="overflow-x-auto rounded-xl border">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/60 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Description</th>
-                  <th className="w-24 px-3 py-2 text-left font-medium">Qty</th>
-                  <th className="w-32 px-3 py-2 text-left font-medium">Unit price</th>
-                  {vatShown ? <th className="w-20 px-3 py-2 text-left font-medium">VAT</th> : null}
-                  <th className="w-12 px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {lines.map((line, i) => {
-                  const errs = lineErrors[i] ?? {};
-                  return (
-                    <tr key={i} className="align-top">
-                      <td className="px-3 py-2">
-                        <Input
-                          value={line.description}
-                          maxLength={INVOICE_LINE_LIMITS.descriptionMax}
-                          placeholder="What was done"
-                          aria-invalid={Boolean(errs.description)}
-                          className={cn(errs.description && "border-destructive")}
-                          onChange={(e) => setLine(i, { description: e.target.value })}
-                        />
-                        {errs.description ? (
-                          <p className="mt-1 text-xs text-destructive">{errs.description}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          min={INVOICE_LINE_LIMITS.quantityMin}
-                          max={INVOICE_LINE_LIMITS.quantityMax}
-                          step={1}
-                          value={line.quantity}
-                          aria-invalid={Boolean(errs.quantity)}
-                          className={cn(errs.quantity && "border-destructive")}
-                          onChange={(e) => setLine(i, { quantity: e.target.value })}
-                        />
-                        {errs.quantity ? (
-                          <p className="mt-1 text-xs text-destructive">{errs.quantity}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Input
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          value={line.unitPrice}
-                          aria-invalid={Boolean(errs.unitPrice)}
-                          className={cn("tabular-nums", errs.unitPrice && "border-destructive")}
-                          onChange={(e) => setLine(i, { unitPrice: e.target.value })}
-                          onBlur={() => {
-                            const n = Number(line.unitPrice.replace(/[^0-9.-]/g, ""));
-                            if (Number.isFinite(n) && line.unitPrice.trim() !== "") {
-                              setLine(i, { unitPrice: n.toFixed(2) });
-                            }
-                          }}
-                        />
-                        {errs.unitPrice ? (
-                          <p className="mt-1 text-xs text-destructive">{errs.unitPrice}</p>
-                        ) : null}
-                      </td>
-                      {vatShown ? (
-                        <td className="px-3 py-3">
+          {/* One card per line, description on its own full-width row: a table squeezed
+              it to a few characters on a phone, so nobody could read what they typed. */}
+          <ol className="divide-y rounded-xl border">
+            {lines.map((line, i) => {
+              const errs = lineErrors[i] ?? {};
+              const id = `inv-line-${i}`;
+              return (
+                <li key={i} className="grid gap-3 p-3">
+                  <div className="grid gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label
+                        htmlFor={`${id}-description`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Description
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-my-1 -mr-2 h-8 px-2 text-muted-foreground"
+                        aria-label={`Remove line ${i + 1}`}
+                        disabled={lines.length <= INVOICE_LINE_LIMITS.minLines}
+                        onClick={() => {
+                          setLines((prev) => prev.filter((_, j) => j !== i));
+                          setLineErrors((prev) => prev.filter((_, j) => j !== i));
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="sr-only sm:not-sr-only">Remove</span>
+                      </Button>
+                    </div>
+                    <Textarea
+                      id={`${id}-description`}
+                      rows={1}
+                      value={line.description}
+                      maxLength={INVOICE_LINE_LIMITS.descriptionMax}
+                      placeholder="What was done"
+                      aria-invalid={Boolean(errs.description)}
+                      className={cn(
+                        "field-sizing-content min-h-9 resize-none py-1.5 max-sm:min-h-11 max-sm:py-2.5",
+                        errs.description && "border-destructive",
+                      )}
+                      onChange={(e) =>
+                        setLine(i, { description: e.target.value.replace(/\r?\n/g, " ") })
+                      }
+                    />
+                    {errs.description ? (
+                      <p className="text-xs text-destructive">{errs.description}</p>
+                    ) : null}
+                  </div>
+                  <div
+                    className={cn(
+                      "grid gap-3",
+                      vatShown ? "grid-cols-[1fr_1fr_auto]" : "grid-cols-2",
+                    )}
+                  >
+                    <div className="grid gap-1.5">
+                      <Label htmlFor={`${id}-qty`} className="text-xs text-muted-foreground">
+                        Qty
+                      </Label>
+                      <Input
+                        id={`${id}-qty`}
+                        type="number"
+                        inputMode="numeric"
+                        min={INVOICE_LINE_LIMITS.quantityMin}
+                        max={INVOICE_LINE_LIMITS.quantityMax}
+                        step={1}
+                        value={line.quantity}
+                        aria-invalid={Boolean(errs.quantity)}
+                        className={cn(errs.quantity && "border-destructive")}
+                        onChange={(e) => setLine(i, { quantity: e.target.value })}
+                      />
+                      {errs.quantity ? (
+                        <p className="text-xs text-destructive">{errs.quantity}</p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor={`${id}-price`} className="text-xs text-muted-foreground">
+                        Unit price
+                      </Label>
+                      <Input
+                        id={`${id}-price`}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={line.unitPrice}
+                        aria-invalid={Boolean(errs.unitPrice)}
+                        className={cn("tabular-nums", errs.unitPrice && "border-destructive")}
+                        onChange={(e) => setLine(i, { unitPrice: e.target.value })}
+                        onBlur={() => {
+                          const n = Number(line.unitPrice.replace(/[^0-9.-]/g, ""));
+                          if (Number.isFinite(n) && line.unitPrice.trim() !== "") {
+                            setLine(i, { unitPrice: n.toFixed(2) });
+                          }
+                        }}
+                      />
+                      {errs.unitPrice ? (
+                        <p className="text-xs text-destructive">{errs.unitPrice}</p>
+                      ) : null}
+                    </div>
+                    {vatShown ? (
+                      <div className="grid gap-1.5">
+                        <Label htmlFor={`${id}-vat`} className="text-xs text-muted-foreground">
+                          VAT
+                        </Label>
+                        <div className="flex h-9 items-center max-sm:h-11">
                           <Switch
+                            id={`${id}-vat`}
                             checked={line.taxable}
                             aria-label="VAT applies"
                             onCheckedChange={(v) => setLine(i, { taxable: v })}
                           />
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Remove line"
-                          disabled={lines.length <= INVOICE_LINE_LIMITS.minLines}
-                          onClick={() => {
-                            setLines((prev) => prev.filter((_, j) => j !== i));
-                            setLineErrors((prev) => prev.filter((_, j) => j !== i));
-                          }}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
           <div className="flex items-center justify-between">
             <Button
               type="button"
