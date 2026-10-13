@@ -19,16 +19,17 @@ const row = (amount: string, unit: RuleRow["unit"], key = amount + unit): RuleRo
 describe("reminder rule form (RECA-530)", () => {
   it("shows an offset in the largest unit that divides it exactly", () => {
     assert.deepEqual(
-      [1440, 120, 90, 30].map((m) => {
+      [525600, 1440, 120, 90, 30].map((m) => {
         const r = rowFromRule({ minutesBefore: m, channel: "email" });
         return `${r.amount} ${r.unit}`;
       }),
-      ["1 days", "2 hours", "90 minutes", "30 minutes"],
+      ["1 years", "1 days", "2 hours", "90 minutes", "30 minutes"],
     );
   });
 
   it("converts rows back to minutes and rejects blanks / fractions", () => {
     assert.equal(rowMinutes(row("2", "days")), 2880);
+    assert.equal(rowMinutes(row("1", "years")), 525600);
     assert.equal(rowMinutes(row("", "hours")), null);
     assert.equal(rowMinutes(row("1.5", "hours")), null);
     assert.equal(rowMinutes(row("0", "hours")), null);
@@ -36,17 +37,21 @@ describe("reminder rule form (RECA-530)", () => {
 
   it("flags out-of-range and duplicate offsets, in any unit", () => {
     const issues = validateRows([
-      row("31", "days", "a"),
+      row("3", "years", "a"),
       row("2", "minutes", "b"),
       row("1", "days", "c"),
       row("24", "hours", "d"),
       row("x", "hours", "e"),
+      row("2", "years", "f"),
+      row("31", "days", "g"),
     ]);
     assert.equal(issues.get("a"), "OUT_OF_RANGE");
     assert.equal(issues.get("b"), "OUT_OF_RANGE");
     assert.equal(issues.get("c"), undefined);
     assert.equal(issues.get("d"), "DUPLICATE");
     assert.equal(issues.get("e"), "INVALID");
+    assert.equal(issues.get("f"), undefined);
+    assert.equal(issues.get("g"), undefined);
   });
 
   it("builds the API payload sorted furthest-out first", () => {
@@ -63,6 +68,7 @@ describe("reminder rule form (RECA-530)", () => {
   });
 
   it("describes offsets for the summary line", () => {
+    assert.equal(describeOffset(525600), "1 year before");
     assert.equal(describeOffset(1440), "1 day before");
     assert.equal(describeOffset(2880), "2 days before");
     assert.equal(describeOffset(60), "1 hour before");
