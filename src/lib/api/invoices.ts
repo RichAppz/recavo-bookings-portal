@@ -17,11 +17,13 @@ import type { PortalBusinessSummary, SubscriptionAddon, SubscriptionView } from 
 import {
   INVOICING_ADDON_KEY,
   INVOICING_FEATURE_KEY,
+  pdfHandoff,
   type CreateInvoiceBody,
   type Invoice,
   type InvoiceStatus,
   type UpdateInvoiceBody,
 } from "@/lib/invoices";
+import { isNativeApp } from "@/lib/native";
 
 export type {
   CreateInvoiceBody,
@@ -363,22 +365,65 @@ export async function fetchPortalInvoicePdf(
   return { blob: res.blob, filename: pdfFilename(invoice, res.filename) };
 }
 
+export type SaveBlobOutcome =
+  /** The browser took the file as a download. */
+  | "downloaded"
+  /** The OS share sheet was shown and the person did something with the file. */
+  | "shared"
+  /** The person closed the share sheet without choosing anything. */
+  | "dismissed"
+  /** Nothing could take the file here (WebView without file sharing). */
+  | "unsupported";
+
 /**
- * Hand a fetched file to the browser. A plain `<a href>` can't carry the bearer
- * token, so downloads always go blob → object URL → synthetic click.
+ * Hand a fetched file to the person. A plain `<a href>` can't carry the bearer
+ * token, so in a browser this goes blob → object URL → synthetic `<a download>`
+ * click. The native app's WebView ignores `download` outright (the button looked
+ * dead on the client's iPhone), so there the file goes to the OS share sheet.
+ * Callers surface `unsupported` — this never fails silently.
  */
-export function saveBlob({ blob, filename }: InvoicePdf): void {
-  if (typeof window === "undefined") return;
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Give the click a tick to start before the URL goes away (Safari).
-  setTimeout(() => URL.revokeObjectURL(href), 1000);
+export async function saveBlob({ blob, filename }: InvoicePdf): Promise<SaveBlobOutcome> {
+  if (typeof window === "undefined") return "unsupported";
+  const file = new File([blob], filename, { type: blob.type || "application/pdf" });
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  const canShareFiles =
+    typeof nav.share === "function" && nav.canShare?.({ files: [file] }) === true;
+
+  switch (pdfHandoff(isNativeApp(), canShareFiles)) {
+    case "share": {
+      try {
+        await nav.share({ files: [file], title: filename });
+        return "shared";
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return "dismissed";
+        // NotAllowedError when the tap is too old to count as a gesture, or a
+        // platform that advertises file sharing and then refuses. Nothing else here
+        // can take the file, so report it rather than click an anchor that does nothing.
+        return "unsupported";
+      }
+    }
+    case "unsupported":
+      return "unsupported";
+    case "download": {
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Give the click a tick to start before the URL goes away (Safari).
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      return "downloaded";
+    }
+  }
 }
+
+/** Shown when {@link saveBlob} reports `unsupported`; the preview still works there. */
+export const SAVE_UNSUPPORTED_MESSAGE = {
+  title: "Couldn't save the PDF on this device",
+  description: "Use Preview to view it here, or download it from a computer.",
+} as const;
 
 /* ---------------- Customer account (portal) ---------------- */
 

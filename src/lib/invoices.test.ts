@@ -15,6 +15,7 @@ import {
   linkedRecordProblem,
   pluralRecordTerm,
   nextInvoiceNumberPreview,
+  pdfHandoff,
   percentInputToBps,
   showsVat,
   sortInvoicesNewestFirst,
@@ -227,6 +228,18 @@ describe("sortInvoicesNewestFirst", () => {
         "2026-08-30T10:00:00Z",
       ],
     );
+  });
+});
+
+describe("handing a PDF to the person", () => {
+  it("downloads in a browser whether or not it could share", () => {
+    assert.equal(pdfHandoff(false, false), "download");
+    assert.equal(pdfHandoff(false, true), "download");
+  });
+
+  it("uses the share sheet in the native app, and never a dead download anchor", () => {
+    assert.equal(pdfHandoff(true, true), "share");
+    assert.equal(pdfHandoff(true, false), "unsupported");
   });
 });
 

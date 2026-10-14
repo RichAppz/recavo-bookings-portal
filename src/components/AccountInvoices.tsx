@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Download, Eye, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { TableGhost } from "@/components/ghost";
 import { PdfPreview } from "@/components/PdfPreview";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
@@ -14,6 +15,7 @@ import {
 import { toastApiError } from "@/lib/api";
 import type { PortalBusinessSummary } from "@/lib/api/hooks";
 import {
+  SAVE_UNSUPPORTED_MESSAGE,
   fetchPortalInvoicePdf,
   saveBlob,
   usePortalInvoicesAcrossStudios,
@@ -27,6 +29,7 @@ import {
   linkedRecordEntries,
   sortInvoicesNewestFirst,
 } from "@/lib/invoices";
+import { isNativeApp } from "@/lib/native";
 
 /**
  * A customer's invoices across every studio they deal with — issued and paid
@@ -42,7 +45,12 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
   const download = async (inv: PortalInvoice) => {
     setBusyId(inv.id);
     try {
-      saveBlob(await fetchPortalInvoicePdf(inv.studio.id, inv));
+      const outcome = await saveBlob(await fetchPortalInvoicePdf(inv.studio.id, inv));
+      if (outcome === "unsupported") {
+        toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
+          description: SAVE_UNSUPPORTED_MESSAGE.description,
+        });
+      }
     } catch (err) {
       toastApiError(err, "Couldn't download the invoice");
     } finally {
@@ -169,7 +177,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
           {preview ? (
             <div className="flex justify-end">
               <Button variant="outline" onClick={() => void download(preview.invoice)}>
-                <Download className="size-4" /> Download
+                <Download className="size-4" /> {isNativeApp() ? "Share" : "Download"}
               </Button>
             </div>
           ) : null}

@@ -16,6 +16,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "fixed",
+        text: "In the app, Download PDF on an invoice did nothing — the phone had nowhere to put the file. It is now Share PDF: the normal share sheet opens so you can save it to Files, AirDrop it, or send it straight to the client on WhatsApp or by email. In a web browser it downloads as before.",
+        where: "Invoices → open an invoice → Share PDF",
+      },
+      {
+        kind: "fixed",
         text: "Previewing an invoice on a phone showed a blank white page. The preview is now drawn page by page inside the app, so it looks the same on iPhone, Android and desktop — for you on the invoice page and for clients in their account.",
         where: "Invoices → open an invoice → Preview",
       },

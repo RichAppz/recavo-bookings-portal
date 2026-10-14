@@ -51,6 +51,7 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import { useBusinessId, useCustomer } from "@/lib/api/hooks";
 import {
+  SAVE_UNSUPPORTED_MESSAGE,
   fetchInvoicePdf,
   isCustomerHasNoEmail,
   isFeatureNotAvailable,
@@ -76,7 +77,7 @@ import {
   showsVat,
   type InvoiceAddress,
 } from "@/lib/invoices";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { RequirePermission, useTenant } from "@/lib/tenant/tenant-context";
 
@@ -183,7 +184,12 @@ function InvoiceDetail() {
   const downloadPdf = async () => {
     setPdfBusy("download");
     try {
-      saveBlob(await fetchInvoicePdf(businessId, inv));
+      const outcome = await saveBlob(await fetchInvoicePdf(businessId, inv));
+      if (outcome === "unsupported") {
+        toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
+          description: SAVE_UNSUPPORTED_MESSAGE.description,
+        });
+      }
     } catch (err) {
       toastApiError(err, "Couldn't download the PDF");
     } finally {
@@ -360,7 +366,8 @@ function InvoiceDetail() {
             <Eye className="size-4" /> {pdfBusy === "preview" ? "Loading…" : "Preview"}
           </Button>
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void downloadPdf()}>
-            <Download className="size-4" /> {pdfBusy === "download" ? "Preparing…" : "Download PDF"}
+            <Download className="size-4" />{" "}
+            {pdfBusy === "download" ? "Preparing…" : isNativeApp() ? "Share PDF" : "Download PDF"}
           </Button>
           {allows("issue") ? (
             <DropdownMenu>

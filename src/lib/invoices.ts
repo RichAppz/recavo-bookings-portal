@@ -236,6 +236,20 @@ export function linkedRecordProblem(
   return null;
 }
 
+/**
+ * How to hand a fetched PDF to the person. A browser honours `<a download>`; the
+ * native app's WebView (WKWebView / Android WebView) silently ignores it, so there
+ * the file goes to the OS share sheet (Save to Files, AirDrop, WhatsApp, Mail…)
+ * via the Web Share API when the platform can share files, and otherwise the
+ * caller must say so rather than let the button appear to do nothing.
+ */
+export type PdfHandoff = "download" | "share" | "unsupported";
+
+export function pdfHandoff(native: boolean, canShareFiles: boolean): PdfHandoff {
+  if (!native) return "download";
+  return canShareFiles ? "share" : "unsupported";
+}
+
 /** Plan feature key and the bolt-on key that grants it (Growth includes it). */
 export const INVOICING_FEATURE_KEY = "invoicing";
 export const INVOICING_ADDON_KEY = "invoicing";
