@@ -9,8 +9,13 @@ import {
   isCustomerVisible,
   isInvoiceOverdue,
   isValidNumberPrefix,
+  linkedRecordBaseLabel,
+  linkedRecordEntries,
   linkedRecordInput,
+  linkedRecordProblem,
+  pluralRecordTerm,
   nextInvoiceNumberPreview,
+  pdfHandoff,
   percentInputToBps,
   showsVat,
   sortInvoicesNewestFirst,
@@ -226,6 +231,18 @@ describe("sortInvoicesNewestFirst", () => {
   });
 });
 
+describe("handing a PDF to the person", () => {
+  it("downloads in a browser whether or not it could share", () => {
+    assert.equal(pdfHandoff(false, false), "download");
+    assert.equal(pdfHandoff(false, true), "download");
+  });
+
+  it("uses the share sheet in the native app, and never a dead download anchor", () => {
+    assert.equal(pdfHandoff(true, true), "share");
+    assert.equal(pdfHandoff(true, false), "unsupported");
+  });
+});
+
 describe("linked record on an invoice", () => {
   const vehicle = { label: "Vehicle", value: "AB12 CDE · Ford · Focus" };
 
@@ -241,15 +258,64 @@ describe("linked record on an invoice", () => {
     assert.equal(supportsLinkedRecord({}), false);
   });
 
-  it("turns typed text into the PATCH body, clearing on blank", () => {
-    assert.deepEqual(linkedRecordInput("Vehicle", "  AB12 CDE · Ford Focus ST "), {
+  it("turns typed rows into the PATCH body, clearing on blank", () => {
+    assert.deepEqual(linkedRecordInput("Vehicle", ["  AB12 CDE · Ford  Focus ST "]), {
       label: "Vehicle",
       value: "AB12 CDE · Ford Focus ST",
     });
-    assert.equal(linkedRecordInput("Vehicle", "   "), null);
-    assert.deepEqual(linkedRecordInput("  ", "AB12 CDE"), {
+    assert.equal(linkedRecordInput("Vehicle", ["   ", ""]), null);
+    assert.equal(linkedRecordInput("Vehicle", []), null);
+    assert.deepEqual(linkedRecordInput("  ", ["AB12 CDE"]), {
       label: "Reference",
       value: "AB12 CDE",
     });
+  });
+
+  it("lists several records one per line under a plural label, skipping blank rows", () => {
+    assert.deepEqual(linkedRecordInput("Vehicle", ["EY75 DNN", "", " EJ25  YSZ "]), {
+      label: "Vehicles",
+      value: "EY75 DNN\nEJ25 YSZ",
+    });
+    // A term already plural-looking is not doubled up.
+    assert.equal(linkedRecordInput("Premises", ["A", "B"])?.label, "Premises");
+  });
+
+  it("splits a saved snapshot back into its entries", () => {
+    assert.deepEqual(linkedRecordEntries({ value: "EY75 DNN\n\n EJ25 YSZ \n" }), [
+      "EY75 DNN",
+      "EJ25 YSZ",
+    ]);
+    assert.deepEqual(linkedRecordEntries({ value: "AB12 CDE" }), ["AB12 CDE"]);
+    assert.deepEqual(linkedRecordEntries(null), []);
+    assert.deepEqual(linkedRecordEntries(undefined), []);
+  });
+
+  it("pluralises the business's term", () => {
+    assert.equal(pluralRecordTerm("Vehicle"), "Vehicles");
+    assert.equal(pluralRecordTerm(" Pet "), "Pets");
+    assert.equal(pluralRecordTerm("Premises"), "Premises");
+    assert.equal(pluralRecordTerm(""), "");
+  });
+
+  it("builds the label from the saved one, undoing its own pluralisation", () => {
+    assert.equal(linkedRecordBaseLabel(null, "Vehicle"), "Vehicle");
+    assert.equal(linkedRecordBaseLabel({ label: "Car" }, "Vehicle"), "Car");
+    assert.equal(linkedRecordBaseLabel({ label: "Vehicles" }, "Vehicle"), "Vehicle");
+    assert.equal(linkedRecordBaseLabel({ label: "  " }, "Vehicle"), "Vehicle");
+    assert.equal(linkedRecordBaseLabel(null, "  "), "Reference");
+  });
+
+  it("reports when the records exceed the API's limits", () => {
+    assert.equal(linkedRecordProblem(null, "Vehicle"), null);
+    assert.equal(linkedRecordProblem({ label: "Vehicle", value: "AB12 CDE" }, "Vehicle"), null);
+    const eleven = Array.from({ length: 11 }, (_, i) => `REG ${i}`);
+    assert.match(
+      linkedRecordProblem(linkedRecordInput("Vehicle", eleven), "Vehicle") ?? "",
+      /at most 10 vehicles/,
+    );
+    assert.match(
+      linkedRecordProblem({ label: "Vehicle", value: "x".repeat(601) }, "Vehicle") ?? "",
+      /600 characters/,
+    );
   });
 });

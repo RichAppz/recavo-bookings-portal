@@ -7,8 +7,23 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-10-14",
-    title: "Invoice lines you can read, follow-ups that know your history, reminders a year out",
+    title: "Several vehicles on one invoice, previews that work on a phone, reminders a year out",
     items: [
+      {
+        kind: "new",
+        text: "Did two cars in one visit? Put them both on the same invoice. The Vehicle field on a draft is now a list: add another vehicle with a tap — the client's saved vehicles are offered so you don't retype a registration — or remove one. Each is printed on its own line on the PDF, and the email names them all.",
+        where: "Invoices → open a draft → Vehicle",
+      },
+      {
+        kind: "fixed",
+        text: "In the app, Download PDF on an invoice did nothing — the phone had nowhere to put the file. It is now Share PDF: the normal share sheet opens so you can save it to Files, AirDrop it, or send it straight to the client on WhatsApp or by email. In a web browser it downloads as before.",
+        where: "Invoices → open an invoice → Share PDF",
+      },
+      {
+        kind: "fixed",
+        text: "Previewing an invoice on a phone showed a blank white page. The preview is now drawn page by page inside the app, so it looks the same on iPhone, Android and desktop — for you on the invoice page and for clients in their account.",
+        where: "Invoices → open an invoice → Preview",
+      },
       {
         kind: "new",
         text: "Booking reminders can now be set in years as well as minutes, hours and days — up to 2 years before. Handy for annual work booked a long way ahead: a reminder a year before an MOT or yearly detail. A reminder whose time has already passed when the job is booked is simply skipped.",

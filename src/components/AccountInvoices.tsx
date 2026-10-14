@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Download, Eye, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { TableGhost } from "@/components/ghost";
+import { PdfPreview } from "@/components/PdfPreview";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +15,7 @@ import {
 import { toastApiError } from "@/lib/api";
 import type { PortalBusinessSummary } from "@/lib/api/hooks";
 import {
+  SAVE_UNSUPPORTED_MESSAGE,
   fetchPortalInvoicePdf,
   saveBlob,
   usePortalInvoicesAcrossStudios,
@@ -23,8 +26,10 @@ import {
   invoiceBalanceMinor,
   invoiceLinkedRecord,
   isInvoiceOverdue,
+  linkedRecordEntries,
   sortInvoicesNewestFirst,
 } from "@/lib/invoices";
+import { isNativeApp } from "@/lib/native";
 
 /**
  * A customer's invoices across every studio they deal with — issued and paid
@@ -35,12 +40,17 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
   const invoices = usePortalInvoicesAcrossStudios(studios);
   const solo = studios.length === 1;
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ invoice: PortalInvoice; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ invoice: PortalInvoice; blob: Blob } | null>(null);
 
   const download = async (inv: PortalInvoice) => {
     setBusyId(inv.id);
     try {
-      saveBlob(await fetchPortalInvoicePdf(inv.studio.id, inv));
+      const outcome = await saveBlob(await fetchPortalInvoicePdf(inv.studio.id, inv));
+      if (outcome === "unsupported") {
+        toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
+          description: SAVE_UNSUPPORTED_MESSAGE.description,
+        });
+      }
     } catch (err) {
       toastApiError(err, "Couldn't download the invoice");
     } finally {
@@ -52,7 +62,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
     setBusyId(inv.id);
     try {
       const { blob } = await fetchPortalInvoicePdf(inv.studio.id, inv);
-      setPreview({ invoice: inv, url: URL.createObjectURL(blob) });
+      setPreview({ invoice: inv, blob });
     } catch (err) {
       toastApiError(err, "Couldn't open the invoice");
     } finally {
@@ -60,10 +70,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
     }
   };
 
-  const closePreview = () => {
-    if (preview) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
+  const closePreview = () => setPreview(null);
 
   if (invoices.isPending) {
     return (
@@ -110,7 +117,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
                       </span>
                       {record ? (
                         <span className="truncate font-normal text-muted-foreground">
-                          · {record.value}
+                          · {linkedRecordEntries(record).join(", ")}
                         </span>
                       ) : null}
                     </p>
@@ -161,16 +168,16 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
             </DialogDescription>
           </DialogHeader>
           {preview ? (
-            <iframe
+            <PdfPreview
+              blob={preview.blob}
               title={`${preview.invoice.number} PDF`}
-              src={preview.url}
-              className="h-[70vh] w-full rounded-xl border bg-muted"
+              className="h-[70vh] w-full"
             />
           ) : null}
           {preview ? (
             <div className="flex justify-end">
               <Button variant="outline" onClick={() => void download(preview.invoice)}>
-                <Download className="size-4" /> Download
+                <Download className="size-4" /> {isNativeApp() ? "Share" : "Download"}
               </Button>
             </div>
           ) : null}

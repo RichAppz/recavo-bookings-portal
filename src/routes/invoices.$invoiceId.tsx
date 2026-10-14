@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { PdfPreview } from "@/components/PdfPreview";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { DetailGhost } from "@/components/ghost";
@@ -50,6 +51,7 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import { useBusinessId, useCustomer } from "@/lib/api/hooks";
 import {
+  SAVE_UNSUPPORTED_MESSAGE,
   fetchInvoicePdf,
   isCustomerHasNoEmail,
   isFeatureNotAvailable,
@@ -71,10 +73,11 @@ import {
   invoiceAllows,
   invoiceBalanceMinor,
   invoiceLinkedRecord,
+  linkedRecordEntries,
   showsVat,
   type InvoiceAddress,
 } from "@/lib/invoices";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
+import { isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { RequirePermission, useTenant } from "@/lib/tenant/tenant-context";
 
@@ -127,7 +130,7 @@ function InvoiceDetail() {
   const [confirmRedo, setConfirmRedo] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPaid, setConfirmPaid] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
   const [upsell, setUpsell] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -181,7 +184,12 @@ function InvoiceDetail() {
   const downloadPdf = async () => {
     setPdfBusy("download");
     try {
-      saveBlob(await fetchInvoicePdf(businessId, inv));
+      const outcome = await saveBlob(await fetchInvoicePdf(businessId, inv));
+      if (outcome === "unsupported") {
+        toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
+          description: SAVE_UNSUPPORTED_MESSAGE.description,
+        });
+      }
     } catch (err) {
       toastApiError(err, "Couldn't download the PDF");
     } finally {
@@ -193,7 +201,7 @@ function InvoiceDetail() {
     setPdfBusy("preview");
     try {
       const { blob } = await fetchInvoicePdf(businessId, inv);
-      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewBlob(blob);
     } catch (err) {
       toastApiError(err, "Couldn't load the PDF");
     } finally {
@@ -201,10 +209,7 @@ function InvoiceDetail() {
     }
   };
 
-  const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-  };
+  const closePreview = () => setPreviewBlob(null);
 
   const doIssue = async (withSend: boolean) => {
     if (!guardEntitled()) return;
@@ -361,7 +366,8 @@ function InvoiceDetail() {
             <Eye className="size-4" /> {pdfBusy === "preview" ? "Loading…" : "Preview"}
           </Button>
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void downloadPdf()}>
-            <Download className="size-4" /> {pdfBusy === "download" ? "Preparing…" : "Download PDF"}
+            <Download className="size-4" />{" "}
+            {pdfBusy === "download" ? "Preparing…" : isNativeApp() ? "Share PDF" : "Download PDF"}
           </Button>
           {allows("issue") ? (
             <DropdownMenu>
@@ -460,7 +466,11 @@ function InvoiceDetail() {
           {record ? (
             <div className="border-b px-4 py-3 text-sm">
               <p className="text-xs font-medium text-muted-foreground">{record.label}</p>
-              <p className="mt-0.5 font-medium">{record.value}</p>
+              {linkedRecordEntries(record).map((entry) => (
+                <p key={entry} className="mt-0.5 font-medium">
+                  {entry}
+                </p>
+              ))}
             </div>
           ) : null}
           <div className="overflow-x-auto">
@@ -637,7 +647,7 @@ function InvoiceDetail() {
         </div>
       </div>
 
-      <Dialog open={previewUrl !== null} onOpenChange={(open) => !open && closePreview()}>
+      <Dialog open={previewBlob !== null} onOpenChange={(open) => !open && closePreview()}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -651,12 +661,8 @@ function InvoiceDetail() {
                     : "As the client will receive it."}
             </DialogDescription>
           </DialogHeader>
-          {previewUrl ? (
-            <iframe
-              title={`${title} PDF`}
-              src={previewUrl}
-              className="h-[70vh] w-full rounded-xl border bg-muted"
-            />
+          {previewBlob ? (
+            <PdfPreview blob={previewBlob} title={`${title} PDF`} className="h-[70vh] w-full" />
           ) : null}
         </DialogContent>
       </Dialog>

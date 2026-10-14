@@ -28677,7 +28677,7 @@ export interface paths {
                         notes?: string | null;
                         /** Format: uuid */
                         customerId?: string;
-                        /** @description Correct the vehicle / pet / … the invoice is about. Null or a blank `value` clears it. Both parts are trimmed. */
+                        /** @description Correct the vehicle(s) / pet(s) / … the invoice is about. Null or a blank `value` clears it. Both parts are trimmed; one record per line of `value` (max 10 lines, 600 characters in total) — blank lines are dropped and inner whitespace collapsed. Send a plural `label` ("Vehicles") when listing several. */
                         linkedRecord?: {
                             label: string;
                             value: string;
@@ -53063,7 +53063,7 @@ export interface components {
             /** Format: uuid */
             bookingId: string | null;
             bookingReference?: string | null;
-            /** @description The record the work was done on (vehicle, pet, …), snapshotted from the booking’s linked record when the draft was created and printed on the PDF and email. `label` is the business’s singular term for the record type ("Vehicle"); `value` is a short summary ("AB12 CDE · Ford · Focus"). Null when the invoice is not about a record. */
+            /** @description The record(s) the work was done on (vehicle, pet, …), snapshotted from the booking’s linked record when the draft was created and printed on the PDF and email. `label` is the business’s term for the record type ("Vehicle", or "Vehicles" when several are listed); `value` is a short summary per record ("AB12 CDE · Ford · Focus"), one per line when the invoice covers more than one. Null when the invoice is not about a record. */
             linkedRecord?: {
                 label: string;
                 value: string;

@@ -60,9 +60,10 @@ export type InvoicePaymentInstructions = {
 };
 
 /**
- * The record the work was done on — a vehicle, a pet — snapshotted from the booking's
+ * The record(s) the work was done on — a vehicle, a pet — snapshotted from the booking's
  * linked record when the draft was created and printed on the PDF and email. `label`
- * is the business's singular term for the record type ("Vehicle").
+ * is the business's term for the record type ("Vehicle", or "Vehicles" when several
+ * are listed); `value` holds one record per line.
  */
 export type InvoiceLinkedRecord = {
   label: string;
@@ -139,7 +140,9 @@ export type UpdateInvoiceBody = {
 /** Mirrors the API's limits for the linked-record snapshot text. */
 export const INVOICE_LINKED_RECORD_LIMITS = {
   labelMax: 60,
-  valueMax: 200,
+  /** Total across every line. */
+  valueMax: 600,
+  maxEntries: 10,
 } as const;
 
 /** The record the invoice is about, or null — also null on an API that predates the field. */
@@ -147,6 +150,47 @@ export function invoiceLinkedRecord(
   invoice: Pick<Invoice, "linkedRecord">,
 ): InvoiceLinkedRecord | null {
   return invoice.linkedRecord ?? null;
+}
+
+/**
+ * The individual records named on the invoice — one per line of `value`, as the API
+ * stores them — tidied the same way the API does (blank lines dropped, inner
+ * whitespace collapsed) so the editor and the saved snapshot compare equal.
+ */
+export function linkedRecordEntries(
+  record: Pick<InvoiceLinkedRecord, "value"> | null | undefined,
+): string[] {
+  return record ? tidyRecordLines(record.value.split(/\r?\n/)) : [];
+}
+
+function tidyRecordLines(lines: readonly string[]): string[] {
+  return lines
+    .flatMap((line) => line.split(/\r?\n/))
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 0);
+}
+
+/** "Vehicle" → "Vehicles"; a term already ending in "s" is left alone. */
+export function pluralRecordTerm(term: string): string {
+  const trimmed = term.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.toLowerCase().endsWith("s") ? trimmed : `${trimmed}s`;
+}
+
+/**
+ * The singular term to build the label from. The saved label is normally the business's
+ * own term, so it is kept — unless it is the plural this editor wrote on an earlier save,
+ * in which case dropping back to one record must read "Vehicle" again, not "Vehicles".
+ */
+export function linkedRecordBaseLabel(
+  saved: Pick<InvoiceLinkedRecord, "label"> | null | undefined,
+  term: string,
+): string {
+  const fallback = term.trim() || "Reference";
+  if (!saved) return fallback;
+  const label = saved.label.trim();
+  if (!label) return fallback;
+  return label.toLowerCase() === pluralRecordTerm(fallback).toLowerCase() ? fallback : label;
 }
 
 /**
@@ -159,13 +203,51 @@ export function supportsLinkedRecord(invoice: Pick<Invoice, "linkedRecord">): bo
 }
 
 /**
- * Turn the editor's typed value into the PATCH body: trimmed, or null to clear when
- * blank. The label is the business's own term for the record type.
+ * Turn the editor's rows into the PATCH body: one record per line, or null to clear when
+ * every row is blank. `label` is the business's singular term for the record type; it is
+ * pluralised when several records are listed so the document reads "Vehicles".
  */
-export function linkedRecordInput(label: string, value: string): InvoiceLinkedRecord | null {
-  const trimmedValue = value.trim();
-  if (trimmedValue === "") return null;
-  return { label: label.trim() || "Reference", value: trimmedValue };
+export function linkedRecordInput(
+  label: string,
+  values: readonly string[],
+): InvoiceLinkedRecord | null {
+  const entries = tidyRecordLines(values);
+  if (entries.length === 0) return null;
+  const base = label.trim() || "Reference";
+  return {
+    label: entries.length > 1 ? pluralRecordTerm(base) : base,
+    value: entries.join("\n"),
+  };
+}
+
+/** The first problem with the typed records, or null when they fit the API's limits. */
+export function linkedRecordProblem(
+  record: InvoiceLinkedRecord | null,
+  term: string,
+): string | null {
+  if (!record) return null;
+  const entries = linkedRecordEntries(record);
+  if (entries.length > INVOICE_LINKED_RECORD_LIMITS.maxEntries) {
+    return `An invoice can list at most ${INVOICE_LINKED_RECORD_LIMITS.maxEntries} ${pluralRecordTerm(term).toLowerCase()}.`;
+  }
+  if (record.value.length > INVOICE_LINKED_RECORD_LIMITS.valueMax) {
+    return `${pluralRecordTerm(term)} can be at most ${INVOICE_LINKED_RECORD_LIMITS.valueMax} characters in total.`;
+  }
+  return null;
+}
+
+/**
+ * How to hand a fetched PDF to the person. A browser honours `<a download>`; the
+ * native app's WebView (WKWebView / Android WebView) silently ignores it, so there
+ * the file goes to the OS share sheet (Save to Files, AirDrop, WhatsApp, Mail…)
+ * via the Web Share API when the platform can share files, and otherwise the
+ * caller must say so rather than let the button appear to do nothing.
+ */
+export type PdfHandoff = "download" | "share" | "unsupported";
+
+export function pdfHandoff(native: boolean, canShareFiles: boolean): PdfHandoff {
+  if (!native) return "download";
+  return canShareFiles ? "share" : "unsupported";
 }
 
 /** Plan feature key and the bolt-on key that grants it (Growth includes it). */
