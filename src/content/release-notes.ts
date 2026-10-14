@@ -6,9 +6,14 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
-    date: "2026-10-13",
-    title: "Invoice lines you can read, and follow-ups that know your history",
+    date: "2026-10-14",
+    title: "Invoice lines you can read, follow-ups that know your history, reminders a year out",
     items: [
+      {
+        kind: "new",
+        text: "Booking reminders can now be set in years as well as minutes, hours and days — up to 2 years before. Handy for annual work booked a long way ahead: a reminder a year before an MOT or yearly detail. A reminder whose time has already passed when the job is booked is simply skipped.",
+        where: "Settings → Notifications → Booking reminders",
+      },
       {
         kind: "fixed",
         text: "On a phone, the description box on an invoice line was squeezed to a few characters by the quantity and price beside it. Each line now has its own card: the description runs the full width and grows as you type, with quantity, unit price and VAT underneath.",
