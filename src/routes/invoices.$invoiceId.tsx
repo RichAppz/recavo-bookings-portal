@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { PdfPreview } from "@/components/PdfPreview";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { DetailGhost } from "@/components/ghost";
@@ -127,7 +128,7 @@ function InvoiceDetail() {
   const [confirmRedo, setConfirmRedo] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPaid, setConfirmPaid] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
   const [upsell, setUpsell] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -193,7 +194,7 @@ function InvoiceDetail() {
     setPdfBusy("preview");
     try {
       const { blob } = await fetchInvoicePdf(businessId, inv);
-      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewBlob(blob);
     } catch (err) {
       toastApiError(err, "Couldn't load the PDF");
     } finally {
@@ -201,10 +202,7 @@ function InvoiceDetail() {
     }
   };
 
-  const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-  };
+  const closePreview = () => setPreviewBlob(null);
 
   const doIssue = async (withSend: boolean) => {
     if (!guardEntitled()) return;
@@ -637,7 +635,7 @@ function InvoiceDetail() {
         </div>
       </div>
 
-      <Dialog open={previewUrl !== null} onOpenChange={(open) => !open && closePreview()}>
+      <Dialog open={previewBlob !== null} onOpenChange={(open) => !open && closePreview()}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -651,12 +649,8 @@ function InvoiceDetail() {
                     : "As the client will receive it."}
             </DialogDescription>
           </DialogHeader>
-          {previewUrl ? (
-            <iframe
-              title={`${title} PDF`}
-              src={previewUrl}
-              className="h-[70vh] w-full rounded-xl border bg-muted"
-            />
+          {previewBlob ? (
+            <PdfPreview blob={previewBlob} title={`${title} PDF`} className="h-[70vh] w-full" />
           ) : null}
         </DialogContent>
       </Dialog>

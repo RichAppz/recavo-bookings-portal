@@ -10,6 +10,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     title: "Invoice lines you can read, follow-ups that know your history, reminders a year out",
     items: [
       {
+        kind: "fixed",
+        text: "Previewing an invoice on a phone showed a blank white page. The preview is now drawn page by page inside the app, so it looks the same on iPhone, Android and desktop — for you on the invoice page and for clients in their account.",
+        where: "Invoices → open an invoice → Preview",
+      },
+      {
         kind: "new",
         text: "Booking reminders can now be set in years as well as minutes, hours and days — up to 2 years before. Handy for annual work booked a long way ahead: a reminder a year before an MOT or yearly detail. A reminder whose time has already passed when the job is booked is simply skipped.",
         where: "Settings → Notifications → Booking reminders",

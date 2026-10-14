@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Eye, FileText } from "lucide-react";
 import { TableGhost } from "@/components/ghost";
+import { PdfPreview } from "@/components/PdfPreview";
 import { EmptyState, SectionCard, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +36,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
   const invoices = usePortalInvoicesAcrossStudios(studios);
   const solo = studios.length === 1;
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ invoice: PortalInvoice; url: string } | null>(null);
+  const [preview, setPreview] = useState<{ invoice: PortalInvoice; blob: Blob } | null>(null);
 
   const download = async (inv: PortalInvoice) => {
     setBusyId(inv.id);
@@ -52,7 +53,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
     setBusyId(inv.id);
     try {
       const { blob } = await fetchPortalInvoicePdf(inv.studio.id, inv);
-      setPreview({ invoice: inv, url: URL.createObjectURL(blob) });
+      setPreview({ invoice: inv, blob });
     } catch (err) {
       toastApiError(err, "Couldn't open the invoice");
     } finally {
@@ -60,10 +61,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
     }
   };
 
-  const closePreview = () => {
-    if (preview) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
+  const closePreview = () => setPreview(null);
 
   if (invoices.isPending) {
     return (
@@ -161,10 +159,10 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
             </DialogDescription>
           </DialogHeader>
           {preview ? (
-            <iframe
+            <PdfPreview
+              blob={preview.blob}
               title={`${preview.invoice.number} PDF`}
-              src={preview.url}
-              className="h-[70vh] w-full rounded-xl border bg-muted"
+              className="h-[70vh] w-full"
             />
           ) : null}
           {preview ? (
