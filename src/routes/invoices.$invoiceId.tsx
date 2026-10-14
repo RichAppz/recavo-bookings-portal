@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  useCanGoBack,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 import {
   ArrowLeft,
   Ban,
@@ -114,6 +120,11 @@ function InvoiceDetail() {
   const { invoiceId } = Route.useParams();
   const tenant = useTenant();
   const navigate = useNavigate();
+  const router = useRouter();
+  // Invoices are opened from a booking, a client's profile, the list… so the
+  // back control retraces that step. Only a cold open (email link, refresh)
+  // has nowhere to go back to, and then "All invoices" is the sensible place.
+  const canGoBack = useCanGoBack();
   const businessId = useBusinessId();
   const invoiceQuery = useInvoice(invoiceId);
   const invoice = invoiceQuery.data;
@@ -292,12 +303,22 @@ function InvoiceDetail() {
 
   return (
     <>
-      <Link
-        to="/invoices"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> All invoices
-      </Link>
+      {canGoBack ? (
+        <button
+          type="button"
+          onClick={() => router.history.back()}
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> Back
+        </button>
+      ) : (
+        <Link
+          to="/invoices"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> All invoices
+        </Link>
+      )}
 
       <div className="surface-card flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

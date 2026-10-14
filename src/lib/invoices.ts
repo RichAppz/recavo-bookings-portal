@@ -170,6 +170,28 @@ function tidyRecordLines(lines: readonly string[]): string[] {
     .filter((line) => line.length > 0);
 }
 
+/**
+ * Upper-case the registration in a typed record while leaving ordinary words as
+ * they are: "ey75 dnn · ford focus" → "EY75 DNN · ford focus". A token is treated as
+ * part of a plate when it mixes letters and digits, or when it is a short run of
+ * letters (≤ 3) sitting next to one that has digits — the "DNN" in "EY75 DNN".
+ */
+export function upperCaseRegistration(value: string): string {
+  const tokens = value.split(/(\s+)/);
+  const hasDigit = (t: string | undefined) => t !== undefined && /\d/.test(t);
+  const word = (i: number): string | undefined => tokens[i];
+  return tokens
+    .map((token, i) => {
+      if (/^\s*$/.test(token)) return token;
+      if (/\d/.test(token) && /[a-z]/i.test(token)) return token.toUpperCase();
+      if (/^[a-z]{1,3}$/i.test(token) && (hasDigit(word(i - 2)) || hasDigit(word(i + 2)))) {
+        return token.toUpperCase();
+      }
+      return token;
+    })
+    .join("");
+}
+
 /** "Vehicle" → "Vehicles"; a term already ending in "s" is left alone. */
 export function pluralRecordTerm(term: string): string {
   const trimmed = term.trim();

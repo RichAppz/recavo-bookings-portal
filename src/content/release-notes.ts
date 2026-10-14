@@ -11,8 +11,13 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     items: [
       {
         kind: "new",
-        text: "Did two cars in one visit? Put them both on the same invoice. The Vehicle field on a draft is now a list: add another vehicle with a tap — the client's saved vehicles are offered so you don't retype a registration — or remove one. Each is printed on its own line on the PDF, and the email names them all.",
+        text: "Did two cars in one visit? Put them both on the same invoice. The Vehicle field on a draft is now a list: add another vehicle with a tap — the client's saved vehicles are offered so you don't retype a registration — or remove one. Each is printed on its own line on the PDF, and the email names them all. Registrations you type are put in capitals for you.",
         where: "Invoices → open a draft → Vehicle",
+      },
+      {
+        kind: "improved",
+        text: "On a booking's Payments tab, the whole invoice row now opens the invoice — you no longer have to hit the number itself. And the Back link at the top of an invoice takes you back to where you came from (the booking, the client's profile, the list), instead of always dropping you on All invoices.",
+        where: "Booking → Payments → Invoices",
       },
       {
         kind: "fixed",
