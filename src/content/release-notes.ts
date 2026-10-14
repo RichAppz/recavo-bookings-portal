@@ -15,6 +15,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Invoices → open a draft → Vehicle",
       },
       {
+        kind: "improved",
+        text: "On a booking's Payments tab, the whole invoice row now opens the invoice — you no longer have to hit the number itself. Send and the delete bin still do their own thing.",
+        where: "Booking → Payments → Invoices",
+      },
+      {
         kind: "fixed",
         text: "In the app, Download PDF on an invoice did nothing — the phone had nowhere to put the file. It is now Share PDF: the normal share sheet opens so you can save it to Files, AirDrop it, or send it straight to the client on WhatsApp or by email. In a web browser it downloads as before.",
         where: "Invoices → open an invoice → Share PDF",

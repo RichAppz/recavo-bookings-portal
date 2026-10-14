@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { FileText, Mail, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, FileText, Mail, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { TableGhost } from "@/components/ghost";
@@ -124,15 +124,22 @@ export function BookingInvoices({
             : ""}
         </p>
       ) : (
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y overflow-hidden rounded-xl border">
+          {/* The whole row opens the invoice — on a phone the number alone was too small a
+              target. The link is stretched over the row with a pseudo-element; the Send
+              and Delete buttons sit above it so they still act on their own. */}
           {list.map((inv) => (
-            <li key={inv.id} className="flex items-center justify-between gap-3 p-3">
+            <li
+              key={inv.id}
+              className="relative flex items-center justify-between gap-3 p-3 transition-colors hover:bg-secondary/60 has-[a:focus-visible]:bg-secondary/60 active:bg-secondary"
+            >
               <div className="min-w-0">
                 <Link
                   to="/invoices/$invoiceId"
                   params={{ invoiceId: inv.id }}
                   onClick={onNavigate}
-                  className="flex items-center gap-2 text-sm font-medium hover:underline"
+                  aria-label={`Open invoice ${inv.number ?? "draft"}`}
+                  className="flex items-center gap-2 text-sm font-medium outline-none after:absolute after:inset-0 after:content-['']"
                 >
                   <InvoiceNumber invoice={inv} />
                   <InvoiceOriginTag invoice={inv} />
@@ -152,6 +159,7 @@ export function BookingInvoices({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="relative z-10"
                     disabled={send.isPending || !customerEmail}
                     title={!customerEmail ? "Add an email address to the client first" : undefined}
                     onClick={() => void sendOne(inv.id, inv.number)}
@@ -165,12 +173,14 @@ export function BookingInvoices({
                     variant="ghost"
                     aria-label="Delete draft"
                     title="Delete this draft"
-                    className="text-muted-foreground hover:text-destructive"
+                    className="relative z-10 text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleting(inv)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
-                ) : null}
+                ) : (
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                )}
               </div>
             </li>
           ))}
