@@ -11,7 +11,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     items: [
       {
         kind: "new",
-        text: "Did two cars in one visit? Put them both on the same invoice. The Vehicle field on a draft is now a list: add another vehicle with a tap — the client's saved vehicles are offered so you don't retype a registration — or remove one. Each is printed on its own line on the PDF, and the email names them all.",
+        text: "Did two cars in one visit? Put them both on the same invoice. The Vehicle field on a draft is now a list: add another vehicle with a tap — the client's saved vehicles are offered so you don't retype a registration — or remove one. Each is printed on its own line on the PDF, and the email names them all. Registrations you type are put in capitals for you.",
         where: "Invoices → open a draft → Vehicle",
       },
       {

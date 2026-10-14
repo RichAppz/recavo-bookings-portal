@@ -27,6 +27,7 @@ import {
   pluralRecordTerm,
   showsVat,
   supportsLinkedRecord,
+  upperCaseRegistration,
   validateLineDrafts,
   type InvoiceLineDraft,
   type LineDraftError,
@@ -404,11 +405,11 @@ export function InvoiceDraftEditor({
                         : `Another ${recordTermLower}`
                     }
                     aria-label={`${recordBase} ${i + 1}`}
-                    onChange={(e) =>
-                      setRecordValues((prev) =>
-                        prev.map((v, j) => (j === i ? e.target.value.replace(/\r?\n/g, " ") : v)),
-                      )
-                    }
+                    autoCapitalize="characters"
+                    onChange={(e) => {
+                      const typed = upperCaseRegistration(e.target.value.replace(/\r?\n/g, " "));
+                      setRecordValues((prev) => prev.map((v, j) => (j === i ? typed : v)));
+                    }}
                   />
                   {recordValues.length > 1 ? (
                     <Button

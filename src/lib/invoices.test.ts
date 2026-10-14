@@ -20,6 +20,7 @@ import {
   showsVat,
   sortInvoicesNewestFirst,
   supportsLinkedRecord,
+  upperCaseRegistration,
   validateLineDrafts,
   visibleInvoices,
   type InvoiceStatus,
@@ -288,6 +289,17 @@ describe("linked record on an invoice", () => {
     assert.deepEqual(linkedRecordEntries({ value: "AB12 CDE" }), ["AB12 CDE"]);
     assert.deepEqual(linkedRecordEntries(null), []);
     assert.deepEqual(linkedRecordEntries(undefined), []);
+  });
+
+  it("upper-cases a typed registration but not the make and model", () => {
+    assert.equal(upperCaseRegistration("ey75 dnn"), "EY75 DNN");
+    assert.equal(upperCaseRegistration("Ej25ysz"), "EJ25YSZ");
+    assert.equal(upperCaseRegistration("ab12 cde · ford focus"), "AB12 CDE · ford focus");
+    assert.equal(upperCaseRegistration("Audi RS6"), "Audi RS6");
+    assert.equal(upperCaseRegistration("a123 bcd"), "A123 BCD");
+    assert.equal(upperCaseRegistration("abc 123d"), "ABC 123D");
+    assert.equal(upperCaseRegistration("Rex the dog"), "Rex the dog");
+    assert.equal(upperCaseRegistration("  ey75  dnn "), "  EY75  DNN ");
   });
 
   it("pluralises the business's term", () => {
