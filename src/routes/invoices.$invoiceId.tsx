@@ -72,6 +72,7 @@ import {
   invoiceAllows,
   invoiceBalanceMinor,
   invoiceLinkedRecord,
+  linkedRecordEntries,
   showsVat,
   type InvoiceAddress,
 } from "@/lib/invoices";
@@ -458,7 +459,11 @@ function InvoiceDetail() {
           {record ? (
             <div className="border-b px-4 py-3 text-sm">
               <p className="text-xs font-medium text-muted-foreground">{record.label}</p>
-              <p className="mt-0.5 font-medium">{record.value}</p>
+              {linkedRecordEntries(record).map((entry) => (
+                <p key={entry} className="mt-0.5 font-medium">
+                  {entry}
+                </p>
+              ))}
             </div>
           ) : null}
           <div className="overflow-x-auto">

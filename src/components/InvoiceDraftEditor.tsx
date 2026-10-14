@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { useCustomer, useCustomers } from "@/lib/api/hooks";
+import { useCustomer, useCustomerLinkedRecords, useCustomers } from "@/lib/api/hooks";
 import { useUpdateInvoice, type Invoice } from "@/lib/api/invoices";
 import type { Customer } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
@@ -20,7 +20,11 @@ import {
   invoiceLinkedRecord,
   isIsoDate,
   lineToDraft,
+  linkedRecordBaseLabel,
+  linkedRecordEntries,
   linkedRecordInput,
+  linkedRecordProblem,
+  pluralRecordTerm,
   showsVat,
   supportsLinkedRecord,
   validateLineDrafts,
@@ -50,16 +54,24 @@ export function InvoiceDraftEditor({
   const currentCustomer = useCustomer(invoice.customerId);
   const tenant = useTenant();
 
-  // The record the invoice is about (vehicle, pet…). Labelled with the business's own
-  // term; hidden entirely when the API build doesn't know the field yet.
+  // The record(s) the invoice is about (vehicle, pet…) — one row each, so two cars
+  // done in one visit go on one document. Labelled with the business's own term;
+  // hidden entirely when the API build doesn't know the field yet.
   const recordTerm = tenant.terminology.linkedRecord;
+  const recordTermLower = recordTerm.toLowerCase();
   const recordSupported = supportsLinkedRecord(invoice);
-  const savedRecordValue = invoiceLinkedRecord(invoice)?.value ?? "";
+  const savedRecord = invoiceLinkedRecord(invoice);
+  const savedRecordValue = savedRecord?.value ?? "";
+  const recordBase = linkedRecordBaseLabel(savedRecord, recordTerm);
+  const savedRecordRows = (): string[] => {
+    const entries = linkedRecordEntries(savedRecord);
+    return entries.length > 0 ? entries : [""];
+  };
 
   const [lines, setLines] = useState<InvoiceLineDraft[]>(() => invoice.lines.map(lineToDraft));
   const [dueDate, setDueDate] = useState(invoice.dueDate ?? "");
   const [notes, setNotes] = useState(invoice.notes ?? "");
-  const [recordValue, setRecordValue] = useState(savedRecordValue);
+  const [recordValues, setRecordValues] = useState<string[]>(savedRecordRows);
   const [customerId, setCustomerId] = useState(invoice.customerId);
   const [pickedCustomer, setPickedCustomer] = useState<Customer | null>(null);
   const [lineErrors, setLineErrors] = useState<LineDraftError[]>([]);
@@ -72,7 +84,8 @@ export function InvoiceDraftEditor({
     setLines(invoice.lines.map(lineToDraft));
     setDueDate(invoice.dueDate ?? "");
     setNotes(invoice.notes ?? "");
-    setRecordValue(savedRecordValue);
+    const rows = linkedRecordEntries({ value: savedRecordValue });
+    setRecordValues(rows.length > 0 ? rows : [""]);
     setCustomerId(invoice.customerId);
     setPickedCustomer(null);
     setLineErrors([]);
@@ -94,6 +107,30 @@ export function InvoiceDraftEditor({
     (currentCustomer.data?.id === customerId ? currentCustomer.data : null) ??
     null;
 
+  // The client's saved vehicles, offered one tap away so a second car can be added
+  // without retyping its registration. Anything already on the invoice is left out.
+  const customerRecords = useCustomerLinkedRecords(recordSupported ? customerId : undefined);
+  const typedRecord = recordSupported ? linkedRecordInput(recordBase, recordValues) : null;
+  const typedRecordValue = typedRecord?.value ?? "";
+  const recordSuggestions = useMemo(() => {
+    const present = new Set(
+      linkedRecordEntries({ value: typedRecordValue }).map((v) => v.toLowerCase()),
+    );
+    return (customerRecords.data ?? [])
+      .filter((r) => r.status === "active" && !present.has(r.displayLabel.trim().toLowerCase()))
+      .slice(0, 6);
+  }, [customerRecords.data, typedRecordValue]);
+  const recordRowsFull = recordValues.length >= INVOICE_LINKED_RECORD_LIMITS.maxEntries;
+  const addRecordValue = (value: string) => {
+    setRecordValues((prev) => {
+      const next = [...prev];
+      const blank = next.findIndex((v) => v.trim() === "");
+      if (blank >= 0) next[blank] = value;
+      else if (next.length < INVOICE_LINKED_RECORD_LIMITS.maxEntries) next.push(value);
+      return next;
+    });
+  };
+
   const vatShown = showsVat(invoice);
 
   // Live preview of the subtotal from what's typed — labelled as such; the
@@ -112,7 +149,7 @@ export function InvoiceDraftEditor({
     JSON.stringify(lines) !== JSON.stringify(invoice.lines.map(lineToDraft)) ||
     dueDate !== (invoice.dueDate ?? "") ||
     notes !== (invoice.notes ?? "") ||
-    (recordSupported && recordValue.trim() !== savedRecordValue) ||
+    (recordSupported && typedRecordValue !== savedRecordValue) ||
     customerId !== invoice.customerId;
 
   const setLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
@@ -138,13 +175,10 @@ export function InvoiceDraftEditor({
       setFormError(`Notes can be at most ${INVOICE_LINE_LIMITS.notesMax} characters.`);
       return;
     }
-    const record = recordSupported
-      ? linkedRecordInput(invoiceLinkedRecord(invoice)?.label ?? recordTerm, recordValue)
-      : undefined;
-    if (record && record.value.length > INVOICE_LINKED_RECORD_LIMITS.valueMax) {
-      setFormError(
-        `${recordTerm} can be at most ${INVOICE_LINKED_RECORD_LIMITS.valueMax} characters.`,
-      );
+    const record = recordSupported ? linkedRecordInput(recordBase, recordValues) : undefined;
+    const recordError = recordSupported ? linkedRecordProblem(record ?? null, recordBase) : null;
+    if (recordError) {
+      setFormError(recordError);
       return;
     }
     setLineErrors([]);
@@ -347,17 +381,80 @@ export function InvoiceDraftEditor({
 
         {recordSupported ? (
           <div className="grid gap-2">
-            <Label htmlFor="invoice-record">{recordTerm}</Label>
-            <Input
-              id="invoice-record"
-              value={recordValue}
-              maxLength={INVOICE_LINKED_RECORD_LIMITS.valueMax}
-              placeholder={`Which ${recordTerm.toLowerCase()} this invoice is for — optional`}
-              onChange={(e) => setRecordValue(e.target.value)}
-            />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="invoice-record-0">
+                {recordValues.length > 1 ? pluralRecordTerm(recordBase) : recordBase}
+              </Label>
+              {recordValues.length > 1 ? (
+                <span className="text-xs text-muted-foreground">
+                  {recordValues.length}/{INVOICE_LINKED_RECORD_LIMITS.maxEntries}
+                </span>
+              ) : null}
+            </div>
+            <ul className="grid gap-2">
+              {recordValues.map((value, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <Input
+                    id={`invoice-record-${i}`}
+                    value={value}
+                    maxLength={INVOICE_LINKED_RECORD_LIMITS.valueMax}
+                    placeholder={
+                      i === 0
+                        ? `Which ${recordTermLower} this invoice is for — optional`
+                        : `Another ${recordTermLower}`
+                    }
+                    aria-label={`${recordBase} ${i + 1}`}
+                    onChange={(e) =>
+                      setRecordValues((prev) =>
+                        prev.map((v, j) => (j === i ? e.target.value.replace(/\r?\n/g, " ") : v)),
+                      )
+                    }
+                  />
+                  {recordValues.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 px-2 text-muted-foreground max-sm:h-11"
+                      aria-label={`Remove ${recordTermLower} ${i + 1}`}
+                      onClick={() => setRecordValues((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={recordRowsFull}
+                onClick={() => setRecordValues((prev) => [...prev, ""])}
+              >
+                <Plus className="size-4" /> Add another {recordTermLower}
+              </Button>
+              {recordSuggestions.map((r) => (
+                <Button
+                  key={r.id}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="max-w-full"
+                  disabled={recordRowsFull && !recordValues.some((v) => v.trim() === "")}
+                  title={`Add ${r.displayLabel}`}
+                  onClick={() => addRecordValue(r.displayLabel)}
+                >
+                  <Plus className="size-3.5 shrink-0" />
+                  <span className="truncate">{r.displayLabel}</span>
+                </Button>
+              ))}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Filled from the booking&apos;s {recordTerm.toLowerCase()}. Printed on the PDF and in
-              the email; leave empty to omit it.
+              Filled from the booking&apos;s {recordTermLower}. Did more than one {recordTermLower}{" "}
+              in the same visit? Add each one — they are all printed on the PDF and in the email.
+              Leave empty to omit it.
             </p>
           </div>
         ) : null}
@@ -407,7 +504,7 @@ export function InvoiceDraftEditor({
                 setLines(invoice.lines.map(lineToDraft));
                 setDueDate(invoice.dueDate ?? "");
                 setNotes(invoice.notes ?? "");
-                setRecordValue(savedRecordValue);
+                setRecordValues(savedRecordRows());
                 setCustomerId(invoice.customerId);
                 setPickedCustomer(null);
                 setLineErrors([]);

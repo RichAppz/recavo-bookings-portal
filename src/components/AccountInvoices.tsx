@@ -24,6 +24,7 @@ import {
   invoiceBalanceMinor,
   invoiceLinkedRecord,
   isInvoiceOverdue,
+  linkedRecordEntries,
   sortInvoicesNewestFirst,
 } from "@/lib/invoices";
 
@@ -108,7 +109,7 @@ export function AccountInvoices({ studios }: { studios: readonly PortalBusinessS
                       </span>
                       {record ? (
                         <span className="truncate font-normal text-muted-foreground">
-                          · {record.value}
+                          · {linkedRecordEntries(record).join(", ")}
                         </span>
                       ) : null}
                     </p>
