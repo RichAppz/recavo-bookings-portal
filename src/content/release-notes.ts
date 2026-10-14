@@ -6,6 +6,22 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-13",
+    title: "Invoice lines you can read, and follow-ups that know your history",
+    items: [
+      {
+        kind: "fixed",
+        text: "On a phone, the description box on an invoice line was squeezed to a few characters by the quantity and price beside it. Each line now has its own card: the description runs the full width and grows as you type, with quantity, unit price and VAT underneath.",
+        where: "Invoices → open a draft → Lines",
+      },
+      {
+        kind: "improved",
+        text: "Switch on a follow-up reminder for a service — a ceramic coating due again in 2 years, say — and it now also covers jobs you'd already marked attended, not just ones from today onwards. A renewal that has recently fallen due is chased straight away; anything more than six months past is left alone.",
+        where: "Services → edit a service → Follow-up reminder",
+      },
+    ],
+  },
+  {
     date: "2026-10-12",
     title: "Money off through an offer link",
     items: [
