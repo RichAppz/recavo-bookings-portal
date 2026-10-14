@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 
 const ISSUE_TEXT: Record<RowIssue, string> = {
   INVALID: "Enter a whole number.",
-  OUT_OF_RANGE: "Between 5 minutes and 30 days before.",
+  OUT_OF_RANGE: "Between 5 minutes and 2 years before.",
   DUPLICATE: "Two reminders can't go at the same time.",
 };
 
@@ -189,6 +189,7 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
                         <SelectItem value="minutes">minutes before</SelectItem>
                         <SelectItem value="hours">hours before</SelectItem>
                         <SelectItem value="days">days before</SelectItem>
+                        <SelectItem value="years">years before</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

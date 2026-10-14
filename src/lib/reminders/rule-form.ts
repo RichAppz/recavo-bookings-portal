@@ -2,13 +2,13 @@ import type { BusinessConfiguration } from "@/lib/api/types";
 
 export type ReminderRule = NonNullable<BusinessConfiguration["reminders"]>["rules"][number];
 export type ReminderChannel = ReminderRule["channel"];
-export type ReminderUnit = "minutes" | "hours" | "days";
+export type ReminderUnit = "minutes" | "hours" | "days" | "years";
 
 export const REMINDER_LIMITS = {
   maxRules: 5,
   minMinutes: 5,
-  /** 30 days. */
-  maxMinutes: 30 * 24 * 60,
+  /** 2 years — annual work is often booked a year ahead. Mirrors the API's cap. */
+  maxMinutes: 2 * 365 * 24 * 60,
 } as const;
 
 /** One editable row; `amount` stays a string so the input can be blank mid-edit. */
@@ -19,7 +19,12 @@ export type RuleRow = {
   channel: ReminderChannel;
 };
 
-const UNIT_MINUTES: Record<ReminderUnit, number> = { minutes: 1, hours: 60, days: 1440 };
+const UNIT_MINUTES: Record<ReminderUnit, number> = {
+  minutes: 1,
+  hours: 60,
+  days: 1440,
+  years: 365 * 1440,
+};
 
 let seq = 0;
 const nextKey = () => `r${Date.now().toString(36)}${(seq++).toString(36)}`;
@@ -27,7 +32,14 @@ const nextKey = () => `r${Date.now().toString(36)}${(seq++).toString(36)}`;
 /** Pick the largest unit that divides the offset exactly, so 1440 shows as "1 day". */
 export function rowFromRule(rule: ReminderRule): RuleRow {
   const m = rule.minutesBefore;
-  const unit: ReminderUnit = m % 1440 === 0 ? "days" : m % 60 === 0 ? "hours" : "minutes";
+  const unit: ReminderUnit =
+    m % UNIT_MINUTES.years === 0
+      ? "years"
+      : m % 1440 === 0
+        ? "days"
+        : m % 60 === 0
+          ? "hours"
+          : "minutes";
   return {
     key: nextKey(),
     amount: String(m / UNIT_MINUTES[unit]),
@@ -81,6 +93,10 @@ export function rulesFromRows(rows: readonly RuleRow[]): ReminderRule[] {
 }
 
 export function describeOffset(minutesBefore: number): string {
+  if (minutesBefore % UNIT_MINUTES.years === 0) {
+    const y = minutesBefore / UNIT_MINUTES.years;
+    return `${y} year${y === 1 ? "" : "s"} before`;
+  }
   if (minutesBefore % 1440 === 0) {
     const d = minutesBefore / 1440;
     return `${d} day${d === 1 ? "" : "s"} before`;

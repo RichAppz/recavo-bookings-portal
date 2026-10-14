@@ -9617,7 +9617,7 @@ export interface paths {
                             iban?: string | null;
                             bic?: string | null;
                         };
-                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+                        /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 2 years before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
                         reminders?: {
                             rules: {
                                 minutesBefore: number;
@@ -52666,7 +52666,7 @@ export interface components {
                 iban?: string | null;
                 bic?: string | null;
             };
-            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 30 days before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
+            /** @description Automatic booking reminders (RECA-530). On PATCH the whole `rules` array is replaced; `[]` turns reminders off. Up to 5 rules, each 5 minutes to 2 years before the booking, offsets unique. `channel: sms` saves on every tier; at send time Growth texts freely and Solo/Business spend one prepaid credit per text, falling back to the email version when the balance is 0 (ADR 0020, see /sms-credits). Changing rules rebuilds the open reminders for upcoming bookings without resending any already sent. Default: 24h and 1h before, client preference. */
             reminders?: {
                 rules: {
                     minutesBefore: number;
