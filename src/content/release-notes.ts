@@ -16,7 +16,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
-        text: "On a booking's Payments tab, the whole invoice row now opens the invoice — you no longer have to hit the number itself. Send and the delete bin still do their own thing.",
+        text: "On a booking's Payments tab, the whole invoice row now opens the invoice — you no longer have to hit the number itself. And the Back link at the top of an invoice takes you back to where you came from (the booking, the client's profile, the list), instead of always dropping you on All invoices.",
         where: "Booking → Payments → Invoices",
       },
       {
