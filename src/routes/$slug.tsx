@@ -1,17 +1,22 @@
+import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { BookingFlow } from "@/components/BookingFlow";
-import { PageGhost } from "@/components/ghost";
+import { ClientBookingFlow } from "@/components/client/ClientBookingFlow";
+import { ClientTheme, OutlineButton, PoweredBy, StudioMark } from "@/components/client/ClientPage";
 import { Wordmark } from "@/components/Wordmark";
-import { usePublicBusiness } from "@/lib/api/hooks";
+import { closedBusinessFromError, usePublicBusiness } from "@/lib/api/hooks";
+import { DEFAULT_BOOKING_PAGE, normaliseBookingPage } from "@/lib/client-theme";
 
 /**
  * `?offer=<code>` is a package link the studio shared: the page then shows only
- * the packages in that link. Stripe's redirect parameters share this search
- * space and are read straight off the URL, so they are left unlisted here.
+ * the packages in that link. `?package=<id>` buys one package from the landing's
+ * Packages list. Stripe's redirect parameters share this search space and are read
+ * straight off the URL, so they are left unlisted here.
  */
 const searchSchema = z.object({
   offer: z.string().min(1).optional(),
+  package: z.string().min(1).optional(),
 });
 
 /**
@@ -40,58 +45,124 @@ export const Route = createFileRoute("/$slug")({
 
 function SlugBookingPage() {
   const { slug } = Route.useParams();
-  const { offer } = Route.useSearch();
+  const { offer, package: packageId } = Route.useSearch();
   const navigate = useNavigate();
   const business = usePublicBusiness(slug);
 
-  if (business.isError) return <NoSuchPage />;
+  // An old link still works, but the address bar should show the current one.
+  const currentSlug = business.data?.slug;
+  const redirectedFrom = business.data?.redirectedFromSlug ?? null;
+  useEffect(() => {
+    if (!currentSlug || !redirectedFrom || currentSlug === slug) return;
+    void navigate({
+      to: "/$slug",
+      params: { slug: currentSlug },
+      search: (prev) => prev,
+      replace: true,
+    });
+  }, [currentSlug, redirectedFrom, slug, navigate]);
+
+  if (business.isError) {
+    const closed = closedBusinessFromError(business.error);
+    if (closed) return <NotTakingBookings name={closed.tradingName} logoUrl={closed.logoUrl} />;
+    return <NoSuchPage />;
+  }
   if (!business.data) return <ResolvingPage />;
 
+  const page = normaliseBookingPage(business.data.page);
+
+  // Offer links and package purchases still run through the catalogue flow.
+  if (offer || packageId) {
+    return (
+      <BookingFlow
+        businessId={business.data.id}
+        studio={business.data}
+        offerCode={offer ?? null}
+        initialPackageId={packageId ?? null}
+        onClearRedirectParams={() =>
+          void navigate({
+            to: "/$slug",
+            params: { slug },
+            search: offer ? { offer } : {},
+            replace: true,
+          })
+        }
+        onLeaveOffer={() => void navigate({ to: "/$slug", params: { slug }, search: {} })}
+      />
+    );
+  }
+
   return (
-    <BookingFlow
-      businessId={business.data.id}
-      studio={business.data}
-      offerCode={offer ?? null}
-      // Stripe's parameters go; the offer stays, so "buy another" is still the same offer.
+    <ClientBookingFlow
+      business={business.data}
+      page={page}
       onClearRedirectParams={() =>
-        void navigate({
-          to: "/$slug",
-          params: { slug },
-          search: offer ? { offer } : {},
-          replace: true,
-        })
+        void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true })
       }
-      onLeaveOffer={() => void navigate({ to: "/$slug", params: { slug }, search: {} })}
+      onPickPackage={(id) =>
+        void navigate({ to: "/$slug", params: { slug }, search: { package: id } })
+      }
     />
   );
 }
 
 function ResolvingPage() {
   return (
-    <main className="min-h-screen bg-background">
-      <header className="pt-safe px-safe-4 sm:px-safe-6 flex min-h-16 items-center sm:border-b">
-        <Wordmark />
-      </header>
-      <div className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl py-4 sm:py-8">
-        <PageGhost />
-      </div>
-    </main>
+    <ClientTheme page={DEFAULT_BOOKING_PAGE}>
+      <main className="min-h-screen">
+        <div className="mx-auto w-full max-w-2xl px-4 pt-3 sm:px-6 sm:pt-6" aria-busy>
+          <div className="aspect-[390/300] w-full animate-pulse rounded-[28px] bg-card sm:aspect-[3/1]" />
+          <div className="mt-5 h-9 w-2/3 animate-pulse rounded-lg bg-card" />
+          <div className="mt-2 h-5 w-1/2 animate-pulse rounded-lg bg-card" />
+          <div className="mt-6 space-y-2">
+            <div className="h-16 animate-pulse rounded-[18px] bg-card" />
+            <div className="h-16 animate-pulse rounded-[18px] bg-card" />
+            <div className="h-16 animate-pulse rounded-[18px] bg-card" />
+          </div>
+        </div>
+      </main>
+    </ClientTheme>
   );
 }
 
-/**
- * Deliberately vague. A slug can 404 because it never existed, because the
- * studio renamed it, or because the studio is no longer trading, and it is not
- * this page's place to say which.
- */
+/** The business exists but has stopped taking online bookings. */
+function NotTakingBookings({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  const navigate = useNavigate();
+  const title = name ?? "This business";
+  return (
+    <ClientTheme page={DEFAULT_BOOKING_PAGE}>
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+        <StudioMark name={title} logoUrl={logoUrl} size="lg" />
+        <h1
+          className="mt-6 max-w-sm text-[26px] font-bold leading-tight tracking-tight"
+          style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
+        >
+          {title} isn't taking online bookings right now
+        </h1>
+        <p className="mt-2 max-w-sm text-[15px] text-muted-foreground">
+          Already booked? Your bookings are safe in your account.
+        </p>
+        <OutlineButton
+          className="mt-8 w-full max-w-xs"
+          onClick={() => void navigate({ to: "/account" })}
+        >
+          Go to my account
+        </OutlineButton>
+        <PoweredBy />
+      </main>
+    </ClientTheme>
+  );
+}
+
+/** Nothing matches the link: never existed, mistyped, or a business long gone. */
 function NoSuchPage() {
   return (
     <main className="screen-center bg-background px-safe-4">
       <div className="max-w-md text-center">
         <Wordmark />
-        <h1 className="mt-6 text-lg font-semibold">This booking page isn't available</h1>
+        <h1 className="mt-6 text-lg font-semibold">We couldn't find this booking page</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The link may have changed. Check with the studio for their current booking link.
+          Check the link with the business. They may have changed it.
         </p>
       </div>
     </main>

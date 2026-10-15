@@ -46,6 +46,7 @@ import type {
   BookingConsumablesUsage,
   Conversation,
   ConversationMessage,
+  WaitlistPreferences,
   CreditLedgerEntry,
   Customer,
   CustomerNote,
@@ -96,6 +97,13 @@ import type {
   UserProfileUpdate,
 } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
+import {
+  normaliseBookingPage,
+  type BookingPageContent,
+  type BookingPageSection,
+  type BookingPageSettings,
+  type BookingPageTheme,
+} from "@/lib/client-theme";
 import { deriveBusinessOnboarding } from "@/lib/onboarding/derive";
 import {
   getSkippedStepsLocally,
@@ -5070,6 +5078,209 @@ export interface PublicBusinessProfile {
   currency: string;
   defaultTimezone: string;
   branding: { logoUrl: string | null; accentColour: string | null };
+  /** The published booking page look + content; optional until every API build returns it. */
+  page?: Partial<BookingPageContent> | null;
+  /** Which ways this business takes payment, so Review offers exactly those. */
+  paymentMethods?: { card: boolean; bankTransfer: boolean; onTheDay: boolean };
+  /** Hours before the start a customer can still move or cancel without losing money. */
+  cancellationWindowHours?: number;
+  /** The business's legal address as one line, when it has one. */
+  address?: string | null;
+  /**
+   * Set when the link that resolved this business was an old one the business has
+   * since changed, so the page can move the visitor to the current link.
+   */
+  redirectedFromSlug?: string | null;
+}
+
+/** A team member as the booking page shows them. */
+export type PublicStaff = {
+  id: string;
+  displayName: string;
+  title: string | null;
+  bio: string | null;
+  locationIds: string[];
+  eligibleServiceIds: string[];
+};
+
+export type PublicCancellationPolicy = {
+  id: string;
+  version: number;
+  content: string | null;
+  effectiveAt: string;
+};
+
+export function usePublicStaff(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicStaff(businessId ?? ""),
+    enabled: Boolean(businessId),
+    staleTime: 5 * 60 * 1000,
+    // Older API builds have no such route; the page simply offers no team picker.
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ staff: PublicStaff[] }>(
+          `/api/v1/public/businesses/${businessId}/staff`,
+          { public: true },
+        );
+        return res.data.staff;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return [] as PublicStaff[];
+        throw err;
+      }
+    },
+  });
+}
+
+export function usePublicCancellationPolicy(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicCancellationPolicy(businessId ?? ""),
+    enabled: Boolean(businessId),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ policy: PublicCancellationPolicy | null }>(
+          `/api/v1/public/businesses/${businessId}/policies/cancellation`,
+          { public: true },
+        );
+        return res.data.policy;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+  });
+}
+
+/* ---------------- Booking page editor (staff side) ---------------- */
+
+export type BookingPageDraftPatch = {
+  theme?: BookingPageTheme;
+  headerImageUrl?: string | null;
+  headerFocalPoint?: { x: number; y: number };
+  accentColour?: string | null;
+  description?: string | null;
+  about?: string | null;
+  sections?: BookingPageSection[];
+  reviewsMinStars?: 0 | 4 | 5;
+  venue?: { address?: string | null; parkingNote?: string | null };
+};
+
+function normaliseBookingPageSettings(
+  raw: Partial<BookingPageSettings> | null | undefined,
+): BookingPageSettings {
+  return {
+    draft: normaliseBookingPage(raw?.draft),
+    published: normaliseBookingPage(raw?.published),
+    draftUpdatedAt: raw?.draftUpdatedAt ?? null,
+    publishedAt: raw?.publishedAt ?? null,
+  };
+}
+
+export function useBookingPage() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingPage(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page`,
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+  });
+}
+
+export function useUpdateBookingPageDraft() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, BookingPageDraftPatch>({
+    mutationFn: async (patch) => {
+      const res = await api.patch<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page`,
+        patch,
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+  });
+}
+
+export function usePublishBookingPage() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, void>({
+    mutationFn: async () => {
+      const res = await api.post<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/publish`,
+        {},
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+      // The public page is keyed by handle; drop every cached copy so a preview refetches.
+      void qc.invalidateQueries({ queryKey: ["public", "business"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useDiscardBookingPageDraft() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, void>({
+    mutationFn: async () => {
+      const res = await api.post<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/discard`,
+        {},
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Raw image bytes, like the logo upload; lands on the draft. */
+export function useUploadBookingPageHeader() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, File>({
+    mutationFn: async (file) => {
+      const res = await api.put<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/header`,
+        file,
+        { headers: { "Content-Type": file.type || "application/octet-stream" } },
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+  });
+}
+
+export function useSlugAvailability(slug: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.slugAvailability(businessId, slug ?? ""),
+    enabled: Boolean(businessId && slug && slug.length >= 3),
+    staleTime: 30 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<{ slug: string; available: boolean; reason: string | null }>(
+        `/api/v1/businesses/${businessId}/slug-availability`,
+        { query: { slug } },
+      );
+      return res.data;
+    },
+  });
 }
 
 /**
@@ -5091,10 +5302,33 @@ export function usePublicBusiness(handle: string | undefined, by: "slug" | "id" 
         by === "slug"
           ? `/api/v1/public/businesses/by-slug/${encodeURIComponent(handle!)}`
           : `/api/v1/public/businesses/${handle}/profile`;
-      const res = await api.get<{ business: PublicBusinessProfile }>(path, { public: true });
-      return res.data.business;
+      const res = await api.get<{
+        business: PublicBusinessProfile;
+        redirectedFromSlug?: string | null;
+      }>(path, { public: true });
+      return {
+        ...res.data.business,
+        redirectedFromSlug: res.data.redirectedFromSlug ?? null,
+      } satisfies PublicBusinessProfile;
     },
   });
+}
+
+/**
+ * The reason a public link 404'd, when the API says: a business that exists but is
+ * not taking online bookings is told apart from a link that goes nowhere.
+ */
+export function closedBusinessFromError(
+  err: unknown,
+): { tradingName: string | null; logoUrl: string | null } | null {
+  if (!(err instanceof ApiError) || err.status !== 404) return null;
+  if (err.extensions.reason !== "not_taking_bookings") return null;
+  const tradingName = err.extensions.tradingName;
+  const logoUrl = err.extensions.logoUrl;
+  return {
+    tradingName: typeof tradingName === "string" ? tradingName : null,
+    logoUrl: typeof logoUrl === "string" ? logoUrl : null,
+  };
 }
 
 export function usePublicServices(businessId: string | undefined) {
@@ -5137,6 +5371,8 @@ export function usePublicAvailability(
     linkCode?: string | null;
     /** Upsell add-ons ticked with the service; slots are sized and priced for the whole job. */
     additionalServiceIds?: readonly string[];
+    /** Only this team member's times; omit for "anyone". */
+    staffId?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -5149,6 +5385,7 @@ export function usePublicAvailability(
     from: filters.from!,
     to: filters.to!,
     ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
+    ...(filters.staffId ? { staffId: filters.staffId } : {}),
     ...(filters.additionalServiceIds?.length
       ? { additionalServiceIds: filters.additionalServiceIds.join(",") }
       : {}),
@@ -6069,6 +6306,91 @@ export function useBookWithPortalCredit(businessId: string | undefined) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
       void qc.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** The customer's own open waitlist entry, as the account page shows it. */
+export type PortalWaitlistEntry = {
+  id: string;
+  status: string;
+  service: { id: string; name: string } | null;
+  variant: { id: string; name: string } | null;
+  location: { id: string; name: string } | null;
+  staff: { id: string; displayName: string } | null;
+  preferences: WaitlistPreferences;
+  notes: string | null;
+  createdAt: string;
+};
+
+export function usePortalWaitlist(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalWaitlist(businessId ?? ""),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ entries: PortalWaitlistEntry[] }>("/api/v1/portal/waitlist", {
+          query: { businessId },
+        });
+        return res.data.entries;
+      } catch (err) {
+        // Older API builds have no such route; the card simply does not appear.
+        if (err instanceof ApiError && err.status === 404) return [] as PortalWaitlistEntry[];
+        throw err;
+      }
+    },
+  });
+}
+
+export function useLeavePortalWaitlist(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<PortalWaitlistEntry, ApiError, { entryId: string }>({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { entryId: string }, idempotencyKey: string) => {
+        const res = await api.post<{ entry: PortalWaitlistEntry }>(
+          `/api/v1/portal/waitlist/${vars.entryId}/leave`,
+          {},
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.entry;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalWaitlist(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Past the free-move window the customer asks rather than moves: the request lands
+ * in their conversation with the business, with the booking reference attached.
+ */
+export function useRequestPortalBookingMove(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<
+    ConversationMessage,
+    ApiError,
+    { bookingId: string; preferredTimes: string; note?: string | null }
+  >({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: { bookingId: string; preferredTimes: string; note?: string | null },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ message: ConversationMessage }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/move-request`,
+          { preferredTimes: vars.preferredTimes, note: vars.note ?? null },
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.message;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalMessages(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalConversation(businessId ?? "") });
     },
     onError: (err) => toastApiError(err),
   });

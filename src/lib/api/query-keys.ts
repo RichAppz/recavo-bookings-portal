@@ -192,6 +192,14 @@ export const queryKeys = {
     ["public", businessId, "availability", filters ?? {}] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
+  publicStaff: (businessId: string) => ["public", businessId, "staff"] as const,
+  publicCancellationPolicy: (businessId: string) =>
+    ["public", businessId, "policies", "cancellation"] as const,
+  /** The studio's own booking page settings (draft + published), staff side. */
+  bookingPage: (businessId: string) => ["biz", businessId, "booking-page"] as const,
+  slugAvailability: (businessId: string, slug: string) =>
+    ["biz", businessId, "slug-availability", slug] as const,
+  portalWaitlist: (businessId: string) => ["portal", businessId, "waitlist"] as const,
 
   /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
   portalBusinesses: () => ["portal", "businesses"] as const,
