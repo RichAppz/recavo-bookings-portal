@@ -961,23 +961,33 @@ function LinkTab({ disabled }: { disabled: boolean }) {
 
 /* ----------------------------------------------------------------- preview */
 
+/**
+ * Width of an element that may mount after the first render (the desktop frame
+ * only exists once that tab is chosen), so the observer follows the ref itself.
+ */
 function useElementWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+  const observer = useRef<ResizeObserver | null>(null);
   const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const ref = useCallback((el: T | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) {
+      setWidth(0);
+      return;
+    }
+    setWidth(el.clientWidth);
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      setWidth(w);
+      setWidth(entries[0]?.contentRect.width ?? 0);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    observer.current = ro;
   }, []);
+  useEffect(() => () => observer.current?.disconnect(), []);
   return { ref, width };
 }
 
 const DESKTOP_CANVAS = 1120;
+const DESKTOP_FRAME_HEIGHT = 640;
 
 function LivePreview({
   businessId,
@@ -1092,10 +1102,14 @@ function LivePreview({
             <span className="size-2.5 rounded-full bg-amber-400" />
             <span className="size-2.5 rounded-full bg-emerald-400" />
           </div>
-          <div style={{ height: 640 * scale }} className="overflow-hidden">
+          <div style={{ height: DESKTOP_FRAME_HEIGHT }} className="overflow-hidden">
             <div
               className="no-scrollbar origin-top-left overflow-y-auto overflow-x-hidden"
-              style={{ width: DESKTOP_CANVAS, height: 640, transform: `scale(${scale})` }}
+              style={{
+                width: DESKTOP_CANVAS,
+                height: Math.round(DESKTOP_FRAME_HEIGHT / scale),
+                transform: `scale(${scale})`,
+              }}
             >
               {content}
             </div>
