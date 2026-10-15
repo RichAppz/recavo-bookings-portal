@@ -203,8 +203,9 @@ function BookingPageEditor() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
               <span className="size-1.5 rounded-full bg-emerald-500" /> Live
             </span>
+            {/* The shell's top bar already offers "View booking page" on desktop. */}
             {liveUrl ? (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm" className="lg:hidden">
                 <a href={liveUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="size-4" /> View booking page
                 </a>
@@ -248,7 +249,7 @@ function BookingPageEditor() {
       ) : null}
 
       {bookingPage.isLoading || !local ? (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_408px]">
           <div className="h-80 animate-pulse rounded-xl bg-muted" />
           <div className="h-[600px] animate-pulse rounded-xl bg-muted" />
         </div>
@@ -257,7 +258,7 @@ function BookingPageEditor() {
           className={cn(
             "mt-6 grid gap-6",
             device === "phone"
-              ? "lg:grid-cols-[minmax(0,1fr)_380px]"
+              ? "lg:grid-cols-[minmax(0,1fr)_408px]"
               : "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]",
           )}
         >
@@ -1021,8 +1022,8 @@ function LivePreview({
         </div>
       </div>
       {device === "phone" ? (
-        <div className="mx-auto w-[312px] rounded-[40px] border-[8px] border-[#111214] bg-[#111214] shadow-xl">
-          <div className="no-scrollbar h-[620px] overflow-y-auto overflow-x-hidden rounded-[32px]">
+        <div className="mx-auto w-[376px] max-w-full rounded-[44px] border-[8px] border-[#111214] bg-[#111214] shadow-xl">
+          <div className="no-scrollbar h-[680px] overflow-y-auto overflow-x-hidden rounded-[36px]">
             {content}
           </div>
         </div>
