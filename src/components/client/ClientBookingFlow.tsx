@@ -61,7 +61,7 @@ import {
 import { queryKeys } from "@/lib/api/query-keys";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
-import { addCalendarDays, shortPlace } from "@/lib/client-booking";
+import { addCalendarDays, nextAvailableLabel, shortPlace } from "@/lib/client-booking";
 import {
   EMPTY_CONTACT,
   authenticationSucceeded,
@@ -266,14 +266,7 @@ export function ClientBookingFlow({
       .slice()
       .sort((a, b) => a.start.localeCompare(b.start))[0];
     if (!first || !firstService) return null;
-    const day = isoDateInTz(first.start, tz);
-    const dayLabel =
-      day === today
-        ? "Today"
-        : day === addCalendarDays(today, 1)
-          ? "Tomorrow"
-          : formatInTz(first.start, tz, { weekday: "short", day: "numeric", month: "short" });
-    return { label: `${dayLabel}, ${formatTimeInTz(first.start, tz)}`, serviceId: firstService.id };
+    return { label: nextAvailableLabel(first.start, tz, today), serviceId: firstService.id };
   }, [landingAvailability.data, firstService, tz, today]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);

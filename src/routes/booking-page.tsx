@@ -28,6 +28,7 @@ import {
   useBookingPage,
   useBusinessId,
   useDiscardBookingPageDraft,
+  usePublicAvailability,
   usePublicBusiness,
   usePublicLocations,
   usePublicPackages,
@@ -41,6 +42,7 @@ import {
   type BookingPageDraftPatch,
 } from "@/lib/api/hooks";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { addCalendarDays, nextAvailableLabel } from "@/lib/client-booking";
 import {
   BOOKING_PAGE_THEMES,
   CLIENT_FONTS_HREF,
@@ -59,6 +61,7 @@ import {
   type BookingPageTheme,
   type HeaderPreset,
 } from "@/lib/client-theme";
+import { isoDateInTz } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
@@ -988,6 +991,18 @@ function useElementWidth<T extends HTMLElement>() {
 
 const DESKTOP_CANVAS = 1120;
 const DESKTOP_FRAME_HEIGHT = 640;
+/** A real phone screen, shrunk so the whole first screen (header to Book now bar) is in view. */
+const PHONE_SCREEN = { width: 390, height: 844 };
+const PHONE_BEZEL = 8;
+const PHONE_SCALE = 0.66;
+
+/** "Now" to the five-minute boundary, so the preview's availability query key is stable. */
+function previewWindowStart(): string {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+  return d.toISOString();
+}
 
 function LivePreview({
   businessId,
@@ -1009,12 +1024,30 @@ function LivePreview({
   const locations = usePublicLocations(businessId);
   const { ref, width } = useElementWidth<HTMLDivElement>();
   const scale = device === "desktop" && width > 0 ? Math.min(1, width / DESKTOP_CANVAS) : 1;
-  const previewToday = new Date().toISOString().slice(0, 10);
+  const tz = business.data?.defaultTimezone ?? "UTC";
+  const fromIso = previewWindowStart();
+  const previewToday = isoDateInTz(fromIso, tz);
+
+  // The phone bar reads "Next available · Today, 17:00" from the first session's real times.
+  const firstService = services.data?.[0] ?? null;
+  const firstLocation = locations.data?.find((l) => l.type === "physical") ?? locations.data?.[0];
+  const peek = usePublicAvailability(businessId, {
+    serviceId: firstService?.id,
+    locationId: firstLocation?.id,
+    from: fromIso,
+    to: `${addCalendarDays(previewToday, 14)}T00:00:00.000Z`,
+    enabled: device === "phone",
+  });
+  const nextAvailable = useMemo(() => {
+    const first = (peek.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (!first || !firstService) return null;
+    return { label: nextAvailableLabel(first.start, tz, previewToday), serviceId: firstService.id };
+  }, [peek.data, firstService, tz, previewToday]);
 
   const noop = () => undefined;
   const content = business.data ? (
     <ClientTheme page={page} scope="element">
-      <div className="pb-6">
+      <div className={device === "desktop" ? "pb-6" : undefined}>
         <ClientLanding
           preview
           business={business.data}
@@ -1023,7 +1056,7 @@ function LivePreview({
           packages={packages.data?.packages ?? []}
           staff={staff.data ?? []}
           locations={locations.data ?? []}
-          nextAvailable={null}
+          nextAvailable={nextAvailable}
           onPickService={noop}
           onPickPackage={noop}
           onBookNow={noop}
@@ -1090,9 +1123,27 @@ function LivePreview({
         </div>
       </div>
       {device === "phone" ? (
-        <div className="mx-auto w-[376px] max-w-full rounded-[44px] border-[8px] border-[#111214] bg-[#111214] shadow-xl">
-          <div className="no-scrollbar h-[680px] overflow-y-auto overflow-x-hidden rounded-[36px]">
-            {content}
+        <div
+          className="mx-auto"
+          style={{
+            width: (PHONE_SCREEN.width + PHONE_BEZEL * 2) * PHONE_SCALE,
+            height: (PHONE_SCREEN.height + PHONE_BEZEL * 2) * PHONE_SCALE,
+          }}
+        >
+          <div
+            className="origin-top-left rounded-[48px] bg-[#111214] shadow-xl"
+            style={{
+              width: PHONE_SCREEN.width + PHONE_BEZEL * 2,
+              padding: PHONE_BEZEL,
+              transform: `scale(${PHONE_SCALE})`,
+            }}
+          >
+            <div
+              className="no-scrollbar relative overflow-y-auto overflow-x-hidden rounded-[40px]"
+              style={{ width: PHONE_SCREEN.width, height: PHONE_SCREEN.height }}
+            >
+              {content}
+            </div>
           </div>
         </div>
       ) : (

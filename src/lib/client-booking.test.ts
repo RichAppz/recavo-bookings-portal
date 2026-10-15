@@ -11,6 +11,7 @@ import {
   isWithinClientCancelWindow,
   monthGrid,
   monthOf,
+  nextAvailableLabel,
   shortPlace,
 } from "./client-booking.ts";
 
@@ -96,5 +97,12 @@ describe("client booking change window", () => {
     assert.equal(shortPlace("Studio 2, Brighton"), "Brighton");
     assert.equal(shortPlace(""), null);
     assert.equal(shortPlace(null), null);
+  });
+
+  it("labels the next free time relative to today", () => {
+    const tz = "Europe/London";
+    assert.equal(nextAvailableLabel("2026-10-15T16:00:00Z", tz, "2026-10-15"), "Today, 17:00");
+    assert.equal(nextAvailableLabel("2026-10-16T08:00:00Z", tz, "2026-10-15"), "Tomorrow, 09:00");
+    assert.equal(nextAvailableLabel("2026-10-19T08:00:00Z", tz, "2026-10-15"), "Mon 19 Oct, 09:00");
   });
 });

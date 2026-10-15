@@ -125,17 +125,28 @@ export function ClientLanding({
       <div className="absolute top-4 left-4">
         <StudioMark name={business.tradingName} logoUrl={business.branding.logoUrl} size="lg" />
       </div>
-      {preview ? null : (
-        <button
-          type="button"
-          onClick={() => void share()}
-          aria-label="Share this page"
-          className="absolute top-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-sm transition hover:bg-white"
-        >
-          <Share className="h-5 w-5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => void share()}
+        aria-label="Share this page"
+        disabled={preview}
+        className="absolute top-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-sm transition hover:bg-white disabled:pointer-events-none"
+      >
+        <Share className="h-5 w-5" />
+      </button>
     </div>
+  );
+
+  const bookNowBar = (
+    <>
+      <BarSummary
+        caption={nextAvailable ? "Next available" : "Book online"}
+        value={nextAvailable ? nextAvailable.label : "Pick a session"}
+      />
+      <PrimaryButton onClick={onBookNow} disabled={services.length === 0}>
+        Book now
+      </PrimaryButton>
+    </>
   );
 
   if (layout === "desktop") {
@@ -322,12 +333,12 @@ export function ClientLanding({
 
   return (
     <div className="pb-4">
-      <ClientColumn className="pt-3 sm:pt-6">
+      <ClientColumn className="pt-3">
         {header}
 
         <div className="mt-5">
           <h1
-            className="text-[32px] font-bold leading-tight tracking-tight sm:text-[44px]"
+            className="text-[32px] font-bold leading-tight tracking-tight"
             style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
           >
             {business.tradingName}
@@ -527,16 +538,14 @@ export function ClientLanding({
         <PoweredBy />
       </ClientColumn>
 
-      {preview ? null : (
-        <BottomBar>
-          <BarSummary
-            caption={nextAvailable ? "Next available" : "Book online"}
-            value={nextAvailable ? nextAvailable.label : "Pick a session"}
-          />
-          <PrimaryButton onClick={onBookNow} disabled={services.length === 0}>
-            Book now
-          </PrimaryButton>
-        </BottomBar>
+      {preview ? (
+        // The editor's phone frame is its own scroller, so the bar sticks to the
+        // frame's bottom edge rather than the browser window's.
+        <div className="sticky bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+          <div className="flex items-center justify-between gap-4 px-4 py-3">{bookNowBar}</div>
+        </div>
+      ) : (
+        <BottomBar>{bookNowBar}</BottomBar>
       )}
     </div>
   );

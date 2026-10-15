@@ -1,3 +1,5 @@
+import { formatInTz, formatTimeInTz, isoDateInTz } from "./format.ts";
+
 /**
  * The booking fields these helpers read. Structural (not the `Booking` schema type)
  * because the portal API sends the customer a slimmer booking than staff get:
@@ -58,6 +60,18 @@ export function addCalendarDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);
   const next = new Date(Date.UTC(y!, m! - 1, d! + days));
   return next.toISOString().slice(0, 10);
+}
+
+/** "Today, 17:00" / "Tomorrow, 09:00" / "Mon 20 Oct, 09:00": the landing's next free time. */
+export function nextAvailableLabel(startIso: string, timeZone: string, today: string): string {
+  const day = isoDateInTz(startIso, timeZone);
+  const dayLabel =
+    day === today
+      ? "Today"
+      : day === addCalendarDays(today, 1)
+        ? "Tomorrow"
+        : formatInTz(startIso, timeZone, { weekday: "short", day: "numeric", month: "short" });
+  return `${dayLabel}, ${formatTimeInTz(startIso, timeZone)}`;
 }
 
 /** `YYYY-MM` of a calendar day. */
