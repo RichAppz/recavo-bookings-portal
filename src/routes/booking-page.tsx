@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { toastApiError } from "@/lib/api/errors";
+import { describeApiError, toastApiError } from "@/lib/api/errors";
 import {
   useBookingPage,
   useBusinessId,
@@ -200,9 +200,11 @@ function BookingPageEditor() {
         description={`Choose how clients see ${name} when they book.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <span className="size-1.5 rounded-full bg-emerald-500" /> Live
-            </span>
+            {bookingPage.data ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="size-1.5 rounded-full bg-emerald-500" /> Live
+              </span>
+            ) : null}
             {/* The shell's top bar already offers "View booking page" on desktop. */}
             {liveUrl ? (
               <Button asChild variant="outline" size="sm" className="lg:hidden">
@@ -215,7 +217,7 @@ function BookingPageEditor() {
         }
       />
 
-      {canEdit ? (
+      {canEdit && !bookingPage.isError ? (
         <div className="mt-4 flex flex-wrap items-center justify-end gap-3 rounded-xl border bg-card px-4 py-3">
           <p className="mr-auto text-sm text-muted-foreground">
             {dirty
@@ -248,7 +250,28 @@ function BookingPageEditor() {
         </div>
       ) : null}
 
-      {bookingPage.isLoading || !local ? (
+      {bookingPage.isError ? (
+        <div className="mt-6">
+          <EmptyState
+            title="Couldn't load your booking page"
+            description={describeApiError(
+              bookingPage.error,
+              "The booking page editor isn't available right now. Try again in a moment.",
+            )}
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bookingPage.isFetching}
+                onClick={() => void bookingPage.refetch()}
+              >
+                Try again
+              </Button>
+            }
+          />
+        </div>
+      ) : bookingPage.isLoading || !local ? (
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_408px]">
           <div className="h-80 animate-pulse rounded-xl bg-muted" />
           <div className="h-[600px] animate-pulse rounded-xl bg-muted" />

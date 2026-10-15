@@ -219,6 +219,21 @@ export function describeFieldErrors(errors: readonly ProblemFieldError[]): strin
   return [...new Set(parts)].join(". ");
 }
 
+/**
+ * One line a person can act on, for inline error states. A 404 on a route the
+ * portal expects means the API is behind the portal, which is worth saying
+ * plainly rather than echoing "Route not found".
+ */
+export function describeApiError(error: unknown, fallback = "Something went wrong"): string {
+  if (!(error instanceof ApiError)) return fallback;
+  const ref = error.requestId ? ` Ref: ${error.requestId}` : "";
+  if (error.status === 404 && error.detail === "Route not found") {
+    return `This part of RECAVO isn't switched on for this server yet.${ref}`;
+  }
+  const text = error.detail || describeFieldErrors(error.fieldErrors) || error.title || fallback;
+  return `${text}${ref}`;
+}
+
 export function toastApiError(error: unknown, fallback = "Something went wrong") {
   if (error instanceof ApiError) {
     if (error.isMfaRequired) return;
