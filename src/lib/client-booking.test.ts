@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addCalendarDays,
+  addMonths,
   bookingAdditionalServiceIds,
   canClientCancelBooking,
   canClientMoveBooking,
   clientCancelDeadlineIso,
   clientCancelWindowHours,
   isWithinClientCancelWindow,
+  monthGrid,
+  monthOf,
+  shortPlace,
 } from "./client-booking.ts";
 
 function booking(
@@ -64,5 +68,33 @@ describe("client booking change window", () => {
   it("adds calendar days without shifting the month on UTC", () => {
     assert.equal(addCalendarDays("2026-10-13", 1), "2026-10-14");
     assert.equal(addCalendarDays("2026-10-31", 1), "2026-11-01");
+  });
+
+  it("steps months, carrying over the year", () => {
+    assert.equal(monthOf("2026-10-16"), "2026-10");
+    assert.equal(addMonths("2026-10", 1), "2026-11");
+    assert.equal(addMonths("2026-12", 1), "2027-01");
+    assert.equal(addMonths("2026-01", -1), "2025-12");
+  });
+
+  it("lays a month out Monday-first in whole weeks", () => {
+    // October 2026 starts on a Thursday: three blanks, 31 days, one trailing blank.
+    const cells = monthGrid("2026-10");
+    assert.equal(cells.length, 35);
+    assert.deepEqual(cells.slice(0, 4), [null, null, null, "2026-10-01"]);
+    assert.equal(cells[33], "2026-10-31");
+    assert.equal(cells[34], null);
+    // A month starting on a Monday has no leading blanks.
+    assert.equal(monthGrid("2026-06")[0], "2026-06-01");
+    // February 2027 fits exactly four weeks.
+    assert.equal(monthGrid("2027-02").length, 28);
+  });
+
+  it("shortens an address to the town and outward postcode", () => {
+    assert.equal(shortPlace("12 Mill Street, Leeds LS6 2AB"), "Leeds LS6");
+    assert.equal(shortPlace("Unit 4, The Depot, Manchester, M1 4PQ"), "Manchester M1");
+    assert.equal(shortPlace("Studio 2, Brighton"), "Brighton");
+    assert.equal(shortPlace(""), null);
+    assert.equal(shortPlace(null), null);
   });
 });

@@ -5763,6 +5763,29 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
   });
 }
 
+/**
+ * Gives a held time back before it would expire on its own: the client went back
+ * to pick another time, or a promo code means the slot must be re-held at the new
+ * price. Best effort: a server without the route (404) is treated as done.
+ */
+export function useReleasePublicBookingHold(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; holdToken: string }) => {
+      try {
+        await api.post<unknown>(
+          `/api/v1/public/businesses/${businessId}/booking-holds/release`,
+          vars,
+          { public: true },
+        );
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 409)) return false;
+        throw err;
+      }
+    },
+  });
+}
+
 export function useConfirmPublicBooking(businessId: string | undefined) {
   return useMutation({
     mutationFn: createIdempotentMutationFn(

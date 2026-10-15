@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BookingContact } from "@/components/BookingCheckout";
 import type { Booking } from "@/lib/api/types";
+import { formatMoney } from "@/lib/format";
 
 /**
  * Pieces of the public booking journey that must survive a page reload: the hold
@@ -170,4 +171,9 @@ export function hoursLabel(hours: number): string {
     return days === 1 ? "24 hours" : `${days} days`;
   }
   return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
+/** "£45" for whole pounds, "£12.50" otherwise: how prices read on the client pages. */
+export function price(minor: number, currency: string): string {
+  return formatMoney(minor, currency, { compact: true });
 }

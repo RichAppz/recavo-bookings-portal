@@ -7,11 +7,14 @@ import {
   InkButton,
   OutlineButton,
   PoweredBy,
+  TextLink,
 } from "@/components/client/ClientPage";
 import type { BankTransferInstructions, Booking } from "@/lib/api/types";
 import { directionsUrl, downloadIcs, googleCalendarUrl } from "@/lib/calendar-links";
-import { formatInTz, formatMoney, formatTimeInTz } from "@/lib/format";
+import { price } from "@/lib/client-journey";
+import { formatInTz, formatTimeInTz } from "@/lib/format";
 import { bookingSettlement } from "@/lib/booking-payment";
+import { cn } from "@/lib/utils";
 
 export type ConfirmationExtra = {
   serviceId: string;
@@ -23,6 +26,7 @@ export type ConfirmationExtra = {
 
 export function ClientConfirmation({
   booking,
+  layout,
   businessName,
   serviceName,
   staffName,
@@ -41,6 +45,7 @@ export function ClientConfirmation({
   onBookAnother,
 }: {
   booking: Booking;
+  layout: "phone" | "desktop";
   businessName: string;
   serviceName: string;
   staffName: string | null;
@@ -60,20 +65,23 @@ export function ClientConfirmation({
   onCreateAccount: () => void;
   onBookAnother: () => void;
 }) {
+  const desktop = layout === "desktop";
   const settlement = bookingSettlement(booking);
   const awaiting = booking.status === "awaiting_payment";
   const paidLine =
     settlement.state === "credit"
-      ? "1 session credit"
+      ? "1 credit used"
       : settlement.state === "free"
         ? "Free"
         : settlement.state === "paid"
-          ? `Paid ${formatMoney(booking.priceMinor, booking.currency)}`
+          ? `Paid ${price(booking.priceMinor, booking.currency)}`
           : settlement.state === "deposit_paid" || settlement.state === "part_paid"
-            ? `Paid ${formatMoney(settlement.paidMinor, booking.currency)} · ${formatMoney(settlement.outstandingMinor, booking.currency)} at the session`
+            ? `Paid ${price(settlement.paidMinor, booking.currency)} · ${price(settlement.outstandingMinor, booking.currency)} on the day`
             : bankTransfer
-              ? `${formatMoney(bankTransfer.amountMinor, bankTransfer.currency)} by bank transfer`
-              : `${formatMoney(booking.priceMinor, booking.currency)} to pay`;
+              ? `${price(bankTransfer.amountMinor, bankTransfer.currency)} by bank transfer`
+              : booking.priceMinor > 0
+                ? "Pay on the day"
+                : "Free";
 
   const title = bankTransfer
     ? "Reserved — now make your transfer"
@@ -111,28 +119,170 @@ export function ClientConfirmation({
       })
     : null;
   const deadlinePassed = deadline ? new Date(deadline).getTime() <= Date.now() : false;
+  const monthShort = formatInTz(booking.start, booking.timezone, { month: "short" }).toUpperCase();
+  const dayNum = formatInTz(booking.start, booking.timezone, { day: "numeric" });
+  const manage = hasAccount ? onManage : onCreateAccount;
+
+  const actionClass =
+    "flex h-14 items-center justify-center gap-2 px-2 text-[15px] font-semibold transition hover:bg-muted";
+
+  const bookingCard = (
+    <ClientCard>
+      <div className="flex items-center gap-4 px-4 py-4">
+        <div className="flex h-[52px] w-[52px] shrink-0 flex-col items-center justify-center rounded-[calc(var(--radius)-4px)] bg-muted">
+          <span className="text-[10px] font-semibold tracking-wide text-muted-foreground">
+            {monthShort}
+          </span>
+          <span className="text-[20px] font-bold leading-none">{dayNum}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[18px] font-semibold leading-tight">
+            {formatInTz(booking.start, booking.timezone, { weekday: "long" })},{" "}
+            {formatTimeInTz(booking.start, booking.timezone)} to{" "}
+            {formatTimeInTz(booking.end, booking.timezone)}
+          </p>
+          <p className="mt-0.5 text-[14px] text-muted-foreground">
+            {serviceName}
+            {staffName ? ` with ${staffName}` : ""} · {paidLine}
+          </p>
+        </div>
+      </div>
+      {locationName || address ? (
+        <div className="border-t border-border px-4 py-3.5">
+          {locationName ? <p className="text-[15px] font-semibold">{locationName}</p> : null}
+          <p className="text-[14px] text-muted-foreground">
+            {[address, parkingNote].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "grid divide-x divide-border border-t border-border",
+          desktop ? "grid-cols-3" : "grid-cols-2",
+        )}
+      >
+        <button type="button" onClick={addToCalendar} className={actionClass}>
+          <CalendarPlus className="h-4 w-4 desk:hidden" />
+          Add to calendar
+        </button>
+        {address ? (
+          <a href={directionsUrl(address)} target="_blank" rel="noreferrer" className={actionClass}>
+            <Navigation className="h-4 w-4 desk:hidden" />
+            Directions
+          </a>
+        ) : (
+          <a
+            href={googleCalendarUrl(event)}
+            target="_blank"
+            rel="noreferrer"
+            className={actionClass}
+          >
+            Google Calendar
+          </a>
+        )}
+        {desktop ? (
+          <button type="button" onClick={manage} className={actionClass}>
+            Move or cancel
+          </button>
+        ) : null}
+      </div>
+    </ClientCard>
+  );
+
+  const extra = extras[0] ?? null;
+  const extrasCard = extra ? (
+    <ClientCard className="flex flex-col">
+      <div className="flex-1 px-4 pt-4">
+        <p className="text-[13px] font-semibold text-muted-foreground">Add to your session</p>
+        <p className="mt-1 text-[17px] font-semibold">{extra.name}</p>
+        <p className="mt-1 text-[14px] leading-relaxed text-muted-foreground">
+          {extra.durationMinutes} min straight after your session. Nothing is charged now.
+        </p>
+      </div>
+      <div className="flex items-center justify-between px-4 py-4">
+        <span className="text-[16px] font-semibold">{price(extra.priceMinor, extra.currency)}</span>
+        <button
+          type="button"
+          onClick={() => onAddExtra(extra.serviceId)}
+          className="h-10 shrink-0 rounded-full border border-foreground/70 px-5 text-[14px] font-semibold transition hover:bg-muted"
+        >
+          Add
+        </button>
+      </div>
+    </ClientCard>
+  ) : null;
+
+  const hero = (
+    <div className="text-center">
+      <span
+        className={cn(
+          "mx-auto flex items-center justify-center rounded-full bg-primary text-primary-foreground",
+          desktop ? "h-[60px] w-[60px]" : "h-[72px] w-[72px]",
+        )}
+      >
+        <Check className="h-7 w-7" strokeWidth={3} />
+      </span>
+      <h1
+        className="mt-5 text-[30px] font-bold leading-tight tracking-tight sm:text-[40px]"
+        style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
+      >
+        {title}
+      </h1>
+      <p className="mx-auto mt-2 max-w-lg text-[16px] text-muted-foreground">
+        {bankTransfer
+          ? "Your time is saved. Send the transfer below and the booking is confirmed once the money arrives — we've emailed these details too."
+          : awaiting
+            ? "Your time is reserved while the payment finishes going through. We'll email you as soon as it's confirmed."
+            : `${emailLine}${textLine}`}
+      </p>
+    </div>
+  );
+
+  if (desktop) {
+    return (
+      <div className="mx-auto w-full max-w-[760px] px-6 pt-10">
+        {hero}
+        {bankTransfer ? (
+          <div className="mt-6">
+            <BankTransferPanel details={bankTransfer} />
+          </div>
+        ) : null}
+        <div
+          className={cn(
+            "mt-7 grid items-stretch gap-4",
+            extrasCard ? "grid-cols-1 desk:grid-cols-[minmax(0,1fr)_250px]" : "grid-cols-1",
+          )}
+        >
+          {bookingCard}
+          {extrasCard}
+        </div>
+        <p className="mt-5 text-center text-[13px] text-muted-foreground">
+          {deadlineLabel && !bankTransfer
+            ? deadlinePassed
+              ? "This session starts soon, so it can no longer be moved or cancelled for free"
+              : `Free to move or cancel until ${deadlineLabel}`
+            : `Reference ${booking.reference}`}
+          {" · "}
+          <TextLink onClick={onBookAnother} className="text-[13px] text-foreground">
+            Book another session
+          </TextLink>
+        </p>
+        {hasAccount ? null : (
+          <p className="mt-2 text-center text-[13px] text-muted-foreground">
+            <TextLink onClick={onCreateAccount} className="text-[13px] text-foreground">
+              Manage my bookings
+            </TextLink>{" "}
+            · we'll email you a code so you can move or cancel this and book faster next time.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
       <ClientColumn className="pt-10 sm:pt-16">
-        <div className="text-center">
-          <span className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Check className="h-8 w-8" strokeWidth={3} />
-          </span>
-          <h1
-            className="mt-5 text-[30px] font-bold leading-tight tracking-tight sm:text-[40px]"
-            style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
-          >
-            {title}
-          </h1>
-          <p className="mx-auto mt-2 max-w-md text-[16px] text-muted-foreground">
-            {bankTransfer
-              ? "Your time is saved. Send the transfer below and the booking is confirmed once the money arrives — we've emailed these details too."
-              : awaiting
-                ? "Your time is reserved while the payment finishes going through. We'll email you as soon as it's confirmed."
-                : `${emailLine}${textLine}`}
-          </p>
-        </div>
+        {hero}
 
         {bankTransfer ? (
           <div className="mt-6">
@@ -140,88 +290,8 @@ export function ClientConfirmation({
           </div>
         ) : null}
 
-        <ClientCard className="mt-6">
-          <div className="px-4 py-4">
-            <p className="text-[18px] font-semibold">
-              {formatInTz(booking.start, booking.timezone, {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-              , {formatTimeInTz(booking.start, booking.timezone)}
-            </p>
-            <p className="mt-0.5 text-[15px] text-muted-foreground">
-              {serviceName}
-              {staffName ? ` with ${staffName}` : ""} · {paidLine}
-            </p>
-          </div>
-          {locationName || address ? (
-            <div className="border-t border-border px-4 py-4">
-              {locationName ? <p className="text-[16px] font-semibold">{locationName}</p> : null}
-              <p className="text-[15px] text-muted-foreground">
-                {[address, parkingNote].filter(Boolean).join(" · ")}
-              </p>
-            </div>
-          ) : null}
-          <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
-            <button
-              type="button"
-              onClick={addToCalendar}
-              className="flex h-14 items-center justify-center gap-2 text-[15px] font-semibold transition hover:bg-muted"
-            >
-              <CalendarPlus className="h-4 w-4" />
-              Add to calendar
-            </button>
-            {address ? (
-              <a
-                href={directionsUrl(address)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-14 items-center justify-center gap-2 text-[15px] font-semibold transition hover:bg-muted"
-              >
-                <Navigation className="h-4 w-4" />
-                Directions
-              </a>
-            ) : (
-              <a
-                href={googleCalendarUrl(event)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-14 items-center justify-center gap-2 text-[15px] font-semibold transition hover:bg-muted"
-              >
-                Google Calendar
-              </a>
-            )}
-          </div>
-        </ClientCard>
-
-        {extras.length > 0 ? (
-          <ClientCard className="mt-4">
-            <div className="px-4 pt-4">
-              <p className="text-[13px] font-semibold text-muted-foreground">Add to your session</p>
-            </div>
-            <ul className="divide-y divide-border">
-              {extras.map((extra) => (
-                <li key={extra.serviceId} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[16px] font-semibold">{extra.name}</p>
-                    <p className="text-[14px] text-muted-foreground">
-                      {extra.durationMinutes} min after your session ·{" "}
-                      {formatMoney(extra.priceMinor, extra.currency)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onAddExtra(extra.serviceId)}
-                    className="h-11 shrink-0 rounded-full border border-foreground/70 px-5 text-[15px] font-semibold transition hover:bg-muted"
-                  >
-                    Add
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </ClientCard>
-        ) : null}
+        <div className="mt-6">{bookingCard}</div>
+        {extrasCard ? <div className="mt-4">{extrasCard}</div> : null}
 
         <p className="mt-6 text-center text-[13px] text-muted-foreground">
           Reference{" "}

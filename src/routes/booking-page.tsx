@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, ImagePlus, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import { ClientBookingCard } from "@/components/client/ClientBookingCard";
 import { ClientLanding } from "@/components/client/ClientLanding";
 import { ClientTheme } from "@/components/client/ClientPage";
 import { EmptyState, PageHeader, SectionCard } from "@/components/ui-bits";
@@ -998,6 +999,7 @@ function LivePreview({
   const locations = usePublicLocations(businessId);
   const { ref, width } = useElementWidth<HTMLDivElement>();
   const scale = device === "desktop" && width > 0 ? Math.min(1, width / DESKTOP_CANVAS) : 1;
+  const previewToday = new Date().toISOString().slice(0, 10);
 
   const noop = () => undefined;
   const content = business.data ? (
@@ -1017,6 +1019,39 @@ function LivePreview({
           onBookNow={noop}
           onSignIn={noop}
           cancellationWindowHours={business.data.cancellationWindowHours ?? cancellationWindowHours}
+          layout={device}
+          selectedServiceId={services.data?.[0]?.id ?? null}
+          bookingCard={
+            <ClientBookingCard
+              service={services.data?.[0] ?? null}
+              pkg={null}
+              timezone={business.data.defaultTimezone}
+              staff={staff.data ?? []}
+              staffId={null}
+              onStaff={noop}
+              extras={[]}
+              extraIds={[]}
+              onToggleExtra={noop}
+              date={previewToday}
+              onDate={noop}
+              today={previewToday}
+              horizonDays={56}
+              dayCounts={null}
+              slots={[]}
+              allSlots={[]}
+              loading={false}
+              selected={null}
+              onSelect={noop}
+              onContinue={noop}
+              onBuyPackage={noop}
+              onWaitlist={noop}
+              priceMinor={services.data?.[0]?.basePriceMinor ?? 0}
+              currency={services.data?.[0]?.currency ?? business.data.currency}
+              cancellationWindowHours={
+                business.data.cancellationWindowHours ?? cancellationWindowHours
+              }
+            />
+          }
         />
       </div>
     </ClientTheme>

@@ -59,3 +59,52 @@ export function addCalendarDays(date: string, days: number): string {
   const next = new Date(Date.UTC(y!, m! - 1, d! + days));
   return next.toISOString().slice(0, 10);
 }
+
+/** `YYYY-MM` of a calendar day. */
+export function monthOf(date: string): string {
+  return date.slice(0, 7);
+}
+
+/** `YYYY-MM` plus whole months. */
+export function addMonths(month: string, months: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(y!, m! - 1 + months, 1));
+  return next.toISOString().slice(0, 7);
+}
+
+/**
+ * The cells of a Monday-first month grid: `null` for the blanks before the 1st,
+ * then every day of the month as `YYYY-MM-DD`. Always a whole number of weeks.
+ */
+export function monthGrid(month: string): (string | null)[] {
+  const [y, m] = month.split("-").map(Number);
+  const first = new Date(Date.UTC(y!, m! - 1, 1));
+  const lead = (first.getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const cells: (string | null)[] = Array.from({ length: lead }, () => null);
+  for (let d = 1; d <= days; d += 1) {
+    cells.push(`${month}-${String(d).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+/**
+ * "Leeds LS6" from "12 Mill Street, Leeds LS6 2AB": the town and the outward
+ * half of a UK postcode, for the landing chip. Falls back to the last part of
+ * the address when there is no postcode to anchor on.
+ */
+export function shortPlace(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const last = parts[parts.length - 1]!;
+  const postcode = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})?$/i.exec(last);
+  if (!postcode) return last;
+  const outward = postcode[1]!.toUpperCase();
+  const town = last.slice(0, postcode.index).trim() || parts[parts.length - 2] || "";
+  return [town, outward].filter(Boolean).join(" ");
+}

@@ -11,6 +11,8 @@
  */
 
 @theme inline {
+  /* The client booking page goes two-column here (spec: columns wrap below ~900px). */
+  --breakpoint-desk: 900px;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);

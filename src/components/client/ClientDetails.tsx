@@ -1,13 +1,20 @@
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Clock, Tag } from "lucide-react";
+import { ChevronRight, Clock } from "lucide-react";
 import {
   BarSummary,
   BottomBar,
+  ClientCard,
   ClientColumn,
+  HoldPill,
   PageTitle,
   PrimaryButton,
   StepHeader,
+  SummaryRow,
+  TextLink,
 } from "@/components/client/ClientPage";
+import { headerStyle, type BookingPageContent } from "@/lib/client-theme";
+import { formatDuration, formatInTz, formatTimeInTz } from "@/lib/format";
+import { price } from "@/lib/client-journey";
 import { cn } from "@/lib/utils";
 
 export type DetailsValues = {
@@ -22,12 +29,32 @@ export type DetailsValues = {
 
 export type DetailsField = keyof Pick<DetailsValues, "firstName" | "lastName" | "email" | "phone">;
 
+/** What the desktop summary card shows beside the form. */
+export type DetailsSummary = {
+  page: BookingPageContent;
+  businessName: string;
+  serviceName: string;
+  start: string;
+  end: string;
+  timezone: string;
+  durationMinutes: number;
+  staffName: string | null;
+  /** "Northside Studio, LS6" */
+  where: string | null;
+  priceMinor: number;
+  currency: string;
+  /** Countdown on a held time; null when nothing is held yet. */
+  msLeft: number | null;
+};
+
 export function ClientDetails({
   values,
   onChange,
   errors,
   whenLabel,
   summaryCaption,
+  summary,
+  layout,
   onBack,
   onChangeTime,
   onContinue,
@@ -36,8 +63,6 @@ export function ClientDetails({
   signedInAs,
   onSignIn,
   onNotYou,
-  promoApplied,
-  promoError,
 }: {
   values: DetailsValues;
   onChange: (patch: Partial<DetailsValues>) => void;
@@ -46,6 +71,8 @@ export function ClientDetails({
   whenLabel: string;
   /** "1-to-1 session · £45" */
   summaryCaption: string;
+  summary: DetailsSummary;
+  layout: "phone" | "desktop";
   onBack: () => void;
   onChangeTime: () => void;
   onContinue: () => void;
@@ -55,11 +82,178 @@ export function ClientDetails({
   signedInAs: string | null;
   onSignIn: () => void;
   onNotYou: () => void;
-  /** What the code is worth, once the studio has confirmed it. */
-  promoApplied: string | null;
-  promoError: string | null;
 }) {
-  const [promoOpen, setPromoOpen] = useState(Boolean(values.promoCode));
+  const [notesOpen, setNotesOpen] = useState(Boolean(values.notes));
+  const desktop = layout === "desktop";
+
+  const signInCard = signedInAs ? (
+    <div className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3">
+      <div>
+        <p className="text-[13px] text-muted-foreground">Booking as</p>
+        <p className="text-[17px] font-semibold">{signedInAs}</p>
+      </div>
+      <TextLink onClick={onNotYou}>Not you?</TextLink>
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={onSignIn}
+      className="flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
+    >
+      <span>
+        <span className="block text-[15px] font-semibold">Booked here before?</span>
+        <span className="block text-[13px] text-muted-foreground">
+          {desktop
+            ? "Sign in with a code and we'll fill this in for you"
+            : "Sign in with a code and skip this step"}
+        </span>
+      </span>
+      {desktop ? (
+        <span className="text-[14px] font-semibold">Sign in</span>
+      ) : (
+        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+      )}
+    </button>
+  );
+
+  const fields = (
+    <>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-4 desk:gap-x-4">
+        <Field label="First name" error={errors.firstName}>
+          <TextInput
+            value={values.firstName}
+            onChange={(v) => onChange({ firstName: v })}
+            autoComplete="given-name"
+            invalid={Boolean(errors.firstName)}
+            required
+          />
+        </Field>
+        <Field label="Surname" error={errors.lastName}>
+          <TextInput
+            value={values.lastName}
+            onChange={(v) => onChange({ lastName: v })}
+            autoComplete="family-name"
+            invalid={Boolean(errors.lastName)}
+            required
+          />
+        </Field>
+        <Field
+          label="Email"
+          error={errors.email}
+          hint="For your confirmation and receipt"
+          className={cn(!desktop && "col-span-2")}
+        >
+          <TextInput
+            type="email"
+            value={values.email}
+            onChange={(v) => onChange({ email: v })}
+            autoComplete="email"
+            inputMode="email"
+            invalid={Boolean(errors.email)}
+            required
+          />
+        </Field>
+        <Field
+          label="Mobile"
+          error={errors.phone}
+          hint="We'll text a reminder the day before"
+          className={cn(!desktop && "col-span-2")}
+        >
+          <div
+            className={cn(
+              "flex items-stretch overflow-hidden rounded-[var(--radius)] border bg-card transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30",
+              desktop ? "h-[48px]" : "h-[56px]",
+              errors.phone ? "border-destructive" : "border-input",
+            )}
+          >
+            <span
+              className={cn(
+                "flex items-center border-r border-border px-3.5 text-muted-foreground",
+                desktop ? "text-[15px]" : "text-[17px]",
+              )}
+            >
+              +44
+            </span>
+            <input
+              type="tel"
+              value={values.phone}
+              onChange={(e) => onChange({ phone: e.target.value })}
+              autoComplete="tel-national"
+              inputMode="tel"
+              placeholder="7700 900123"
+              required
+              className={cn(
+                "min-w-0 flex-1 bg-transparent px-4 text-foreground outline-none placeholder:text-muted-foreground/60",
+                desktop ? "text-[15px]" : "text-[17px]",
+              )}
+            />
+          </div>
+        </Field>
+      </div>
+
+      <div className="mt-4">
+        {notesOpen ? (
+          <Field label="Anything we should know? (optional)">
+            <textarea
+              value={values.notes}
+              onChange={(e) => onChange({ notes: e.target.value })}
+              rows={2}
+              maxLength={500}
+              placeholder="Injuries, goals, access needs"
+              className={cn(
+                "w-full resize-none rounded-[var(--radius)] border border-input bg-card px-4 py-3 text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30",
+                desktop ? "text-[15px]" : "text-[17px]",
+              )}
+            />
+          </Field>
+        ) : (
+          <TextLink onClick={() => setNotesOpen(true)} className="text-[14px]">
+            Anything we should know?
+          </TextLink>
+        )}
+      </div>
+
+      <label className="mt-4 flex cursor-pointer items-start gap-3 text-[13px] text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={values.marketingConsent}
+          onChange={(e) => onChange({ marketingConsent: e.target.checked })}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-[var(--client-accent)]"
+        />
+        <span>Keep me posted about offers and news from this business.</span>
+      </label>
+    </>
+  );
+
+  const summaryCard = <DetailsSummaryCard summary={summary} />;
+
+  if (desktop) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canContinue && !pending) onContinue();
+        }}
+      >
+        <ClientColumn wide className="pt-6">
+          <div className="grid grid-cols-1 items-start gap-10 desk:grid-cols-[minmax(0,1fr)_320px] desk:gap-12">
+            <div className="min-w-0">
+              <PageTitle>Your details</PageTitle>
+              <div className="mt-6">{signInCard}</div>
+              <div className="mt-6">{fields}</div>
+              <div className="mt-8 flex items-center justify-between">
+                <TextLink onClick={onBack}>Back</TextLink>
+                <PrimaryButton type="submit" disabled={!canContinue || pending}>
+                  {pending ? "Holding your time…" : "Continue to review"}
+                </PrimaryButton>
+              </div>
+            </div>
+            <aside className="desk:sticky desk:top-6">{summaryCard}</aside>
+          </div>
+        </ClientColumn>
+      </form>
+    );
+  }
 
   return (
     <form
@@ -84,150 +278,8 @@ export function ClientDetails({
         </button>
 
         <PageTitle className="mt-5">Your details</PageTitle>
-
-        {signedInAs ? (
-          <div className="mt-4 flex items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3">
-            <div>
-              <p className="text-[13px] text-muted-foreground">Booking as</p>
-              <p className="text-[17px] font-semibold">{signedInAs}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onNotYou}
-              className="text-[15px] font-semibold underline underline-offset-4"
-            >
-              Not you?
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="mt-4 flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
-          >
-            <span>
-              <span className="block text-[15px] font-semibold">Booked here before?</span>
-              <span className="block text-[13px] text-muted-foreground">
-                Sign in with a code and skip this step
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </button>
-        )}
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <Field label="First name" error={errors.firstName}>
-            <TextInput
-              value={values.firstName}
-              onChange={(v) => onChange({ firstName: v })}
-              autoComplete="given-name"
-              invalid={Boolean(errors.firstName)}
-              required
-            />
-          </Field>
-          <Field label="Surname" error={errors.lastName}>
-            <TextInput
-              value={values.lastName}
-              onChange={(v) => onChange({ lastName: v })}
-              autoComplete="family-name"
-              invalid={Boolean(errors.lastName)}
-              required
-            />
-          </Field>
-        </div>
-
-        <Field label="Email" error={errors.email} className="mt-4">
-          <TextInput
-            type="email"
-            value={values.email}
-            onChange={(v) => onChange({ email: v })}
-            autoComplete="email"
-            inputMode="email"
-            invalid={Boolean(errors.email)}
-            required
-          />
-        </Field>
-
-        <Field
-          label="Mobile"
-          error={errors.phone}
-          hint="We'll text you a reminder the day before."
-          className="mt-4"
-        >
-          <div
-            className={cn(
-              "flex h-[56px] items-stretch overflow-hidden rounded-[var(--radius)] border bg-card transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30",
-              errors.phone ? "border-destructive" : "border-input",
-            )}
-          >
-            <span className="flex items-center border-r border-border px-4 text-[17px] text-muted-foreground">
-              +44
-            </span>
-            <input
-              type="tel"
-              value={values.phone}
-              onChange={(e) => onChange({ phone: e.target.value })}
-              autoComplete="tel-national"
-              inputMode="tel"
-              placeholder="7700 900123"
-              required
-              className="min-w-0 flex-1 bg-transparent px-4 text-[17px] text-foreground outline-none placeholder:text-muted-foreground/60"
-            />
-          </div>
-        </Field>
-
-        <Field label="Anything we should know? (optional)" className="mt-4">
-          <textarea
-            value={values.notes}
-            onChange={(e) => onChange({ notes: e.target.value })}
-            rows={2}
-            maxLength={500}
-            placeholder="Injuries, goals, access needs"
-            className="w-full resize-none rounded-[var(--radius)] border border-input bg-card px-4 py-3 text-[17px] text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30"
-          />
-        </Field>
-
-        <div className="mt-4">
-          {promoOpen ? (
-            <Field
-              label="Promo code"
-              error={promoError ?? undefined}
-              hint={promoApplied ?? undefined}
-            >
-              <div className="flex items-center gap-2">
-                <TextInput
-                  value={values.promoCode}
-                  onChange={(v) => onChange({ promoCode: v.toUpperCase() })}
-                  autoComplete="off"
-                  invalid={Boolean(promoError)}
-                  className="font-mono uppercase"
-                  placeholder="SUMMER10"
-                />
-              </div>
-            </Field>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPromoOpen(true)}
-              className="inline-flex items-center gap-2 text-[15px] font-semibold underline underline-offset-4"
-            >
-              <Tag className="h-4 w-4" />
-              Have a code?
-            </button>
-          )}
-        </div>
-
-        <label className="mt-5 flex cursor-pointer items-start gap-3 text-[14px] text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={values.marketingConsent}
-            onChange={(e) => onChange({ marketingConsent: e.target.checked })}
-            className="mt-0.5 h-5 w-5 shrink-0 rounded border-input accent-[var(--client-accent)]"
-          />
-          <span>
-            Keep me posted about offers and news from this business. You can opt out any time.
-          </span>
-        </label>
+        <div className="mt-4">{signInCard}</div>
+        <div className="mt-5">{fields}</div>
       </ClientColumn>
 
       <BottomBar>
@@ -237,6 +289,33 @@ export function ClientDetails({
         </PrimaryButton>
       </BottomBar>
     </form>
+  );
+}
+
+/** Header image strip, service, when / length / trainer / venue, total, hold timer. */
+function DetailsSummaryCard({ summary }: { summary: DetailsSummary }) {
+  const when = `${formatInTz(summary.start, summary.timezone, { weekday: "short", day: "numeric", month: "short" })}, ${formatTimeInTz(summary.start, summary.timezone)}`;
+  return (
+    <ClientCard className="shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="h-[88px] w-full bg-muted" style={headerStyle(summary.page)} aria-hidden />
+      <div className="px-5 pt-4 pb-5">
+        <p className="text-[13px] text-muted-foreground">{summary.businessName}</p>
+        <p className="text-[18px] font-semibold leading-tight">{summary.serviceName}</p>
+        <div className="mt-3">
+          <SummaryRow label="When" value={when} />
+          <SummaryRow label="Length" value={formatDuration(summary.durationMinutes)} />
+          <SummaryRow label="With" value={summary.staffName ?? "Any trainer"} />
+          {summary.where ? <SummaryRow label="Where" value={summary.where} /> : null}
+        </div>
+        <div className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
+          <span className="text-[15px] font-semibold">Total</span>
+          <span className="text-[22px] font-bold">
+            {summary.priceMinor === 0 ? "Free" : price(summary.priceMinor, summary.currency)}
+          </span>
+        </div>
+        {summary.msLeft !== null ? <HoldPill msLeft={summary.msLeft} className="mt-3" /> : null}
+      </div>
+    </ClientCard>
   );
 }
 
@@ -255,12 +334,12 @@ function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[15px] font-semibold">{label}</span>
+      <span className="mb-1.5 block text-[14px] font-semibold">{label}</span>
       {children}
       {error ? (
         <span className="mt-1.5 block text-[13px] text-destructive">{error}</span>
       ) : hint ? (
-        <span className="mt-1.5 block text-[13px] text-muted-foreground">{hint}</span>
+        <span className="mt-1.5 block text-[12px] text-muted-foreground">{hint}</span>
       ) : null}
     </label>
   );
@@ -291,7 +370,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       aria-invalid={invalid || undefined}
       className={cn(
-        "h-[56px] w-full rounded-[var(--radius)] border bg-card px-4 text-[17px] text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30",
+        "h-[56px] w-full rounded-[var(--radius)] border bg-card px-4 text-[17px] text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30 desk:h-[48px] desk:text-[15px]",
         invalid ? "border-destructive" : "border-input",
         className,
       )}

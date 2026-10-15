@@ -12,8 +12,8 @@ import { PersonMark } from "@/components/client/ClientLanding";
 import type { PublicLocation, PublicService, PublicStaff } from "@/lib/api/hooks";
 import type { AvailabilitySlot, PublicServiceUpsell } from "@/lib/api/types";
 import { addCalendarDays } from "@/lib/client-booking";
-import { dedupeSlotsByStart, groupSlotsByDayPart } from "@/lib/client-journey";
-import { formatDuration, formatInTz, formatMoney, formatTimeInTz, isoDateInTz } from "@/lib/format";
+import { dedupeSlotsByStart, groupSlotsByDayPart, price } from "@/lib/client-journey";
+import { formatDuration, formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type DayAvailability = Map<string, number>;
@@ -121,7 +121,7 @@ export function ClientDateTime({
         <PageTitle>Choose a time</PageTitle>
         <p className="mt-1 text-[15px] text-muted-foreground">
           {service.name} · {formatDuration(service.durationMinutes)} ·{" "}
-          {priceMinor === 0 ? "Free" : formatMoney(priceMinor, currency)}
+          {priceMinor === 0 ? "Free" : price(priceMinor, currency)}
         </p>
 
         {locations.length > 1 ? (
@@ -137,9 +137,14 @@ export function ClientDateTime({
           </div>
         ) : null}
 
-        {staff.length > 0 ? (
+        {/* One trainer means no choice to make; the chips only appear when there are several. */}
+        {staff.length > 1 ? (
           <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0">
-            <PersonChip label="Anyone" active={staffId === null} onClick={() => onStaff(null)} />
+            <PersonChip
+              label="Any trainer"
+              active={staffId === null}
+              onClick={() => onStaff(null)}
+            />
             {staff.map((person) => (
               <PersonChip
                 key={person.id}
@@ -176,7 +181,7 @@ export function ClientDateTime({
                     {on ? <Check className="h-4 w-4 text-primary" /> : null}
                     {u.name}
                     <span className="text-muted-foreground">
-                      +{formatMoney(u.priceMinor, currency)} · {formatDuration(u.durationMinutes)}
+                      +{price(u.priceMinor, currency)} · {formatDuration(u.durationMinutes)}
                     </span>
                   </button>
                 );
@@ -310,7 +315,7 @@ export function ClientDateTime({
       <BottomBar>
         {selected ? (
           <BarSummary
-            caption={`${formatInTz(selected.start, timezone, { weekday: "short", day: "numeric", month: "short" })} · ${staffName ?? "Anyone"}`}
+            caption={`${formatInTz(selected.start, timezone, { weekday: "short", day: "numeric", month: "short" })} · ${staffName ?? "Any trainer"}`}
             value={`${formatTimeInTz(selected.start, timezone)} to ${formatTimeInTz(selected.end, timezone)}`}
           />
         ) : (
@@ -318,7 +323,7 @@ export function ClientDateTime({
             caption="Pick a time"
             value={
               extrasTotal > 0
-                ? `${formatMoney(priceMinor + extrasTotal, currency)} total`
+                ? `${price(priceMinor + extrasTotal, currency)} total`
                 : isoDateInTz(new Date().toISOString(), timezone) === date
                   ? "Today"
                   : formatInTz(`${date}T12:00:00Z`, "UTC", {

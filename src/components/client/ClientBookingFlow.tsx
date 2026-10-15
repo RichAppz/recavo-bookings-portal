@@ -10,27 +10,33 @@ import type {
 } from "@/components/BookingCheckout";
 import { EmailCodeSignIn, type EmailCodeStep } from "@/components/EmailCodeSignIn";
 import { JoinWaitlistSheet } from "@/components/JoinWaitlistSheet";
+import { ClientBookingCard } from "@/components/client/ClientBookingCard";
 import { ClientConfirmation, type ConfirmationExtra } from "@/components/client/ClientConfirmation";
 import { ClientDateTime, type DayAvailability } from "@/components/client/ClientDateTime";
 import {
   ClientDetails,
   type DetailsField,
+  type DetailsSummary,
   type DetailsValues,
 } from "@/components/client/ClientDetails";
 import { ClientLanding, type NextAvailable } from "@/components/client/ClientLanding";
 import {
+  CLIENT_DESKTOP_QUERY,
   ClientSheet,
   ClientTheme,
   DesktopTopBar,
   InkButton,
   PrimaryButton,
+  TextLink,
 } from "@/components/client/ClientPage";
 import {
   ClientReview,
   type PayMethod,
   type PayOption,
+  type PromoState,
   type ReviewSummary,
 } from "@/components/client/ClientReview";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { ApiError } from "@/lib/api";
 import {
   useBookWithPortalCredit,
@@ -47,6 +53,7 @@ import {
   usePublicPackages,
   usePublicServices,
   usePublicStaff,
+  useReleasePublicBookingHold,
   useStartPublicBookingPayment,
   type PublicBookingPayment,
   type PublicBusinessProfile,
@@ -54,7 +61,7 @@ import {
 import { queryKeys } from "@/lib/api/query-keys";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
-import { addCalendarDays } from "@/lib/client-booking";
+import { addCalendarDays, shortPlace } from "@/lib/client-booking";
 import {
   EMPTY_CONTACT,
   authenticationSucceeded,
@@ -67,15 +74,18 @@ import {
   useCountdown,
   writeStoredJourney,
   type JourneyHold,
+  price,
 } from "@/lib/client-journey";
 import { THEME_SPECS, effectiveAccent, type BookingPageContent } from "@/lib/client-theme";
-import { formatInTz, formatMoney, formatTimeInTz, isoDateInTz } from "@/lib/format";
+import { formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
 
 type Step = "landing" | "time" | "details" | "review" | "done";
 
 /** How far ahead one availability request looks; the API caps requests at 62 days. */
 const WINDOW_DAYS = 28;
+/** The desktop month calendar loads its whole horizon in one go. */
+const DESKTOP_WINDOW_DAYS = 56;
 
 /** "Now", rounded down to five minutes, so it is a stable query input. */
 function availabilityWindowStart(): string {
@@ -114,9 +124,14 @@ export function ClientBookingFlow({
   const queryClient = useQueryClient();
   const auth = useAuth();
   const signedIn = auth.status === "authenticated";
+  // Desktop: the landing carries the booking card, so "choose a time" is not a
+  // separate screen and the other steps sit beside a summary card.
+  const desktop = useMediaQuery(CLIENT_DESKTOP_QUERY);
+  const layout = desktop ? "desktop" : "phone";
 
   const [step, setStep] = useState<Step>("landing");
   const [serviceId, setServiceId] = useState<string | null>(null);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [extraIds, setExtraIds] = useState<string[]>([]);
@@ -130,6 +145,9 @@ export function ClientBookingFlow({
   const [details, setDetails] = useState<DetailsValues>(EMPTY_DETAILS);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<DetailsField, string>>>({});
   const [hold, setHold] = useState<JourneyHold | null>(null);
+  /** The promo code the current hold was priced with, so a new code re-holds once. */
+  const [heldCode, setHeldCode] = useState<string | null>(null);
+  const [reholding, setReholding] = useState(false);
   const [payment, setPayment] = useState<PublicBookingPayment | null>(null);
   const [payMethod, setPayMethod] = useState<PayMethod>("card");
   const [agreed, setAgreed] = useState(false);
@@ -160,6 +178,15 @@ export function ClientBookingFlow({
   const credits = usePortalCredits(hasAccountHere ? businessId : undefined);
 
   const service = services.data?.find((s) => s.id === serviceId) ?? null;
+  const selectedPackage = packages.data?.packages.find((p) => p.id === selectedPackageId) ?? null;
+
+  // Desktop opens with the first session chosen, so the card shows times straight away.
+  useEffect(() => {
+    if (!desktop || serviceId || selectedPackageId) return;
+    const first = services.data?.[0];
+    if (first) setServiceId(first.id);
+  }, [desktop, serviceId, selectedPackageId, services.data]);
+
   const serviceStaff = useMemo(
     () =>
       (staff.data ?? []).filter(
@@ -192,16 +219,18 @@ export function ClientBookingFlow({
 
   // One window of availability per service/person/add-ons; the day strip and the
   // chosen day both read from it, so changing day costs nothing.
-  const windowStart = date >= addCalendarDays(today, WINDOW_DAYS) ? date : today;
+  const windowDays = desktop ? DESKTOP_WINDOW_DAYS : WINDOW_DAYS;
+  const windowStart = date >= addCalendarDays(today, windowDays) ? date : today;
+  const choosingTime = step === "time" || (desktop && step === "landing");
   const availability = usePublicAvailability(businessId, {
     serviceId: serviceId ?? undefined,
     locationId: activeLocationId ?? undefined,
     from: fromIso,
-    to: `${addCalendarDays(windowStart, WINDOW_DAYS)}T00:00:00.000Z`,
+    to: `${addCalendarDays(windowStart, windowDays)}T00:00:00.000Z`,
     staffId,
     linkCode,
     additionalServiceIds: extraIds,
-    enabled: step === "time" && Boolean(serviceId && activeLocationId),
+    enabled: choosingTime && Boolean(serviceId && activeLocationId),
   });
   const dayCounts = useMemo<DayAvailability | null>(() => {
     if (!availability.data) return null;
@@ -229,7 +258,8 @@ export function ClientBookingFlow({
     locationId: activeLocationId ?? undefined,
     from: fromIso,
     to: `${addCalendarDays(today, 14)}T00:00:00.000Z`,
-    enabled: step === "landing" && Boolean(firstService && activeLocationId),
+    // The desktop card shows the times themselves, so no separate peek is needed.
+    enabled: !desktop && step === "landing" && Boolean(firstService && activeLocationId),
   });
   const nextAvailable = useMemo<NextAvailable>(() => {
     const first = (landingAvailability.data ?? [])
@@ -247,6 +277,7 @@ export function ClientBookingFlow({
   }, [landingAvailability.data, firstService, tz, today]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);
+  const releaseMutation = useReleasePublicBookingHold(businessId);
   const confirmMutation = useConfirmPublicBooking(businessId);
   const paymentMutation = useStartPublicBookingPayment(businessId);
   const creditMutation = useBookWithPortalCredit(hasAccountHere ? businessId : undefined);
@@ -317,16 +348,27 @@ export function ClientBookingFlow({
     void queryClient.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId) });
   };
 
+  /** Hands a held time back so nobody waits ten minutes for it; best effort. */
+  const releaseHold = (current: JourneyHold | null) => {
+    if (!current || current.booking.status !== "held") return Promise.resolve(false);
+    return releaseMutation
+      .mutateAsync({ bookingId: current.booking.id, holdToken: current.holdToken })
+      .catch(() => false);
+  };
+
   /** Back to the times after a clash or an expiry: the grid is refreshed and the slot cleared. */
   const reselect = (message: string | null) => {
     if (message) toast.error(message);
+    void releaseHold(hold).then(() => refreshAvailability());
     setHold(null);
+    setHeldCode(null);
     setPayment(null);
     setSelectedSlot(null);
     setSettling(false);
     setExpiredSlot(null);
     clearStoredHold();
-    setStep("time");
+    // The desktop landing carries the booking card; the phone has its own screen.
+    setStep(desktop ? "landing" : "time");
     refreshAvailability();
   };
 
@@ -362,21 +404,23 @@ export function ClientBookingFlow({
     if (card)
       list.push({
         key: "card",
-        title: "Pay by card now",
-        subtitle: "Card, Apple Pay or Google Pay",
+        title: "Pay now",
+        subtitle: "Card, Apple Pay, Google Pay",
       });
+    // Paying at the session is only on offer when the business does not insist
+    // on payment up front; the confirm call would refuse it otherwise.
     if (!card) {
       list.push({
         key: "in_person",
         title: "Pay on the day",
-        subtitle: `Pay ${business.tradingName} at the session`,
+        subtitle: "At your session",
       });
     }
     if (bank)
       list.push({
         key: "bank_transfer",
         title: "Bank transfer",
-        subtitle: "We email you the details",
+        subtitle: "Details sent by email",
       });
     return list;
   };
@@ -401,16 +445,34 @@ export function ClientBookingFlow({
   /* ---------- actions ---------- */
 
   const pickService = (id: string) => {
+    setSelectedPackageId(null);
+    if (id === serviceId && desktop) return;
     setServiceId(id);
     setStaffId(null);
     setExtraIds([]);
     setSelectedSlot(null);
     setDate(today);
+    if (desktop) return;
     setStep("time");
     window.scrollTo({ top: 0 });
   };
 
+  // Desktop: a package is a radio row like the sessions, and the card becomes its
+  // buy card. Phone: straight through to the package checkout.
+  const pickPackage = (id: string) => {
+    if (!desktop) {
+      onPickPackage(id);
+      return;
+    }
+    setSelectedPackageId(id);
+    setSelectedSlot(null);
+  };
+
   const bookNow = () => {
+    if (desktop) {
+      document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     if (nextAvailable) {
       pickService(nextAvailable.serviceId);
       return;
@@ -422,7 +484,11 @@ export function ClientBookingFlow({
     document.getElementById("sessions")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const takeHold = (slot: AvailabilitySlot, after: (held: JourneyHold) => void) => {
+  const takeHold = (
+    slot: AvailabilitySlot,
+    after: (held: JourneyHold) => void,
+    onFail?: () => void,
+  ) => {
     setFieldErrors({});
     holdMutation.mutate(
       {
@@ -451,10 +517,12 @@ export function ClientBookingFlow({
               : {}),
           };
           setHold(held);
+          setHeldCode(linkCode);
           setExpiredSlot(null);
           after(held);
         },
         onError: (err) => {
+          onFail?.();
           if (err instanceof ApiError) {
             if (err.code === "BOOKING_CONFLICT" || err.isConflict) {
               reselect(
@@ -628,6 +696,32 @@ export function ClientBookingFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, hold, payment, settling, payMethod]);
 
+  // A promo code applied on Review changes the price, and a hold's price is fixed
+  // when it is taken: give the held time back and hold it again with the code.
+  useEffect(() => {
+    if (step !== "review" || !hold || !selectedSlot || reholding || settling) return;
+    if (promo.isPending && details.promoCode.trim()) return;
+    if (linkCode === heldCode) return;
+    if (hold.booking.start !== selectedSlot.start) return;
+    setReholding(true);
+    const previous = hold;
+    void releaseHold(previous).then(() => {
+      setPayment(null);
+      takeHold(
+        selectedSlot,
+        (held) => {
+          setReholding(false);
+          setPayMethod((m) => {
+            const allowed = optionsFor(held, held.booking.priceMinor).map((o) => o.key);
+            return allowed.includes(m) ? m : defaultMethodFor(held, held.booking.priceMinor);
+          });
+        },
+        () => setReholding(false),
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, hold, selectedSlot, linkCode, heldCode, promo.isPending, reholding, settling]);
+
   // Card authentication goes to the bank and back to a fresh page: rebuild from storage.
   const resumed = useRef(false);
   useEffect(() => {
@@ -698,6 +792,16 @@ export function ClientBookingFlow({
       ? new Date(new Date(start).getTime() - cancellationHours * 3_600_000).toISOString()
       : null;
   const address = page.venue.address ?? business.address ?? null;
+  // "Northside Studio, LS6": the venue and the outward half of its postcode.
+  const whereLabel = location
+    ? [location.name, location.type === "physical" ? shortPlace(address)?.split(" ").pop() : null]
+        .filter(Boolean)
+        .join(", ")
+    : null;
+  const bookingFor =
+    [details.firstName.trim(), details.lastName.trim()].filter(Boolean).join(" ") ||
+    contact.name ||
+    null;
 
   const whenLabel = summaryStart
     ? `${formatInTz(summaryStart, tz, { weekday: "short", day: "numeric", month: "short" })}, ${formatTimeInTz(summaryStart, tz)}`
@@ -710,9 +814,12 @@ export function ClientBookingFlow({
           extras: booking
             ? booking.lineItems.slice(1).map((li) => ({ name: li.name, priceMinor: li.priceMinor }))
             : extrasChosen.map((u) => ({ name: u.name, priceMinor: u.priceMinor })),
-          staffName: staffFor(booking?.staffId ?? selectedSlot?.staffId ?? staffId),
+          bookingFor,
+          // The trainer is assigned on confirm; until then "Any trainer" unless they chose one.
+          staffName: staffFor(confirmed ? confirmed.staffId : staffId),
           locationName: location?.name ?? null,
           address,
+          where: whereLabel,
           start: summaryStart,
           end: summaryEnd,
           timezone: booking?.timezone ?? tz,
@@ -738,6 +845,31 @@ export function ClientBookingFlow({
     promoDiscount && details.promoCode.trim()
       ? `${details.promoCode.trim()} · ${describeDiscount(promoDiscount, business.currency)}`
       : null;
+  const promoState: PromoState = {
+    code: details.promoCode.trim(),
+    label: promoLabel,
+    error: promoError,
+    pending: reholding || (Boolean(details.promoCode.trim()) && promo.isPending),
+    onApply: (code) => setDetails((d) => ({ ...d, promoCode: code.toUpperCase() })),
+  };
+
+  const detailsSummary: DetailsSummary | null =
+    service && selectedSlot
+      ? {
+          page,
+          businessName: business.tradingName,
+          serviceName: service.name,
+          start: selectedSlot.start,
+          end: selectedSlot.end,
+          timezone: tz,
+          durationMinutes: service.durationMinutes,
+          staffName: staffFor(staffId),
+          where: whereLabel,
+          priceMinor: previewPrice,
+          currency: selectedSlot.currency,
+          msLeft: hold ? msLeft : null,
+        }
+      : null;
 
   const confirmationExtras: ConfirmationExtra[] = confirmed
     ? (service?.upsells ?? [])
@@ -759,7 +891,86 @@ export function ClientBookingFlow({
       </span>
     ) : null;
 
+  // On desktop the landing is also the "choose" step, so the stepper starts at Details.
+  const onLanding = step === "landing" || (desktop && step === "time");
   const stepNumber = step === "time" ? 1 : step === "details" ? 2 : step === "review" ? 3 : 0;
+
+  const myBookings = (
+    <TextLink
+      className="text-[14px] font-medium no-underline hover:underline"
+      onClick={() => (signedIn ? void navigate({ to: "/account" }) : openSignIn("account"))}
+    >
+      My bookings
+    </TextLink>
+  );
+  const topBarTrailing = onLanding ? (
+    <>
+      {myBookings}
+      <InkButton onClick={bookNow} className="h-10 px-5 text-[14px]">
+        Book
+      </InkButton>
+    </>
+  ) : step === "details" ? (
+    hasAccountHere && signedInName ? (
+      <span className="text-[14px] text-muted-foreground">{signedInName}</span>
+    ) : (
+      <TextLink
+        className="text-[14px] font-medium no-underline hover:underline"
+        onClick={() => openSignIn("stay")}
+      >
+        Sign in
+      </TextLink>
+    )
+  ) : step === "review" ? (
+    heldBadge
+  ) : (
+    myBookings
+  );
+
+  const bookingCard = desktop ? (
+    <div id="booking-card" className="scroll-mt-6">
+      <ClientBookingCard
+        service={service}
+        pkg={selectedPackage}
+        timezone={tz}
+        staff={serviceStaff}
+        staffId={staffId}
+        onStaff={(id) => {
+          setStaffId(id);
+          setSelectedSlot(null);
+        }}
+        extras={service?.upsells ?? []}
+        extraIds={extraIds}
+        onToggleExtra={(id) => {
+          setExtraIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+          setSelectedSlot(null);
+        }}
+        date={date}
+        onDate={(d) => {
+          setDate(d);
+          setSelectedSlot(null);
+        }}
+        today={today}
+        horizonDays={DESKTOP_WINDOW_DAYS}
+        dayCounts={dayCounts}
+        slots={daySlots}
+        allSlots={availability.data ?? []}
+        loading={availability.isFetching}
+        selected={selectedSlot}
+        onSelect={setSelectedSlot}
+        onContinue={() => {
+          if (!selectedSlot) return;
+          setStep("details");
+          window.scrollTo({ top: 0 });
+        }}
+        onBuyPackage={onPickPackage}
+        onWaitlist={() => setWaitlistOpen(true)}
+        priceMinor={previewPrice}
+        currency={selectedSlot?.currency ?? service?.currency ?? business.currency}
+        cancellationWindowHours={cancellationHours}
+      />
+    </div>
+  ) : null;
 
   /* ---------- render ---------- */
 
@@ -769,15 +980,15 @@ export function ClientBookingFlow({
         <DesktopTopBar
           name={business.tradingName}
           logoUrl={business.branding.logoUrl}
-          step={stepNumber}
+          step={onLanding ? 0 : stepNumber}
           onHome={() => {
             if (step === "review" && hold) return;
             setStep("landing");
           }}
-          trailing={step === "review" ? heldBadge : null}
+          trailing={topBarTrailing}
         />
 
-        {step === "landing" ? (
+        {onLanding ? (
           <ClientLanding
             business={business}
             page={page}
@@ -787,16 +998,20 @@ export function ClientBookingFlow({
             locations={locations.data ?? []}
             nextAvailable={nextAvailable}
             onPickService={pickService}
-            onPickPackage={onPickPackage}
+            onPickPackage={pickPackage}
             onBookNow={bookNow}
             onSignIn={() => openSignIn("stay")}
             signedInName={hasAccountHere ? signedInName : null}
             onAccount={() => void navigate({ to: "/account" })}
             cancellationWindowHours={cancellationHours}
+            layout={layout}
+            selectedServiceId={selectedPackageId ? null : serviceId}
+            selectedPackageId={selectedPackageId}
+            bookingCard={bookingCard}
           />
         ) : null}
 
-        {step === "time" && service ? (
+        {step === "time" && !desktop && service ? (
           <ClientDateTime
             service={service}
             timezone={tz}
@@ -843,7 +1058,7 @@ export function ClientBookingFlow({
           />
         ) : null}
 
-        {step === "details" && service && selectedSlot ? (
+        {step === "details" && service && selectedSlot && detailsSummary ? (
           <ClientDetails
             values={details}
             onChange={(patch) => {
@@ -857,25 +1072,24 @@ export function ClientBookingFlow({
             }}
             errors={fieldErrors}
             whenLabel={whenLabel}
-            summaryCaption={`${service.name} · ${previewPrice === 0 ? "Free" : formatMoney(previewPrice, selectedSlot.currency)}`}
-            onBack={() => (hold ? reselect(null) : setStep("time"))}
-            onChangeTime={() => (hold ? reselect(null) : setStep("time"))}
+            summaryCaption={`${service.name} · ${previewPrice === 0 ? "Free" : price(previewPrice, selectedSlot.currency)}`}
+            summary={detailsSummary}
+            layout={layout}
+            onBack={() => (hold ? reselect(null) : setStep(desktop ? "landing" : "time"))}
+            onChangeTime={() => (hold ? reselect(null) : setStep(desktop ? "landing" : "time"))}
             onContinue={submitDetails}
             canContinue={detailsComplete}
             pending={holdMutation.isPending}
             signedInAs={hasAccountHere ? signedInName : null}
             onSignIn={() => openSignIn("stay")}
             onNotYou={() => void auth.signOut()}
-            promoApplied={
-              promoLabel ? `${describeDiscount(promoDiscount!, business.currency)} applied` : null
-            }
-            promoError={promoError}
           />
         ) : null}
 
         {step === "review" && reviewSummary ? (
           <ClientReview
             summary={reviewSummary}
+            layout={layout}
             msLeft={hold ? msLeft : null}
             bookingAs={hasAccountHere ? signedInName : null}
             onNotYou={() => void auth.signOut()}
@@ -901,7 +1115,7 @@ export function ClientBookingFlow({
             }}
             agreed={agreed}
             onAgreed={setAgreed}
-            promoLabel={promoLabel}
+            promo={promoState}
             // The time stays held while they look at their details again.
             onBack={() => setStep("details")}
             onEdit={() => reselect(null)}
@@ -919,6 +1133,7 @@ export function ClientBookingFlow({
         {step === "done" && confirmed ? (
           <ClientConfirmation
             booking={confirmed}
+            layout={layout}
             businessName={business.tradingName}
             serviceName={confirmed.serviceSnapshot.name}
             staffName={staffFor(confirmed.staffId)}
@@ -936,8 +1151,9 @@ export function ClientBookingFlow({
               setStaffId(confirmed.staffId);
               setExtraIds([]);
               setSelectedSlot(null);
+              setSelectedPackageId(null);
               setDate(isoDateInTz(confirmed.end, tz));
-              setStep("time");
+              setStep(desktop ? "landing" : "time");
               window.scrollTo({ top: 0 });
             }}
             hasAccount={hasAccountHere}
