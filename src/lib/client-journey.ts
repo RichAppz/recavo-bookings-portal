@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BookingContact } from "@/components/BookingCheckout";
 import type { Booking } from "@/lib/api/types";
-import { formatMoney } from "@/lib/format";
+import { formatMoney } from "./format.ts";
 
 /**
  * Pieces of the public booking journey that must survive a page reload: the hold
