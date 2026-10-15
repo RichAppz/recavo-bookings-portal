@@ -26,6 +26,7 @@ import {
   MessageSquare,
   Menu,
   Package,
+  Palette,
   Plus,
   Search,
   Settings,
@@ -220,6 +221,14 @@ const NAV: NavGroup[] = [
   {
     heading: "Business",
     items: [
+      // How the public page looks and reads; the NEW badge in the nav row marks it
+      // until the next release.
+      {
+        to: "/booking-page",
+        label: "Booking page",
+        icon: Palette,
+        anyOf: [PERMISSIONS.BUSINESS_READ],
+      },
       {
         to: "/messages",
         label: "Messages",
@@ -480,6 +489,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                                 aria-label={`${waiting} waiting`}
                               >
                                 {waiting}
+                              </span>
+                            ) : null}
+                            {item.to === "/booking-page" ? (
+                              <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sidebar-primary-foreground">
+                                NEW
                               </span>
                             ) : null}
                           </Link>
