@@ -91,6 +91,9 @@ export function ClientDateTime({
   }, [date]);
 
   const visible = useMemo(() => dedupeSlotsByStart(slots), [slots]);
+  // "1 left" only means something for a session several people share; a one-to-one
+  // always has exactly one place, so the badge would sit on every time.
+  const sharedSession = useMemo(() => slots.some((s) => (s.remainingCapacity ?? 0) > 1), [slots]);
   const grouped = useMemo(
     () =>
       groupSlotsByDayPart(visible, (iso) =>
@@ -281,7 +284,7 @@ export function ClientDateTime({
                           )}
                         >
                           {formatTimeInTz(slot.start, timezone)}
-                          {left !== null && left === 1 ? (
+                          {sharedSession && left === 1 ? (
                             <span className="absolute -top-2 right-2 rounded-full bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold text-warning-foreground">
                               1 left
                             </span>

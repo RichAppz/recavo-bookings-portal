@@ -77,6 +77,14 @@ type Step = "landing" | "time" | "details" | "review" | "done";
 /** How far ahead one availability request looks; the API caps requests at 62 days. */
 const WINDOW_DAYS = 28;
 
+/** "Now", rounded down to five minutes, so it is a stable query input. */
+function availabilityWindowStart(): string {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+  return d.toISOString();
+}
+
 const EMPTY_DETAILS: DetailsValues = {
   firstName: "",
   lastName: "",
@@ -112,7 +120,11 @@ export function ClientBookingFlow({
   const [staffId, setStaffId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [extraIds, setExtraIds] = useState<string[]>([]);
-  const today = isoDateInTz(new Date().toISOString(), tz);
+  // Availability is keyed on its `from`; a fresh timestamp each render would make
+  // every render a new query and refetch without end, so the window starts on a
+  // five-minute boundary that stays put between renders.
+  const fromIso = availabilityWindowStart();
+  const today = isoDateInTz(fromIso, tz);
   const [date, setDate] = useState(today);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
   const [details, setDetails] = useState<DetailsValues>(EMPTY_DETAILS);
@@ -184,7 +196,7 @@ export function ClientBookingFlow({
   const availability = usePublicAvailability(businessId, {
     serviceId: serviceId ?? undefined,
     locationId: activeLocationId ?? undefined,
-    from: new Date().toISOString(),
+    from: fromIso,
     to: `${addCalendarDays(windowStart, WINDOW_DAYS)}T00:00:00.000Z`,
     staffId,
     linkCode,
@@ -215,7 +227,7 @@ export function ClientBookingFlow({
   const landingAvailability = usePublicAvailability(businessId, {
     serviceId: firstService?.id,
     locationId: activeLocationId ?? undefined,
-    from: new Date().toISOString(),
+    from: fromIso,
     to: `${addCalendarDays(today, 14)}T00:00:00.000Z`,
     enabled: step === "landing" && Boolean(firstService && activeLocationId),
   });

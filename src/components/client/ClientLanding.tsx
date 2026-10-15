@@ -170,7 +170,7 @@ export function ClientLanding({
                 Nothing to book online just now. Check back soon.
               </p>
             </ClientCard>
-          ) : hasCategories(services) ? (
+          ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
             <div className="space-y-4">
               {groupByCategory(services).map((group) => (
                 <div key={group.category ?? "other"}>
