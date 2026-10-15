@@ -1,12 +1,12 @@
 import type { Booking, Payment } from "@/lib/api/types";
-import { bookingNeedsPayment, bookingSettlement } from "@/lib/booking-payment";
+import { bookingNeedsPayment, bookingSettlement } from "./booking-payment.ts";
 import {
   addCalendarDays,
   clientCancelWindowHours,
   isWithinClientCancelWindow,
-} from "@/lib/client-booking";
-import { hoursLabel } from "@/lib/client-journey";
-import { formatInTz, formatMoney, isoDateInTz } from "@/lib/format";
+} from "./client-booking.ts";
+import { hoursLabel } from "./client-journey.ts";
+import { formatInTz, formatMoney, isoDateInTz } from "./format.ts";
 
 /** "Tomorrow, 09:00" / "Today, 09:00" / "Fri 16 Oct, 09:00" */
 export function relativeWhen(start: string, timezone: string, now = new Date()): string {

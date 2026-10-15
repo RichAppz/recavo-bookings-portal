@@ -190,9 +190,14 @@ export function contrastRatio(a: string, b: string): number {
 export const ACCENT_DARK_TEXT = "#111214";
 export const ACCENT_LIGHT_TEXT = "#ffffff";
 
-/** Dark text on light accents, white on everything else (spec: luminance split 0.55). */
+/**
+ * Whichever of white or near-black reads better on the accent. Mirrors the API's rule so
+ * an accent the API accepted always gets the text colour that passed the 4.5:1 check.
+ */
 export function textOnAccent(accent: string): string {
-  return relativeLuminance(accent) > 0.55 ? ACCENT_DARK_TEXT : ACCENT_LIGHT_TEXT;
+  return contrastRatio(accent, ACCENT_DARK_TEXT) > contrastRatio(accent, ACCENT_LIGHT_TEXT)
+    ? ACCENT_DARK_TEXT
+    : ACCENT_LIGHT_TEXT;
 }
 
 /** Why an accent is unusable, or null when it reads at 4.5:1 with one of the text colours. */
@@ -200,7 +205,7 @@ export function accentRejection(accent: string): string | null {
   if (!isHexColour(accent)) return "Pick a colour in the form #rrggbb";
   const onWhite = contrastRatio(accent, ACCENT_LIGHT_TEXT);
   const onDark = contrastRatio(accent, ACCENT_DARK_TEXT);
-  if (onWhite >= 4.5 || onDark >= 4.5) return null;
+  if (Math.max(onWhite, onDark) >= 4.5) return null;
   return `Text would be hard to read on this colour (${onWhite.toFixed(1)}:1 with white, ${onDark.toFixed(1)}:1 with dark text; 4.5:1 is needed). Try a darker or lighter shade.`;
 }
 
