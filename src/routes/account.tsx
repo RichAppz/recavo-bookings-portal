@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountInvoices } from "@/components/AccountInvoices";
+import { AccountOverview } from "@/components/AccountOverview";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
 import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
 import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
@@ -194,6 +195,8 @@ function AccountContent({
   studios: PortalBusinessSummary[];
 }) {
   const { user } = useAuth();
+  const firstName = userDisplayName(user, "").trim().split(/\s+/)[0] ?? "";
+  const greeting = firstName ? `Hi ${firstName}` : "My account";
   const { bookings, credits, payments, packageRequests } = usePortalAcrossStudios(studios);
   const pendingRequests = useMemo(
     () => (packageRequests.data ?? []).filter((r) => r.status === "pending"),
@@ -300,8 +303,8 @@ function AccountContent({
     <>
       <AccountShell
         view={view}
-        title={copy.title}
-        description={copy.description}
+        title={view === "overview" ? greeting : copy.title}
+        description={view === "overview" ? undefined : copy.description}
         actions={solo ? <BookButton onClick={() => openBooking(studios[0])} /> : undefined}
       >
         {bookings.isPartial || credits.isPartial || payments.isPartial ? (
@@ -311,18 +314,17 @@ function AccountContent({
         ) : null}
 
         {view === "overview" ? (
-          <Overview
+          <AccountOverview
             solo={solo}
             studios={studios}
             upcoming={upcoming}
             usable={usable}
-            pendingRequests={pendingRequests}
             history={history}
-            sessions={sessions}
             loading={bookings.isPending}
             payingId={payingId}
             onPay={(booking) => void payNow(booking)}
             onBook={(studio) => openBooking(studio)}
+            pendingBanner={<PendingPackageRequests requests={pendingRequests} solo={solo} />}
           />
         ) : view === "calendar" ? (
           <SessionCalendar
@@ -465,261 +467,16 @@ function CalendarDayManage({
                   {payingId === b.id ? "Starting…" : "Pay now"}
                 </Button>
               ) : null}
-              <ClientBookingActions booking={b} businessId={b.studio.id} />
+              <ClientBookingActions
+                booking={b}
+                businessId={b.studio.id}
+                businessName={b.studio.tradingName}
+              />
             </div>
           </li>
         );
       })}
     </ul>
-  );
-}
-
-const SETTLED: ReadonlySet<Payment["state"]> = new Set([
-  "succeeded",
-  "partially_refunded",
-  "refunded",
-]);
-
-function Overview({
-  solo,
-  studios,
-  upcoming,
-  usable,
-  pendingRequests,
-  history,
-  sessions,
-  loading,
-  payingId,
-  onPay,
-  onBook,
-}: {
-  solo: boolean;
-  studios: PortalBusinessSummary[];
-  upcoming: FromStudio<Booking>[];
-  usable: FromStudio<PortalCredit>[];
-  pendingRequests: FromStudio<PortalPackageRequest>[];
-  history: FromStudio<Payment>[];
-  sessions: CalendarSession[];
-  loading: boolean;
-  payingId: string | null;
-  onPay: (booking: FromStudio<Booking>) => void;
-  onBook: (studio: PortalBusinessSummary) => void;
-}) {
-  const next = upcoming[0];
-  const creditsLeft = usable.reduce((sum, c) => sum + c.available, 0);
-  // What actually left the customer's account: attempts that never settled are
-  // not spend, and anything sent back is not either.
-  const spent = history.reduce(
-    (sum, p) => (SETTLED.has(p.state) ? sum + p.amountMinor - p.amountRefundedMinor : sum),
-    0,
-  );
-  const currency = history[0]?.currency ?? "GBP";
-
-  return (
-    <>
-      <PendingPackageRequests requests={pendingRequests} solo={solo} />
-
-      {/* Explicit `grid-cols-1` (minmax(0, 1fr)) on every phone-width grid: a bare
-          `grid` sizes its single implicit column to the widest item's min-content, and
-          with a nowrap (`truncate`) name inside, that can be wider than the screen. The
-          column then grows past the viewport and the whole page scrolls sideways. */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard
-          label="Next booking"
-          value={
-            next
-              ? formatInTz(next.start, next.timezone, { day: "numeric", month: "short" })
-              : "None booked"
-          }
-          hint={
-            next
-              ? `${formatInTz(next.start, next.timezone, { timeStyle: "short" })} · ${next.serviceSnapshot.name}`
-              : "Book one below"
-          }
-          icon={<CalendarClock className="size-4.5" />}
-        />
-        <StatCard
-          label="Upcoming"
-          value={String(upcoming.length)}
-          hint={upcoming.length === 1 ? "booking" : "bookings"}
-          icon={<CalendarDays className="size-4.5" />}
-        />
-        <StatCard
-          label="Credits left"
-          value={String(creditsLeft)}
-          hint={
-            usable[0]
-              ? `Next expires ${formatInTz(usable[0].expiresAt, "Europe/London", { day: "numeric", month: "short" })}`
-              : pendingRequests.length > 0
-                ? `${pendingRequests.length} package ${pendingRequests.length === 1 ? "request" : "requests"} awaiting confirmation`
-                : "No prepaid credits"
-          }
-          icon={<Ticket className="size-4.5" />}
-        />
-        <StatCard
-          label="Total spent"
-          value={formatMoney(spent, currency)}
-          hint={`${history.length} ${history.length === 1 ? "payment" : "payments"}`}
-          icon={<Wallet className="size-4.5" />}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <SectionCard
-          title="Upcoming bookings"
-          action={
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/account" search={{ view: "calendar" }}>
-                Calendar
-              </Link>
-            </Button>
-          }
-          bodyClassName="p-0 sm:p-0"
-        >
-          {loading && upcoming.length === 0 ? (
-            <TableGhost rows={4} />
-          ) : upcoming.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                icon={<CalendarDays className="size-5" />}
-                title="No upcoming bookings"
-                description="Book your next one from the businesses listed here."
-                action={solo ? <BookButton onClick={() => onBook(studios[0])} /> : undefined}
-              />
-            </div>
-          ) : (
-            <ul className="divide-y">
-              {upcoming.slice(0, 6).map((b) => {
-                const needsPay = bookingNeedsPayment(b, history);
-                const hint = customerMoneyHint(b, history);
-                return (
-                  // Phone: the status chip sits beside the name, the date and money
-                  // lines wrap underneath, and "Pay now" drops to its own line. Squeezed
-                  // into one row next to two buttons, the text had a few letters left.
-                  // From `sm` up it is the original one-line row: text left, actions right.
-                  <li
-                    key={b.id}
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:px-5"
-                  >
-                    <div className="min-w-0 flex-1 basis-full sm:basis-0">
-                      <div className="flex items-center justify-between gap-2 sm:block">
-                        <p className="truncate text-sm font-medium">{b.serviceSnapshot.name}</p>
-                        <StatusBadge status={b.status} className="sm:hidden" />
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
-                        {b.allDay
-                          ? `${formatAllDaySpan(b.start, b.end, b.timezone)} · All day`
-                          : formatInTz(b.start, b.timezone, {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                        {/* A job over several days says when it is ready — its real end,
-                            after any days the business does not work. */}
-                        {!b.allDay && isMultiDay(b, b.timezone)
-                          ? ` → ready ${formatInTz(b.end, b.timezone, {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}`
-                          : ""}
-                        {solo ? "" : ` · ${b.studio.tradingName}`}
-                      </p>
-                      {hint ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">{hint}</p>
-                      ) : null}
-                      {/* Read-only: the lift the business arranged after drop-off. */}
-                      {liftLine(b) ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
-                          {liftLine(b)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      {needsPay ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={payingId === b.id}
-                          onClick={() => onPay(b)}
-                        >
-                          {payingId === b.id ? "Starting…" : "Pay now"}
-                        </Button>
-                      ) : null}
-                      <ClientBookingActions booking={b} businessId={b.studio.id} />
-                      <StatusBadge status={b.status} className="hidden sm:inline-flex" />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </SectionCard>
-
-        <div className="space-y-5">
-          <SectionCard
-            title={solo ? "Book now" : "Your businesses"}
-            description={solo ? undefined : `${studios.length} businesses`}
-            bodyClassName="p-0 sm:p-0"
-          >
-            <ul className="divide-y">
-              {studios.map((studio) => (
-                <li
-                  key={studio.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-xs font-bold text-primary">
-                      {studio.tradingName.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{studio.tradingName}</p>
-                    </div>
-                  </div>
-                  <BookButton onClick={() => onBook(studio)} />
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-
-          {usable.length > 0 ? (
-            <SectionCard
-              title="Credits"
-              action={
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/account" search={{ view: "credits" }}>
-                    All
-                  </Link>
-                </Button>
-              }
-              bodyClassName="p-0 sm:p-0"
-            >
-              <ul className="divide-y">
-                {usable.slice(0, 4).map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{sessionCount(c.available)} left</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}
-                        {solo ? "" : ` · ${c.studio.tradingName}`}
-                      </p>
-                    </div>
-                    <BookWithCredit studio={c.studio} />
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-          ) : null}
-        </div>
-      </div>
-    </>
   );
 }
 

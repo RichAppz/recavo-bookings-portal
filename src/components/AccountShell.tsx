@@ -4,6 +4,7 @@ import {
   CalendarDays,
   FileText,
   Gift,
+  House,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -21,6 +22,15 @@ import { cn } from "@/lib/utils";
 
 export type AccountView =
   "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile";
+
+/** The five things a client reaches for on a phone; the rest live in the slide-out menu. */
+const TAB_BAR: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
+  { view: "overview", label: "Home", icon: House },
+  { view: "calendar", label: "Calendar", icon: CalendarDays },
+  { view: "credits", label: "Credits", icon: Ticket },
+  { view: "invoices", label: "Invoices", icon: FileText },
+  { view: "profile", label: "Profile", icon: UserRound },
+];
 
 const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
@@ -151,15 +161,52 @@ export function AccountShell({
           </div>
         </header>
 
-        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
-            {description ? (
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-            ) : null}
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-4 pb-28 sm:p-6 lg:pb-safe-12">
+          <div className="flex min-w-0 items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-[28px] font-bold tracking-tight sm:text-[32px]">{title}</h1>
+              {description ? (
+                <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+              ) : null}
+            </div>
+            <Link
+              to="/account"
+              search={{ view: "profile" }}
+              aria-label="Profile"
+              className="shrink-0 lg:hidden"
+            >
+              <PersonAvatar name={userDisplayName(user, "?")} size={40} />
+            </Link>
           </div>
           {children}
         </main>
+
+        <nav
+          aria-label="Account"
+          className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:hidden"
+        >
+          <ul className="mx-auto grid max-w-lg grid-cols-5 pb-[max(env(safe-area-inset-bottom),0.25rem)]">
+            {TAB_BAR.map((item) => {
+              const active = item.view === view;
+              return (
+                <li key={item.view}>
+                  <Link
+                    to="/account"
+                    search={{ view: item.view }}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
+                      active ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    <item.icon className={cn("size-5", active && "text-primary")} />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       </div>
     </div>
   );

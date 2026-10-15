@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner";
 import { AppleButton, AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
-import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
+import { EmailCodeSignIn, type EmailCodeStep } from "@/components/EmailCodeSignIn";
 import { AuthChromeGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,12 +110,17 @@ function LoginPage() {
  * day, keep passwords where password managers and MFA earn their place.
  */
 function CustomerLogin() {
+  const [step, setStep] = useState<EmailCodeStep>("email");
   return (
     <CustomerAuthLayout
-      title="Your sessions and credits"
-      subtitle="Sign in with your email to see what you've booked, use your credits and buy more."
+      title={step === "code" ? "Check your email" : "Sign in"}
+      subtitle={
+        step === "code"
+          ? "Enter the code to open your account."
+          : "Your bookings, credits and receipts in one place. We'll email you a code; no password needed."
+      }
     >
-      <EmailCodeSignIn />
+      <EmailCodeSignIn onStepChange={setStep} />
     </CustomerAuthLayout>
   );
 }

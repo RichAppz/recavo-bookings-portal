@@ -8,7 +8,7 @@ import type {
   CheckoutLook,
   CheckoutSubmitHandle,
 } from "@/components/BookingCheckout";
-import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
+import { EmailCodeSignIn, type EmailCodeStep } from "@/components/EmailCodeSignIn";
 import { JoinWaitlistSheet } from "@/components/JoinWaitlistSheet";
 import { ClientConfirmation, type ConfirmationExtra } from "@/components/client/ClientConfirmation";
 import { ClientDateTime, type DayAvailability } from "@/components/client/ClientDateTime";
@@ -129,6 +129,7 @@ export function ClientBookingFlow({
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInThen, setSignInThen] = useState<"stay" | "account">("stay");
+  const [signInStep, setSignInStep] = useState<EmailCodeStep>("email");
   const [policyOpen, setPolicyOpen] = useState(false);
   const [expiredSlot, setExpiredSlot] = useState<AvailabilitySlot | null>(null);
   const submitRef = useRef<CheckoutSubmitHandle>(null);
@@ -957,10 +958,16 @@ export function ClientBookingFlow({
       <ClientSheet
         open={signInOpen}
         onOpenChange={setSignInOpen}
-        title="Sign in"
-        description="We'll email you a code. No password needed."
+        title={signInStep === "code" ? "Check your email" : "Sign in"}
+        description={
+          signInStep === "code" ? undefined : "We'll email you a code. No password needed."
+        }
       >
-        <EmailCodeSignIn defaultEmail={details.email} onSignedIn={onSignedIn} />
+        <EmailCodeSignIn
+          defaultEmail={details.email}
+          onSignedIn={onSignedIn}
+          onStepChange={(step) => setSignInStep(step)}
+        />
       </ClientSheet>
 
       <ClientSheet

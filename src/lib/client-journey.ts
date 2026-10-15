@@ -162,3 +162,12 @@ export function dedupeSlotsByStart<T extends { start: string; remainingCapacity?
   }
   return [...byStart.values()].sort((a, b) => a.start.localeCompare(b.start));
 }
+
+/** "24 hours", "2 days", "6 hours": the notice window as people say it. */
+export function hoursLabel(hours: number): string {
+  if (hours % 24 === 0 && hours >= 24) {
+    const days = hours / 24;
+    return days === 1 ? "24 hours" : `${days} days`;
+  }
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}

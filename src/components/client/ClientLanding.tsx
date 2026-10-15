@@ -18,6 +18,7 @@ import type {
   PublicStaff,
 } from "@/lib/api/hooks";
 import { directionsUrl } from "@/lib/calendar-links";
+import { hoursLabel } from "@/lib/client-journey";
 import { headerStyle, sectionEnabled, type BookingPageContent } from "@/lib/client-theme";
 import { formatDuration, formatMoney } from "@/lib/format";
 import { validityLabel } from "@/lib/packages";
@@ -398,12 +399,4 @@ export function PersonMark({ name, className }: { name: string; className?: stri
       {letters || "?"}
     </span>
   );
-}
-
-export function hoursLabel(hours: number): string {
-  if (hours % 24 === 0 && hours >= 24) {
-    const days = hours / 24;
-    return days === 1 ? "24 hours" : `${days} days`;
-  }
-  return hours === 1 ? "1 hour" : `${hours} hours`;
 }
