@@ -1268,7 +1268,9 @@ export function ClientBookingFlow({
         onOpenChange={setSignInOpen}
         title={signInStep === "code" ? "Check your email" : "Sign in"}
         description={
-          signInStep === "code" ? undefined : "We'll email you a code. No password needed."
+          signInStep === "code"
+            ? undefined
+            : "We'll email you a sign-in link and a code. No password needed."
         }
       >
         <EmailCodeSignIn

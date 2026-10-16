@@ -6,6 +6,7 @@ import { ClientBookingFlow, type BookingStart } from "@/components/client/Client
 import { ClientTheme, OutlineButton, PoweredBy, StudioMark } from "@/components/client/ClientPage";
 import { Wordmark } from "@/components/Wordmark";
 import { closedBusinessFromError, usePublicBusiness } from "@/lib/api/hooks";
+import { rememberCameFrom } from "@/lib/auth/came-from";
 import { DEFAULT_BOOKING_PAGE, normaliseBookingPage } from "@/lib/client-theme";
 
 /**
@@ -72,8 +73,14 @@ function SlugBookingPage() {
       : null,
   );
 
-  // An old link still works, but the address bar should show the current one.
+  // The sign-in page offers "Back to {business}" to anyone who came from here.
   const currentSlug = business.data?.slug;
+  const tradingName = business.data?.tradingName;
+  useEffect(() => {
+    if (currentSlug && tradingName) rememberCameFrom({ slug: currentSlug, name: tradingName });
+  }, [currentSlug, tradingName]);
+
+  // An old link still works, but the address bar should show the current one.
   const redirectedFrom = business.data?.redirectedFromSlug ?? null;
   useEffect(() => {
     if (!currentSlug || !redirectedFrom || currentSlug === slug) return;

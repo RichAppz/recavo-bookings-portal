@@ -6,23 +6,20 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth/auth-store";
+import { emailAppHref } from "@/lib/auth/email-app";
+import { EMAIL_CODE_LENGTH } from "@/lib/auth/email-code";
 
-/**
- * Must match "OTP Length" in the Supabase project's Auth settings, currently 8.
- * Too few boxes and the last digits have nowhere to go; too many and the field
- * never auto-submits.
- */
-const CODE_LENGTH = 8;
 const RESEND_SECONDS = 30;
 
 /**
- * Sign-in by emailed code, for customers.
+ * Sign-in by emailed link or code, for clients.
  *
- * There is no sign-up step and no password. Someone who bought as a guest has
- * purchases sitting under their address with no account attached, and asking
+ * There is no sign-up step and no password. Someone who booked as a guest has
+ * bookings sitting under their address with no account attached, and asking
  * them to choose between "sign in" and "register" is asking a question they
  * cannot answer. Entering the address handles both cases identically, and
- * proving they control it is what lets those purchases be attached.
+ * proving they control it is what lets those bookings be attached. The email
+ * carries a one-tap link and the code, so on a phone they rarely type.
  */
 export type EmailCodeStep = "email" | "code";
 
@@ -31,7 +28,7 @@ export function EmailCodeSignIn({
   onSignedIn,
   onStepChange,
 }: {
-  /** Prefilled when we already know the address, e.g. from a purchase. */
+  /** Prefilled when we already know the address, e.g. from a booking. */
   readonly defaultEmail?: string;
   readonly onSignedIn?: () => void;
   /** Lets the surrounding page swap its heading to "Check your email" once a code is out. */
@@ -43,9 +40,15 @@ export function EmailCodeSignIn({
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  // Decided after mount: the server render has no user agent to go on.
+  const [mailApp, setMailApp] = useState<string | null>(null);
   // Guards against the paste-and-submit path firing twice, since the code field
   // submits on its own once full.
   const verifying = useRef(false);
+
+  useEffect(() => {
+    setMailApp(emailAppHref(navigator.userAgent));
+  }, []);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -66,7 +69,7 @@ export function EmailCodeSignIn({
       setCode("");
       setResendIn(RESEND_SECONDS);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't send the code");
+      toast.error(err instanceof Error ? err.message : "Couldn't send the email");
     } finally {
       setBusy(false);
     }
@@ -99,7 +102,7 @@ export function EmailCodeSignIn({
       >
         <div className="space-y-2">
           <Label htmlFor="email" className="text-[15px] font-semibold">
-            Email
+            Email you book with
           </Label>
           <div className="relative">
             <Mail className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -126,14 +129,10 @@ export function EmailCodeSignIn({
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <>
-              Email me a code <ArrowRight className="size-4" />
+              Email me a sign-in link <ArrowRight className="size-4" />
             </>
           )}
         </Button>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">
-          No password needed. Any bookings you made as a guest with this email will appear in your
-          account.
-        </p>
       </form>
     );
   }
@@ -145,22 +144,34 @@ export function EmailCodeSignIn({
           Code
         </Label>
         <p className="text-[15px] text-muted-foreground">
-          We sent a {CODE_LENGTH}-digit code to{" "}
+          {`We sent a sign-in link and ${EMAIL_CODE_LENGTH === 8 ? "an" : "a"} ${EMAIL_CODE_LENGTH}-digit code to`}{" "}
           <span className="font-semibold text-foreground">{sentTo}</span>
         </p>
+        {mailApp ? (
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="h-[48px] w-full rounded-full text-[15px] font-semibold"
+          >
+            <a href={mailApp}>
+              <Mail className="size-4" /> Open email app
+            </a>
+          </Button>
+        ) : null}
         <InputOTP
           id="code"
           containerClassName="w-full"
-          maxLength={CODE_LENGTH}
+          maxLength={EMAIL_CODE_LENGTH}
           value={code}
           disabled={busy}
           onChange={(value) => {
             setCode(value);
-            if (value.length === CODE_LENGTH) void verify(value);
+            if (value.length === EMAIL_CODE_LENGTH) void verify(value);
           }}
         >
           <InputOTPGroup className="w-full gap-1.5">
-            {Array.from({ length: CODE_LENGTH }, (_, i) => (
+            {Array.from({ length: EMAIL_CODE_LENGTH }, (_, i) => (
               <InputOTPSlot
                 key={i}
                 index={i}
@@ -185,7 +196,7 @@ export function EmailCodeSignIn({
             </>
           ) : (
             <span className="font-semibold text-foreground underline underline-offset-4">
-              Resend the code
+              Resend
             </span>
           )}
         </button>
@@ -203,14 +214,14 @@ export function EmailCodeSignIn({
 
       <p className="rounded-2xl border bg-card px-4 py-3 text-[14px] text-muted-foreground">
         No password needed. Signing in links any bookings you made as a guest with this email. The
-        code can take a minute to arrive; check your spam folder if it doesn't.
+        email can take a minute to arrive; check your spam folder if it doesn't.
       </p>
 
       <Button
         type="button"
         size="lg"
         className="h-[52px] w-full rounded-full text-[16px] font-semibold"
-        disabled={busy || code.length !== CODE_LENGTH}
+        disabled={busy || code.length !== EMAIL_CODE_LENGTH}
         onClick={() => void verify(code)}
       >
         {busy ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
