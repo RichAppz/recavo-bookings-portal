@@ -72,6 +72,7 @@ import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoBusinessInApp } from "@/components/NoBusinessInApp";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
+import { HeaderBackButton } from "@/components/BackLink";
 import {
   useLinkedRecordDefinition,
   useMarkNotificationRead,
@@ -630,6 +631,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu className="size-6 sm:size-5" />
             </Button>
+            {/* Every click in the app can be undone from here; the desktop and phone
+                shells have no browser chrome, so this is their only Back. */}
+            <HeaderBackButton />
 
             <SetupHeaderButton
               onClick={() => {

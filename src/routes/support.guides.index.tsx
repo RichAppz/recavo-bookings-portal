@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, BookOpen, LifeBuoy, Search } from "lucide-react";
+import { BookOpen, LifeBuoy, Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { GuideCard, VerticalSwitch } from "@/components/guides";
 import { useGuideCopy, useGuideVertical } from "@/lib/use-guides";
 import { EmptyState, PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BackLink } from "@/components/BackLink";
 import { GUIDES } from "@/content/guides";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
@@ -51,11 +52,7 @@ function GuidesPage() {
 
   return (
     <>
-      <Button variant="ghost" size="sm" asChild className="-ml-2 w-fit">
-        <Link to="/support">
-          <ArrowLeft className="size-4" /> Support
-        </Link>
-      </Button>
+      <BackLink fallbackTo="/support" fallbackLabel="Support" />
       <PageHeader
         title="Guides"
         description={

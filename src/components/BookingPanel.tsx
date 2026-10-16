@@ -1726,6 +1726,12 @@ export function BookingPanel({
           pending={busy === "payment"}
           onSubmit={async (amountMinor, method) => {
             setBusy("payment");
+            // The API completes a started job the moment it is paid in full (see
+            // recordPayment); mirror that so the panel doesn't flash "Attended" late.
+            const settlesStartedJob =
+              amountMinor >= settlement.outstandingMinor &&
+              booking.status === "confirmed" &&
+              new Date(booking.start).getTime() <= Date.now();
             try {
               const outcome = await outbox({
                 label: `Recorded ${formatMoney(amountMinor, booking.currency)} from ${customerName}`,
@@ -1735,7 +1741,13 @@ export function BookingPanel({
                 booking: {
                   businessId,
                   bookingId: booking.id,
-                  patch: { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
+                  patch: settlesStartedJob
+                    ? {
+                        paidMinor: (booking.paidMinor ?? 0) + amountMinor,
+                        attendanceStatus: "attended",
+                        status: "completed",
+                      }
+                    : { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
                 },
               });
               if (outcome.queued) {
@@ -1743,12 +1755,22 @@ export function BookingPanel({
                 setRecordOpen(false);
                 return;
               }
+              if (settlesStartedJob) {
+                // Completing the job may issue an invoice a moment later (ADR 0019 §7).
+                for (const delay of [1500, 4000]) {
+                  setTimeout(() => {
+                    void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+                  }, delay);
+                }
+              }
               toast.success(
-                amountMinor >= settlement.outstandingMinor
-                  ? "Payment recorded — paid in full"
-                  : recordIntent === "deposit" && amountMinor >= depositOwedMinor
-                    ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
-                    : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+                settlesStartedJob
+                  ? "Paid in full — job marked done"
+                  : amountMinor >= settlement.outstandingMinor
+                    ? "Payment recorded — paid in full"
+                    : recordIntent === "deposit" && amountMinor >= depositOwedMinor
+                      ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
+                      : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
               );
               setRecordOpen(false);
             } catch (err) {
