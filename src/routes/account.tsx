@@ -26,6 +26,7 @@ import { TableGhost } from "@/components/ghost";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { useAuth } from "@/lib/auth/auth-store";
 import { ApiError, toastApiError } from "@/lib/api";
+import { isAccountBooking } from "@/lib/client-journey";
 import {
   usePortalAcrossStudios,
   usePortalBusinesses,
@@ -214,9 +215,7 @@ function AccountContent({
   const solo = studios.length === 1;
 
   const now = new Date().toISOString();
-  const live = bookings.data.filter(
-    (b) => b.status !== "cancelled_by_customer" && b.status !== "cancelled_by_business",
-  );
+  const live = bookings.data.filter(isAccountBooking);
   const upcoming = live
     .filter((b) => b.start >= now)
     .sort((a, b) => a.start.localeCompare(b.start));

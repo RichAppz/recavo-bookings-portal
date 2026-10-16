@@ -152,6 +152,20 @@ export function isTooLateToHold(err: { status: number; detail?: string | undefin
   return /notice window|in the past|already (started|passed)/i.test(err.detail ?? "");
 }
 
+/**
+ * What the account shows as a booking. A hold is a place kept for ten minutes
+ * while someone finishes checking out, not a booking they made; it lapses on its
+ * own, and offering Cancel on one only invites an error. Cancelled, expired and
+ * no-show bookings are history, not plans.
+ */
+export function isAccountBooking(booking: { status: string }): boolean {
+  return (
+    booking.status === "awaiting_payment" ||
+    booking.status === "confirmed" ||
+    booking.status === "completed"
+  );
+}
+
 export function splitDisplayName(name: string | null | undefined): { first: string; last: string } {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { first: "", last: "" };

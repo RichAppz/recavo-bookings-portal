@@ -6,6 +6,7 @@ import {
   formatCountdown,
   groupSlotsByDayPart,
   hoursLabel,
+  isAccountBooking,
   isTooLateToHold,
   looksLikeEmail,
   nationalPhone,
@@ -126,5 +127,24 @@ describe("isTooLateToHold — a slot that passed while the visitor typed", () =>
       false,
     );
     assert.equal(isTooLateToHold({ status: 422 }), false);
+  });
+});
+
+describe("isAccountBooking — what counts as a booking in the account", () => {
+  it("keeps confirmed, unpaid and completed; drops holds and history", () => {
+    for (const status of ["awaiting_payment", "confirmed", "completed"]) {
+      assert.equal(isAccountBooking({ status }), true, status);
+    }
+    for (const status of [
+      "held",
+      "expired",
+      "cancelled_by_customer",
+      "cancelled_by_business",
+      "late_cancelled",
+      "no_show",
+      "draft",
+    ]) {
+      assert.equal(isAccountBooking({ status }), false, status);
+    }
   });
 });
