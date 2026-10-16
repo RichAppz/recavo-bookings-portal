@@ -263,7 +263,7 @@ export function ClientLanding({
                   >
                     What clients say
                   </DesktopHeading>
-                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 desk:grid-cols-3">
+                  <ul className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-3">
                     {reviews.reviews.slice(0, 6).map((review) => (
                       <li key={`${review.publishedAt}-${review.author}`}>
                         <ReviewCard review={review} className="h-full" />

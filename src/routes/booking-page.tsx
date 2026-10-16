@@ -850,7 +850,7 @@ function GoogleReviewsCard({ page, edit, disabled, sectionOn }: TabProps & { sec
         <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Checking Google…</p>
       ) : connected ? (
         <div className="px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-start gap-3">
+          <div className="flex flex-col gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{connected.name}</p>
               {connected.address ? (
@@ -865,7 +865,7 @@ function GoogleReviewsCard({ page, edit, disabled, sectionOn }: TabProps & { sec
                 </span>
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <Button asChild variant="outline" size="sm">
                 <a href={connected.mapsUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="size-4" />
