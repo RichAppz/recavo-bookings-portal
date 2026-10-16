@@ -719,13 +719,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                           </span>
                         </span>
                         {/* Stopping the click here keeps the row's open/mark-read from firing and
-                            leaves the menu open so several can be cleared in a row. */}
+                            leaves the menu open so several can be cleared in a row. Pointer
+                            events must still bubble: Radix treats a pointerup it did not see
+                            the pointerdown for as a click on the row. */}
                         <button
                           type="button"
                           aria-label={`Clear “${n.subject}”`}
                           data-testid="clear-notification"
                           className="-mt-0.5 -mr-1 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                          onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
