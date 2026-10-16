@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { paths } from "./schema";
 import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
 import { useLiveConnected } from "@/lib/live/live-status";
+import { ledgerBehind } from "@/lib/booking-money";
 import { toast } from "sonner";
 import {
   keepPreviousData,
@@ -31,6 +32,7 @@ import type {
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
+  BookingSettlementLine,
   CalendarBlock,
   CorrectBookingTimeBody,
   Business,
@@ -809,6 +811,32 @@ export function useBookingPayments(bookingId: string | undefined) {
   return useQuery({
     ...bookingPaymentsQueryOptions(businessId, bookingId ?? ""),
     enabled: Boolean(businessId && bookingId),
+  });
+}
+
+/**
+ * Every movement of money against a booking from the settlement ledger — including the
+ * cash, bank-transfer and terminal amounts staff recorded by hand, which never become a
+ * `Payment`. The ledger is projected from events a poll after the booking's paid total
+ * moves, so while it still shows less than `paidMinor` this re-asks every couple of
+ * seconds (bounded) rather than leaving "No payments yet" under "Paid in full".
+ */
+export function useBookingSettlements(
+  bookingId: string | undefined,
+  paidMinor: number | null | undefined,
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingSettlements(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ settlements: BookingSettlementLine[] }>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/settlements`,
+      );
+      return res.data.settlements;
+    },
+    refetchInterval: (query) =>
+      ledgerBehind(query.state.data, paidMinor) && query.state.dataUpdateCount < 15 ? 2000 : false,
   });
 }
 

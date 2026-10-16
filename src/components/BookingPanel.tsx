@@ -84,6 +84,7 @@ import {
   useBusinessId,
   useBookingHistory,
   useBookingPayments,
+  useBookingSettlements,
   useCustomer,
   useDeleteBooking,
   useLinkedRecord,
@@ -126,6 +127,12 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import {
+  bookingMoneyLines,
+  ledgerBehind,
+  recordedDirectionLabel,
+  settlementMethodLabel,
+} from "@/lib/booking-money";
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { emptySlotsMessage } from "@/lib/availability-windows";
@@ -242,6 +249,11 @@ export function BookingPanel({
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
+  // Cash / bank / terminal money staff recorded by hand lives in the settlement ledger,
+  // not in `payments`; the Payments tab lists both.
+  const settlements = useBookingSettlements(booking?.id, booking?.paidMinor);
+  const moneyLines = bookingMoneyLines(payments.data, settlements.data);
+  const ledgerCatchingUp = ledgerBehind(settlements.data, booking?.paidMinor);
   // Same query the Payments tab uses, so this costs nothing extra.
   const invoices = useBookingInvoices(booking?.id);
 
@@ -1437,45 +1449,84 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {payments.isLoading ? (
+                  {payments.isLoading || settlements.isLoading ? (
                     <TableGhost rows={3} />
-                  ) : payments.isError ? (
+                  ) : payments.isError && settlements.isError ? (
                     <p className="text-xs text-destructive">Couldn't load payments.</p>
-                  ) : (payments.data ?? []).length === 0 ? (
-                    <EmptyState
-                      title="No payments yet"
-                      description="Payments taken for this booking will appear here."
-                    />
+                  ) : moneyLines.length === 0 ? (
+                    ledgerCatchingUp ? (
+                      // The booking already counts the money; the ledger lists it a
+                      // moment later and the query is re-asking in the background.
+                      <TableGhost rows={1} />
+                    ) : (
+                      <EmptyState
+                        title="No payments yet"
+                        description="Card payments and any you record by hand will appear here."
+                      />
+                    )
                   ) : (
-                    <ul className="divide-y rounded-xl border">
-                      {payments.data!.map((p) => (
-                        <li key={p.id} className="flex items-center justify-between gap-3 p-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">
-                              {formatMoney(p.amountMinor, p.currency)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatInTz(p.createdAt, timezone, {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <StatusBadge status={p.state} />
-                            {p.receiptUrl ? (
-                              <a
-                                href={p.receiptUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-medium text-primary underline"
-                              >
-                                Receipt
-                              </a>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
+                    <ul className="divide-y rounded-xl border" data-testid="booking-money">
+                      {moneyLines.map((line) =>
+                        line.kind === "payment" ? (
+                          <li key={line.id} className="flex items-center justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.payment.amountMinor, line.payment.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Card ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={line.payment.state} />
+                              {line.payment.receiptUrl ? (
+                                <a
+                                  href={line.payment.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-medium text-primary underline"
+                                >
+                                  Receipt
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ) : (
+                          <li
+                            key={line.id}
+                            className="flex items-center justify-between gap-3 p-3"
+                            data-testid="recorded-payment"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.amountMinor, line.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {settlementMethodLabel(line.method)} ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                                line.direction === "payment" ||
+                                  line.direction === "dispute_reversal"
+                                  ? "bg-success-soft text-success"
+                                  : "bg-secondary text-secondary-foreground",
+                              )}
+                            >
+                              {recordedDirectionLabel(line.direction)}
+                            </span>
+                          </li>
+                        ),
+                      )}
                     </ul>
                   )}
 

@@ -108,6 +108,8 @@ export type EntitlementView = schemas["EntitlementView"];
 export type CreditLedgerEntry = schemas["CreditLedgerEntry"];
 export type PublicCataloguePlan = schemas["PublicCataloguePlan"];
 export type Payment = schemas["Payment"];
+/** One movement of money against a booking from the settlement ledger (card or recorded by hand). */
+export type BookingSettlementLine = schemas["BookingSettlement"];
 export type Refund = schemas["Refund"];
 export type PaymentReceipt = schemas["PaymentReceipt"];
 export type ConnectAccount = schemas["ConnectAccount"];

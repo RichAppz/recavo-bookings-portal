@@ -84,6 +84,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "A client who bought a package by bank transfer, or one you sold them in person, saw an empty Purchases page because only card payments were listed. Every package they have bought now appears there with its name, credits and date; card purchases keep their receipt.",
         where: "Client account → Purchases",
       },
+      {
+        kind: "fixed",
+        text: "A booking you had marked paid by bank transfer or cash said “Paid in full” and then “No payments yet” underneath, because only card payments were listed. Money you record by hand now appears there with how it arrived (cash, bank transfer, your card machine) and when, alongside any card payments.",
+        where: "Booking → Payments",
+      },
     ],
   },
   {
