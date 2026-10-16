@@ -6,6 +6,7 @@ import {
   formatCountdown,
   groupSlotsByDayPart,
   hoursLabel,
+  isTooLateToHold,
   looksLikeEmail,
   nationalPhone,
   splitDisplayName,
@@ -107,5 +108,23 @@ describe("hoursLabel", () => {
     assert.equal(hoursLabel(48), "2 days");
     assert.equal(hoursLabel(6), "6 hours");
     assert.equal(hoursLabel(1), "1 hour");
+  });
+});
+
+describe("isTooLateToHold — a slot that passed while the visitor typed", () => {
+  it("recognises the notice-window refusal and nothing else", () => {
+    assert.equal(
+      isTooLateToHold({
+        status: 422,
+        detail: "The selected time is within the booking notice window",
+      }),
+      true,
+    );
+    assert.equal(isTooLateToHold({ status: 422, detail: "Payment still settling" }), false);
+    assert.equal(
+      isTooLateToHold({ status: 409, detail: "within the booking notice window" }),
+      false,
+    );
+    assert.equal(isTooLateToHold({ status: 422 }), false);
   });
 });

@@ -38,6 +38,7 @@ import {
 } from "@/components/client/ClientReview";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ApiError } from "@/lib/api";
+import { toastApiError } from "@/lib/api/errors";
 import {
   useBookWithPortalCredit,
   useConfirmPublicBooking,
@@ -73,7 +74,9 @@ import {
   returnedFromAuthentication,
   splitDisplayName,
   toE164,
+  isTooLateToHold,
   useCountdown,
+  useNow,
   writeStoredJourney,
   type JourneyHold,
   price,
@@ -295,20 +298,30 @@ export function ClientBookingFlow({
     additionalServiceIds: extraIds,
     enabled: choosingTime && Boolean(serviceId && activeLocationId) && !availability.data,
   });
+  // Times are fetched once and sit on screen while the clock moves on. Without
+  // this, a page left open past 09:00 still offers 09:00, and tapping it is
+  // refused by the server. Every slot on screen is checked against a clock that
+  // ticks every half minute, so the past falls away on its own.
+  const now = useNow(choosingTime || step === "details" ? 30_000 : null);
+  const upcoming = useCallback(
+    (slots: readonly AvailabilitySlot[] | undefined | null) =>
+      (slots ?? []).filter((s) => Date.parse(s.start) > now),
+    [now],
+  );
   const slotSource = availability.data ?? dayWindow.data ?? null;
   const timesLoading = availability.data ? availability.isFetching : dayWindow.isFetching;
   const dayCounts = useMemo<DayAvailability | null>(() => {
     if (!availability.data) return null;
     const counts = new Map<string, number>();
-    for (const slot of availability.data) {
+    for (const slot of upcoming(availability.data)) {
       const day = isoDateInTz(slot.start, tz);
       counts.set(day, (counts.get(day) ?? 0) + 1);
     }
     return counts;
-  }, [availability.data, tz]);
+  }, [availability.data, tz, upcoming]);
   const daySlots = useMemo(
-    () => (slotSource ?? []).filter((s) => isoDateInTz(s.start, tz) === date),
-    [slotSource, date, tz],
+    () => upcoming(slotSource).filter((s) => isoDateInTz(s.start, tz) === date),
+    [slotSource, date, tz, upcoming],
   );
   const nextAvailableDate = useMemo(() => {
     if (!dayCounts) return null;
@@ -348,12 +361,12 @@ export function ClientBookingFlow({
     enabled: !desktop && step === "landing" && Boolean(firstService && activeLocationId),
   });
   const nextAvailable = useMemo<NextAvailable>(() => {
-    const first = (landingAvailability.data ?? [])
+    const first = upcoming(landingAvailability.data)
       .slice()
       .sort((a, b) => a.start.localeCompare(b.start))[0];
     if (!first || !firstService) return null;
     return { label: nextAvailableLabel(first.start, tz, today), serviceId: firstService.id };
-  }, [landingAvailability.data, firstService, tz, today]);
+  }, [landingAvailability.data, firstService, tz, today, upcoming]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);
   const releaseMutation = useReleasePublicBookingHold(businessId);
@@ -609,6 +622,13 @@ export function ClientBookingFlow({
               );
               return;
             }
+            // The time passed (or slid inside the notice window) while they typed.
+            if (isTooLateToHold(err)) {
+              reselect(
+                `Sorry, ${formatTimeInTz(slot.start, tz)} has just gone. Here are the nearest times.`,
+              );
+              return;
+            }
             if (err.fieldErrors.length > 0) {
               const next: Partial<Record<DetailsField, string>> = {};
               for (const fe of err.fieldErrors) {
@@ -622,7 +642,7 @@ export function ClientBookingFlow({
               return;
             }
           }
-          toast.error(err instanceof ApiError ? err.title : "Something went wrong");
+          toastApiError(err, "Couldn't hold that time");
         },
       },
     );
@@ -630,6 +650,12 @@ export function ClientBookingFlow({
 
   const submitDetails = () => {
     if (!selectedSlot) return;
+    if (Date.parse(selectedSlot.start) <= Date.now()) {
+      reselect(
+        `Sorry, ${formatTimeInTz(selectedSlot.start, tz)} has just gone. Here are the nearest times.`,
+      );
+      return;
+    }
     setAgreed(false);
     // Back from Review to check a detail, then Continue: the hold is still theirs.
     if (hold && hold.booking.start === selectedSlot.start) {
@@ -693,7 +719,7 @@ export function ClientBookingFlow({
             reselect("That time is no longer available. Please choose another.");
             return;
           }
-          toast.error(err instanceof ApiError ? err.title : "Something went wrong");
+          toastApiError(err, "Something went wrong");
         },
       },
     );
@@ -740,7 +766,7 @@ export function ClientBookingFlow({
         const pending = err instanceof ApiError && err.status === 422;
         if (!pending) {
           setSettling(false);
-          toast.error(err instanceof ApiError ? err.title : "Something went wrong");
+          toastApiError(err, "Something went wrong");
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));

@@ -126,6 +126,32 @@ export function useCountdown(targetIso: string | null, onExpire: () => void): nu
   return msLeft;
 }
 
+/**
+ * The current time, re-read every `intervalMs`, so a list filtered by it drops
+ * entries as they pass. `null` stops the clock (the value stays as it was) for
+ * screens that do not need it.
+ */
+export function useNow(intervalMs: number | null): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (intervalMs === null) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(interval);
+  }, [intervalMs]);
+  return now;
+}
+
+/**
+ * The server refused a hold because the time is no longer bookable: already
+ * started, or now inside the service's notice window. It is the client's clock
+ * that lagged, so it is handled like a clash rather than shown as an error.
+ */
+export function isTooLateToHold(err: { status: number; detail?: string | undefined }): boolean {
+  if (err.status !== 422) return false;
+  return /notice window|in the past|already (started|passed)/i.test(err.detail ?? "");
+}
+
 export function splitDisplayName(name: string | null | undefined): { first: string; last: string } {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { first: "", last: "" };
