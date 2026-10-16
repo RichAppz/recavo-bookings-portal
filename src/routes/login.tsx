@@ -98,7 +98,9 @@ function LoginPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || customer === null) return;
-    void navigate({ to: postLoginPath(redirect, customer) });
+    // Replace rather than push: Back from the first page should not land on a
+    // sign-in form that immediately bounces the user forward again.
+    void navigate({ to: postLoginPath(redirect, customer), replace: true });
   }, [status, redirect, navigate, customer]);
 
   if (customer === null) {
