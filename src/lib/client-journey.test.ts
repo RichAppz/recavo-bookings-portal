@@ -7,6 +7,7 @@ import {
   groupSlotsByDayPart,
   hoursLabel,
   looksLikeEmail,
+  nationalPhone,
   splitDisplayName,
   toE164,
 } from "./client-journey.ts";
@@ -25,6 +26,19 @@ describe("toE164 — UK mobile numbers as people type them", () => {
     assert.equal(toE164("123"), null);
     assert.equal(toE164(""), null);
     assert.equal(toE164("call me"), null);
+  });
+});
+
+describe("nationalPhone — a stored number back in the form", () => {
+  it("shows a +44 number the way it is dialled at home", () => {
+    assert.equal(nationalPhone("+447700900123"), "07700 900123");
+    assert.equal(toE164(nationalPhone("+447700900123")), "+447700900123");
+  });
+
+  it("leaves other countries and odd values alone", () => {
+    assert.equal(nationalPhone("+353871234567"), "+353871234567");
+    assert.equal(nationalPhone("07700 900123"), "07700 900123");
+    assert.equal(nationalPhone(""), "");
   });
 });
 

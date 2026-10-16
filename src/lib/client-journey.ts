@@ -59,6 +59,18 @@ export function toE164(raw: string, diallingCode = "44"): string | null {
   return null;
 }
 
+/**
+ * The form shows a "+44" box before the number, so a stored `+447700900123` is
+ * prefilled as `07700 900123`. Other countries' numbers are left as they are.
+ */
+export function nationalPhone(stored: string, diallingCode = "44"): string {
+  const trimmed = stored.replace(/[\s()-]/g, "");
+  if (!trimmed.startsWith(`+${diallingCode}`)) return stored;
+  const rest = trimmed.slice(diallingCode.length + 1);
+  if (!/^[1-9]\d{8,9}$/.test(rest)) return stored;
+  return `0${rest.slice(0, 4)} ${rest.slice(4)}`;
+}
+
 /** Enough to catch a mistyped address; the server decides properly. */
 export function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

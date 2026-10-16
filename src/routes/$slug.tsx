@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { BookingFlow } from "@/components/BookingFlow";
-import { ClientBookingFlow } from "@/components/client/ClientBookingFlow";
+import { ClientBookingFlow, type BookingStart } from "@/components/client/ClientBookingFlow";
 import { ClientTheme, OutlineButton, PoweredBy, StudioMark } from "@/components/client/ClientPage";
 import { Wordmark } from "@/components/Wordmark";
 import { closedBusinessFromError, usePublicBusiness } from "@/lib/api/hooks";
@@ -11,12 +11,22 @@ import { DEFAULT_BOOKING_PAGE, normaliseBookingPage } from "@/lib/client-theme";
 /**
  * `?offer=<code>` is a package link the studio shared: the page then shows only
  * the packages in that link. `?package=<id>` buys one package from the landing's
- * Packages list. Stripe's redirect parameters share this search space and are read
- * straight off the URL, so they are left unlisted here.
+ * Packages list. `?service=` (with optional `location`, `date` and `start`) is how
+ * the account hands a client straight to a session, day or time they picked
+ * there; those are consumed on arrival and dropped from the address bar. Stripe's
+ * redirect parameters share this search space and are read straight off the URL,
+ * so they are left unlisted here.
  */
 const searchSchema = z.object({
   offer: z.string().min(1).optional(),
   package: z.string().min(1).optional(),
+  service: z.string().min(1).optional(),
+  location: z.string().min(1).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  start: z.string().min(1).optional(),
 });
 
 /**
@@ -45,9 +55,22 @@ export const Route = createFileRoute("/$slug")({
 
 function SlugBookingPage() {
   const { slug } = Route.useParams();
-  const { offer, package: packageId } = Route.useSearch();
+  const { offer, package: packageId, service, location, date, start } = Route.useSearch();
   const navigate = useNavigate();
   const business = usePublicBusiness(slug);
+
+  // Read once on arrival: the flow keeps its own state from here, and a refresh
+  // or Back should not drop the person onto the same pre-filled step again.
+  const [handOff] = useState<BookingStart | null>(() =>
+    service
+      ? {
+          serviceId: service,
+          locationId: location ?? null,
+          date: date ?? null,
+          startAt: start ?? null,
+        }
+      : null,
+  );
 
   // An old link still works, but the address bar should show the current one.
   const currentSlug = business.data?.slug;
@@ -96,6 +119,8 @@ function SlugBookingPage() {
     <ClientBookingFlow
       business={business.data}
       page={page}
+      start={handOff}
+      onStarted={() => void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true })}
       onClearRedirectParams={() =>
         void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true })
       }

@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import {
   CalendarClock,
@@ -15,10 +15,7 @@ import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { AccountInvoices } from "@/components/AccountInvoices";
 import { AccountOverview } from "@/components/AccountOverview";
 import { AccountShell, type AccountView } from "@/components/AccountShell";
-import { BookWithCreditDialog } from "@/components/BookWithCreditDialog";
-import { BookSessionDrawer, type BookingSeed } from "@/components/BookSessionDrawer";
-import { businessIdPendingCardReturn } from "@/components/BookingFlow";
-import { CalendarDayBooker } from "@/components/CalendarDayBooker";
+import { CalendarDayBooker, type CalendarPaidSlot } from "@/components/CalendarDayBooker";
 import { CreditBalanceStrip } from "@/components/CreditBalanceStrip";
 import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { OutstandingPaymentDialog } from "@/components/OutstandingPaymentDialog";
@@ -98,7 +95,8 @@ const searchSchema = z.object({
   view: z
     .enum(["overview", "calendar", "offers", "credits", "purchases", "invoices", "profile"])
     .optional(),
-  // Stripe 3-D Secure returns here when checkout ran from the account drawer.
+  // Booking now runs on the business's own page, so 3-D Secure returns there.
+  // These stay accepted so a return from before that change still lands here.
   payment_intent: z.string().optional(),
   payment_intent_client_secret: z.string().optional(),
   redirect_status: z.string().optional(),
@@ -205,9 +203,7 @@ function AccountContent({
   const offers = usePortalPackageLinksAcrossStudios(studios);
   const startPayment = useStartPortalBookingPayment(undefined);
   const syncPayment = useSyncPortalBookingPayment();
-  const [bookingStudio, setBookingStudio] = useState<PortalBusinessSummary | null>(null);
-  const [bookingSeed, setBookingSeed] = useState<BookingSeed | null>(null);
-  const [bookingOffer, setBookingOffer] = useState<{ code: string; name: string } | null>(null);
+  const navigate = useNavigate();
   const [calDay, setCalDay] = useState(isoDate(new Date()));
   const [checkout, setCheckout] = useState<{
     payment: PublicBookingPayment;
@@ -216,17 +212,6 @@ function AccountContent({
   } | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const solo = studios.length === 1;
-
-  useEffect(() => {
-    const id = businessIdPendingCardReturn(studios.map((s) => s.id));
-    if (!id) return;
-    const studio = studios.find((s) => s.id === id);
-    if (studio) {
-      setBookingSeed(null);
-      setBookingOffer(null);
-      setBookingStudio(studio);
-    }
-  }, [studios]);
 
   const now = new Date().toISOString();
   const live = bookings.data.filter(
@@ -287,17 +272,31 @@ function AccountContent({
     }
   };
 
-  const openBooking = (studio: PortalBusinessSummary, seed?: BookingSeed | null) => {
-    setBookingSeed(seed ?? null);
-    setBookingOffer(null);
-    setBookingStudio(studio);
-  };
+  // Booking happens on the business's own page, the same one a new client sees,
+  // so a signed-in client gets the same journey with their details filled in.
+  const openBooking = (studio: PortalBusinessSummary) =>
+    void navigate({ to: "/$slug", params: { slug: studio.slug }, search: {} });
 
-  const openOffer = (offer: FromStudio<PublicPackageLink>) => {
-    setBookingSeed(null);
-    setBookingOffer(offer.link);
-    setBookingStudio(offer.studio);
-  };
+  // A time picked on the calendar carries through: the page opens on that session
+  // and day and, if the time is still free, straight on to their details.
+  const openBookingAt = (paid: CalendarPaidSlot) =>
+    void navigate({
+      to: "/$slug",
+      params: { slug: paid.studio.slug },
+      search: {
+        service: paid.serviceId,
+        location: paid.locationId,
+        date: paid.date,
+        start: paid.slot.start,
+      },
+    });
+
+  const openOffer = (offer: FromStudio<PublicPackageLink>) =>
+    void navigate({
+      to: "/$slug",
+      params: { slug: offer.studio.slug },
+      search: { offer: offer.link.code },
+    });
 
   return (
     <>
@@ -348,14 +347,7 @@ function AccountContent({
                   date={calDay}
                   studios={studios}
                   credits={usable}
-                  onBookPaid={(paid) =>
-                    openBooking(paid.studio, {
-                      date: paid.date,
-                      serviceId: paid.serviceId,
-                      locationId: paid.locationId,
-                      slot: paid.slot,
-                    })
-                  }
+                  onBookPaid={openBookingAt}
                 />
               </>
             }
@@ -403,19 +395,6 @@ function AccountContent({
         }}
         onOpenChange={(open) => {
           if (!open) setCheckout(null);
-        }}
-      />
-      <BookSessionDrawer
-        studio={bookingStudio}
-        seed={bookingSeed}
-        offer={bookingOffer}
-        open={bookingStudio !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setBookingStudio(null);
-            setBookingSeed(null);
-            setBookingOffer(null);
-          }
         }}
       />
     </>
@@ -666,7 +645,9 @@ function Credits({
               <p>Expires {formatInTz(c.expiresAt, "Europe/London", { dateStyle: "medium" })}</p>
               {c.reserved > 0 ? <p>{c.reserved} held against a pending booking</p> : null}
             </div>
-            <BookWithCredit studio={c.studio} full />
+            <Button size="sm" variant="outline" className="w-full" onClick={() => onBook(c.studio)}>
+              <CalendarClock className="size-4" /> Book with a credit
+            </Button>
           </div>
         ))}
       </div>
@@ -728,22 +709,5 @@ function BookButton({ onClick }: { onClick: () => void }) {
     <Button size="sm" onClick={onClick}>
       <CalendarClock className="size-4" /> Book now
     </Button>
-  );
-}
-
-function BookWithCredit({ studio, full }: { studio: PortalBusinessSummary; full?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="outline"
-        className={full ? "w-full" : undefined}
-        onClick={() => setOpen(true)}
-      >
-        <CalendarClock className="size-4" /> Book with a credit
-      </Button>
-      {open ? <BookWithCreditDialog businessId={studio.id} onOpenChange={setOpen} /> : null}
-    </>
   );
 }

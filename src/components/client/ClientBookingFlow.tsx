@@ -68,6 +68,7 @@ import {
   authenticationSucceeded,
   formatCountdown,
   looksLikeEmail,
+  nationalPhone,
   readStoredJourney,
   returnedFromAuthentication,
   splitDisplayName,
@@ -111,14 +112,33 @@ const EMPTY_DETAILS: DetailsValues = {
   marketingConsent: false,
 };
 
+/**
+ * Where to drop someone who arrives already knowing what they want: the account's
+ * calendar hands over a session, a day and — when they tapped one — a time.
+ */
+export type BookingStart = {
+  serviceId: string;
+  locationId: string | null;
+  /** YYYY-MM-DD in the business's timezone. */
+  date: string | null;
+  /** ISO start of the time they picked; matched against live availability. */
+  startAt: string | null;
+};
+
 export function ClientBookingFlow({
   business,
   page,
+  start = null,
+  onStarted,
   onClearRedirectParams,
   onPickPackage,
 }: {
   business: PublicBusinessProfile;
   page: BookingPageContent;
+  /** A session (and maybe a day and time) chosen before arriving, e.g. from the account. */
+  start?: BookingStart | null;
+  /** Called once `start` has been applied, so the caller can drop it from the URL. */
+  onStarted?: () => void;
   /** Strips Stripe's redirect parameters once a card return has been handled. */
   onClearRedirectParams: () => void;
   /** Packages are bought through the catalogue flow; the landing hands over to it. */
@@ -194,6 +214,28 @@ export function ClientBookingFlow({
     if (first) setServiceId(first.id);
   }, [desktop, serviceId, selectedPackageId, services.data]);
 
+  // Arriving from the account with a session already chosen: open on its times
+  // (the day they were looking at, if any) instead of the landing. Declared after
+  // the desktop default above so this choice is the one that sticks.
+  const startApplied = useRef(false);
+  const [pendingStartAt, setPendingStartAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (startApplied.current || !start || !services.data || !locations.data) return;
+    startApplied.current = true;
+    onStarted?.();
+    if (!services.data.some((s) => s.id === start.serviceId)) return;
+    setSelectedPackageId(null);
+    setServiceId(start.serviceId);
+    if (start.locationId && locations.data.some((l) => l.id === start.locationId)) {
+      setLocationId(start.locationId);
+    }
+    if (start.date && start.date >= today) setDate(start.date);
+    setPendingStartAt(start.startAt);
+    setStep(desktop ? "landing" : "time");
+    window.scrollTo({ top: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, services.data, locations.data]);
+
   const serviceStaff = useMemo(
     () =>
       (staff.data ?? []).filter(
@@ -239,6 +281,22 @@ export function ClientBookingFlow({
     additionalServiceIds: extraIds,
     enabled: choosingTime && Boolean(serviceId && activeLocationId),
   });
+  // The whole window takes the API a while for a busy session (it works day by
+  // day), so the day on screen is asked for on its own first and its times show
+  // straight away; the wide window fills in the day counts behind it. The window
+  // is a day either side in UTC so any timezone's local day is inside it.
+  const dayWindow = usePublicAvailability(businessId, {
+    serviceId: serviceId ?? undefined,
+    locationId: activeLocationId ?? undefined,
+    from: date > today ? `${addCalendarDays(date, -1)}T12:00:00.000Z` : fromIso,
+    to: `${addCalendarDays(date, 1)}T12:00:00.000Z`,
+    staffId,
+    linkCode,
+    additionalServiceIds: extraIds,
+    enabled: choosingTime && Boolean(serviceId && activeLocationId) && !availability.data,
+  });
+  const slotSource = availability.data ?? dayWindow.data ?? null;
+  const timesLoading = availability.data ? availability.isFetching : dayWindow.isFetching;
   const dayCounts = useMemo<DayAvailability | null>(() => {
     if (!availability.data) return null;
     const counts = new Map<string, number>();
@@ -249,14 +307,35 @@ export function ClientBookingFlow({
     return counts;
   }, [availability.data, tz]);
   const daySlots = useMemo(
-    () => (availability.data ?? []).filter((s) => isoDateInTz(s.start, tz) === date),
-    [availability.data, date, tz],
+    () => (slotSource ?? []).filter((s) => isoDateInTz(s.start, tz) === date),
+    [slotSource, date, tz],
   );
   const nextAvailableDate = useMemo(() => {
     if (!dayCounts) return null;
     const days = [...dayCounts.keys()].filter((d) => d > date).sort();
     return days[0] ?? null;
   }, [dayCounts, date]);
+
+  // The time they tapped on the account calendar is only a time; the slot token
+  // that holds it comes from this page's own availability, so wait for that.
+  useEffect(() => {
+    if (!pendingStartAt) return;
+    // Placeholder data is another day's times kept on screen; wait for the real ones.
+    const fresh = [availability, dayWindow].find((q) => q.isSuccess && !q.isPlaceholderData);
+    if (!fresh?.data) return;
+    setPendingStartAt(null);
+    const match = fresh.data.find((s) => s.start === pendingStartAt);
+    if (!match) {
+      toast.error(
+        `Sorry, ${formatTimeInTz(pendingStartAt, tz)} has just gone. Here are the nearest times.`,
+      );
+      return;
+    }
+    setSelectedSlot(match);
+    setStep("details");
+    window.scrollTo({ top: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingStartAt, availability.data, dayWindow.data]);
 
   // The landing's "Next available" reads one window for the first bookable session.
   const firstService = services.data?.[0] ?? null;
@@ -302,7 +381,7 @@ export function ClientBookingFlow({
       firstName: d.firstName || me.data?.firstName?.trim() || fromUser.first,
       lastName: d.lastName || me.data?.lastName?.trim() || fromUser.last,
       email: d.email || me.data?.emailDisplay?.trim() || auth.user?.email || "",
-      phone: d.phone || me.data?.phoneDisplay?.trim() || auth.user?.phone || "",
+      phone: d.phone || nationalPhone(me.data?.phoneDisplay?.trim() || auth.user?.phone || ""),
     }));
   }, [hasAccountHere, me.isLoading, me.data, auth.user, restoredContact]);
 
@@ -955,7 +1034,7 @@ export function ClientBookingFlow({
         dayCounts={dayCounts}
         slots={daySlots}
         allSlots={availability.data ?? []}
-        loading={availability.isFetching}
+        loading={timesLoading}
         selected={selectedSlot}
         onSelect={setSelectedSlot}
         onContinue={() => {
@@ -1043,7 +1122,7 @@ export function ClientBookingFlow({
             horizonDays={WINDOW_DAYS}
             dayCounts={dayCounts}
             slots={daySlots}
-            loading={availability.isFetching}
+            loading={timesLoading}
             selected={selectedSlot}
             onSelect={setSelectedSlot}
             onBack={() => setStep("landing")}
