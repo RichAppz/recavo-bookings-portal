@@ -15,9 +15,10 @@
  *  - Google Fonts are cached so type doesn't fall back offline.
  *  - API calls are never cached here: TanStack Query owns data (and its auth).
  *
- * Updates: a new deploy installs a new worker that waits until the page asks it
- * to take over (see src/lib/offline/service-worker.ts), so a session is never
- * half old bundle, half new.
+ * Updates: a new deploy installs a new worker that waits until the old one has
+ * no tabs left, so a session is never half old bundle, half new. There is no
+ * reload prompt (see src/lib/offline/service-worker.ts); the SKIP_WAITING
+ * message is kept for tooling and tests.
  */
 import { clientsClaim } from "workbox-core";
 import { ExpirationPlugin } from "workbox-expiration";
