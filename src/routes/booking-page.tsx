@@ -1233,8 +1233,8 @@ function LivePreview({
 
   const noop = () => undefined;
   const content = business.data ? (
-    <ClientTheme page={page} scope="element">
-      <div className={device === "desktop" ? "pb-6" : undefined}>
+    <ClientTheme page={page} scope="element" className={device === "phone" ? "h-full" : undefined}>
+      <div className={device === "desktop" ? "pb-6" : "h-full"}>
         <ClientLanding
           preview
           business={business.data}
@@ -1326,8 +1326,9 @@ function LivePreview({
               transform: `scale(${PHONE_SCALE})`,
             }}
           >
+            {/* The landing scrolls itself so its Book now bar can be a plain footer. */}
             <div
-              className="no-scrollbar relative overflow-y-auto overflow-x-hidden rounded-[40px]"
+              className="relative overflow-hidden rounded-[40px]"
               style={{ width: PHONE_SCREEN.width, height: PHONE_SCREEN.height }}
             >
               {content}

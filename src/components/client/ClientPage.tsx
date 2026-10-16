@@ -23,11 +23,13 @@ export function ClientTheme({
   page,
   children,
   scope = "document",
+  className,
 }: {
   page: Pick<BookingPageContent, "theme" | "accentColour">;
   children: ReactNode;
   /** `element` keeps the theme inside the wrapper (used by the editor's preview). */
   scope?: "document" | "element";
+  className?: string;
 }) {
   const style = useMemo(
     () => clientThemeStyle({ theme: page.theme, accentColour: page.accentColour }),
@@ -65,7 +67,7 @@ export function ClientTheme({
 
   return (
     <div
-      className="client-page min-h-full bg-background text-foreground antialiased"
+      className={cn("client-page min-h-full bg-background text-foreground antialiased", className)}
       style={scope === "element" ? style : undefined}
       data-client-theme={page.theme}
     >

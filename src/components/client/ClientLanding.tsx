@@ -347,228 +347,240 @@ export function ClientLanding({
   }
 
   return (
-    <div className="pb-4">
-      <ClientColumn className="pt-3">
-        {header}
+    // In the editor's phone frame the landing owns its own scroller and the bar is a
+    // plain flex footer: `sticky` inside a scaled scroller lands mid-screen on iOS.
+    <div className={preview ? "flex h-full flex-col" : "pb-4"}>
+      <div
+        className={
+          preview ? "no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-4" : undefined
+        }
+      >
+        <ClientColumn className="pt-3">
+          {header}
 
-        <div className="mt-5">
-          <h1
-            className="text-[32px] font-bold leading-tight tracking-tight"
-            style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
-          >
-            {business.tradingName}
-          </h1>
-          {page.description ? (
-            <p className="mt-1 text-[17px] text-muted-foreground">{page.description}</p>
-          ) : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {reviewsChip ? (
-              <Chip>
-                <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
-                {reviewsChip}
-              </Chip>
-            ) : null}
-            {showStaff ? (
-              <Chip>{staff.length === 1 ? "1 to book with" : `${staff.length} to book with`}</Chip>
-            ) : null}
-            {locations.length > 0 ? <Chip>{where}</Chip> : null}
-            {cancellationWindowHours > 0 ? (
-              <Chip>Free to move up to {hoursLabel(cancellationWindowHours)} before</Chip>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Returning clients skip the details step. */}
-        {preview ? null : signedInName ? (
-          <button
-            type="button"
-            onClick={onAccount}
-            className="mt-4 flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
-          >
-            <span>
-              <span className="block text-[15px] font-semibold">Hi {signedInName}</span>
-              <span className="block text-[13px] text-muted-foreground">
-                Your bookings and credits are in your account
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="mt-4 flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
-          >
-            <span>
-              <span className="block text-[15px] font-semibold">Booked here before?</span>
-              <span className="block text-[13px] text-muted-foreground">
-                Sign in with a code to use your details and credits
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </button>
-        )}
-
-        <div className="mt-6 scroll-mt-4" id="sessions">
-          <SectionLabel>Sessions</SectionLabel>
-          {services.length === 0 ? (
-            <ClientCard>
-              <p className="px-4 py-5 text-[15px] text-muted-foreground">
-                Nothing to book online just now. Check back soon.
-              </p>
-            </ClientCard>
-          ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
-            <div className="space-y-4">
-              {groupByCategory(services).map((group) => (
-                <div key={group.category ?? "other"}>
-                  {group.category ? (
-                    <p className="mb-1.5 text-[13px] text-muted-foreground">{group.category}</p>
-                  ) : null}
-                  <ServiceList
-                    services={group.items}
-                    locations={locations}
-                    onPick={onPickService}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <ServiceList services={services} locations={locations} onPick={onPickService} />
-          )}
-        </div>
-
-        {packages.length > 0 ? (
-          <div className="mt-6">
-            <SectionLabel>Packages</SectionLabel>
-            <ClientCard>
-              <ul className="divide-y divide-border">
-                {packages.map((pkg) => (
-                  <li key={pkg.id}>
-                    <button
-                      type="button"
-                      onClick={() => onPickPackage(pkg.id)}
-                      className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-muted"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-semibold">{pkg.name}</span>
-                        <span className="block text-[13px] text-muted-foreground">
-                          {pkg.creditsIssued} {pkg.creditsIssued === 1 ? "session" : "sessions"} ·
-                          Use within {validityLabel(pkg.validity)}
-                        </span>
-                      </span>
-                      <span className="text-[16px] font-semibold">
-                        {price(pkg.priceMinor, pkg.currency)}
-                      </span>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </ClientCard>
-          </div>
-        ) : null}
-
-        {showReviews ? (
-          <div className="mt-6">
-            <SectionLabel
-              trailing={
-                <GoogleLink reviews={reviews} preview={preview} className="text-[12px]" short />
-              }
+          <div className="mt-5">
+            <h1
+              className="text-[32px] font-bold leading-tight tracking-tight"
+              style={{ fontFamily: "var(--client-font-display)", fontWeight: 650 }}
             >
-              What clients say
-            </SectionLabel>
-            <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-              {reviews.reviews.map((review) => (
-                <li
-                  key={`${review.publishedAt}-${review.author}`}
-                  className="w-[260px] shrink-0 snap-start"
-                >
-                  <ReviewCard review={review} className="h-full" />
-                </li>
-              ))}
-            </ul>
+              {business.tradingName}
+            </h1>
+            {page.description ? (
+              <p className="mt-1 text-[17px] text-muted-foreground">{page.description}</p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {reviewsChip ? (
+                <Chip>
+                  <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                  {reviewsChip}
+                </Chip>
+              ) : null}
+              {showStaff ? (
+                <Chip>
+                  {staff.length === 1 ? "1 to book with" : `${staff.length} to book with`}
+                </Chip>
+              ) : null}
+              {locations.length > 0 ? <Chip>{where}</Chip> : null}
+              {cancellationWindowHours > 0 ? (
+                <Chip>Free to move up to {hoursLabel(cancellationWindowHours)} before</Chip>
+              ) : null}
+            </div>
           </div>
-        ) : null}
 
-        {showAbout ? (
-          <div className="mt-6">
-            <SectionLabel>About</SectionLabel>
-            <ClientCard>
-              <p className="whitespace-pre-line px-4 py-4 text-[15px] leading-relaxed">
-                {page.about}
-              </p>
-            </ClientCard>
+          {/* Returning clients skip the details step. */}
+          {preview ? null : signedInName ? (
+            <button
+              type="button"
+              onClick={onAccount}
+              className="mt-4 flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
+            >
+              <span>
+                <span className="block text-[15px] font-semibold">Hi {signedInName}</span>
+                <span className="block text-[13px] text-muted-foreground">
+                  Your bookings and credits are in your account
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="mt-4 flex w-full items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3 text-left transition hover:bg-muted"
+            >
+              <span>
+                <span className="block text-[15px] font-semibold">Booked here before?</span>
+                <span className="block text-[13px] text-muted-foreground">
+                  Sign in with a code to use your details and credits
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </button>
+          )}
+
+          <div className="mt-6 scroll-mt-4" id="sessions">
+            <SectionLabel>Sessions</SectionLabel>
+            {services.length === 0 ? (
+              <ClientCard>
+                <p className="px-4 py-5 text-[15px] text-muted-foreground">
+                  Nothing to book online just now. Check back soon.
+                </p>
+              </ClientCard>
+            ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
+              <div className="space-y-4">
+                {groupByCategory(services).map((group) => (
+                  <div key={group.category ?? "other"}>
+                    {group.category ? (
+                      <p className="mb-1.5 text-[13px] text-muted-foreground">{group.category}</p>
+                    ) : null}
+                    <ServiceList
+                      services={group.items}
+                      locations={locations}
+                      onPick={onPickService}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ServiceList services={services} locations={locations} onPick={onPickService} />
+            )}
           </div>
-        ) : null}
 
-        {showStaff ? (
-          <div className="mt-6">
-            <SectionLabel>Team</SectionLabel>
-            <ClientCard>
-              <ul className="divide-y divide-border">
-                {staff.map((person) => (
-                  <li key={person.id} className="flex items-start gap-3 px-4 py-3.5">
-                    <PersonMark name={person.displayName} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[16px] font-semibold">{person.displayName}</p>
-                      {person.title ? (
-                        <p className="text-[13px] text-muted-foreground">{person.title}</p>
-                      ) : null}
-                      {person.bio ? (
-                        <p className="mt-1 text-[14px] leading-relaxed text-foreground/80">
-                          {person.bio}
-                        </p>
-                      ) : null}
-                    </div>
+          {packages.length > 0 ? (
+            <div className="mt-6">
+              <SectionLabel>Packages</SectionLabel>
+              <ClientCard>
+                <ul className="divide-y divide-border">
+                  {packages.map((pkg) => (
+                    <li key={pkg.id}>
+                      <button
+                        type="button"
+                        onClick={() => onPickPackage(pkg.id)}
+                        className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-muted"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[16px] font-semibold">{pkg.name}</span>
+                          <span className="block text-[13px] text-muted-foreground">
+                            {pkg.creditsIssued} {pkg.creditsIssued === 1 ? "session" : "sessions"} ·
+                            Use within {validityLabel(pkg.validity)}
+                          </span>
+                        </span>
+                        <span className="text-[16px] font-semibold">
+                          {price(pkg.priceMinor, pkg.currency)}
+                        </span>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </ClientCard>
+            </div>
+          ) : null}
+
+          {showReviews ? (
+            <div className="mt-6">
+              <SectionLabel
+                trailing={
+                  <GoogleLink reviews={reviews} preview={preview} className="text-[12px]" short />
+                }
+              >
+                What clients say
+              </SectionLabel>
+              <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+                {reviews.reviews.map((review) => (
+                  <li
+                    key={`${review.publishedAt}-${review.author}`}
+                    className="w-[260px] shrink-0 snap-start"
+                  >
+                    <ReviewCard review={review} className="h-full" />
                   </li>
                 ))}
               </ul>
-            </ClientCard>
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        {showLocation ? (
-          <div className="mt-6">
-            <SectionLabel>Location and parking</SectionLabel>
-            <ClientCard>
-              <div className="flex items-start gap-3 px-4 py-4">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  {locations
-                    .filter((l) => l.type === "physical")
-                    .map((l) => (
-                      <p key={l.id} className="text-[16px] font-semibold">
-                        {l.name}
+          {showAbout ? (
+            <div className="mt-6">
+              <SectionLabel>About</SectionLabel>
+              <ClientCard>
+                <p className="whitespace-pre-line px-4 py-4 text-[15px] leading-relaxed">
+                  {page.about}
+                </p>
+              </ClientCard>
+            </div>
+          ) : null}
+
+          {showStaff ? (
+            <div className="mt-6">
+              <SectionLabel>Team</SectionLabel>
+              <ClientCard>
+                <ul className="divide-y divide-border">
+                  {staff.map((person) => (
+                    <li key={person.id} className="flex items-start gap-3 px-4 py-3.5">
+                      <PersonMark name={person.displayName} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[16px] font-semibold">{person.displayName}</p>
+                        {person.title ? (
+                          <p className="text-[13px] text-muted-foreground">{person.title}</p>
+                        ) : null}
+                        {person.bio ? (
+                          <p className="mt-1 text-[14px] leading-relaxed text-foreground/80">
+                            {person.bio}
+                          </p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </ClientCard>
+            </div>
+          ) : null}
+
+          {showLocation ? (
+            <div className="mt-6">
+              <SectionLabel>Location and parking</SectionLabel>
+              <ClientCard>
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    {locations
+                      .filter((l) => l.type === "physical")
+                      .map((l) => (
+                        <p key={l.id} className="text-[16px] font-semibold">
+                          {l.name}
+                        </p>
+                      ))}
+                    {address ? (
+                      <p className="text-[15px] text-muted-foreground">{address}</p>
+                    ) : null}
+                    {page.venue.parkingNote ? (
+                      <p className="mt-1 text-[14px] text-foreground/80">
+                        {page.venue.parkingNote}
                       </p>
-                    ))}
-                  {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
-                  {page.venue.parkingNote ? (
-                    <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+                    ) : null}
+                  </div>
+                  {address && !preview ? (
+                    <a
+                      href={directionsUrl(address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
+                    >
+                      <Navigation className="h-4 w-4" />
+                      Directions
+                    </a>
                   ) : null}
                 </div>
-                {address && !preview ? (
-                  <a
-                    href={directionsUrl(address)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
-                  >
-                    <Navigation className="h-4 w-4" />
-                    Directions
-                  </a>
-                ) : null}
-              </div>
-            </ClientCard>
-          </div>
-        ) : null}
+              </ClientCard>
+            </div>
+          ) : null}
 
-        <PoweredBy />
-      </ClientColumn>
+          <PoweredBy />
+        </ClientColumn>
+      </div>
 
       {preview ? (
-        // The editor's phone frame is its own scroller, so the bar sticks to the
-        // frame's bottom edge rather than the browser window's.
-        <div className="sticky bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+        <div className="shrink-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
           <div className="flex items-center justify-between gap-4 px-4 py-3">{bookNowBar}</div>
         </div>
       ) : (
