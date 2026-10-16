@@ -85,6 +85,7 @@ export function ClientMonthCalendar({
               key={day}
               type="button"
               role="gridcell"
+              data-day={day}
               onClick={() => onDate(day)}
               disabled={!enabled}
               aria-pressed={active}

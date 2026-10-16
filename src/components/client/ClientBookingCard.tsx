@@ -241,6 +241,7 @@ export function ClientBookingCard({
                 <button
                   key={slot.slotToken}
                   type="button"
+                  data-slot-start={slot.start}
                   onClick={() => onSelect(slot)}
                   aria-pressed={active}
                   className={cn(
