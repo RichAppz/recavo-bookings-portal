@@ -1014,7 +1014,7 @@ export function ClientBookingFlow({
       </InkButton>
     </>
   ) : step === "details" ? (
-    hasAccountHere && signedInName ? (
+    signedInName ? (
       <span className="text-[14px] text-muted-foreground">{signedInName}</span>
     ) : (
       <TextLink
@@ -1184,7 +1184,7 @@ export function ClientBookingFlow({
             onContinue={submitDetails}
             canContinue={detailsComplete}
             pending={holdMutation.isPending}
-            signedInAs={hasAccountHere ? signedInName : null}
+            signedInAs={signedInName}
             onSignIn={() => openSignIn("stay")}
             onNotYou={() => void auth.signOut()}
           />
@@ -1195,7 +1195,7 @@ export function ClientBookingFlow({
             summary={reviewSummary}
             layout={layout}
             msLeft={hold ? msLeft : null}
-            bookingAs={hasAccountHere ? signedInName : null}
+            bookingAs={signedInName}
             onNotYou={() => void auth.signOut()}
             options={optionsFor(hold, reviewSummary.priceMinor)}
             payMethod={payMethod}
