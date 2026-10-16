@@ -24,15 +24,36 @@ export function followUpIntervalLabel(months: number): string {
   return months === 1 ? "every month" : `every ${months} months`;
 }
 
-/** The hint on a service card: "Top-up every 2 years" (or the rule's own label). */
-export function followUpRuleSummary(rule: ServiceFollowUpRule): string {
+/** One rule's summary: "Ceramic top-up every 2 years" (or "Top-up …" without a label). */
+export function followUpRuleSummary(
+  rule: Pick<ServiceFollowUpRule, "intervalMonths" | "label">,
+): string {
   const what = rule.label?.trim() || "Top-up";
   return `${what} ${followUpIntervalLabel(rule.intervalMonths)}`;
 }
 
-/** Form state for the rule editor; strings so partially typed numbers survive. */
+/** The hint on a service card: every rule, soonest first — "Valet every year · Top-up every 2 years". */
+export function followUpRulesSummary(
+  rules: readonly Pick<ServiceFollowUpRule, "intervalMonths" | "label">[],
+): string {
+  return rules
+    .slice()
+    .sort((a, b) => a.intervalMonths - b.intervalMonths)
+    .map(followUpRuleSummary)
+    .join(" · ");
+}
+
+/** The most reminders one service can carry; mirrors the API. */
+export const FOLLOW_UP_MAX_RULES = 5;
+
+/**
+ * Form state for one reminder in the editor; strings so partially typed numbers
+ * survive. `id` is the saved rule's id (null for one added this session) so the API
+ * keeps its scheduled follow-ups; `key` is only for React.
+ */
 export type FollowUpRuleDraft = {
-  enabled: boolean;
+  key: string;
+  id: string | null;
   /** A preset's months, or "custom". */
   preset: string;
   customMonths: string;
@@ -40,19 +61,17 @@ export type FollowUpRuleDraft = {
   label: string;
 };
 
-export function draftFromRule(rule: ServiceFollowUpRule | null | undefined): FollowUpRuleDraft {
-  if (!rule) {
-    return {
-      enabled: false,
-      preset: "24",
-      customMonths: "",
-      leadDays: String(FOLLOW_UP_DEFAULT_LEAD_DAYS),
-      label: "",
-    };
-  }
+let draftSeq = 0;
+function nextKey(): string {
+  draftSeq += 1;
+  return `fu-draft-${draftSeq}`;
+}
+
+export function draftFromRule(rule: ServiceFollowUpRule): FollowUpRuleDraft {
   const preset = FOLLOW_UP_INTERVAL_PRESETS.find((p) => p.months === rule.intervalMonths);
   return {
-    enabled: true,
+    key: rule.id,
+    id: rule.id,
     preset: preset ? String(preset.months) : "custom",
     customMonths: preset ? "" : String(rule.intervalMonths),
     leadDays: String(rule.leadDays),
@@ -60,43 +79,108 @@ export function draftFromRule(rule: ServiceFollowUpRule | null | undefined): Fol
   };
 }
 
-export type FollowUpRuleDraftResult =
-  | { ok: true; rule: ServiceFollowUpRule | null }
-  | { ok: false; field: "intervalMonths" | "leadDays" | "label"; message: string };
+export function draftsFromRules(
+  rules: readonly ServiceFollowUpRule[] | null | undefined,
+): FollowUpRuleDraft[] {
+  return (rules ?? []).map(draftFromRule);
+}
 
-/** Validates the draft into the API payload; `null` when the reminder is switched off. */
-export function ruleFromDraft(draft: FollowUpRuleDraft): FollowUpRuleDraftResult {
-  if (!draft.enabled) return { ok: true, rule: null };
-  const months =
-    draft.preset === "custom" ? Number(draft.customMonths.trim()) : Number(draft.preset);
-  if (
-    !Number.isInteger(months) ||
-    months < FOLLOW_UP_MIN_INTERVAL_MONTHS ||
-    months > FOLLOW_UP_MAX_INTERVAL_MONTHS
-  ) {
-    return {
-      ok: false,
-      field: "intervalMonths",
-      message: `Enter a whole number of months between ${FOLLOW_UP_MIN_INTERVAL_MONTHS} and ${FOLLOW_UP_MAX_INTERVAL_MONTHS}.`,
-    };
+/**
+ * A blank reminder to add to the list. Its interval is the first preset not already
+ * used, so "Add another" after a 2-year top-up offers something other than 2 years
+ * (6 months first: a maintenance wash is the usual second reminder).
+ */
+export function newFollowUpDraft(existing: readonly FollowUpRuleDraft[]): FollowUpRuleDraft {
+  const taken = new Set(existing.map((d) => draftMonths(d)));
+  const order = existing.length === 0 ? [24, 12, 6, 18, 36] : [12, 6, 18, 24, 36];
+  const months = order.find((m) => !taken.has(m));
+  return {
+    key: nextKey(),
+    id: null,
+    preset: months ? String(months) : "custom",
+    customMonths: "",
+    leadDays: String(FOLLOW_UP_DEFAULT_LEAD_DAYS),
+    label: "",
+  };
+}
+
+function draftMonths(draft: FollowUpRuleDraft): number {
+  return draft.preset === "custom" ? Number(draft.customMonths.trim()) : Number(draft.preset);
+}
+
+/** What the API accepts for one rule: an existing id to keep, or none for a new one. */
+export type FollowUpRuleInput = {
+  id?: string;
+  intervalMonths: number;
+  leadDays: number;
+  label: string | null;
+};
+
+export type FollowUpRuleField = "intervalMonths" | "leadDays" | "label";
+
+export type FollowUpRulesDraftResult =
+  | { ok: true; rules: FollowUpRuleInput[] }
+  | { ok: false; index: number; field: FollowUpRuleField; message: string };
+
+/**
+ * Validates every draft into the API payload (an empty list switches reminders off).
+ * The first problem is reported with the reminder it belongs to; two reminders with the
+ * same interval are refused because they would be the same message twice.
+ */
+export function rulesFromDrafts(drafts: readonly FollowUpRuleDraft[]): FollowUpRulesDraftResult {
+  const rules: FollowUpRuleInput[] = [];
+  const seen = new Map<number, number>();
+  for (const [index, draft] of drafts.entries()) {
+    const months = draftMonths(draft);
+    if (
+      !Number.isInteger(months) ||
+      months < FOLLOW_UP_MIN_INTERVAL_MONTHS ||
+      months > FOLLOW_UP_MAX_INTERVAL_MONTHS
+    ) {
+      return {
+        ok: false,
+        index,
+        field: "intervalMonths",
+        message: `Enter a whole number of months between ${FOLLOW_UP_MIN_INTERVAL_MONTHS} and ${FOLLOW_UP_MAX_INTERVAL_MONTHS}.`,
+      };
+    }
+    const first = seen.get(months);
+    if (first !== undefined) {
+      return {
+        ok: false,
+        index,
+        field: "intervalMonths",
+        message: `Reminder ${first + 1} already uses ${followUpIntervalLabel(months).replace(/^every /, "")}. Pick a different interval or remove one.`,
+      };
+    }
+    seen.set(months, index);
+    const lead =
+      draft.leadDays.trim() === "" ? FOLLOW_UP_DEFAULT_LEAD_DAYS : Number(draft.leadDays);
+    if (!Number.isInteger(lead) || lead < 0 || lead > FOLLOW_UP_MAX_LEAD_DAYS) {
+      return {
+        ok: false,
+        index,
+        field: "leadDays",
+        message: `Enter a whole number of days between 0 and ${FOLLOW_UP_MAX_LEAD_DAYS}.`,
+      };
+    }
+    const label = draft.label.trim();
+    if (label.length > FOLLOW_UP_MAX_LABEL_LENGTH) {
+      return {
+        ok: false,
+        index,
+        field: "label",
+        message: `Keep the label under ${FOLLOW_UP_MAX_LABEL_LENGTH} characters.`,
+      };
+    }
+    rules.push({
+      ...(draft.id ? { id: draft.id } : {}),
+      intervalMonths: months,
+      leadDays: lead,
+      label: label || null,
+    });
   }
-  const lead = draft.leadDays.trim() === "" ? FOLLOW_UP_DEFAULT_LEAD_DAYS : Number(draft.leadDays);
-  if (!Number.isInteger(lead) || lead < 0 || lead > FOLLOW_UP_MAX_LEAD_DAYS) {
-    return {
-      ok: false,
-      field: "leadDays",
-      message: `Enter a whole number of days between 0 and ${FOLLOW_UP_MAX_LEAD_DAYS}.`,
-    };
-  }
-  const label = draft.label.trim();
-  if (label.length > FOLLOW_UP_MAX_LABEL_LENGTH) {
-    return {
-      ok: false,
-      field: "label",
-      message: `Keep the label under ${FOLLOW_UP_MAX_LABEL_LENGTH} characters.`,
-    };
-  }
-  return { ok: true, rule: { intervalMonths: months, leadDays: lead, label: label || null } };
+  return { ok: true, rules };
 }
 
 /** Where a follow-up sits relative to today, for grouping and badges. */

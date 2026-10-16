@@ -60,6 +60,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Payments → Take payment online",
       },
       {
+        kind: "new",
+        text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
+        where: "Services → edit a service → Follow-up reminders → Add another reminder",
+      },
+      {
         kind: "improved",
         text: "Recording the last of the money on a job that has already started marks it done in the same step, so it shows up under Job outcomes and the invoice is raised without a second visit to the booking.",
         where: "Bookings → Record payment",
