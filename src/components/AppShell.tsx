@@ -75,6 +75,8 @@ import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import { HeaderBackButton } from "@/components/BackLink";
 import {
   useLinkedRecordDefinition,
+  useDismissAllNotifications,
+  useDismissNotification,
   useMarkNotificationRead,
   useNotifications,
   usePortalBusinesses,
@@ -274,6 +276,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const dismissNotification = useDismissNotification();
+  const dismissAllNotifications = useDismissAllNotifications();
   const canSeeWaitlist = tenant.can(PERMISSIONS.BOOKING_READ_ALL);
   const waitlistSummary = useWaitlistSummary({ enabled: canSeeWaitlist });
   const waiting = waitlistSummary.data?.waiting ?? 0;
@@ -697,27 +701,56 @@ export function AppShell({ children }: { children: ReactNode }) {
                     return (
                       <DropdownMenuItem
                         key={n.id}
-                        className="flex-col items-start gap-0.5"
+                        className="items-start gap-2"
                         onClick={() => {
                           if (!n.readAt) markNotificationRead.mutate(n.id);
                           if (href) void navigate({ href });
                         }}
                       >
-                        <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
-                          {href ? <BellRing className="size-3.5 shrink-0 text-primary" /> : null}
-                          <span className="truncate">{n.subject}</span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
+                            {href ? <BellRing className="size-3.5 shrink-0 text-primary" /> : null}
+                            <span className="truncate">{n.subject}</span>
+                          </span>
+                          {/* The clamp box is a flex child; without an explicit width it sizes to its
+                              text and wraps past the menu's edge instead of inside it. */}
+                          <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
+                            {n.body}
+                          </span>
                         </span>
-                        {/* The clamp box is a flex child; without an explicit width it sizes to its
-                            text and wraps past the menu's edge instead of inside it. */}
-                        <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
-                          {n.body}
-                        </span>
+                        {/* Stopping the click here keeps the row's open/mark-read from firing and
+                            leaves the menu open so several can be cleared in a row. */}
+                        <button
+                          type="button"
+                          aria-label={`Clear “${n.subject}”`}
+                          data-testid="clear-notification"
+                          className="-mt-0.5 -mr-1 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dismissNotification.mutate(n.id);
+                          }}
+                        >
+                          <X className="size-3.5" />
+                        </button>
                       </DropdownMenuItem>
                     );
                   })}
                   {(notifications.data?.notifications ?? []).length === 0 ? (
                     <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
-                  ) : null}
+                  ) : (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="justify-center text-xs text-muted-foreground"
+                        data-testid="clear-all-notifications"
+                        onClick={() => dismissAllNotifications.mutate()}
+                      >
+                        Clear all
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 

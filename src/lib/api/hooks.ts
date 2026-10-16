@@ -3000,6 +3000,77 @@ export function useMarkNotificationRead() {
   });
 }
 
+type NotificationsPage = { notifications: Notification[]; nextCursor?: string | null };
+
+/** Clear one notification from the bell. Optimistically removes the row. */
+export function useDismissNotification() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await api.post<{ notification: Notification }>(
+        `/api/v1/businesses/${businessId}/notifications/${notificationId}/dismiss`,
+        {},
+      );
+      return res.data.notification;
+    },
+    onMutate: async (notificationId) => {
+      await qc.cancelQueries({ queryKey: ["biz", businessId, "notifications"] });
+      const snapshots = qc.getQueriesData<NotificationsPage>({
+        queryKey: ["biz", businessId, "notifications"],
+      });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData(key, {
+          ...data,
+          notifications: data.notifications.filter((n) => n.id !== notificationId),
+        });
+      }
+      return { snapshots };
+    },
+    onError: (err, _id, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
+      toastApiError(err);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
+    },
+  });
+}
+
+/** Clear everything in the bell for the signed-in user. */
+export function useDismissAllNotifications() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ dismissed: number }>(
+        `/api/v1/businesses/${businessId}/notifications/dismiss-all`,
+        {},
+      );
+      return res.data.dismissed;
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["biz", businessId, "notifications"] });
+      const snapshots = qc.getQueriesData<NotificationsPage>({
+        queryKey: ["biz", businessId, "notifications"],
+      });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData(key, { ...data, notifications: [] });
+      }
+      return { snapshots };
+    },
+    onError: (err, _vars, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
+      toastApiError(err);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
+    },
+  });
+}
+
 /** Notifications sent to a specific customer (reminders, updates) — RECA-518 inspect. */
 export function useCustomerNotifications(customerId: string | undefined) {
   const businessId = useBusinessId();

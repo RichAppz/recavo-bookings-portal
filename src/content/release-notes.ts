@@ -60,6 +60,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Payments → Take payment online",
       },
       {
+        kind: "improved",
+        text: "You can clear notifications from the bell: an × on each one, or Clear all at the bottom. Cleared ones stay cleared on every device you sign in on.",
+        where: "Top bar → Bell",
+      },
+      {
         kind: "new",
         text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
         where: "Services → edit a service → Follow-up reminders → Add another reminder",
