@@ -1,114 +1,67 @@
 import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-import { CalendarCheck, Check, ShieldCheck } from "lucide-react";
-import { BrandMark } from "@/components/AuthShell";
-const HIGHLIGHTS = [
-  "Every studio you train at, under one login",
-  "See what you've booked and what you've already paid for",
-  "Buy more sessions and keep your receipts",
-];
-
-const STEPS = [
-  { step: "1", label: "Give us your email" },
-  { step: "2", label: "We send a code" },
-  { step: "3", label: "You're in" },
-];
+import { ChevronLeft } from "lucide-react";
+import { ACCOUNT_PALETTE } from "@/lib/account-palette";
+import { useFixedTheme } from "@/lib/theme";
 
 /**
  * The frame for pages a customer meets before they are signed in.
  *
- * Same two-panel shape as {@link AuthShell} so the two front doors of the
- * product feel like one product, but the left panel sells something different.
- * A studio owner arriving at the staff login is being asked to buy software; a
- * customer here has already paid for sessions and is trying to reach them, so
- * the panel reassures rather than pitches, and spends its lower half explaining
- * the passwordless sign-in — which is the one thing on this page likely to be
- * unfamiliar.
+ * One RECAVO account spans every business a client books with, so this is the
+ * neutral RECAVO look rather than a business theme: the wordmark, one white
+ * card on the warm page background, black buttons. It stays light whatever the
+ * phone's own setting, like the account it leads to. On a phone the card
+ * dissolves into the page and a round back button sits where the wordmark was.
  */
 export function CustomerAuthLayout({
   title,
   subtitle,
   children,
   footer,
+  onBack,
 }: {
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle?: string | undefined;
   readonly children: ReactNode;
   readonly footer?: ReactNode;
+  /** The code step's way back to the email field. */
+  readonly onBack?: (() => void) | undefined;
 }) {
+  useFixedTheme("light");
+
   return (
-    <div className="grid min-h-screen grid-cols-1 overflow-x-clip bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden overflow-hidden bg-sidebar px-12 py-14 lg:flex lg:flex-col lg:justify-between">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 -left-24 size-[26rem] rounded-full bg-sidebar-primary/25 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-0 -bottom-40 size-[24rem] rounded-full bg-sidebar-primary/10 blur-3xl"
-        />
+    <div
+      className="relative flex min-h-screen flex-col overflow-x-clip bg-[var(--account-bg)] text-[#15171c] antialiased"
+      style={ACCOUNT_PALETTE}
+    >
+      <header className="pt-safe px-safe-5 flex h-[88px] shrink-0 items-center justify-center sm:h-[104px]">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="absolute top-[max(env(safe-area-inset-top),1.25rem)] left-5 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--account-line)] bg-white sm:hidden"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        ) : null}
+        <span className="text-[17px] font-extrabold tracking-tight">RECAVO</span>
+      </header>
 
-        <Link to="/" className="relative">
-          <BrandMark tone="dark" />
-        </Link>
-
-        <div className="relative max-w-md">
-          <p className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent px-3 py-1 text-xs font-medium text-sidebar-accent-foreground">
-            <CalendarCheck className="size-3.5 text-sidebar-primary" />
-            Your training account
-          </p>
-          <h2 className="mt-6 text-4xl leading-[1.1] font-semibold tracking-tight text-sidebar-foreground">
-            Your sessions, wherever you train.
-          </h2>
-          <ul className="mt-8 space-y-3">
-            {HIGHLIGHTS.map((item) => (
-              <li key={item} className="flex items-start gap-3 text-sm text-sidebar-foreground/80">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/20 text-sidebar-primary">
-                  <Check className="size-3" strokeWidth={3} />
-                </span>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative border-t border-sidebar-border pt-6">
-          <p className="text-xs font-semibold tracking-[0.14em] text-sidebar-foreground/50 uppercase">
-            No password needed
-          </p>
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            {STEPS.map((item) => (
-              <div key={item.step}>
-                <span className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/20 text-xs font-semibold text-sidebar-primary">
-                  {item.step}
-                </span>
-                <p className="mt-2 text-xs text-sidebar-foreground/70">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      <main className="pt-safe-8 pb-safe-8 px-safe-5 sm:px-safe-10 flex flex-col">
-        <div className="flex items-center">
-          <Link to="/" className="lg:invisible">
-            <BrandMark tone="light" />
-          </Link>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center py-10">
-          <div className="w-full max-w-[26rem]">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
-            <div className="mt-8">{children}</div>
-            {footer ? <div className="mt-8 text-sm text-muted-foreground">{footer}</div> : null}
-          </div>
-        </div>
-
-        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5" />
-          Protected by RECAVO — your connection is encrypted end to end.
-        </p>
+      <main className="px-safe-5 flex flex-1 flex-col items-center pb-10">
+        <section className="w-full max-w-[400px] sm:rounded-[28px] sm:border sm:border-[var(--account-line)] sm:bg-white sm:p-7 sm:shadow-[0_8px_30px_rgba(21,23,28,0.05)]">
+          <h1 className="text-[32px] leading-[1.1] font-bold tracking-tight sm:text-[26px]">
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className="mt-2 text-[17px] text-[var(--account-muted)] sm:text-[14px]">
+              {subtitle}
+            </p>
+          ) : null}
+          <div className="mt-6">{children}</div>
+        </section>
+        {footer ? (
+          <div className="mt-6 text-center text-[14px] text-[var(--account-muted)]">{footer}</div>
+        ) : null}
       </main>
     </div>
   );

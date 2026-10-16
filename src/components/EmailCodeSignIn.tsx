@@ -130,8 +130,9 @@ export function EmailCodeSignIn({
             </>
           )}
         </Button>
-        <p className="rounded-2xl border bg-card px-4 py-3 text-[14px] text-muted-foreground">
-          No password needed. Signing in links any bookings you made as a guest with this email.
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          No password needed. Any bookings you made as a guest with this email will appear in your
+          account.
         </p>
       </form>
     );

@@ -111,16 +111,29 @@ function LoginPage() {
  */
 function CustomerLogin() {
   const [step, setStep] = useState<EmailCodeStep>("email");
+  const [email, setEmail] = useState("");
+  // Remounting is how the code step goes back: the form keeps the address.
+  const [attempt, setAttempt] = useState(0);
+  const back = () => {
+    setStep("email");
+    setAttempt((n) => n + 1);
+  };
   return (
     <CustomerAuthLayout
-      title={step === "code" ? "Check your email" : "Sign in"}
+      title={step === "code" ? "Check your email" : "Sign in to your bookings"}
       subtitle={
-        step === "code"
-          ? "Enter the code to open your account."
-          : "Your bookings, credits and receipts in one place. We'll email you a code; no password needed."
+        step === "code" ? undefined : "One account for every business you book with on RECAVO."
       }
+      onBack={step === "code" ? back : undefined}
     >
-      <EmailCodeSignIn onStepChange={setStep} />
+      <EmailCodeSignIn
+        key={attempt}
+        defaultEmail={email}
+        onStepChange={(next, address) => {
+          setStep(next);
+          if (address) setEmail(address);
+        }}
+      />
     </CustomerAuthLayout>
   );
 }

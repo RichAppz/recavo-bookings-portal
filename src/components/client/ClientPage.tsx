@@ -4,10 +4,12 @@ import { BottomSheet, BottomSheetContent, BottomSheetTitle } from "@/components/
 import { cn } from "@/lib/utils";
 import {
   CLIENT_FONTS_HREF,
+  THEME_SPECS,
   clientThemeStyle,
   initials,
   type BookingPageContent,
 } from "@/lib/client-theme";
+import { useFixedTheme } from "@/lib/theme";
 
 /**
  * The themed frame around every screen of a studio's booking page.
@@ -31,6 +33,8 @@ export function ClientTheme({
     () => clientThemeStyle({ theme: page.theme, accentColour: page.accentColour }),
     [page.theme, page.accentColour],
   );
+  // The page's own theme decides light or dark, never the visitor's OS setting.
+  useFixedTheme(scope === "document" ? (THEME_SPECS[page.theme].dark ? "dark" : "light") : null);
 
   useEffect(() => {
     if (scope !== "document") return;

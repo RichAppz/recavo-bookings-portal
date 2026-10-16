@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   CalendarDays,
@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar } from "@/components/ui-bits";
+import { ACCOUNT_PALETTE } from "@/lib/account-palette";
 import { useAuth } from "@/lib/auth/auth-store";
 import { userDisplayName } from "@/lib/api/types";
+import { useFixedTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export type AccountView =
@@ -39,25 +41,6 @@ const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashb
   { view: "invoices", label: "Invoices", icon: FileText },
   { view: "profile", label: "Profile", icon: UserRound },
 ];
-
-/**
- * Warm neutrals shared with the Studio booking page so the account feels like its
- * continuation. The console's teal primary is re-pointed to near-black here so
- * every shadcn button inside the account picks up the design's dark pill without
- * touching each call site.
- */
-const SHELL_STYLE: CSSProperties = {
-  "--account-bg": "#f5f4f1",
-  "--account-line": "#e6e4df",
-  "--account-muted": "#5f656e",
-  "--background": "#f5f4f1",
-  "--card": "#ffffff",
-  "--border": "#e6e4df",
-  "--muted-foreground": "#5f656e",
-  "--primary": "#15171c",
-  "--primary-foreground": "#ffffff",
-  "--ring": "#15171c",
-} as CSSProperties;
 
 /**
  * The frame for a signed-in customer.
@@ -85,6 +68,8 @@ export function AccountShell({
   const { user, signOut } = useAuth();
   const [mobileNav, setMobileNav] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The account is designed light; the OS dark setting must not darken its cards.
+  useFixedTheme("light");
 
   useEffect(() => setMobileNav(false), [pathname, view]);
 
@@ -94,7 +79,7 @@ export function AccountShell({
     // `overflow-x: hidden` makes this the scroll container and unsticks the header.
     <div
       className="min-h-screen overflow-x-clip bg-[var(--account-bg)] text-[#15171c]"
-      style={SHELL_STYLE}
+      style={ACCOUNT_PALETTE}
     >
       {mobileNav ? (
         <div
