@@ -6,6 +6,67 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-16",
+    title: "A new booking page for your clients, and you decide how it looks",
+    items: [
+      {
+        kind: "new",
+        text: "Your public booking page has been rebuilt from the ground up. Clients land on your name, photo and sessions, see the next free time straight away, pick a day and time (Morning, Afternoon, Evening) and a trainer if you have more than one, and book in three short steps. On a phone the whole thing fits in one hand; on a desktop the calendar and times sit beside your page. Share the same link as before — nothing to change.",
+        where: "book.recavo.app/your-link",
+      },
+      {
+        kind: "new",
+        text: "Booking page is a new area where you choose how that page looks and reads. Pick a theme (Studio, Night or Editorial) and an accent colour, upload a header photo or pick a gradient, write a short intro, and turn sections on or off: about, team, reviews, location. A phone and desktop preview updates as you type, and nothing goes live until you press Publish changes — Discard throws a draft away.",
+        where: "Business → Booking page → Design, Content, Sections",
+      },
+      {
+        kind: "new",
+        text: "Shorten your booking link to something you can say out loud. Old links keep working: anyone using the previous address is taken to the new one.",
+        where: "Business → Booking page → Link and sharing",
+      },
+      {
+        kind: "new",
+        text: "Connect your Google listing to show your star rating and latest reviews on the booking page. It searches by your business name, you pick the right listing, and the reviews refresh themselves about once a day.",
+        where: "Business → Booking page → Content → Google reviews",
+      },
+      {
+        kind: "improved",
+        text: 'Review and pay shows only the ways to pay you have switched on, as a short list to pick from — pay now by card, pay on the day, bank transfer, or a session credit when the client has one. The tick box spells out your cancellation deadline as a real date and time ("Free to cancel until Sun 18 Oct, 15:00") rather than "24 hours before".',
+        where: "Booking page → Review and pay",
+      },
+      {
+        kind: "improved",
+        text: "The confirmation gives clients everything for the day: add to calendar, directions, what's still to pay and how, and one suggested extra. Managing the booking is one tap into their account.",
+        where: "Booking page → You're booked",
+      },
+      {
+        kind: "improved",
+        text: "Clients' accounts have a new overview: the next session up front with Pay, Add to calendar, Directions, Move and Cancel; session credits with how many are left and when they run out; everything coming up; and anything they're on the waitlist for. Cancelling or moving tells them exactly what happens to their money before they confirm.",
+        where: "Client account → Overview",
+      },
+      {
+        kind: "improved",
+        text: "Client sign-in is simpler: one email, one code, no password. Someone arriving from your page gets a Back to {your business} link, and on a phone an Open email app button. The business login lives on its own page so clients and staff don't end up in each other's doors.",
+        where: "book.recavo.app → Sign in",
+      },
+      {
+        kind: "improved",
+        text: "When a time is taken while someone is choosing it, when their ten-minute hold runs out, or when a day is fully booked, the page says so plainly and offers the nearest times or the waitlist. Times that pass while the page is open simply drop off the list.",
+        where: "Booking page → Date and time",
+      },
+      {
+        kind: "improved",
+        text: "Take payment online is clearer about what happens before you connect Stripe or add bank details: your page keeps taking bookings as pay on the day rather than turning clients away.",
+        where: "Payments → Take payment online",
+      },
+      {
+        kind: "fixed",
+        text: "A client giving up an unpaid booking inside your notice window got an error instead of a cancellation. It now cancels cleanly, and only confirmed bookings count as late cancellations.",
+        where: "Client account → Cancel",
+      },
+    ],
+  },
+  {
     date: "2026-10-14",
     title: "Several vehicles on one invoice, previews that work on a phone, reminders a year out",
     items: [
