@@ -13,14 +13,16 @@ import {
   StudioMark,
 } from "@/components/client/ClientPage";
 import type {
+  GoogleReview,
   PublicBusinessProfile,
   PublicLocation,
   PublicPackage,
+  PublicReviews,
   PublicService,
   PublicStaff,
 } from "@/lib/api/hooks";
 import { directionsUrl } from "@/lib/calendar-links";
-import { shortPlace } from "@/lib/client-booking";
+import { reviewsChipLabel, shortPlace } from "@/lib/client-booking";
 import { hoursLabel, price } from "@/lib/client-journey";
 import { headerStyle, sectionEnabled, type BookingPageContent } from "@/lib/client-theme";
 import { formatDuration } from "@/lib/format";
@@ -37,6 +39,7 @@ export function ClientLanding({
   packages,
   staff,
   locations,
+  reviews = null,
   nextAvailable,
   onPickService,
   onPickPackage,
@@ -57,6 +60,8 @@ export function ClientLanding({
   packages: PublicPackage[];
   staff: PublicStaff[];
   locations: PublicLocation[];
+  /** Google reviews already filtered to the page's star floor; null hides the section. */
+  reviews?: PublicReviews | null;
   nextAvailable: NextAvailable;
   onPickService: (serviceId: string) => void;
   onPickPackage: (packageId: string) => void;
@@ -97,6 +102,9 @@ export function ClientLanding({
 
   const address = page.venue.address ?? business.address ?? null;
   const showStaff = sectionEnabled(page, "staff") && staff.length > 0;
+  const showReviews =
+    sectionEnabled(page, "reviews") && reviews !== null && reviews.reviews.length > 0;
+  const reviewsChip = sectionEnabled(page, "reviews") ? reviewsChipLabel(reviews) : null;
   const showAbout = sectionEnabled(page, "about") && Boolean(page.about?.trim());
   const showLocation =
     sectionEnabled(page, "location") && (Boolean(address) || Boolean(page.venue.parkingNote));
@@ -166,6 +174,12 @@ export function ClientLanding({
                 <p className="mt-2 text-[17px] text-muted-foreground">{page.description}</p>
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
+                {reviewsChip ? (
+                  <Chip>
+                    <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                    {reviewsChip}
+                  </Chip>
+                ) : null}
                 {showStaff && staff.length > 1 ? <Chip>{staff.length} trainers</Chip> : null}
                 {place ? <Chip>{place}</Chip> : locations.length > 0 ? <Chip>{where}</Chip> : null}
                 {parkingChip ? <Chip>{parkingChip}</Chip> : null}
@@ -240,21 +254,22 @@ export function ClientLanding({
                 )}
               </section>
 
-              {sectionEnabled(page, "reviews") && preview ? (
+              {showReviews ? (
                 <section className="mt-10">
                   <DesktopHeading
                     trailing={
-                      <span className="text-[13px] text-muted-foreground">From Google</span>
+                      <GoogleLink reviews={reviews} preview={preview} className="text-[13px]" />
                     }
                   >
                     What clients say
                   </DesktopHeading>
-                  <ClientCard>
-                    <div className="flex items-center gap-2 px-4 py-4 text-[14px] text-muted-foreground">
-                      <Star className="h-4 w-4 text-amber-500" />
-                      Reviews appear here once a Google Business Profile is connected.
-                    </div>
-                  </ClientCard>
+                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 desk:grid-cols-3">
+                    {reviews.reviews.slice(0, 6).map((review) => (
+                      <li key={`${review.publishedAt}-${review.author}`}>
+                        <ReviewCard review={review} className="h-full" />
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               ) : null}
 
@@ -347,6 +362,12 @@ export function ClientLanding({
             <p className="mt-1 text-[17px] text-muted-foreground">{page.description}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
+            {reviewsChip ? (
+              <Chip>
+                <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                {reviewsChip}
+              </Chip>
+            ) : null}
             {showStaff ? (
               <Chip>{staff.length === 1 ? "1 to book with" : `${staff.length} to book with`}</Chip>
             ) : null}
@@ -447,6 +468,28 @@ export function ClientLanding({
           </div>
         ) : null}
 
+        {showReviews ? (
+          <div className="mt-6">
+            <SectionLabel
+              trailing={
+                <GoogleLink reviews={reviews} preview={preview} className="text-[12px]" short />
+              }
+            >
+              What clients say
+            </SectionLabel>
+            <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+              {reviews.reviews.map((review) => (
+                <li
+                  key={`${review.publishedAt}-${review.author}`}
+                  className="w-[260px] shrink-0 snap-start"
+                >
+                  <ReviewCard review={review} className="h-full" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {showAbout ? (
           <div className="mt-6">
             <SectionLabel>About</SectionLabel>
@@ -514,22 +557,6 @@ export function ClientLanding({
                     Directions
                   </a>
                 ) : null}
-              </div>
-            </ClientCard>
-          </div>
-        ) : null}
-
-        {sectionEnabled(page, "reviews") && preview ? (
-          <div className="mt-6">
-            <SectionLabel
-              trailing={<span className="text-[12px] text-muted-foreground">From Google</span>}
-            >
-              What clients say
-            </SectionLabel>
-            <ClientCard>
-              <div className="flex items-center gap-2 px-4 py-4 text-[14px] text-muted-foreground">
-                <Star className="h-4 w-4 text-amber-500" />
-                Reviews appear here once a Google Business Profile is connected.
               </div>
             </ClientCard>
           </div>
@@ -685,6 +712,61 @@ function RadioRow({
       </span>
       <span className="shrink-0 text-[16px] font-semibold">{price}</span>
     </button>
+  );
+}
+
+/** One Google review: stars, up to three lines of text, "Sarah K. · 2 weeks ago". */
+function ReviewCard({ review, className }: { review: GoogleReview; className?: string }) {
+  return (
+    <ClientCard className={cn("flex flex-col px-4 py-3.5", className)}>
+      <div className="flex items-center gap-0.5" aria-label={`${review.rating} out of 5 stars`}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Star
+            key={n}
+            className={cn(
+              "h-3.5 w-3.5",
+              n <= review.rating ? "fill-amber-500 text-amber-500" : "text-border",
+            )}
+          />
+        ))}
+      </div>
+      <p className="mt-2 line-clamp-3 flex-1 text-[14px] leading-snug">{review.text}</p>
+      <p className="mt-2.5 text-[12px] text-muted-foreground">
+        {review.author}
+        {review.relativeTime ? ` · ${review.relativeTime}` : ""}
+      </p>
+    </ClientCard>
+  );
+}
+
+/** "All 86 reviews on Google" (or just "From Google" where space is tight). */
+function GoogleLink({
+  reviews,
+  preview,
+  className,
+  short = false,
+}: {
+  reviews: PublicReviews;
+  preview: boolean;
+  className?: string;
+  short?: boolean;
+}) {
+  const label =
+    short || reviews.reviewCount === 0
+      ? "From Google"
+      : `All ${reviews.reviewCount} ${reviews.reviewCount === 1 ? "review" : "reviews"} on Google`;
+  if (preview) {
+    return <span className={cn("text-muted-foreground", className)}>{label}</span>;
+  }
+  return (
+    <a
+      href={reviews.mapsUrl}
+      target="_blank"
+      rel="noreferrer"
+      className={cn("font-medium text-foreground underline underline-offset-2", className)}
+    >
+      {label}
+    </a>
   );
 }
 

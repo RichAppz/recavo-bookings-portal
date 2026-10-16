@@ -11,7 +11,10 @@ import {
   isWithinClientCancelWindow,
   monthGrid,
   monthOf,
+  filterReviews,
   nextAvailableLabel,
+  reviewsChipLabel,
+  shortAuthorName,
   shortPlace,
 } from "./client-booking.ts";
 
@@ -104,5 +107,34 @@ describe("client booking change window", () => {
     assert.equal(nextAvailableLabel("2026-10-15T16:00:00Z", tz, "2026-10-15"), "Today, 17:00");
     assert.equal(nextAvailableLabel("2026-10-16T08:00:00Z", tz, "2026-10-15"), "Tomorrow, 09:00");
     assert.equal(nextAvailableLabel("2026-10-19T08:00:00Z", tz, "2026-10-15"), "Mon 19 Oct, 09:00");
+  });
+
+  it("shortens review authors the way the public page does", () => {
+    assert.equal(shortAuthorName("Sarah Kent"), "Sarah K.");
+    assert.equal(shortAuthorName("  priya  nair-smith "), "priya N.");
+    assert.equal(shortAuthorName("Tom"), "Tom");
+    assert.equal(shortAuthorName(""), "A Google user");
+  });
+
+  it("filters a snapshot to the star floor, newest first", () => {
+    const reviews = [
+      { author: "Tom Reid", rating: 3, text: "Fine", publishedAt: "2026-06-01T00:00:00Z" },
+      { author: "Sarah Kent", rating: 5, text: "Great", publishedAt: "2026-07-10T00:00:00Z" },
+      { author: "Priya Nair", rating: 4, text: "  ", publishedAt: "2026-07-12T00:00:00Z" },
+      { author: "Alex Mo", rating: 4, text: "Good", publishedAt: "2026-07-01T00:00:00Z" },
+    ];
+    assert.deepEqual(
+      filterReviews(reviews, 4).map((r) => r.author),
+      ["Sarah K.", "Alex M."],
+    );
+    assert.equal(filterReviews(reviews, 0).length, 3);
+    assert.equal(filterReviews(reviews, 5).length, 1);
+  });
+
+  it("builds the Google chip only when there is a rating", () => {
+    assert.equal(reviewsChipLabel({ rating: 4.9, reviewCount: 86 }), "4.9 · 86 Google reviews");
+    assert.equal(reviewsChipLabel({ rating: 5, reviewCount: 1 }), "5.0 · 1 Google review");
+    assert.equal(reviewsChipLabel({ rating: null, reviewCount: 0 }), null);
+    assert.equal(reviewsChipLabel(null), null);
   });
 });

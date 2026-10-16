@@ -56,7 +56,7 @@ export const DEFAULT_BOOKING_PAGE: BookingPageContent = {
 };
 
 export const SECTION_LABELS: Record<BookingPageSectionKey, { title: string; hint: string }> = {
-  reviews: { title: "Reviews", hint: "Needs a Google Business Profile connection" },
+  reviews: { title: "Google reviews", hint: "Your Google rating and latest reviews" },
   about: { title: "About", hint: "A few sentences about the business" },
   staff: { title: "Team", hint: "People marked as visible on the booking page" },
   location: { title: "Location and parking", hint: "Address and how to find you" },

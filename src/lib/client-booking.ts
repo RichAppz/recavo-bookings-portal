@@ -122,3 +122,36 @@ export function shortPlace(address: string | null | undefined): string | null {
   const town = last.slice(0, postcode.index).trim() || parts[parts.length - 2] || "";
   return [town, outward].filter(Boolean).join(" ");
 }
+
+/* ------------------------------------------------------------ google reviews */
+
+type ReviewLike = { author: string; rating: number; text: string; publishedAt: string };
+
+/** "Sarah Kent" → "Sarah K."; one word stays as it is. Mirrors the API's public projection. */
+export function shortAuthorName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "A Google user";
+  if (parts.length === 1) return parts[0]!;
+  return `${parts[0]} ${parts[parts.length - 1]!.charAt(0).toUpperCase()}.`;
+}
+
+/**
+ * What the public page would show for a stored snapshot: at or above the star floor,
+ * with text, newest first, author shortened. Lets the editor preview a draft's floor
+ * from the staff-side snapshot without another request.
+ */
+export function filterReviews<T extends ReviewLike>(reviews: readonly T[], minStars: number): T[] {
+  return reviews
+    .filter((r) => r.rating >= minStars && r.text.trim().length > 0)
+    .slice()
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .map((r) => ({ ...r, author: shortAuthorName(r.author) }));
+}
+
+/** "4.9 · 86 Google reviews" for the landing chip; null when there is nothing to say. */
+export function reviewsChipLabel(
+  reviews: { rating: number | null; reviewCount: number } | null | undefined,
+): string | null {
+  if (!reviews || reviews.rating === null || reviews.reviewCount === 0) return null;
+  return `${reviews.rating.toFixed(1)} · ${reviews.reviewCount} Google ${reviews.reviewCount === 1 ? "review" : "reviews"}`;
+}

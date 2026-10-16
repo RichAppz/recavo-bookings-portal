@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, ImagePlus, Share2 } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  ImagePlus,
+  Share2,
+  Star,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { ClientBookingCard } from "@/components/client/ClientBookingCard";
@@ -27,7 +36,11 @@ import { describeApiError, toastApiError } from "@/lib/api/errors";
 import {
   useBookingPage,
   useBusinessId,
+  useConnectGooglePlace,
+  useDisconnectGooglePlace,
   useDiscardBookingPageDraft,
+  useGooglePlace,
+  useGooglePlaceSearch,
   usePublicAvailability,
   usePublicBusiness,
   usePublicLocations,
@@ -40,9 +53,10 @@ import {
   useUpdateBusiness,
   useUploadBookingPageHeader,
   type BookingPageDraftPatch,
+  type PublicReviews,
 } from "@/lib/api/hooks";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { addCalendarDays, nextAvailableLabel } from "@/lib/client-booking";
+import { addCalendarDays, filterReviews, nextAvailableLabel } from "@/lib/client-booking";
 import {
   BOOKING_PAGE_THEMES,
   CLIENT_FONTS_HREF,
@@ -777,20 +791,111 @@ function SectionsTab({ page, edit, disabled }: TabProps) {
           })}
         </ul>
       </SectionCard>
-      {reviewsOn ? (
-        <SectionCard
-          title="Reviews"
-          description="Reviews come from your Google Business Profile once it is connected. Until then the section is hidden from clients."
-        >
-          <div className="flex flex-wrap items-center gap-2 p-4 sm:p-5">
+      <GoogleReviewsCard page={page} edit={edit} disabled={disabled} sectionOn={reviewsOn} />
+    </>
+  );
+}
+
+/* ---------------------------------------------------------- google reviews */
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+const STAR_FLOORS = [
+  [0, "Any"],
+  [4, "4 stars and up"],
+  [5, "5 stars only"],
+] as const;
+
+/**
+ * Where the business connects its Google listing. One search box takes whatever
+ * they have to hand (a Maps link, a Place ID, or just the name); connecting stores
+ * the listing and its latest reviews for the page.
+ */
+function GoogleReviewsCard({ page, edit, disabled, sectionOn }: TabProps & { sectionOn: boolean }) {
+  const status = useGooglePlace();
+  const connect = useConnectGooglePlace();
+  const disconnect = useDisconnectGooglePlace();
+  const [raw, setRaw] = useState("");
+  const query = useDebounced(raw.trim(), 350);
+  const search = useGooglePlaceSearch(query);
+  const connected = status.data?.googlePlace ?? null;
+  const notConfigured =
+    status.data?.configured === false ||
+    (search.error?.status === 422 &&
+      search.error.extensions.reason === "google_places_not_configured");
+
+  const onConnect = (placeId: string, name: string) => {
+    connect.mutate(placeId, {
+      onSuccess: () => {
+        setRaw("");
+        toast.success(`Connected ${name}`);
+      },
+      onError: (err) => toastApiError(err, "Couldn't connect that listing"),
+    });
+  };
+
+  return (
+    <SectionCard
+      title="Google reviews"
+      description="Connect your Google listing and its rating and latest reviews appear on your page, with Google's attribution. Updated about once a day."
+    >
+      {status.isLoading ? (
+        <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Checking Google…</p>
+      ) : connected ? (
+        <div className="px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{connected.name}</p>
+              {connected.address ? (
+                <p className="text-xs text-muted-foreground">{connected.address}</p>
+              ) : null}
+              <p className="mt-1 flex items-center gap-1 text-sm">
+                <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                {connected.rating !== null ? connected.rating.toFixed(1) : "No rating yet"}
+                <span className="text-muted-foreground">
+                  · {connected.reviewCount} Google{" "}
+                  {connected.reviewCount === 1 ? "review" : "reviews"}
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline" size="sm">
+                <a href={connected.mapsUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-4" />
+                  View on Google
+                </a>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={disabled || disconnect.isPending}
+                onClick={() =>
+                  disconnect.mutate(undefined, {
+                    onSuccess: () => toast.success("Google listing disconnected"),
+                    onError: (err) => toastApiError(err, "Couldn't disconnect"),
+                  })
+                }
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+          {connected.reviews.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Google has no written reviews for this listing yet, so the section stays hidden until
+              there are some.
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
             <span className="mr-2 text-sm">Show reviews rated</span>
-            {(
-              [
-                [0, "Any"],
-                [4, "4 stars and up"],
-                [5, "5 stars only"],
-              ] as const
-            ).map(([stars, label]) => (
+            {STAR_FLOORS.map(([stars, label]) => (
               <button
                 key={stars}
                 type="button"
@@ -807,9 +912,77 @@ function SectionsTab({ page, edit, disabled }: TabProps) {
               </button>
             ))}
           </div>
-        </SectionCard>
-      ) : null}
-    </>
+          {!sectionOn ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              The Google reviews section is switched off above, so clients won't see these yet.
+            </p>
+          ) : null}
+        </div>
+      ) : notConfigured ? (
+        <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">
+          Google reviews aren't switched on for this RECAVO server yet, so listings can't be looked
+          up. Once they are, you'll be able to find your business here.
+        </p>
+      ) : (
+        <div className="px-4 py-4 sm:px-5">
+          <Label htmlFor="bp-google-search">Find your business on Google</Label>
+          <Input
+            id="bp-google-search"
+            className="mt-1.5"
+            value={raw}
+            disabled={disabled || connect.isPending}
+            placeholder="Paste your Google Maps link or search for your business"
+            autoComplete="off"
+            onChange={(e) => setRaw(e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Any Google Maps link to your listing works, including short ones from the Share button.
+            Or type the name and town.
+          </p>
+          {query.length >= 2 ? (
+            search.isLoading ? (
+              <p className="mt-3 text-sm text-muted-foreground">Searching Google…</p>
+            ) : search.isError ? (
+              <p className="mt-3 text-sm text-destructive">
+                {describeApiError(search.error, "Google didn't answer. Try again in a moment.")}
+              </p>
+            ) : (search.data ?? []).length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No listings match. Try the name and town together, or paste the link from Google
+                Maps.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y rounded-md border">
+                {(search.data ?? []).map((candidate) => (
+                  <li key={candidate.placeId} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{candidate.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[
+                          candidate.rating !== null
+                            ? `★ ${candidate.rating.toFixed(1)} · ${candidate.reviewCount} ${candidate.reviewCount === 1 ? "review" : "reviews"}`
+                            : null,
+                          candidate.address,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={disabled || connect.isPending}
+                      onClick={() => onConnect(candidate.placeId, candidate.name)}
+                    >
+                      Connect
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -1022,6 +1195,20 @@ function LivePreview({
   const packages = usePublicPackages(businessId);
   const staff = usePublicStaff(businessId);
   const locations = usePublicLocations(businessId);
+  const googlePlace = useGooglePlace();
+  // The preview applies the draft's star floor to the staff-side snapshot, so changing
+  // the filter shows its effect before publish.
+  const reviews = useMemo<PublicReviews | null>(() => {
+    const place = googlePlace.data?.googlePlace;
+    if (!place) return null;
+    return {
+      placeName: place.name,
+      mapsUrl: place.mapsUrl,
+      rating: place.rating,
+      reviewCount: place.reviewCount,
+      reviews: filterReviews(place.reviews, page.reviewsMinStars),
+    };
+  }, [googlePlace.data, page.reviewsMinStars]);
   const { ref, width } = useElementWidth<HTMLDivElement>();
   const scale = device === "desktop" && width > 0 ? Math.min(1, width / DESKTOP_CANVAS) : 1;
   const tz = business.data?.defaultTimezone ?? "UTC";
@@ -1056,6 +1243,7 @@ function LivePreview({
           packages={packages.data?.packages ?? []}
           staff={staff.data ?? []}
           locations={locations.data ?? []}
+          reviews={reviews}
           nextAvailable={nextAvailable}
           onPickService={noop}
           onPickPackage={noop}

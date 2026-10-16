@@ -5132,6 +5132,45 @@ export function usePublicStaff(businessId: string | undefined) {
   });
 }
 
+export type GoogleReview = {
+  author: string;
+  authorPhotoUrl: string | null;
+  rating: number;
+  text: string;
+  relativeTime: string;
+  publishedAt: string;
+};
+
+/** What a visitor sees: the published page's star floor already applied. */
+export type PublicReviews = {
+  placeName: string;
+  mapsUrl: string;
+  rating: number | null;
+  reviewCount: number;
+  reviews: GoogleReview[];
+};
+
+export function usePublicReviews(businessId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.publicReviews(businessId ?? ""),
+    enabled: Boolean(businessId) && enabled,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ reviews: PublicReviews | null }>(
+          `/api/v1/public/businesses/${businessId}/reviews`,
+          { public: true },
+        );
+        return res.data.reviews;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+  });
+}
+
 export function usePublicCancellationPolicy(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.publicCancellationPolicy(businessId ?? ""),
@@ -5188,6 +5227,114 @@ export function useBookingPage() {
         `/api/v1/businesses/${businessId}/booking-page`,
       );
       return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+  });
+}
+
+/* ---------------------------------------------------------- google reviews */
+
+export type GooglePlaceCandidate = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  rating: number | null;
+  reviewCount: number;
+};
+
+/** The connected listing with its stored snapshot (full author names, every star). */
+export type GooglePlaceConnection = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  mapsUrl: string;
+  rating: number | null;
+  reviewCount: number;
+  reviews: GoogleReview[];
+  connectedAt: string;
+  fetchedAt: string;
+};
+
+export type GooglePlaceStatus = {
+  googlePlace: GooglePlaceConnection | null;
+  /** False when the server has no Google key, so lookups cannot work yet. */
+  configured: boolean;
+};
+
+export function useGooglePlace() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.googlePlace(businessId),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<GooglePlaceStatus>(
+          `/api/v1/businesses/${businessId}/booking-page/google-place`,
+        );
+        return res.data;
+      } catch (err) {
+        // Older API builds have no such route; the editor then shows nothing to connect.
+        if (err instanceof ApiError && err.status === 404) {
+          return { googlePlace: null, configured: false } satisfies GooglePlaceStatus;
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+export function useGooglePlaceSearch(q: string) {
+  const businessId = useBusinessId();
+  const query = q.trim();
+  return useQuery<GooglePlaceCandidate[], ApiError>({
+    queryKey: queryKeys.googlePlaceSearch(businessId, query),
+    enabled: Boolean(businessId) && query.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<{ candidates: GooglePlaceCandidate[] }>(
+        `/api/v1/businesses/${businessId}/booking-page/google-place/search`,
+        { query: { q: query } },
+      );
+      return res.data.candidates;
+    },
+  });
+}
+
+export function useConnectGooglePlace() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<GooglePlaceConnection, ApiError, string>({
+    mutationFn: async (placeId) => {
+      const res = await api.put<{ googlePlace: GooglePlaceConnection }>(
+        `/api/v1/businesses/${businessId}/booking-page/google-place`,
+        { placeId },
+      );
+      return res.data.googlePlace;
+    },
+    onSuccess: (googlePlace) => {
+      qc.setQueryData<GooglePlaceStatus>(queryKeys.googlePlace(businessId), (prev) => ({
+        configured: prev?.configured ?? true,
+        googlePlace,
+      }));
+      void qc.invalidateQueries({ queryKey: queryKeys.publicReviews(businessId) });
+    },
+  });
+}
+
+export function useDisconnectGooglePlace() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, void>({
+    mutationFn: async () => {
+      await api.delete(`/api/v1/businesses/${businessId}/booking-page/google-place`);
+    },
+    onSuccess: () => {
+      qc.setQueryData<GooglePlaceStatus>(queryKeys.googlePlace(businessId), (prev) => ({
+        configured: prev?.configured ?? true,
+        googlePlace: null,
+      }));
+      void qc.invalidateQueries({ queryKey: queryKeys.publicReviews(businessId) });
     },
   });
 }

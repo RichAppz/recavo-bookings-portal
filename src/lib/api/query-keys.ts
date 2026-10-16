@@ -195,6 +195,11 @@ export const queryKeys = {
   publicStaff: (businessId: string) => ["public", businessId, "staff"] as const,
   publicCancellationPolicy: (businessId: string) =>
     ["public", businessId, "policies", "cancellation"] as const,
+  publicReviews: (businessId: string) => ["public", businessId, "reviews"] as const,
+  /** The Google listing a studio connected for its booking page, staff side. */
+  googlePlace: (businessId: string) => ["biz", businessId, "booking-page", "google-place"] as const,
+  googlePlaceSearch: (businessId: string, q: string) =>
+    ["biz", businessId, "booking-page", "google-place", "search", q] as const,
   /** The studio's own booking page settings (draft + published), staff side. */
   bookingPage: (businessId: string) => ["biz", businessId, "booking-page"] as const,
   slugAvailability: (businessId: string, slug: string) =>

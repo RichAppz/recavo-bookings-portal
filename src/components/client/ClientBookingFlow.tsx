@@ -52,6 +52,7 @@ import {
   usePublicPackageLink,
   usePublicPackages,
   usePublicServices,
+  usePublicReviews,
   usePublicStaff,
   useReleasePublicBookingHold,
   useStartPublicBookingPayment,
@@ -76,7 +77,12 @@ import {
   type JourneyHold,
   price,
 } from "@/lib/client-journey";
-import { THEME_SPECS, effectiveAccent, type BookingPageContent } from "@/lib/client-theme";
+import {
+  THEME_SPECS,
+  effectiveAccent,
+  sectionEnabled,
+  type BookingPageContent,
+} from "@/lib/client-theme";
 import { formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
 
@@ -168,6 +174,7 @@ export function ClientBookingFlow({
   const locations = usePublicLocations(businessId);
   const packages = usePublicPackages(businessId);
   const staff = usePublicStaff(businessId);
+  const reviews = usePublicReviews(businessId, sectionEnabled(page, "reviews"));
   const policy = usePublicCancellationPolicy(businessId);
 
   // Signed in and a customer here: their details, credits and account link.
@@ -989,6 +996,7 @@ export function ClientBookingFlow({
             packages={packages.data?.packages ?? []}
             staff={staff.data ?? []}
             locations={locations.data ?? []}
+            reviews={reviews.data ?? null}
             nextAvailable={nextAvailable}
             onPickService={pickService}
             onPickPackage={pickPackage}
