@@ -6361,6 +6361,22 @@ export function usePortalCredits(businessId: string | undefined) {
   });
 }
 
+/**
+ * A package the customer bought, however they paid. A card purchase also shows up
+ * in payments with `paymentRef` pointing at that payment; a bank transfer the
+ * business confirmed or a sale staff keyed in exists only here.
+ */
+export type PortalPurchase = {
+  id: string;
+  packageId: string;
+  packageName: string | null;
+  creditsIssued: number | null;
+  amountMinor: number;
+  currency: string;
+  paymentRef: string | null;
+  purchasedAt: string;
+};
+
 /** One row of a customer's account, tagged with the studio it came from. */
 export type FromStudio<T> = T & { readonly studio: PortalBusinessSummary };
 
@@ -6419,6 +6435,21 @@ export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefi
     combine: (results) => combineByStudio(results, list),
   });
 
+  // Packages bought by bank transfer or sold by staff never produce a card payment,
+  // so the Purchases list needs the sale record as well as the receipts.
+  const purchases = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPurchases(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ purchases: PortalPurchase[] }>("/api/v1/portal/purchases", {
+          query: { businessId: studio.id },
+        });
+        return res.data.purchases;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
   // Packages asked for while a studio had no card processing; a pending one is why
   // the Credits view may be empty even though the customer "bought" something.
   const packageRequests = useQueries({
@@ -6435,7 +6466,7 @@ export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefi
     combine: (results) => combineByStudio(results, list),
   });
 
-  return { bookings, credits, payments, packageRequests };
+  return { bookings, credits, payments, purchases, packageRequests };
 }
 
 function combineByStudio<T>(

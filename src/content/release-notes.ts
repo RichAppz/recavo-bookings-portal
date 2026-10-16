@@ -60,9 +60,24 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Payments → Take payment online",
       },
       {
+        kind: "improved",
+        text: "Recording the last of the money on a job that has already started marks it done in the same step, so it shows up under Job outcomes and the invoice is raised without a second visit to the booking.",
+        where: "Bookings → Record payment",
+      },
+      {
+        kind: "improved",
+        text: "Every page you click into — an invoice, a client, a support request, a guide — has a Back that returns you to exactly where you were, including in the desktop and phone apps where there is no browser button.",
+        where: "Everywhere",
+      },
+      {
         kind: "fixed",
         text: "A client giving up an unpaid booking inside your notice window got an error instead of a cancellation. It now cancels cleanly, and only confirmed bookings count as late cancellations.",
         where: "Client account → Cancel",
+      },
+      {
+        kind: "fixed",
+        text: "A client who bought a package by bank transfer, or one you sold them in person, saw an empty Purchases page because only card payments were listed. Every package they have bought now appears there with its name, credits and date; card purchases keep their receipt.",
+        where: "Client account → Purchases",
       },
     ],
   },

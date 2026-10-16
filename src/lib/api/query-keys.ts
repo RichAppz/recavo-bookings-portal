@@ -220,6 +220,7 @@ export const queryKeys = {
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
+  portalPurchases: (businessId: string) => ["portal", businessId, "purchases"] as const,
   portalPackageRequests: (businessId: string) =>
     ["portal", businessId, "package-requests"] as const,
   portalPackageLinks: (businessId: string) => ["portal", businessId, "package-links"] as const,

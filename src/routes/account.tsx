@@ -51,6 +51,7 @@ import {
   isSettledPaymentState,
 } from "@/lib/booking-payment";
 import { describeClientLiftForCustomer } from "@/lib/client-lift";
+import { purchaseHistory, type PurchaseLine } from "@/lib/purchase-history";
 import {
   formatAllDaySpan,
   formatDuration,
@@ -196,7 +197,8 @@ function AccountContent({
   const { user } = useAuth();
   const firstName = userDisplayName(user, "").trim().split(/\s+/)[0] ?? "";
   const greeting = firstName ? `Hi ${firstName}` : "My account";
-  const { bookings, credits, payments, packageRequests } = usePortalAcrossStudios(studios);
+  const { bookings, credits, payments, purchases, packageRequests } =
+    usePortalAcrossStudios(studios);
   const pendingRequests = useMemo(
     () => (packageRequests.data ?? []).filter((r) => r.status === "pending"),
     [packageRequests.data],
@@ -223,6 +225,10 @@ function AccountContent({
     .filter((c) => c.status === "active" && c.available > 0 && Date.parse(c.expiresAt) > Date.now())
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
   const history = payments.data.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const bought = useMemo(
+    () => purchaseHistory(payments.data, purchases.data),
+    [payments.data, purchases.data],
+  );
   const sessions: CalendarSession[] = live.map((b) => ({
     id: b.id,
     start: b.start,
@@ -305,7 +311,7 @@ function AccountContent({
         description={view === "overview" ? undefined : copy.description}
         actions={solo ? <BookButton onClick={() => openBooking(studios[0])} /> : undefined}
       >
-        {bookings.isPartial || credits.isPartial || payments.isPartial ? (
+        {bookings.isPartial || credits.isPartial || payments.isPartial || purchases.isPartial ? (
           <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
             One of your studios didn't load, so this may be incomplete. Refresh to try again.
           </p>
@@ -364,7 +370,11 @@ function AccountContent({
         ) : view === "invoices" ? (
           <AccountInvoices studios={studios} />
         ) : (
-          <Purchases payments={history} solo={solo} />
+          <Purchases
+            lines={bought}
+            loading={payments.isPending || purchases.isPending}
+            solo={solo}
+          />
         )}
       </AccountShell>
       <OutstandingPaymentDialog
@@ -654,13 +664,28 @@ function Credits({
   );
 }
 
-function Purchases({ payments, solo }: { payments: FromStudio<Payment>[]; solo: boolean }) {
-  if (payments.length === 0) {
+function Purchases({
+  lines,
+  loading,
+  solo,
+}: {
+  lines: PurchaseLine<PortalBusinessSummary>[];
+  loading: boolean;
+  solo: boolean;
+}) {
+  if (lines.length === 0) {
+    if (loading) {
+      return (
+        <SectionCard bodyClassName="p-0 sm:p-0">
+          <TableGhost rows={3} />
+        </SectionCard>
+      );
+    }
     return (
       <EmptyState
         icon={<Receipt className="size-5" />}
-        title="No payments yet"
-        description="Anything you buy will be listed here, with its receipt."
+        title="Nothing bought yet"
+        description="Packages and payments will be listed here, with the receipt when there is one."
       />
     );
   }
@@ -668,19 +693,24 @@ function Purchases({ payments, solo }: { payments: FromStudio<Payment>[]; solo: 
   return (
     <SectionCard bodyClassName="p-0 sm:p-0">
       <ul className="divide-y">
-        {payments.map((p) => (
+        {lines.map((p) => (
           <li key={p.id} className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
             <div className="min-w-0">
-              <p className="text-sm font-medium tabular-nums">
-                {formatMoney(p.amountMinor, p.currency)}
+              <p className="truncate text-sm font-medium">
+                {p.title}
+                {p.detail ? (
+                  <span className="font-normal text-muted-foreground"> · {p.detail}</span>
+                ) : null}
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {formatInTz(p.createdAt, "Europe/London", { dateStyle: "medium" })}
+                <span className="tabular-nums">{formatMoney(p.amountMinor, p.currency)}</span>
+                {" · "}
+                {formatInTz(p.at, "Europe/London", { dateStyle: "medium" })}
                 {solo ? "" : ` · ${p.studio.tradingName}`}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <StatusBadge status={p.state} />
+              <StatusBadge status={p.status} />
               {p.receiptUrl ? (
                 <a
                   href={p.receiptUrl}

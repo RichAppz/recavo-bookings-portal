@@ -438,6 +438,7 @@ export function ClientBookingFlow({
     void queryClient.invalidateQueries({ queryKey: queryKeys.portalBusinesses() });
     void queryClient.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.portalPurchases(businessId) });
   };
 
   /** Hands a held time back so nobody waits ten minutes for it; best effort. */
