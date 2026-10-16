@@ -257,7 +257,7 @@ export function AccountOverview({
           ))}
         </div>
         {!solo ? (
-          <SectionCard title="Your businesses" bodyClassName="p-0 sm:p-0">
+          <SectionCard title="Businesses you book with" bodyClassName="p-0 sm:p-0">
             <ul className="divide-y">
               {studios.map((studio) => (
                 <li
