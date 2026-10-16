@@ -787,9 +787,7 @@ export function ClientBookingFlow({
         }),
       );
     } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.title : "We couldn't start the payment. Please try again.",
-      );
+      toastApiError(err, "We couldn't start the payment. Please try again.");
     }
   };
 
