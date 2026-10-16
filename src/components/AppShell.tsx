@@ -699,11 +699,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                           if (href) void navigate({ href });
                         }}
                       >
-                        <span className="flex items-center gap-1.5 text-sm font-medium">
-                          {href ? <BellRing className="size-3.5 text-primary" /> : null}
-                          {n.subject}
+                        <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
+                          {href ? <BellRing className="size-3.5 shrink-0 text-primary" /> : null}
+                          <span className="truncate">{n.subject}</span>
                         </span>
-                        <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                        {/* The clamp box is a flex child; without an explicit width it sizes to its
+                            text and wraps past the menu's edge instead of inside it. */}
+                        <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
+                          {n.body}
+                        </span>
                       </DropdownMenuItem>
                     );
                   })}
