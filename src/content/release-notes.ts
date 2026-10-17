@@ -41,6 +41,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "Invoices from a business that hasn't uploaded a logo now carry the RECAVO mark in the header rather than the business name set large. Your own name, address and contact details are still printed in full under From, and as soon as you upload a logo it takes the mark's place on every invoice, including ones you had already started.",
+        where: "Invoices → Preview / PDF",
+      },
+      {
+        kind: "improved",
         text: "Automotive businesses no longer see an Occupancy rate card. It measured seats booked against capacity, which only means something for classes — a job is always one car in one slot, so the figure could only ever read 0% or 100%. The Overview and Reports now show Average job value in its place, and Reports drops the seats-vs-capacity chart and talks about jobs, completion rate and job outcomes.",
         where: "Overview and Reports (automotive)",
       },
