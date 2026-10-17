@@ -1293,7 +1293,12 @@ function LivePreview({
   return (
     <div className="rounded-xl border bg-secondary/40 p-4 lg:sticky lg:top-20 lg:self-start">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs font-semibold text-muted-foreground">Live preview</p>
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground">Live preview</p>
+          <p className="text-[11px] text-muted-foreground/80">
+            Just a picture of your page: nothing here can be tapped.
+          </p>
+        </div>
         <div className="flex rounded-full bg-background p-0.5 shadow-sm">
           {(["phone", "desktop"] as const).map((d) => (
             <button
@@ -1356,6 +1361,20 @@ function LivePreview({
           </div>
         </div>
       )}
+      {business.data ? (
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+          Want to try it as a client?{" "}
+          <a
+            href={bookingUrlFor(business.data.slug)}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Open your live page
+          </a>
+          .
+        </p>
+      ) : null}
     </div>
   );
 }
