@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronRight, Clock } from "lucide-react";
+import { ChevronRight, Clock, Package } from "lucide-react";
 import {
   BarSummary,
   BottomBar,
@@ -29,8 +29,9 @@ export type DetailsValues = {
 
 export type DetailsField = keyof Pick<DetailsValues, "firstName" | "lastName" | "email" | "phone">;
 
-/** What the desktop summary card shows beside the form. */
-export type DetailsSummary = {
+/** What the desktop summary card shows beside the form: a session and its time. */
+export type SessionDetailsSummary = {
+  kind: "session";
   page: BookingPageContent;
   businessName: string;
   serviceName: string;
@@ -46,6 +47,25 @@ export type DetailsSummary = {
   /** Countdown on a held time; null when nothing is held yet. */
   msLeft: number | null;
 };
+
+/** The same card for a package: credits, validity and the price (struck through when an offer cut it). */
+export type PackageDetailsSummary = {
+  kind: "package";
+  page: BookingPageContent;
+  businessName: string;
+  packageName: string;
+  creditsIssued: number;
+  /** "6 months" */
+  validity: string;
+  priceMinor: number;
+  /** The usual price when an offer took money off; null otherwise. */
+  listPriceMinor: number | null;
+  currency: string;
+  /** "Autumn offer · 10% off" */
+  offerLabel: string | null;
+};
+
+export type DetailsSummary = SessionDetailsSummary | PackageDetailsSummary;
 
 export function ClientDetails({
   values,
@@ -63,11 +83,12 @@ export function ClientDetails({
   signedInAs,
   onSignIn,
   onNotYou,
+  pendingLabel = "Holding your time…",
 }: {
   values: DetailsValues;
   onChange: (patch: Partial<DetailsValues>) => void;
   errors: Partial<Record<DetailsField, string>>;
-  /** "Fri 16 Oct, 09:00" */
+  /** "Fri 16 Oct, 09:00" — or the package's name when buying a package. */
   whenLabel: string;
   /** "1-to-1 session · £45" */
   summaryCaption: string;
@@ -82,9 +103,12 @@ export function ClientDetails({
   signedInAs: string | null;
   onSignIn: () => void;
   onNotYou: () => void;
+  /** What the desktop button says while `pending` ("Setting up payment…" for a package). */
+  pendingLabel?: string;
 }) {
   const [notesOpen, setNotesOpen] = useState(Boolean(values.notes));
   const desktop = layout === "desktop";
+  const forPackage = summary.kind === "package";
 
   const signInCard = signedInAs ? (
     <div className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-card px-4 py-3">
@@ -244,7 +268,7 @@ export function ClientDetails({
               <div className="mt-8 flex items-center justify-between">
                 <TextLink onClick={onBack}>Back</TextLink>
                 <PrimaryButton type="submit" disabled={!canContinue || pending}>
-                  {pending ? "Holding your time…" : "Continue to review"}
+                  {pending ? pendingLabel : "Continue to review"}
                 </PrimaryButton>
               </div>
             </div>
@@ -270,9 +294,14 @@ export function ClientDetails({
           onClick={onChangeTime}
           className="flex w-full items-center gap-2 rounded-[var(--radius)] bg-primary-soft px-4 py-3 text-left text-[15px] transition hover:brightness-95"
         >
-          <Clock className="h-4 w-4 shrink-0 text-primary" />
+          {forPackage ? (
+            <Package className="h-4 w-4 shrink-0 text-primary" />
+          ) : (
+            <Clock className="h-4 w-4 shrink-0 text-primary" />
+          )}
           <span className="min-w-0 flex-1 truncate">
-            Your time: <span className="font-semibold">{whenLabel}</span>
+            {forPackage ? "Your package" : "Your time"}:{" "}
+            <span className="font-semibold">{whenLabel}</span>
           </span>
           <span className="text-[13px] font-semibold text-muted-foreground">Change</span>
         </button>
@@ -285,7 +314,7 @@ export function ClientDetails({
       <BottomBar>
         <BarSummary caption={summaryCaption} value={whenLabel} />
         <PrimaryButton type="submit" disabled={!canContinue || pending}>
-          {pending ? "Holding…" : "Continue"}
+          {pending ? (forPackage ? "One moment…" : "Holding…") : "Continue"}
         </PrimaryButton>
       </BottomBar>
     </form>
@@ -294,6 +323,38 @@ export function ClientDetails({
 
 /** Header image strip, service, when / length / trainer / venue, total, hold timer. */
 function DetailsSummaryCard({ summary }: { summary: DetailsSummary }) {
+  if (summary.kind === "package") {
+    return (
+      <ClientCard className="shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+        <div className="h-[88px] w-full bg-muted" style={headerStyle(summary.page)} aria-hidden />
+        <div className="px-5 pt-4 pb-5">
+          <p className="text-[13px] text-muted-foreground">{summary.businessName}</p>
+          <p className="text-[18px] font-semibold leading-tight">{summary.packageName}</p>
+          <div className="mt-3">
+            <SummaryRow
+              label="Sessions"
+              value={`${summary.creditsIssued} ${summary.creditsIssued === 1 ? "credit" : "credits"}`}
+            />
+            <SummaryRow label="Use within" value={summary.validity} />
+            {summary.offerLabel ? <SummaryRow label="Offer" value={summary.offerLabel} /> : null}
+          </div>
+          <div className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
+            <span className="text-[15px] font-semibold">Total</span>
+            <span className="flex items-baseline gap-2">
+              {summary.listPriceMinor !== null && summary.listPriceMinor !== summary.priceMinor ? (
+                <span className="text-[14px] text-muted-foreground line-through">
+                  {price(summary.listPriceMinor, summary.currency)}
+                </span>
+              ) : null}
+              <span className="text-[22px] font-bold">
+                {price(summary.priceMinor, summary.currency)}
+              </span>
+            </span>
+          </div>
+        </div>
+      </ClientCard>
+    );
+  }
   const when = `${formatInTz(summary.start, summary.timezone, { weekday: "short", day: "numeric", month: "short" })}, ${formatTimeInTz(summary.start, summary.timezone)}`;
   return (
     <ClientCard className="shadow-[0_8px_30px_rgba(0,0,0,0.04)]">

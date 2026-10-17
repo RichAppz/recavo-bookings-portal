@@ -144,6 +144,7 @@ export function ClientBookingFlow({
   onPickPackage,
   offerCode = null,
   onPickOfferPackage,
+  offerOnly = false,
 }: {
   business: PublicBusinessProfile;
   page: BookingPageContent;
@@ -159,6 +160,11 @@ export function ClientBookingFlow({
   offerCode?: string | null;
   /** A package from an offer: the catalogue flow buys it with the offer's code applied. */
   onPickOfferPackage?: (code: string, packageId: string) => void;
+  /**
+   * The offer they arrived by is private (`showFullCatalogue` off): the page shows
+   * that offer and nothing from the catalogue, and books from it.
+   */
+  offerOnly?: boolean;
 }) {
   const businessId = business.id;
   const tz = business.defaultTimezone;
@@ -227,9 +233,15 @@ export function ClientBookingFlow({
   // too; the link's code goes with the availability and hold calls to say so.
   const arrivedBy = usePublicPackageLink(businessId, offerCode ?? undefined);
   const myOffers = usePortalPackageLinks(hasAccountHere ? businessId : undefined);
+  // A private offer is the whole page, so the client's other offers stay off it.
   const offers = useMemo(
-    () => offersToShow(arrivedBy.data ?? null, myOffers.data),
-    [arrivedBy.data, myOffers.data],
+    () =>
+      offerOnly
+        ? arrivedBy.data
+          ? [arrivedBy.data]
+          : []
+        : offersToShow(arrivedBy.data ?? null, myOffers.data),
+    [arrivedBy.data, myOffers.data, offerOnly],
   );
   const allServices = useMemo<PublicService[]>(() => {
     const byId = new Map<string, PublicService>();
@@ -254,11 +266,32 @@ export function ClientBookingFlow({
     selectedOfferPackage ?? packages.data?.packages.find((p) => p.id === selectedPackageId) ?? null;
 
   // Desktop opens with the first session chosen, so the card shows times straight away.
+  // On a private offer that is the offer's first session (with its code), or its
+  // first package when the offer has no sessions.
+  const arrivedByOffer = arrivedBy.data ?? null;
   useEffect(() => {
     if (!desktop || serviceId || selectedPackageId) return;
+    if (offerOnly) {
+      if (!arrivedByOffer) return;
+      const code = arrivedByOffer.link.code;
+      const firstService = arrivedByOffer.services[0];
+      const firstPackage = arrivedByOffer.packages[0];
+      if (firstService) {
+        setOfferPick({ code, kind: "service", id: firstService.id });
+        setServiceId(firstService.id);
+        setDetails((d) => ({ ...d, promoCode: code }));
+        setPromoFromOffer(true);
+      } else if (firstPackage) {
+        setOfferPick({ code, kind: "package", id: firstPackage.id });
+        setSelectedPackageId(firstPackage.id);
+        setDetails((d) => ({ ...d, promoCode: code }));
+        setPromoFromOffer(true);
+      }
+      return;
+    }
     const first = services.data?.[0];
     if (first) setServiceId(first.id);
-  }, [desktop, serviceId, selectedPackageId, services.data]);
+  }, [desktop, serviceId, selectedPackageId, services.data, offerOnly, arrivedByOffer]);
 
   // Arriving from the account with a session already chosen: open on its times
   // (the day they were looking at, if any) instead of the landing. Declared after
@@ -406,16 +439,19 @@ export function ClientBookingFlow({
     locationId: activeLocationId ?? undefined,
     from: fromIso,
     to: `${addCalendarDays(today, 14)}T00:00:00.000Z`,
-    // The desktop card shows the times themselves, so no separate peek is needed.
-    enabled: !desktop && step === "landing" && Boolean(firstService && activeLocationId),
+    // The desktop card shows the times themselves, so no separate peek is needed; a
+    // private offer's bar names the offer rather than the catalogue's next time.
+    enabled:
+      !desktop && !offerOnly && step === "landing" && Boolean(firstService && activeLocationId),
   });
   const nextAvailable = useMemo<NextAvailable>(() => {
+    if (offerOnly) return null;
     const first = upcoming(landingAvailability.data)
       .slice()
       .sort((a, b) => a.start.localeCompare(b.start))[0];
     if (!first || !firstService) return null;
     return { label: nextAvailableLabel(first.start, tz, today), serviceId: firstService.id };
-  }, [landingAvailability.data, firstService, tz, today, upcoming]);
+  }, [landingAvailability.data, firstService, tz, today, upcoming, offerOnly]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);
   const releaseMutation = useReleasePublicBookingHold(businessId);
@@ -621,6 +657,21 @@ export function ClientBookingFlow({
   const bookNow = () => {
     if (desktop) {
       document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    if (offerOnly) {
+      // One session and nothing else: straight to its times. Otherwise show the choice.
+      const only =
+        arrivedByOffer &&
+        arrivedByOffer.services.length === 1 &&
+        arrivedByOffer.packages.length === 0
+          ? arrivedByOffer.services[0]
+          : null;
+      if (only && arrivedByOffer) {
+        pickOfferService(arrivedByOffer.link.code, only.id);
+        return;
+      }
+      document.getElementById("offers")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (nextAvailable) {
@@ -1028,6 +1079,7 @@ export function ClientBookingFlow({
   const detailsSummary: DetailsSummary | null =
     service && selectedSlot
       ? {
+          kind: "session",
           page,
           businessName: business.tradingName,
           serviceName: service.name,
@@ -1192,6 +1244,7 @@ export function ClientBookingFlow({
             offerPick={offerPick}
             onPickOfferService={pickOfferService}
             onPickOfferPackage={pickOfferPackage}
+            offerOnly={offerOnly}
           />
         ) : null}
 

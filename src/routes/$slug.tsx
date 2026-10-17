@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BookingFlow } from "@/components/BookingFlow";
 import { ClientBookingFlow, type BookingStart } from "@/components/client/ClientBookingFlow";
+import { ClientPackageFlow } from "@/components/client/ClientPackageFlow";
 import { ClientTheme, OutlineButton, PoweredBy, StudioMark } from "@/components/client/ClientPage";
 import { Wordmark } from "@/components/Wordmark";
 import { closedBusinessFromError, usePublicBusiness, usePublicPackageLink } from "@/lib/api/hooks";
@@ -12,9 +12,10 @@ import { DEFAULT_BOOKING_PAGE, normaliseBookingPage } from "@/lib/client-theme";
 
 /**
  * `?offer=<code>` is an offer link the studio shared: the page shows it in its Offers
- * section (a private link, which keeps the visitor to what it names, still opens on
- * its own). `?package=<id>` buys one package from the landing's Packages list, with
- * `offer` alongside when it came from an offer so the offer's price is charged.
+ * section (a private link keeps the visitor to what it names: the offer leads and
+ * the catalogue is left out). `?package=<id>` buys one package from the landing's
+ * Packages list, with `offer` alongside when it came from an offer so the offer's
+ * price is charged.
  * `?service=` (with optional `location`, `date` and `start`) is how
  * the account hands a client straight to a session, day or time they picked
  * there; those are consumed on arrival and dropped from the address bar. Stripe's
@@ -122,23 +123,23 @@ function SlugBookingPage() {
   if (offer && offerLink.isPending) return <ResolvingPage />;
   const privateOffer = Boolean(offer) && offerLink.data?.link.showFullCatalogue === false;
 
-  // Package purchases and private offers still run through the catalogue flow.
-  if (packageId || privateOffer) {
+  // Buying a package: Details → Review and pay → Done, in the page's own design.
+  if (packageId) {
     return (
-      <BookingFlow
-        businessId={business.data.id}
-        studio={business.data}
-        offerCode={offer ?? null}
-        initialPackageId={packageId ?? null}
+      <ClientPackageFlow
+        business={business.data}
+        page={page}
+        packageId={packageId}
+        offerCode={offerLink.isSuccess ? (offer ?? null) : null}
+        onBack={() => void navigate({ to: "/$slug", params: { slug }, search: keepOffer })}
         onClearRedirectParams={() =>
           void navigate({
             to: "/$slug",
             params: { slug },
-            search: offer ? { offer } : {},
+            search: { ...keepOffer, package: packageId },
             replace: true,
           })
         }
-        onLeaveOffer={() => void navigate({ to: "/$slug", params: { slug }, search: {} })}
       />
     );
   }
@@ -149,6 +150,7 @@ function SlugBookingPage() {
       page={page}
       start={handOff}
       offerCode={offerLink.isSuccess ? (offer ?? null) : null}
+      offerOnly={privateOffer}
       onStarted={() =>
         void navigate({ to: "/$slug", params: { slug }, search: keepOffer, replace: true })
       }

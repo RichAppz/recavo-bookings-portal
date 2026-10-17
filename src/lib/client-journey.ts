@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { BookingContact } from "@/components/BookingCheckout";
+import type { PublicPackagePayment } from "@/lib/api/hooks";
 import type { Booking } from "@/lib/api/types";
 import { formatMoney } from "./format.ts";
 
@@ -123,6 +124,47 @@ export function writeStoredJourney(businessId: string, journey: StoredJourney | 
   try {
     if (journey) sessionStorage.setItem(holdStorageKey(businessId), JSON.stringify(journey));
     else sessionStorage.removeItem(holdStorageKey(businessId));
+  } catch {
+    // Private browsing can refuse storage; only the redirect-return path suffers.
+  }
+}
+
+/**
+ * A package purchase survives bank authentication the same way a hold does, and for a
+ * sharper reason: there is no held time to lose, but re-entering the flow would mint a
+ * second PaymentIntent and charge the card twice. Keeping the intent means the same
+ * one is reused on return. Same storage key as the catalogue flow, so a purchase
+ * started in one and resumed in the other is still found.
+ */
+export type StoredPurchase = {
+  packageId: string;
+  payment: PublicPackagePayment;
+  contact: BookingContact;
+};
+
+const purchaseStorageKey = (businessId: string) => `recavo.package.purchase.${businessId}`;
+
+export function readStoredPurchase(businessId: string): StoredPurchase | null {
+  try {
+    const raw = sessionStorage.getItem(purchaseStorageKey(businessId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredPurchase>;
+    return parsed.packageId && parsed.payment
+      ? {
+          packageId: parsed.packageId,
+          payment: parsed.payment,
+          contact: parsed.contact ?? EMPTY_CONTACT,
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredPurchase(businessId: string, purchase: StoredPurchase | null): void {
+  try {
+    if (purchase) sessionStorage.setItem(purchaseStorageKey(businessId), JSON.stringify(purchase));
+    else sessionStorage.removeItem(purchaseStorageKey(businessId));
   } catch {
     // Private browsing can refuse storage; only the redirect-return path suffers.
   }

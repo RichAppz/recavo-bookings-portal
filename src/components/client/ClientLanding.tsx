@@ -26,7 +26,7 @@ import type {
 import { directionsUrl } from "@/lib/calendar-links";
 import { reviewsChipLabel, shortPlace } from "@/lib/client-booking";
 import { hoursLabel, price } from "@/lib/client-journey";
-import { offersSectionVisible, sampleOffer } from "@/lib/client-offers";
+import { landingSectionOrder, offersSectionVisible, sampleOffer } from "@/lib/client-offers";
 import {
   headerStyle,
   orderedSectionKeys,
@@ -68,6 +68,7 @@ export function ClientLanding({
   onPickOfferService,
   onPickOfferPackage,
   offerPick = null,
+  offerOnly = false,
 }: {
   business: Pick<PublicBusinessProfile, "tradingName" | "slug" | "branding" | "address">;
   page: BookingPageContent;
@@ -90,6 +91,11 @@ export function ClientLanding({
   onPickOfferPackage?: (code: string, packageId: string) => void;
   /** Set when the filled radio is an offer row, so Sessions stays clear. */
   offerPick?: OfferPick | null;
+  /**
+   * A private offer link: the page is the offer, not the catalogue. Offers lead,
+   * Sessions and Packages are left out, and the bar books from the offer.
+   */
+  offerOnly?: boolean;
   onBookNow: () => void;
   onSignIn: () => void;
   /** When the visitor is already signed in with an account at this studio. */
@@ -138,9 +144,13 @@ export function ClientLanding({
     enabled: sectionEnabled(page, "offers"),
     offers: offerList,
     preview,
+    offerOnly,
   });
-  // The business orders the sections (Booking page → Sections); Sessions is always among them.
-  const order = orderedSectionKeys(page);
+  // The business orders the sections (Booking page → Sections); Sessions is always among
+  // them — except on a private offer, where the offer takes its place at the top.
+  const order = landingSectionOrder(orderedSectionKeys(page), offerOnly);
+  const offerBookable = offerList.some((o) => o.services.length > 0 || o.packages.length > 0);
+  const offerName = offerList[0]?.link.name ?? null;
   const pickOfferService = onPickOfferService ?? ((_code: string, id: string) => onPickService(id));
   const pickOfferPackage = onPickOfferPackage ?? ((_code: string, id: string) => onPickPackage(id));
   const offerCards = offerList.map((offer) => (
@@ -197,7 +207,14 @@ export function ClientLanding({
     </div>
   );
 
-  const bookNowBar = (
+  const bookNowBar = offerOnly ? (
+    <>
+      <BarSummary caption="Your offer" value={offerName ?? "Picked out for you"} />
+      <PrimaryButton onClick={onBookNow} disabled={!offerBookable}>
+        Book now
+      </PrimaryButton>
+    </>
+  ) : (
     <>
       <BarSummary
         caption={nextAvailable ? "Next available" : "Book online"}
@@ -208,16 +225,28 @@ export function ClientLanding({
       </PrimaryButton>
     </>
   );
+  const offersTitle = offerOnly
+    ? offerList.length === 1
+      ? "Your offer"
+      : "Your offers"
+    : "Offers";
+  const offersIntro = offerOnly ? (
+    <p className="mb-3 text-[15px] text-muted-foreground">
+      {business.tradingName} sent you {offerList.length === 1 ? "this" : "these"}. Pick a session to
+      book it, or a package and use the sessions whenever you like.
+    </p>
+  ) : null;
 
   if (layout === "desktop") {
     const desktopSections: SectionNodes = {
       offers: showOffers ? (
         <section className="mt-8 scroll-mt-6" id="offers">
-          <DesktopHeading>Offers</DesktopHeading>
+          <DesktopHeading>{offersTitle}</DesktopHeading>
+          {offersIntro}
           <div className="space-y-3">{offerCards}</div>
         </section>
       ) : null,
-      sessions: (
+      sessions: offerOnly ? null : (
         <section className="mt-8 scroll-mt-6" id="sessions">
           <DesktopHeading>Sessions</DesktopHeading>
           {services.length === 0 && packages.length === 0 ? (
@@ -403,11 +432,12 @@ export function ClientLanding({
   const phoneSections: SectionNodes = {
     offers: showOffers ? (
       <div className="mt-6 scroll-mt-4" id="offers">
-        <SectionLabel>Offers</SectionLabel>
+        <SectionLabel>{offersTitle}</SectionLabel>
+        {offersIntro}
         <div className="space-y-3">{offerCards}</div>
       </div>
     ) : null,
-    sessions: (
+    sessions: offerOnly ? null : (
       <>
         <div className="mt-6 scroll-mt-4" id="sessions">
           <SectionLabel>Sessions</SectionLabel>

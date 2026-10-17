@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { PublicPackageLink } from "@/lib/api/hooks";
-import { offersSectionVisible, offersToShow, sampleOffer } from "./client-offers.ts";
+import {
+  landingSectionOrder,
+  offersSectionVisible,
+  offersToShow,
+  sampleOffer,
+} from "./client-offers.ts";
 
 function link(code: string, name = code): PublicPackageLink {
   return { link: { code, name }, services: [], packages: [] };
@@ -52,6 +57,44 @@ describe("offersSectionVisible", () => {
 
   it("always shows it in the editor's preview so the business can place it", () => {
     assert.equal(offersSectionVisible({ enabled: true, offers: [], preview: true }), true);
+  });
+
+  it("a private offer link shows its offer even when the section is switched off", () => {
+    assert.equal(
+      offersSectionVisible({
+        enabled: false,
+        offers: [link("A")],
+        preview: false,
+        offerOnly: true,
+      }),
+      true,
+    );
+    assert.equal(
+      offersSectionVisible({ enabled: true, offers: [], preview: false, offerOnly: true }),
+      false,
+    );
+  });
+});
+
+describe("landingSectionOrder — a private offer link is the page", () => {
+  const order = ["about", "sessions", "offers", "staff", "reviews", "location"] as const;
+
+  it("keeps the business's order on the ordinary page", () => {
+    assert.deepEqual(landingSectionOrder(order, false), [...order]);
+  });
+
+  it("leads with the offer and drops the catalogue, keeping the rest in order", () => {
+    assert.deepEqual(landingSectionOrder(order, true), [
+      "offers",
+      "about",
+      "staff",
+      "reviews",
+      "location",
+    ]);
+  });
+
+  it("still shows the offer when the business had the section off", () => {
+    assert.deepEqual(landingSectionOrder(["sessions", "about"], true), ["offers", "about"]);
   });
 });
 
