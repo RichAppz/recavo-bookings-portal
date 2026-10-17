@@ -12,11 +12,24 @@ import {
   isTooLateToHold,
   looksLikeEmail,
   nationalPhone,
+  price,
   splitDisplayName,
   toE164,
   type JourneyHold,
   type PaymentMethodsOffered,
 } from "./client-journey.ts";
+
+describe("price — compact money on the client journey", () => {
+  it("drops the pence on whole amounts", () => {
+    assert.equal(price(4500, "GBP"), "£45");
+    assert.equal(price(35000, "GBP"), "£350");
+  });
+  it("keeps both pence digits on a discounted amount", () => {
+    // 10% off £45 is £40.50, which must not print as "£40.5".
+    assert.equal(price(4050, "GBP"), "£40.50");
+    assert.equal(price(31505, "GBP"), "£315.05");
+  });
+});
 
 describe("toE164 — UK mobile numbers as people type them", () => {
   it("turns a national number into +44", () => {

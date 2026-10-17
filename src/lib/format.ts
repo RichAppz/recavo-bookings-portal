@@ -17,10 +17,12 @@ export function formatMoney(
   opts: { locale?: string; compact?: boolean } = {},
 ): string {
   const locale = opts.locale ?? "en-GB";
+  // Compact drops ".00" on whole amounts only; £40.50 must never print as "£40.5".
+  const wholeAmount = minor % 100 === 0;
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-    minimumFractionDigits: opts.compact ? 0 : 2,
+    minimumFractionDigits: opts.compact && wholeAmount ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(minor / 100);
 }

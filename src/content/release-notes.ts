@@ -14,6 +14,16 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "Follow-ups is now Reminders, and it is where you set them up as well as see who is due. Press Add reminder, pick the service, how often it is due again — every 2 months, every 2 years, or your own number of months — how many days ahead to remind, and what to call it. Every reminder you have is listed at the top of the page; tap one to change or remove it. The same reminders still show on each service under Services, and on a phone the Reminders page is the quick way in.",
         where: "Reminders → Add reminder",
       },
+      {
+        kind: "improved",
+        text: "On a desktop, the Offers section on your booking page now works like Sessions: each offer session or package has a round selector rather than a link, and choosing one fills the calendar and price on the right — pick a session from the catalogue and the offer unselects. Nothing changes on a phone, where a tap still opens the offer.",
+        where: "book.recavo.app/your-link?offer=…",
+      },
+      {
+        kind: "fixed",
+        text: "Discounted prices on the booking page now always show both pence digits — 10% off £45 reads £40.50, not £40.5.",
+        where: "Booking page",
+      },
     ],
   },
   {
