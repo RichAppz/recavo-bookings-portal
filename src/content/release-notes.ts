@@ -16,6 +16,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "Offer links now open in the new booking page design, the same as everything else your clients see. A private link (one that doesn't show your full catalogue) opens on a page that leads with the offer — its sessions and packages at the offer's price, with your about, team, reviews and location underneath — and nothing from the catalogue. Buying a package, from an offer or from your Packages list, is now three short steps in the same style: details, review and pay (or a request you confirm, if you don't take cards online), and a done screen with the way into their account.",
+        where: "Offer links → the link you share",
+      },
+      {
+        kind: "improved",
         text: "On a desktop, the Offers section on your booking page now works like Sessions: each offer session or package has a round selector rather than a link, and choosing one fills the calendar and price on the right — pick a session from the catalogue and the offer unselects. Nothing changes on a phone, where a tap still opens the offer.",
         where: "book.recavo.app/your-link?offer=…",
       },
