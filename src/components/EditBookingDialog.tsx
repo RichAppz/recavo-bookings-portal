@@ -1039,7 +1039,7 @@ export function EditBookingDialog({
                             // Keep the span whole when the first day passes the last.
                             if (e.target.value > whenLastDay) setWhenLastDay(e.target.value);
                           }}
-                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                         />
                       </div>
                       <div className="grid gap-1">
@@ -1053,7 +1053,7 @@ export function EditBookingDialog({
                           value={whenLastDay}
                           onChange={(e) => setWhenLastDay(e.target.value)}
                           aria-invalid={whenInvalid}
-                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm aria-invalid:border-destructive"
                         />
                       </div>
                     </div>
@@ -1065,14 +1065,14 @@ export function EditBookingDialog({
                         aria-label="Date"
                         value={whenDate}
                         onChange={(e) => setWhenDate(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                       />
                       <input
                         type="time"
                         aria-label="Start time"
                         value={whenTime}
                         onChange={(e) => setWhenTime(e.target.value)}
-                        className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                        className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                       />
                     </div>
                   )}

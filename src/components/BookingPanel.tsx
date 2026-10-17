@@ -2560,7 +2560,7 @@ function RescheduleDialog({
                     // Keep an overridden span whole when the first day passes the last.
                     if (lastDay !== null && e.target.value > lastDay) setLastDay(e.target.value);
                   }}
-                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                 />
                 {mode === "custom" && !booking.allDay ? (
                   <input
@@ -2568,7 +2568,7 @@ function RescheduleDialog({
                     aria-label="Start time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                   />
                 ) : null}
               </div>
@@ -2599,7 +2599,7 @@ function RescheduleDialog({
                       value={effectiveLastDay}
                       onChange={(e) => setLastDay(e.target.value)}
                       aria-invalid={lastDayInvalid}
-                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm aria-invalid:border-destructive"
                     />
                   </div>
                 </div>
