@@ -28,12 +28,7 @@ export function TotpSecretField({ secret }: { secret: string }) {
     <div className="space-y-2">
       <Label htmlFor="mfa-secret">Or enter this key manually</Label>
       <div className="flex gap-2">
-        <Input
-          id="mfa-secret"
-          readOnly
-          value={secret}
-          className="font-mono text-sm tracking-wide"
-        />
+        <Input id="mfa-secret" readOnly value={secret} className="font-mono tracking-wide" />
         <Button
           type="button"
           variant="outline"

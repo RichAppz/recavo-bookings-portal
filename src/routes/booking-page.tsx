@@ -539,7 +539,7 @@ function DesignTab({ page, edit, disabled }: TabProps) {
               value={customHex}
               disabled={disabled}
               placeholder="#2d7a5f"
-              className="h-9 w-28 font-mono text-sm"
+              className="h-9 w-28 font-mono"
               onChange={(e) => {
                 const value = e.target.value.trim().toLowerCase();
                 setCustomHex(value);

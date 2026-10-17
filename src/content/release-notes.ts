@@ -70,6 +70,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Side menu → Hide menu",
       },
       {
+        kind: "fixed",
+        text: "On an iPhone, tapping the price box when adding a booking with more than one service zoomed the whole page in and it would not zoom back out. The box (and a couple of other small fields) now use the size Safari leaves alone.",
+        where: "Add session → services → price",
+      },
+      {
         kind: "new",
         text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
         where: "Services → edit a service → Follow-up reminders → Add another reminder",

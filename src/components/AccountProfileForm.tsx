@@ -195,7 +195,7 @@ export function AccountProfileForm() {
         <Label htmlFor="profile-locale">Language</Label>
         <select
           id="profile-locale"
-          className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-base focus-visible:ring-2 md:text-sm focus-visible:ring-offset-2 focus-visible:outline-none"
           value={draft.locale === "" ? NOT_SET : draft.locale}
           onChange={(e) => set("locale")(e.target.value === NOT_SET ? "" : e.target.value)}
         >
