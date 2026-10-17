@@ -57,6 +57,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
+import { PushBellPrompt } from "@/components/PushBellPrompt";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { EventModal } from "@/components/EventModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
@@ -732,6 +733,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <PushBellPrompt />
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
                     // The API says where each alert leads (a package request opens that
                     // request, a follow-up the follow-ups list). Older rows about a booking

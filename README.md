@@ -101,6 +101,26 @@ can open without Gatekeeper warnings, set `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, 
 part of the build. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` per
 release.
 
+## Push notifications
+
+Staff and clients can turn on push for the device they are using (Settings → Notifications, or
+the account Profile page; the bell menu nudges once). Code lives in `src/lib/push`, the switch in
+`src/components/PushNotificationsSetting.tsx`, launch sync and tap handling in
+`src/components/PushBootstrap.tsx`, and the web `push` / `notificationclick` handlers in `src/sw.ts`.
+The API decides which platforms are live (`GET /api/v1/push/config`); the switch is hidden elsewhere.
+
+- **iOS app** — APNs via `@capacitor/push-notifications`. `ios/App/App/App.entitlements` carries
+  `aps-environment` (Xcode flips it to `production` on an App Store export) and `AppDelegate.swift`
+  forwards the token to the plugin. One-off: tick **Push Notifications** on the `com.richappz.recavo`
+  App ID in the Apple developer portal.
+- **Android app** — FCM via the same plugin. Drop the Firebase project's `google-services.json` into
+  `android/app/` (the gradle files already apply the plugin when it is present).
+- **Web** — standard Web Push with the API's VAPID key. Nothing to configure here; Safari on iPhone
+  only offers it once the site is on the Home Screen, which the card explains.
+
+Server-side set-up (APNs key, Firebase service account, VAPID pair) is documented in the API repo at
+`documents/push-notifications.md`.
+
 ## Lovable
 
 This project is connected to [Lovable](https://lovable.dev). Avoid rewriting published git history on the connected branch.
