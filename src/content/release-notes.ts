@@ -75,6 +75,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Add session → services → price",
       },
       {
+        kind: "fixed",
+        text: "The × on a pop-up message did nothing while a form was open — worse, on some phones the tap went through and closed the form behind it. Messages can now be closed with the × or swiped away (up or to the right) at any time, and the form stays put.",
+        where: "Pop-up messages",
+      },
+      {
         kind: "new",
         text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
         where: "Services → edit a service → Follow-up reminders → Add another reminder",

@@ -104,7 +104,11 @@ const Toaster = () => {
 
   return (
     <Sonner
-      className="toaster group"
+      // Modal dialogs set `pointer-events: none` on <body> while open and the toast
+      // host lives outside them, so without its own `auto` a toast could not be
+      // tapped or swiped while a form was up (ui/dialog.tsx keeps that tap from
+      // closing the dialog underneath).
+      className="toaster group pointer-events-auto"
       position="top-right"
       // Up (off the top edge) or right (the way it came in). Explicit rather than
       // sonner's position-derived default so a position change cannot silently drop one.
