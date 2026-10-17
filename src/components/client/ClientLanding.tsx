@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { ChevronRight, MapPin, Navigation, Share, Star } from "lucide-react";
 import { toast } from "sonner";
-import { OfferCard } from "@/components/client/ClientOffers";
+import { OfferCard, type OfferPick } from "@/components/client/ClientOffers";
 import {
   BarSummary,
   BottomBar,
@@ -67,6 +67,7 @@ export function ClientLanding({
   offers = [],
   onPickOfferService,
   onPickOfferPackage,
+  offerPick = null,
 }: {
   business: Pick<PublicBusinessProfile, "tradingName" | "slug" | "branding" | "address">;
   page: BookingPageContent;
@@ -87,6 +88,8 @@ export function ClientLanding({
   offers?: PublicPackageLink[];
   onPickOfferService?: (code: string, serviceId: string) => void;
   onPickOfferPackage?: (code: string, packageId: string) => void;
+  /** Set when the filled radio is an offer row, so Sessions stays clear. */
+  offerPick?: OfferPick | null;
   onBookNow: () => void;
   onSignIn: () => void;
   /** When the visitor is already signed in with an account at this studio. */
@@ -144,12 +147,19 @@ export function ClientLanding({
     <OfferCard
       key={offer.link.code}
       offer={offer}
+      rows={layout === "desktop" ? "radio" : "link"}
       onPickService={pickOfferService}
       onPickPackage={pickOfferPackage}
-      selectedServiceId={selectedServiceId}
-      selectedPackageId={selectedPackageId}
+      selectedServiceId={
+        offerPick?.code === offer.link.code && offerPick.kind === "service" ? offerPick.id : null
+      }
+      selectedPackageId={
+        offerPick?.code === offer.link.code && offerPick.kind === "package" ? offerPick.id : null
+      }
     />
   ));
+  const sessionSelectedId = offerPick ? null : selectedServiceId;
+  const packageSelectedId = offerPick ? null : selectedPackageId;
   const inPerson = locations.some((l) => l.type === "physical");
   const online = locations.some((l) => l.type !== "physical");
   const where = inPerson && online ? "In person or online" : online ? "Online" : "In person";
@@ -229,7 +239,7 @@ export function ClientLanding({
                     <RadioRows
                       services={group.items}
                       locations={locations}
-                      selectedId={selectedServiceId}
+                      selectedId={sessionSelectedId}
                       onPick={onPickService}
                     />
                   </div>
@@ -238,7 +248,7 @@ export function ClientLanding({
                 <RadioRows
                   services={services}
                   locations={locations}
-                  selectedId={selectedServiceId}
+                  selectedId={sessionSelectedId}
                   onPick={onPickService}
                 />
               )}
@@ -247,7 +257,7 @@ export function ClientLanding({
                   {packages.map((pkg) => (
                     <li key={pkg.id}>
                       <RadioRow
-                        active={selectedPackageId === pkg.id}
+                        active={packageSelectedId === pkg.id}
                         onClick={() => onPickPackage(pkg.id)}
                         title={pkg.name}
                         subtitle={`${pkg.creditsIssued} ${pkg.creditsIssued === 1 ? "session" : "sessions"} · Use within ${validityLabel(pkg.validity)}`}
