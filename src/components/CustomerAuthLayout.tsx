@@ -75,20 +75,20 @@ export function CustomerAuthLayout({
       </header>
 
       <main className="px-safe-5 flex flex-1 flex-col items-center pb-10">
-        <section className="w-full max-w-[400px] sm:rounded-[28px] sm:border sm:border-[var(--account-line)] sm:bg-white sm:p-7 sm:shadow-[0_8px_30px_rgba(21,23,28,0.05)]">
+        <section className="w-full max-w-[400px] sm:rounded-[28px] sm:border sm:border-[var(--account-line)] sm:bg-white sm:p-8 sm:shadow-[0_8px_30px_rgba(21,23,28,0.05)]">
           {showBusinesses ? <BusinessInitials /> : null}
           <h1 className="text-[32px] leading-[1.1] font-bold tracking-tight sm:text-[26px]">
             {title}
           </h1>
           {subtitle ? (
-            <p className="mt-2 text-[17px] text-[var(--account-muted)] sm:text-[14px]">
+            <p className="mt-3 text-[17px] leading-relaxed text-[var(--account-muted)] sm:text-[15px]">
               {subtitle}
             </p>
           ) : null}
-          <div className="mt-6">{children}</div>
+          <div className="mt-8">{children}</div>
         </section>
         {footer ? (
-          <div className="mt-6 text-center text-[14px] text-[var(--account-muted)]">{footer}</div>
+          <div className="mt-8 text-center text-[14px] text-[var(--account-muted)]">{footer}</div>
         ) : null}
       </main>
     </div>
@@ -105,7 +105,7 @@ const SAMPLE_BUSINESSES = [
 
 function BusinessInitials() {
   return (
-    <div className="mb-5 flex items-center" aria-hidden>
+    <div className="mb-7 flex items-center" aria-hidden>
       {SAMPLE_BUSINESSES.map((b, i) => (
         <span
           key={b.initials}

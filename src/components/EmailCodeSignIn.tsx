@@ -94,13 +94,13 @@ export function EmailCodeSignIn({
   if (!sentTo) {
     return (
       <form
-        className="space-y-4"
+        className="space-y-6"
         onSubmit={(e) => {
           e.preventDefault();
           void send(email.trim());
         }}
       >
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <Label htmlFor="email" className="text-[15px] font-semibold">
             Email you book with
           </Label>
@@ -138,8 +138,8 @@ export function EmailCodeSignIn({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-3">
+    <div className="space-y-6">
+      <div className="space-y-4">
         <Label htmlFor="code" className="sr-only">
           Code
         </Label>
