@@ -62,6 +62,15 @@ export function PushNotificationsSetting({ className }: { className?: string }) 
   const blocked = push.permission === "denied";
   const others = (devices.data ?? []).filter((d) => d.disabledAt === null).length;
 
+  // Until the API has a provider for this platform there is nothing the person can do
+  // here, so the card stays out of the way rather than advertising a switch that is off.
+  if (
+    !push.enabled &&
+    (push.unavailableReason === "loading" || push.unavailableReason === "not-configured")
+  ) {
+    return null;
+  }
+
   return (
     <section
       className={cn(
