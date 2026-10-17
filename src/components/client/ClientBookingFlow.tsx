@@ -20,6 +20,7 @@ import {
   type DetailsValues,
 } from "@/components/client/ClientDetails";
 import { ClientLanding, type NextAvailable } from "@/components/client/ClientLanding";
+import type { OfferPick } from "@/components/client/ClientOffers";
 import {
   CLIENT_DESKTOP_QUERY,
   ClientSheet,
@@ -173,6 +174,8 @@ export function ClientBookingFlow({
   const [step, setStep] = useState<Step>("landing");
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  /** Which offer row is the filled radio. Null when a catalogue session or package is chosen. */
+  const [offerPick, setOfferPick] = useState<OfferPick | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [extraIds, setExtraIds] = useState<string[]>([]);
@@ -239,7 +242,16 @@ export function ClientBookingFlow({
   const [promoFromOffer, setPromoFromOffer] = useState(false);
 
   const service = allServices.find((s) => s.id === serviceId) ?? null;
-  const selectedPackage = packages.data?.packages.find((p) => p.id === selectedPackageId) ?? null;
+  // An offer package may be hidden from the public list, and its price is the
+  // discounted one. Prefer that copy whenever the filled radio is the offer.
+  const selectedOfferPackage =
+    offerPick?.kind === "package"
+      ? (offers
+          .find((offer) => offer.link.code === offerPick.code)
+          ?.packages.find((pkg) => pkg.id === offerPick.id) ?? null)
+      : null;
+  const selectedPackage =
+    selectedOfferPackage ?? packages.data?.packages.find((p) => p.id === selectedPackageId) ?? null;
 
   // Desktop opens with the first session chosen, so the card shows times straight away.
   useEffect(() => {
@@ -536,6 +548,7 @@ export function ClientBookingFlow({
 
   const pickService = (id: string) => {
     setSelectedPackageId(null);
+    setOfferPick(null);
     // A code picked up from an offer belongs to that offer's sessions, not this one.
     if (promoFromOffer) {
       setPromoFromOffer(false);
@@ -555,6 +568,7 @@ export function ClientBookingFlow({
   /** A session from an offer: the same as picking it, with the offer's code applied. */
   const pickOfferService = (code: string, id: string) => {
     setSelectedPackageId(null);
+    setOfferPick({ code, kind: "service", id });
     setDetails((d) => ({ ...d, promoCode: code }));
     setPromoFromOffer(true);
     if (id === serviceId && desktop) return;
@@ -574,12 +588,34 @@ export function ClientBookingFlow({
   // Desktop: a package is a radio row like the sessions, and the card becomes its
   // buy card. Phone: straight through to the package checkout.
   const pickPackage = (id: string) => {
+    setOfferPick(null);
     if (!desktop) {
       onPickPackage(id);
       return;
     }
     setSelectedPackageId(id);
     setSelectedSlot(null);
+  };
+
+  /**
+   * A package from an offer. Desktop keeps the new journey: the row's radio fills
+   * and Continue on the booking card buys it. Phone goes straight to checkout.
+   */
+  const pickOfferPackage = (code: string, id: string) => {
+    if (!desktop) {
+      if (onPickOfferPackage) onPickOfferPackage(code, id);
+      else onPickPackage(id);
+      return;
+    }
+    setOfferPick({ code, kind: "package", id });
+    setSelectedPackageId(id);
+    setServiceId(null);
+    setStaffId(null);
+    setExtraIds([]);
+    setSelectedSlot(null);
+    setDetails((d) => ({ ...d, promoCode: code }));
+    setPromoFromOffer(true);
+    document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const bookNow = () => {
@@ -1099,7 +1135,13 @@ export function ClientBookingFlow({
           setStep("details");
           window.scrollTo({ top: 0 });
         }}
-        onBuyPackage={onPickPackage}
+        onBuyPackage={(id) => {
+          if (offerPick?.kind === "package" && offerPick.id === id && onPickOfferPackage) {
+            onPickOfferPackage(offerPick.code, id);
+            return;
+          }
+          onPickPackage(id);
+        }}
         onWaitlist={() => setWaitlistOpen(true)}
         priceMinor={previewPrice}
         currency={selectedSlot?.currency ?? service?.currency ?? business.currency}
@@ -1147,10 +1189,9 @@ export function ClientBookingFlow({
             selectedPackageId={selectedPackageId}
             bookingCard={bookingCard}
             offers={offers}
+            offerPick={offerPick}
             onPickOfferService={pickOfferService}
-            onPickOfferPackage={(code, id) =>
-              onPickOfferPackage ? onPickOfferPackage(code, id) : onPickPackage(id)
-            }
+            onPickOfferPackage={pickOfferPackage}
           />
         ) : null}
 
