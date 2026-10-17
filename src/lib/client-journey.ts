@@ -21,6 +21,89 @@ export type JourneyHold = {
 
 export type StoredJourney = { hold: JourneyHold; contact: BookingContact };
 
+export type ClientPayMethod = "card" | "credit" | "bank_transfer" | "in_person";
+
+export type ClientPayOption = {
+  key: ClientPayMethod;
+  title: string;
+  subtitle: string;
+  disabled?: boolean;
+};
+
+/** The ways a business takes payment, as the public profile advertises them. */
+export type PaymentMethodsOffered = { card: boolean; bankTransfer: boolean; onTheDay: boolean };
+
+export type PayOptionsInput = {
+  /** The hold, once taken: its flags are authoritative for this booking. */
+  hold: JourneyHold | null;
+  priceMinor: number;
+  /** Before a hold exists, the profile says what the review step can offer. */
+  profileMethods: PaymentMethodsOffered | undefined;
+  /** A signed-in client with a credit that covers this session. */
+  eligibleCredit: boolean;
+};
+
+/**
+ * Which payment methods the review step lists, in the order they are shown. Card
+ * leads when the business takes payment online; otherwise paying on the day is the
+ * fallback the confirm call will accept. Bank transfer (RECA-522) sits alongside
+ * either whenever the business has account details on file — it must never be
+ * dropped just because card is on offer.
+ */
+export function clientPayOptions({
+  hold,
+  priceMinor,
+  profileMethods,
+  eligibleCredit,
+}: PayOptionsInput): ClientPayOption[] {
+  const list: ClientPayOption[] = [];
+  if (eligibleCredit) {
+    list.push({
+      key: "credit",
+      title: "Use a session credit",
+      subtitle: "From your package",
+      ...(hold ? { disabled: true } : {}),
+    });
+  }
+  if (priceMinor <= 0) return list;
+  const card = hold ? hold.onlinePaymentRequired === true : profileMethods?.card !== false;
+  const bank = hold ? hold.bankTransferAvailable === true : profileMethods?.bankTransfer === true;
+  if (card) {
+    list.push({ key: "card", title: "Pay now", subtitle: "Card, Apple Pay, Google Pay" });
+  } else {
+    // Paying at the session is only on offer when the business does not insist
+    // on payment up front; the confirm call would refuse it otherwise.
+    list.push({ key: "in_person", title: "Pay on the day", subtitle: "At your session" });
+  }
+  if (bank) {
+    list.push({ key: "bank_transfer", title: "Bank transfer", subtitle: "Details sent by email" });
+  }
+  return list;
+}
+
+/** The method pre-selected on the review step: always one of `clientPayOptions`. */
+export function defaultClientPayMethod({
+  hold,
+  priceMinor,
+  profileMethods,
+  eligibleCredit,
+}: PayOptionsInput): ClientPayMethod {
+  if (eligibleCredit && !hold) return "credit";
+  if (priceMinor <= 0) return "in_person";
+  if (hold) {
+    return hold.onlinePaymentRequired
+      ? "card"
+      : hold.bankTransferAvailable
+        ? "bank_transfer"
+        : "in_person";
+  }
+  return profileMethods?.card === false
+    ? profileMethods.bankTransfer
+      ? "bank_transfer"
+      : "in_person"
+    : "card";
+}
+
 export const EMPTY_CONTACT: BookingContact = { name: null, email: null, phone: null };
 
 const holdStorageKey = (businessId: string) => `recavo.booking.hold.${businessId}`;

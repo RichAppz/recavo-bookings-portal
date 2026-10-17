@@ -65,6 +65,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Payments → Take payment online",
       },
       {
+        kind: "fixed",
+        text: "Pay by bank transfer is back where you look for it. The bank details form — account name, sort code, account number and the on/off switch — now sits on the Payments page under your payout account, as well as in Settings → Payments where it was easy to miss at the end of the tab row. Nothing about bank transfer itself changed: clients still choose Bank transfer at Review and pay when it is on, see your details and their reference on the confirmation, and the booking waits as awaiting payment until you mark the money received.",
+        where: "Payments → Pay by bank transfer",
+      },
+      {
         kind: "improved",
         text: "You can clear notifications from the bell: an × on each one, or Clear all at the bottom. Cleared ones stay cleared on every device you sign in on.",
         where: "Top bar → Bell",

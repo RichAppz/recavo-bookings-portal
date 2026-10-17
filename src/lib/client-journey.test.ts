@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  clientPayOptions,
   dayPartFor,
   dedupeSlotsByStart,
+  defaultClientPayMethod,
   formatCountdown,
   groupSlotsByDayPart,
   hoursLabel,
@@ -12,6 +14,8 @@ import {
   nationalPhone,
   splitDisplayName,
   toE164,
+  type JourneyHold,
+  type PaymentMethodsOffered,
 } from "./client-journey.ts";
 
 describe("toE164 — UK mobile numbers as people type them", () => {
@@ -145,6 +149,160 @@ describe("isAccountBooking — what counts as a booking in the account", () => {
       "draft",
     ]) {
       assert.equal(isAccountBooking({ status }), false, status);
+    }
+  });
+});
+
+describe("clientPayOptions — what Review and pay offers (RECA-522 bank transfer)", () => {
+  const holdWith = (flags: Partial<JourneyHold>): JourneyHold =>
+    ({ booking: { id: "b1" }, holdToken: "t", ...flags }) as unknown as JourneyHold;
+  const keys = (opts: ReturnType<typeof clientPayOptions>) => opts.map((o) => o.key);
+  const profile = (over: Partial<PaymentMethodsOffered>): PaymentMethodsOffered => ({
+    card: false,
+    bankTransfer: false,
+    onTheDay: true,
+    ...over,
+  });
+
+  it("offers bank transfer whenever the hold says the business accepts it", () => {
+    const opts = clientPayOptions({
+      hold: holdWith({ onlinePaymentRequired: false, bankTransferAvailable: true }),
+      priceMinor: 1800,
+      profileMethods: undefined,
+      eligibleCredit: false,
+    });
+    assert.deepEqual(keys(opts), ["in_person", "bank_transfer"]);
+    assert.equal(opts[1]?.title, "Bank transfer");
+  });
+
+  it("keeps bank transfer alongside card when payment up front is required", () => {
+    const opts = clientPayOptions({
+      hold: holdWith({ onlinePaymentRequired: true, bankTransferAvailable: true }),
+      priceMinor: 4500,
+      profileMethods: undefined,
+      eligibleCredit: false,
+    });
+    assert.deepEqual(keys(opts), ["card", "bank_transfer"]);
+  });
+
+  it("reads the public profile before a hold exists", () => {
+    assert.deepEqual(
+      keys(
+        clientPayOptions({
+          hold: null,
+          priceMinor: 1800,
+          profileMethods: profile({ bankTransfer: true }),
+          eligibleCredit: false,
+        }),
+      ),
+      ["in_person", "bank_transfer"],
+    );
+    assert.deepEqual(
+      keys(
+        clientPayOptions({
+          hold: null,
+          priceMinor: 1800,
+          profileMethods: profile({ card: true, bankTransfer: true }),
+          eligibleCredit: false,
+        }),
+      ),
+      ["card", "bank_transfer"],
+    );
+  });
+
+  it("leaves bank transfer out only when the business has no details on file", () => {
+    assert.deepEqual(
+      keys(
+        clientPayOptions({
+          hold: holdWith({ onlinePaymentRequired: false, bankTransferAvailable: false }),
+          priceMinor: 1800,
+          profileMethods: undefined,
+          eligibleCredit: false,
+        }),
+      ),
+      ["in_person"],
+    );
+    assert.deepEqual(
+      keys(
+        clientPayOptions({
+          hold: null,
+          priceMinor: 1800,
+          profileMethods: profile({}),
+          eligibleCredit: false,
+        }),
+      ),
+      ["in_person"],
+    );
+  });
+
+  it("has nothing to pay for a free session, and a credit leads when eligible", () => {
+    assert.deepEqual(
+      keys(
+        clientPayOptions({
+          hold: null,
+          priceMinor: 0,
+          profileMethods: profile({ card: true, bankTransfer: true }),
+          eligibleCredit: false,
+        }),
+      ),
+      [],
+    );
+    const withCredit = clientPayOptions({
+      hold: null,
+      priceMinor: 1800,
+      profileMethods: profile({ bankTransfer: true }),
+      eligibleCredit: true,
+    });
+    assert.deepEqual(keys(withCredit), ["credit", "in_person", "bank_transfer"]);
+    assert.equal(withCredit[0]?.disabled, undefined);
+  });
+
+  it("pre-selects bank transfer when it is the only way to pay ahead", () => {
+    const hold = holdWith({ onlinePaymentRequired: false, bankTransferAvailable: true });
+    assert.equal(
+      defaultClientPayMethod({
+        hold,
+        priceMinor: 1800,
+        profileMethods: undefined,
+        eligibleCredit: false,
+      }),
+      "bank_transfer",
+    );
+    assert.equal(
+      defaultClientPayMethod({
+        hold: null,
+        priceMinor: 1800,
+        profileMethods: profile({ bankTransfer: true }),
+        eligibleCredit: false,
+      }),
+      "bank_transfer",
+    );
+  });
+
+  it("the default is always one of the options offered", () => {
+    const cases: { hold: JourneyHold | null; profileMethods: PaymentMethodsOffered | undefined }[] =
+      [
+        { hold: null, profileMethods: undefined },
+        { hold: null, profileMethods: profile({ card: true }) },
+        { hold: null, profileMethods: profile({ bankTransfer: true }) },
+        { hold: null, profileMethods: profile({ card: true, bankTransfer: true }) },
+        { hold: holdWith({ onlinePaymentRequired: true }), profileMethods: undefined },
+        { hold: holdWith({ bankTransferAvailable: true }), profileMethods: undefined },
+        {
+          hold: holdWith({ onlinePaymentRequired: true, bankTransferAvailable: true }),
+          profileMethods: undefined,
+        },
+        { hold: holdWith({}), profileMethods: undefined },
+      ];
+    for (const c of cases) {
+      for (const eligibleCredit of [false, true]) {
+        const input = { ...c, priceMinor: 2500, eligibleCredit };
+        const offered = keys(clientPayOptions(input));
+        assert.ok(
+          offered.includes(defaultClientPayMethod(input)),
+          JSON.stringify({ input, offered }),
+        );
+      }
     }
   });
 });

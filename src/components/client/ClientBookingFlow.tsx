@@ -70,6 +70,8 @@ import { offersToShow } from "@/lib/client-offers";
 import {
   EMPTY_CONTACT,
   authenticationSucceeded,
+  clientPayOptions,
+  defaultClientPayMethod,
   formatCountdown,
   looksLikeEmail,
   nationalPhone,
@@ -505,63 +507,23 @@ export function ClientBookingFlow({
     writeStoredJourney(businessId, hold ? { hold, contact } : null);
   }, [businessId, hold, contact]);
 
-  const optionsFor = (current: JourneyHold | null, priceMinor: number): PayOption[] => {
-    const list: PayOption[] = [];
-    if (eligibleCredit) {
-      list.push({
-        key: "credit",
-        title: "Use a session credit",
-        subtitle: "From your package",
-        ...(current ? { disabled: true } : {}),
-      });
-    }
-    if (priceMinor <= 0) return list;
-    const card = current
-      ? current.onlinePaymentRequired === true
-      : business.paymentMethods?.card !== false;
-    const bank = current
-      ? current.bankTransferAvailable === true
-      : business.paymentMethods?.bankTransfer === true;
-    if (card)
-      list.push({
-        key: "card",
-        title: "Pay now",
-        subtitle: "Card, Apple Pay, Google Pay",
-      });
-    // Paying at the session is only on offer when the business does not insist
-    // on payment up front; the confirm call would refuse it otherwise.
-    if (!card) {
-      list.push({
-        key: "in_person",
-        title: "Pay on the day",
-        subtitle: "At your session",
-      });
-    }
-    if (bank)
-      list.push({
-        key: "bank_transfer",
-        title: "Bank transfer",
-        subtitle: "Details sent by email",
-      });
-    return list;
-  };
+  // The method list and its default live in client-journey.ts so the rule that
+  // bank transfer is offered whenever the business accepts it is unit-tested.
+  const optionsFor = (current: JourneyHold | null, priceMinor: number): PayOption[] =>
+    clientPayOptions({
+      hold: current,
+      priceMinor,
+      profileMethods: business.paymentMethods,
+      eligibleCredit: eligibleCredit !== null,
+    });
 
-  const defaultMethodFor = (current: JourneyHold | null, priceMinor: number): PayMethod => {
-    if (eligibleCredit && !current) return "credit";
-    if (priceMinor <= 0) return "in_person";
-    if (current) {
-      return current.onlinePaymentRequired
-        ? "card"
-        : current.bankTransferAvailable
-          ? "bank_transfer"
-          : "in_person";
-    }
-    return business.paymentMethods?.card === false
-      ? business.paymentMethods.bankTransfer
-        ? "bank_transfer"
-        : "in_person"
-      : "card";
-  };
+  const defaultMethodFor = (current: JourneyHold | null, priceMinor: number): PayMethod =>
+    defaultClientPayMethod({
+      hold: current,
+      priceMinor,
+      profileMethods: business.paymentMethods,
+      eligibleCredit: eligibleCredit !== null,
+    });
 
   /* ---------- actions ---------- */
 
