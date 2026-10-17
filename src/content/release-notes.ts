@@ -81,6 +81,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "new",
+        text: "A booking with notes on it now says so at the top of its drawer — “Note from the client”, “Internal note” or “Notes on this booking” — next to the status pills; tap it to jump straight to them. What the client typed when booking is shown in its own box on Details, where before only your internal notes were.",
+        where: "Calendar → open a booking",
+      },
+      {
+        kind: "new",
         text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
         where: "Services → edit a service → Follow-up reminders → Add another reminder",
       },

@@ -18,6 +18,7 @@ import {
   Repeat,
   Send,
   Sparkles,
+  StickyNote,
   Trash2,
   X,
 } from "lucide-react";
@@ -176,7 +177,10 @@ import {
 } from "@/lib/booking-reminders";
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { describeClientLift } from "@/lib/client-lift";
+import { bookingNotes, bookingNotesLabel, hasBookingNotes } from "@/lib/booking-notes";
 import { cn } from "@/lib/utils";
+
+const NOTES_SECTION_ID = "booking-panel-notes";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
   "cancelled_by_customer",
@@ -272,6 +276,7 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
+  const notes = bookingNotes(booking ?? {});
   // Each service at what it was booked at (with its list), the whole-job discount or
   // adjustment (if any) and the total (RECA-532). The list total differs from
   // priceMinor only when staff priced a service or the job differently.
@@ -939,6 +944,27 @@ export function BookingPanel({
                     Lift needed
                   </span>
                 ) : null}
+                {/* Notes sit at the foot of Details, so flag them up here and jump to
+                    them on tap — otherwise "park round the back" is read at the kerb. */}
+                {hasBookingNotes(notes) ? (
+                  <button
+                    type="button"
+                    data-testid="booking-notes-pill"
+                    onClick={() => {
+                      setTab("details");
+                      requestAnimationFrame(() => {
+                        document
+                          .getElementById(NOTES_SECTION_ID)
+                          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/15"
+                    title="Show the notes"
+                  >
+                    <StickyNote className="size-3" aria-hidden />
+                    {bookingNotesLabel(notes)}
+                  </button>
+                ) : null}
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
@@ -1310,12 +1336,28 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {booking.notesInternal ? (
-                    <div>
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        Internal notes
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">{booking.notesInternal}</p>
+                  {hasBookingNotes(notes) ? (
+                    <div id={NOTES_SECTION_ID} className="scroll-mt-4 space-y-4">
+                      {notes.customer ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Note from the client
+                          </p>
+                          <p className="mt-2 rounded-xl border border-primary/30 bg-primary-soft p-3 text-sm whitespace-pre-wrap">
+                            {notes.customer}
+                          </p>
+                        </div>
+                      ) : null}
+                      {notes.internal ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Internal notes
+                          </p>
+                          <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
+                            {notes.internal}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
