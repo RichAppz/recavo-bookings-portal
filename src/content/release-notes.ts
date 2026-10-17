@@ -105,6 +105,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Invoices → draft → Vehicle",
       },
       {
+        kind: "fixed",
+        text: "Upload your logo and it now appears on invoices you had already started, not just new ones. A draft takes its business details from your current settings when you preview or download it, and an invoice issued before you had a logo prints the one you have now. Logo uploads themselves also work again.",
+        where: "Settings → Configuration → Logo, then Invoices → Preview",
+      },
+      {
         kind: "new",
         text: "A booking with notes on it now says so at the top of its drawer — “Note from the client”, “Internal note” or “Notes on this booking” — next to the status pills; tap it to jump straight to them. What the client typed when booking is shown in its own box on Details, where before only your internal notes were.",
         where: "Calendar → open a booking",
