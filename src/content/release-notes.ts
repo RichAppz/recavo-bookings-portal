@@ -21,6 +21,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "Service cards on a one-person business no longer carry an “Offered: whenever you're available” line — it said nothing you didn't know. The line still appears when a service is limited to certain days or times.",
+        where: "Services",
+      },
+      {
+        kind: "improved",
         text: "Offer links now open in the new booking page design, the same as everything else your clients see. A private link (one that doesn't show your full catalogue) opens on a page that leads with the offer — its sessions and packages at the offer's price, with your about, team, reviews and location underneath — and nothing from the catalogue. Buying a package, from an offer or from your Packages list, is now three short steps in the same style: details, review and pay (or a request you confirm, if you don't take cards online), and a done screen with the way into their account.",
         where: "Offer links → the link you share",
       },

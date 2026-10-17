@@ -145,16 +145,12 @@ function ServicesPage() {
   const locations = useLocationsList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
-  const { user } = useAuth();
-  // No offer windows on a one-person business means "whenever they're free" —
-  // say so in their words rather than the team wording.
-  const offeredLabel = (s: CatalogueService) => {
-    if (!soleStaff || s.availabilityWindows.length > 0) {
-      return formatAvailabilityWindows(s.availabilityWindows);
-    }
-    return soleStaff.userId === user?.id
-      ? "Whenever you're available"
-      : `Whenever ${soleStaff.displayName} is available`;
+  // No offer windows on a one-person business means "whenever they're free",
+  // which tells them nothing — the row is left off. With windows set it still
+  // shows the days and times.
+  const offeredLabel = (s: CatalogueService): string | null => {
+    if (soleStaff && s.availabilityWindows.length === 0) return null;
+    return formatAvailabilityWindows(s.availabilityWindows);
   };
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -243,160 +239,165 @@ function ServicesPage() {
                 </h2>
               ) : null}
               <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {group.items.map((s) => (
-                  <article key={s.id} className="surface-card flex flex-col p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {s.publicVisible ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <Eye className="size-3.5" /> Public
+                {group.items.map((s) => {
+                  const offered = offeredLabel(s);
+                  return (
+                    <article key={s.id} className="surface-card flex flex-col p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {s.publicVisible ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Eye className="size-3.5" /> Public
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <EyeOff className="size-3.5" /> Hidden from booking page
+                            </span>
+                          )}
+                          <StatusBadge status={s.active ? "active" : "inactive"} />
+                        </div>
+                      </div>
+                      <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
+
+                      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="size-4 text-muted-foreground" />
+                          {formatDuration(s.durationMinutes)}
+                        </span>
+                        <span className="flex items-center gap-1.5 font-semibold">
+                          {formatMoney(s.basePriceMinor, s.currency)}
+                          {s.capacityMax > 1 ? " pp" : ""}
+                        </span>
+                        {s.depositMinor && s.depositMinor > 0 ? (
+                          <span className="text-muted-foreground">
+                            {formatMoney(s.depositMinor, s.currency)} deposit
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <EyeOff className="size-3.5" /> Hidden from booking page
+                        ) : null}
+                        {isDetailing && s.capacityMax === 1 ? null : (
+                          <span className="flex items-center gap-1.5">
+                            <Users className="size-4 text-muted-foreground" />
+                            {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
                           </span>
                         )}
-                        <StatusBadge status={s.active ? "active" : "inactive"} />
+                        {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
+                          <span
+                            className="flex items-center gap-1.5 text-muted-foreground"
+                            title="Materials this service uses by default — your records only"
+                          >
+                            <Package className="size-4" />
+                            {consumableCountByService.get(s.id)}{" "}
+                            {consumableCountByService.get(s.id) === 1
+                              ? "consumable"
+                              : "consumables"}
+                          </span>
+                        ) : null}
+                        {s.followUps.length > 0 ? (
+                          <span
+                            className="flex items-center gap-1.5 text-muted-foreground"
+                            title={
+                              s.followUps.length === 1
+                                ? `Clients (and you) are reminded ${s.followUps[0]!.leadDays} days before it is due again`
+                                : `${s.followUps.length} reminders: clients (and you) are told before each is due`
+                            }
+                          >
+                            <BellRing className="size-4" />
+                            {followUpRulesSummary(s.followUps)}
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
-                    <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
 
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="size-4 text-muted-foreground" />
-                        {formatDuration(s.durationMinutes)}
-                      </span>
-                      <span className="flex items-center gap-1.5 font-semibold">
-                        {formatMoney(s.basePriceMinor, s.currency)}
-                        {s.capacityMax > 1 ? " pp" : ""}
-                      </span>
-                      {s.depositMinor && s.depositMinor > 0 ? (
-                        <span className="text-muted-foreground">
-                          {formatMoney(s.depositMinor, s.currency)} deposit
-                        </span>
+                      {s.variants.length > 0 ? (
+                        <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+                          {s.variants.map((v) => (
+                            <li key={v.id} className="flex items-center justify-between">
+                              <span>{v.name}</span>
+                              <span className="tabular-nums">
+                                {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
+                                {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       ) : null}
-                      {isDetailing && s.capacityMax === 1 ? null : (
-                        <span className="flex items-center gap-1.5">
-                          <Users className="size-4 text-muted-foreground" />
-                          {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
-                        </span>
-                      )}
-                      {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title="Materials this service uses by default — your records only"
-                        >
-                          <Package className="size-4" />
-                          {consumableCountByService.get(s.id)}{" "}
-                          {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
-                        </span>
-                      ) : null}
-                      {s.followUps.length > 0 ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title={
-                            s.followUps.length === 1
-                              ? `Clients (and you) are reminded ${s.followUps[0]!.leadDays} days before it is due again`
-                              : `${s.followUps.length} reminders: clients (and you) are told before each is due`
-                          }
-                        >
-                          <BellRing className="size-4" />
-                          {followUpRulesSummary(s.followUps)}
-                        </span>
-                      ) : null}
-                    </div>
 
-                    {s.variants.length > 0 ? (
-                      <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-                        {s.variants.map((v) => (
-                          <li key={v.id} className="flex items-center justify-between">
-                            <span>{v.name}</span>
-                            <span className="tabular-nums">
-                              {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
-                              {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                      {/* One person / one place: the rows would only ever say "All". */}
-                      {soleStaff ? null : (
+                      <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                        {/* One person / one place: the rows would only ever say "All". */}
+                        {soleStaff ? null : (
+                          <Row
+                            label={
+                              tenant.terminology.staff.toLowerCase().endsWith("s")
+                                ? tenant.terminology.staff
+                                : `${tenant.terminology.staff}s`
+                            }
+                            value={describeDeliverers(s, staff.data ?? [])}
+                          />
+                        )}
+                        {soleLocation ? null : (
+                          <Row
+                            label="Locations"
+                            value={
+                              s.locationIds
+                                .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                                .filter(Boolean)
+                                .join(", ") || "All"
+                            }
+                          />
+                        )}
                         <Row
-                          label={
-                            tenant.terminology.staff.toLowerCase().endsWith("s")
-                              ? tenant.terminology.staff
-                              : `${tenant.terminology.staff}s`
-                          }
-                          value={describeDeliverers(s, staff.data ?? [])}
+                          label="Booking notice"
+                          value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
                         />
-                      )}
-                      {soleLocation ? null : (
                         <Row
-                          label="Locations"
-                          value={
-                            s.locationIds
-                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                              .filter(Boolean)
-                              .join(", ") || "All"
-                          }
+                          label="Cancellation"
+                          value={`${s.cancellationPolicy.windowHours} hours`}
                         />
-                      )}
-                      <Row
-                        label="Booking notice"
-                        value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
-                      />
-                      <Row
-                        label="Cancellation"
-                        value={`${s.cancellationPolicy.windowHours} hours`}
-                      />
-                      <Row
-                        label="Buffer"
-                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
-                      />
-                      <Row label="Offered" value={offeredLabel(s)} />
-                    </dl>
+                        <Row
+                          label="Buffer"
+                          value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
+                        />
+                        {offered ? <Row label="Offered" value={offered} /> : null}
+                      </dl>
 
-                    <div className="mt-5 flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Switch
-                          checked={s.active}
-                          disabled={updateService.isPending}
-                          onCheckedChange={(v) => {
-                            updateService.mutate(
-                              {
-                                serviceId: s.id,
-                                version: s.version,
-                                body: { active: v },
-                              },
-                              {
-                                onSuccess: () =>
-                                  toast.success(v ? `${noun} activated` : `${noun} paused`),
-                              },
-                            );
-                          }}
-                        />
-                        {s.active ? "Bookable" : "Hidden"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-destructive"
-                          aria-label={`Delete ${lower}`}
-                          onClick={() => setDeleting(s)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                          Edit {lower}
-                        </Button>
+                      <div className="mt-5 flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Switch
+                            checked={s.active}
+                            disabled={updateService.isPending}
+                            onCheckedChange={(v) => {
+                              updateService.mutate(
+                                {
+                                  serviceId: s.id,
+                                  version: s.version,
+                                  body: { active: v },
+                                },
+                                {
+                                  onSuccess: () =>
+                                    toast.success(v ? `${noun} activated` : `${noun} paused`),
+                                },
+                              );
+                            }}
+                          />
+                          {s.active ? "Bookable" : "Hidden"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete ${lower}`}
+                            onClick={() => setDeleting(s)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                            Edit {lower}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}
