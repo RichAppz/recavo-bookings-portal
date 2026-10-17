@@ -456,14 +456,14 @@ function ExtraTimesEditor({
                     // Keyed by the row's own key, never by a value that changes while
                     // typing: remounting a focused <input type="time"> upsets Safari.
                     <div key={row.key} className="grid gap-1.5 px-2.5 py-2">
-                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_2.25rem] items-center gap-2">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)_6.5rem_6.5rem_2.25rem] items-center gap-2">
                         <Select
                           value={row.mode}
                           onValueChange={(v) =>
                             update(row.key, { mode: v as ExtraTimeRow["mode"] })
                           }
                         >
-                          <SelectTrigger aria-label="Repeat" className="w-[5.5rem]">
+                          <SelectTrigger aria-label="Repeat" className="w-[5rem]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
