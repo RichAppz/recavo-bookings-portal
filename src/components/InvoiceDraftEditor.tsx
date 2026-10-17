@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
@@ -33,7 +33,11 @@ import {
   type LineDraftError,
 } from "@/lib/invoices";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { useFormattedChange } from "@/hooks/use-formatted-change";
 import { cn } from "@/lib/utils";
+
+/** Pasted line breaks become spaces; registrations are upper-cased as they are typed. */
+const formatRecordValue = (raw: string) => upperCaseRegistration(raw.replace(/\r?\n/g, " "));
 
 /**
  * Edit a draft's lines, due date, notes and customer. The API recomputes totals
@@ -122,6 +126,12 @@ export function InvoiceDraftEditor({
       .slice(0, 6);
   }, [customerRecords.data, typedRecordValue]);
   const recordRowsFull = recordValues.length >= INVOICE_LINKED_RECORD_LIMITS.maxEntries;
+  const onRecordChange = useFormattedChange(
+    formatRecordValue,
+    useCallback((typed: string, i: number) => {
+      setRecordValues((prev) => prev.map((v, j) => (j === i ? typed : v)));
+    }, []),
+  );
   const addRecordValue = (value: string) => {
     setRecordValues((prev) => {
       const next = [...prev];
@@ -406,10 +416,7 @@ export function InvoiceDraftEditor({
                     }
                     aria-label={`${recordBase} ${i + 1}`}
                     autoCapitalize="characters"
-                    onChange={(e) => {
-                      const typed = upperCaseRegistration(e.target.value.replace(/\r?\n/g, " "));
-                      setRecordValues((prev) => prev.map((v, j) => (j === i ? typed : v)));
-                    }}
+                    onChange={onRecordChange(i)}
                   />
                   {recordValues.length > 1 ? (
                     <Button
