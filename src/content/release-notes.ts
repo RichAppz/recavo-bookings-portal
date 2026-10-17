@@ -85,6 +85,16 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Pop-up messages",
       },
       {
+        kind: "improved",
+        text: "Invoice previews can be enlarged. Tap the page (or Enlarge) to open it full screen, zoom in to 300% with the text staying sharp, and on a computer open the PDF in a new tab in the browser's own viewer.",
+        where: "Invoices → open an invoice → Preview",
+      },
+      {
+        kind: "fixed",
+        text: "Typing into the middle of the Vehicle field on an invoice sent the cursor to the far right after the first character. It now stays where you put it.",
+        where: "Invoices → draft → Vehicle",
+      },
+      {
         kind: "new",
         text: "A booking with notes on it now says so at the top of its drawer — “Note from the client”, “Internal note” or “Notes on this booking” — next to the status pills; tap it to jump straight to them. What the client typed when booking is shown in its own box on Details, where before only your internal notes were.",
         where: "Calendar → open a booking",
@@ -98,6 +108,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         kind: "improved",
         text: "Recording the last of the money on a job that has already started marks it done in the same step, so it shows up under Job outcomes and the invoice is raised without a second visit to the booking.",
         where: "Bookings → Record payment",
+      },
+      {
+        kind: "improved",
+        text: "When the money already received on an invoice is the booking's deposit, the totals now say “Deposit taken” rather than “Paid”, on the PDF and on the invoice page. Once more than the deposit has come in, or the invoice is settled, it reads “Paid” as before.",
+        where: "Invoices → PDF",
       },
       {
         kind: "improved",
