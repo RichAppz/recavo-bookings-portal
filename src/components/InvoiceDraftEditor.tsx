@@ -346,11 +346,15 @@ export function InvoiceDraftEditor({
                         errs.description && "border-destructive",
                       )}
                       onChange={(e) =>
-                        setLine(i, { description: e.target.value.replace(/\r?\n/g, " ") })
+                        setLine(i, { description: e.target.value.replace(/\r\n?/g, "\n") })
                       }
                     />
                     {errs.description ? (
                       <p className="text-xs text-destructive">{errs.description}</p>
+                    ) : i === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Press Enter for detail lines — they print under the heading.
+                      </p>
                     ) : null}
                   </div>
                   <div

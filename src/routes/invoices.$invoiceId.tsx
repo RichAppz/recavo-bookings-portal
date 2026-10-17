@@ -80,6 +80,7 @@ import {
   invoiceLinkedRecord,
   linkedRecordEntries,
   showsVat,
+  splitLineDescription,
   type InvoiceAddress,
 } from "@/lib/invoices";
 import { isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
@@ -523,33 +524,43 @@ function InvoiceDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {inv.lines.map((line) => (
-                  <tr key={line.id}>
-                    <td className="px-4 py-3">
-                      {line.description}
-                      {vat && !line.taxable ? (
-                        <span className="ml-2 text-xs text-muted-foreground">(no VAT)</span>
+                {inv.lines.map((line) => {
+                  const { heading, details } = splitLineDescription(line.description);
+                  return (
+                    <tr key={line.id}>
+                      <td className="px-4 py-3">
+                        {heading}
+                        {vat && !line.taxable ? (
+                          <span className="ml-2 text-xs text-muted-foreground">(no VAT)</span>
+                        ) : null}
+                        {details.length > 0 ? (
+                          <ul className="mt-0.5 text-xs text-muted-foreground">
+                            {details.map((detail, i) => (
+                              <li key={i}>{detail}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{line.quantity}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {formatMoney(line.unitPriceMinor, inv.currency)}
+                      </td>
+                      {vat ? (
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatMoney(line.netMinor, inv.currency)}
+                        </td>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{line.quantity}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {formatMoney(line.unitPriceMinor, inv.currency)}
-                    </td>
-                    {vat ? (
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatMoney(line.netMinor, inv.currency)}
+                      {vat ? (
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatMoney(line.vatMinor, inv.currency)}
+                        </td>
+                      ) : null}
+                      <td className="px-4 py-3 text-right tabular-nums font-medium">
+                        {formatMoney(line.totalMinor, inv.currency)}
                       </td>
-                    ) : null}
-                    {vat ? (
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatMoney(line.vatMinor, inv.currency)}
-                      </td>
-                    ) : null}
-                    <td className="px-4 py-3 text-right tabular-nums font-medium">
-                      {formatMoney(line.totalMinor, inv.currency)}
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

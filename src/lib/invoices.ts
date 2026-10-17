@@ -410,10 +410,30 @@ export const INVOICE_LINE_LIMITS = {
   minLines: 1,
   maxLines: 50,
   descriptionMax: 500,
+  /** A heading plus a few detail lines; anything longer belongs in the notes. */
+  descriptionMaxLines: 6,
   quantityMin: 1,
   quantityMax: 10_000,
   notesMax: 2000,
 } as const;
+
+/**
+ * A line's description is a heading with optional detail lines under it. Mirrors the
+ * API: line endings unified, each line trimmed, blank lines dropped.
+ */
+export function normaliseLineDescription(raw: string): string {
+  return raw
+    .split(/\r\n|\r|\n/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join("\n");
+}
+
+/** Heading and detail lines of a stored description, for display. */
+export function splitLineDescription(description: string): { heading: string; details: string[] } {
+  const [heading = "", ...details] = description.split("\n");
+  return { heading, details };
+}
 
 export type InvoiceLineDraft = {
   description: string;
@@ -464,10 +484,12 @@ export function validateLineDrafts(
   let failed = false;
   for (const draft of drafts) {
     const rowErrors: LineDraftError = {};
-    const description = draft.description.trim();
+    const description = normaliseLineDescription(draft.description);
     if (!description) rowErrors.description = "Required";
     else if (description.length > INVOICE_LINE_LIMITS.descriptionMax) {
       rowErrors.description = `At most ${INVOICE_LINE_LIMITS.descriptionMax} characters`;
+    } else if (description.split("\n").length > INVOICE_LINE_LIMITS.descriptionMaxLines) {
+      rowErrors.description = `At most ${INVOICE_LINE_LIMITS.descriptionMaxLines} lines — put the rest in Notes`;
     }
     const quantity = Number(draft.quantity);
     if (

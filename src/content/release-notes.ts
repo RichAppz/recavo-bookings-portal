@@ -40,6 +40,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Business → Booking page → Content → Google reviews",
       },
       {
+        kind: "new",
+        text: "Invoice lines can carry detail under the heading. Press Enter in a line's description to add up to five more lines — “Paint correction”, then “Bonnet and both front wings” and “Two-stage machine polish” beneath it. The heading prints as before and the detail sits under it in smaller grey type, on the PDF and on the invoice page.",
+        where: "Invoices → draft → Lines → Description",
+      },
+      {
         kind: "improved",
         text: 'Review and pay shows only the ways to pay you have switched on, as a short list to pick from — pay now by card, pay on the day, bank transfer, or a session credit when the client has one. The tick box spells out your cancellation deadline as a real date and time ("Free to cancel until Sun 18 Oct, 15:00") rather than "24 hours before".',
         where: "Booking page → Review and pay",
