@@ -171,18 +171,9 @@ function FollowUpsPage() {
                     <Repeat className="size-4" />
                   </span>
                   <span className="grid min-w-0 flex-1 gap-0.5">
-                    <span className="truncate font-medium">
-                      {followUpRuleSummary(row.rule)}
-                      {row.rule.label ? (
-                        <span className="font-normal text-muted-foreground">
-                          {" "}
-                          · {row.serviceName}
-                        </span>
-                      ) : null}
-                    </span>
+                    <span className="font-medium">{followUpRuleSummary(row.rule)}</span>
                     <span className="text-xs text-muted-foreground">
-                      {leadDaysLabel(row.rule.leadDays)}
-                      {row.rule.label ? null : ` · ${row.serviceName}`}
+                      {row.serviceName} · {leadDaysLabel(row.rule.leadDays).toLowerCase()}
                       {row.serviceActive ? null : ` · ${serviceNoun} archived`}
                     </span>
                   </span>
