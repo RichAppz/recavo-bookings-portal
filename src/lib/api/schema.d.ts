@@ -4585,6 +4585,21 @@ export interface paths {
                                     /** @description Taken once per booking or package, in the business’s minor units. */
                                     amountMinor: number;
                                 } | null;
+                                /** @description Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link. */
+                                extraAvailability: {
+                                    /**
+                                     * Format: uuid
+                                     * @description Must be one of the link’s serviceIds.
+                                     */
+                                    serviceId: string;
+                                    /** @description One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set. */
+                                    date: string | null;
+                                    /** @description ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date. */
+                                    dayOfWeek: number | null;
+                                    startMinute: number;
+                                    /** @description Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes. */
+                                    endMinute: number;
+                                }[];
                             };
                             services: components["schemas"]["CatalogueService"][];
                             packages: {
@@ -8094,6 +8109,21 @@ export interface paths {
                                         /** @description Taken once per booking or package, in the business’s minor units. */
                                         amountMinor: number;
                                     } | null;
+                                    /** @description Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link. */
+                                    extraAvailability: {
+                                        /**
+                                         * Format: uuid
+                                         * @description Must be one of the link’s serviceIds.
+                                         */
+                                        serviceId: string;
+                                        /** @description One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set. */
+                                        date: string | null;
+                                        /** @description ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date. */
+                                        dayOfWeek: number | null;
+                                        startMinute: number;
+                                        /** @description Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes. */
+                                        endMinute: number;
+                                    }[];
                                 };
                                 services: components["schemas"]["CatalogueService"][];
                                 packages: {
@@ -27045,6 +27075,21 @@ export interface paths {
                             /** @description Taken once per booking or package, in the business’s minor units. */
                             amountMinor: number;
                         } | null;
+                        /** @description Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link. */
+                        extraAvailability?: {
+                            /**
+                             * Format: uuid
+                             * @description Must be one of the link’s serviceIds.
+                             */
+                            serviceId: string;
+                            /** @description One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set. */
+                            date: string | null;
+                            /** @description ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date. */
+                            dayOfWeek: number | null;
+                            startMinute: number;
+                            /** @description Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes. */
+                            endMinute: number;
+                        }[];
                     };
                 };
             };
@@ -27323,7 +27368,162 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Replace the extra bookable times on a package link
+         * @description Replaces `extraAvailability` wholesale on a live link; the rest of a link (sessions, packages, discount) is fixed once shared. Every window must name one of the link’s sessions. 422 when the link has been revoked. Requires package.manage.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    businessId: string;
+                    linkId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link. */
+                        extraAvailability: {
+                            /**
+                             * Format: uuid
+                             * @description Must be one of the link’s serviceIds.
+                             */
+                            serviceId: string;
+                            /** @description One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set. */
+                            date: string | null;
+                            /** @description ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date. */
+                            dayOfWeek: number | null;
+                            startMinute: number;
+                            /** @description Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes. */
+                            endMinute: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated link */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: components["schemas"]["PackageLink"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/api/v1/businesses/{businessId}/package-links/{linkId}/customers/{customerId}": {
@@ -56222,6 +56422,21 @@ export interface components {
                 /** @description Taken once per booking or package, in the business’s minor units. */
                 amountMinor: number;
             } | null;
+            /** @description Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link. */
+            extraAvailability: {
+                /**
+                 * Format: uuid
+                 * @description Must be one of the link’s serviceIds.
+                 */
+                serviceId: string;
+                /** @description One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set. */
+                date: string | null;
+                /** @description ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date. */
+                dayOfWeek: number | null;
+                startMinute: number;
+                /** @description Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes. */
+                endMinute: number;
+            }[];
             /** @description Staff-facing label; also shown to the buyer. */
             name: string;
             /** @description Sessions shown to the visitor, in this order. */

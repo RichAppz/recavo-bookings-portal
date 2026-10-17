@@ -7065,6 +7065,7 @@
           "customerIds",
           "showFullCatalogue",
           "discount",
+          "extraAvailability",
           "revokedAt",
           "createdAt",
           "updatedAt"
@@ -7129,6 +7130,52 @@
               }
             ],
             "description": "Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices."
+          },
+          "extraAvailability": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "required": [
+                "serviceId",
+                "date",
+                "dayOfWeek",
+                "startMinute",
+                "endMinute"
+              ],
+              "properties": {
+                "serviceId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Must be one of the link’s serviceIds."
+                },
+                "date": {
+                  "type": "string",
+                  "nullable": true,
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set."
+                },
+                "dayOfWeek": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 7,
+                  "description": "ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date."
+                },
+                "startMinute": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "endMinute": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1440,
+                  "description": "Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes."
+                }
+              }
+            },
+            "description": "Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link."
           },
           "name": {
             "type": "string",
@@ -16676,7 +16723,8 @@
                         "code",
                         "name",
                         "showFullCatalogue",
-                        "discount"
+                        "discount",
+                        "extraAvailability"
                       ],
                       "properties": {
                         "code": {
@@ -16736,6 +16784,52 @@
                             }
                           ],
                           "description": "The link’s discount, for display (\"20% off\"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted."
+                        },
+                        "extraAvailability": {
+                          "type": "array",
+                          "maxItems": 50,
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "serviceId",
+                              "date",
+                              "dayOfWeek",
+                              "startMinute",
+                              "endMinute"
+                            ],
+                            "properties": {
+                              "serviceId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Must be one of the link’s serviceIds."
+                              },
+                              "date": {
+                                "type": "string",
+                                "nullable": true,
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                "description": "One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set."
+                              },
+                              "dayOfWeek": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 1,
+                                "maximum": 7,
+                                "description": "ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date."
+                              },
+                              "startMinute": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1440
+                              },
+                              "endMinute": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1440,
+                                "description": "Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes."
+                              }
+                            }
+                          },
+                          "description": "Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link."
                         }
                       }
                     },
@@ -21793,7 +21887,8 @@
                               "code",
                               "name",
                               "showFullCatalogue",
-                              "discount"
+                              "discount",
+                              "extraAvailability"
                             ],
                             "properties": {
                               "code": {
@@ -21853,6 +21948,52 @@
                                   }
                                 ],
                                 "description": "The link’s discount, for display (\"20% off\"). Session prices come back already discounted from the availability search when the search carries the `linkCode`; package prices below are already discounted."
+                              },
+                              "extraAvailability": {
+                                "type": "array",
+                                "maxItems": 50,
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "serviceId",
+                                    "date",
+                                    "dayOfWeek",
+                                    "startMinute",
+                                    "endMinute"
+                                  ],
+                                  "properties": {
+                                    "serviceId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "description": "Must be one of the link’s serviceIds."
+                                    },
+                                    "date": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                      "description": "One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set."
+                                    },
+                                    "dayOfWeek": {
+                                      "type": "integer",
+                                      "nullable": true,
+                                      "minimum": 1,
+                                      "maximum": 7,
+                                      "description": "ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date."
+                                    },
+                                    "startMinute": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 1440
+                                    },
+                                    "endMinute": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 1440,
+                                      "description": "Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes."
+                                    }
+                                  }
+                                },
+                                "description": "Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link."
                               }
                             }
                           },
@@ -50864,6 +51005,52 @@
                       }
                     ],
                     "description": "Money off everything the link names for whoever books or buys through it: a whole percentage of each item, or a fixed amount off each booking (once across the sessions the link names, never per line) and each package. Applied server-side to the public availability quote, the hold, the package checkout and package requests whenever the link’s code is sent; null = list prices."
+                  },
+                  "extraAvailability": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "serviceId",
+                        "date",
+                        "dayOfWeek",
+                        "startMinute",
+                        "endMinute"
+                      ],
+                      "properties": {
+                        "serviceId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Must be one of the link’s serviceIds."
+                        },
+                        "date": {
+                          "type": "string",
+                          "nullable": true,
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                          "description": "One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set."
+                        },
+                        "dayOfWeek": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 1,
+                          "maximum": 7,
+                          "description": "ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date."
+                        },
+                        "startMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1440
+                        },
+                        "endMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1440,
+                          "description": "Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes."
+                        }
+                      }
+                    },
+                    "description": "Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link."
                   }
                 }
               }
@@ -51248,6 +51435,272 @@
       }
     },
     "/api/v1/businesses/{businessId}/package-links/{linkId}": {
+      "patch": {
+        "summary": "Replace the extra bookable times on a package link",
+        "description": "Replaces `extraAvailability` wholesale on a live link; the rest of a link (sessions, packages, discount) is fixed once shared. Every window must name one of the link’s sessions. 422 when the link has been revoked. Requires package.manage.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "linkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "extraAvailability"
+                ],
+                "properties": {
+                  "extraAvailability": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "serviceId",
+                        "date",
+                        "dayOfWeek",
+                        "startMinute",
+                        "endMinute"
+                      ],
+                      "properties": {
+                        "serviceId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Must be one of the link’s serviceIds."
+                        },
+                        "date": {
+                          "type": "string",
+                          "nullable": true,
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                          "description": "One calendar day (YYYY-MM-DD in the location’s local calendar); null for a weekly rule. Exactly one of date / dayOfWeek is set."
+                        },
+                        "dayOfWeek": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 1,
+                          "maximum": 7,
+                          "description": "ISO weekday (1 = Monday … 7 = Sunday) for a weekly rule; null for a date."
+                        },
+                        "startMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1440
+                        },
+                        "endMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1440,
+                          "description": "Half-open: the window runs [startMinute, endMinute) in local wall-clock minutes."
+                        }
+                      }
+                    },
+                    "description": "Extra bookable windows, per session the link names, that only a visitor arriving with the link’s code sees — times outside the normal schedule (working rules, opening hours and the session’s own windows do not apply). The public availability search adds them on top of the ordinary slots when `linkCode` is sent; notice, horizon and collisions with bookings, holds and time off still rule a time out. Max 50 per link."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "link"
+                  ],
+                  "properties": {
+                    "link": {
+                      "$ref": "#/components/schemas/PackageLink"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "summary": "Revoke a package link",
         "description": "The URL stops resolving immediately; the booking page falls back to its ordinary listing. Idempotent. Requires package.manage.",

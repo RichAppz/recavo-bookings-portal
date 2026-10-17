@@ -75,6 +75,7 @@ import type {
   Package,
   PackageLink,
   PackageLinkDiscount,
+  PackageLinkExtraWindow,
   PackagePurchase,
   Payment,
   PaymentReceipt,
@@ -2529,10 +2530,31 @@ export function useCreatePackageLink() {
       showFullCatalogue?: boolean;
       /** Money off everything the link names; omitted = list prices. */
       discount?: PackageLinkDiscount | null;
+      /** Extra bookable times per named session, only for clients with the code. */
+      extraAvailability?: PackageLinkExtraWindow[];
     }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
         body,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Replace the extra bookable times on a live link; the rest of a link is fixed once shared. */
+export function useUpdatePackageLinkExtraTimes() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { linkId: string; extraAvailability: PackageLinkExtraWindow[] }) => {
+      const res = await api.patch<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links/${vars.linkId}`,
+        { extraAvailability: vars.extraAvailability },
       );
       return res.data.link;
     },
@@ -5717,6 +5739,8 @@ export type PublicPackageLink = PublicPackageCatalogue & {
     name: string;
     showFullCatalogue?: boolean;
     discount?: PackageLinkDiscount | null;
+    /** Extra bookable times the offer opens, per session; absent on older API builds. */
+    extraAvailability?: PackageLinkExtraWindow[];
   };
   services: PublicService[];
 };

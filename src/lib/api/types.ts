@@ -101,6 +101,12 @@ export type Package = schemas["Package"];
 export type PackageLink = schemas["PackageLink"];
 /** Money off through an offer link: a whole percentage, or a fixed amount in minor units. */
 export type PackageLinkDiscount = NonNullable<PackageLink["discount"]>;
+/**
+ * An extra bookable window an offer link opens for one of its sessions: a weekly rule
+ * (`dayOfWeek` 1–7, Monday = 1) or one local calendar day (`date`), with half-open
+ * wall-clock minutes. Only a client arriving with the link's code sees these times.
+ */
+export type PackageLinkExtraWindow = PackageLink["extraAvailability"][number];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];
