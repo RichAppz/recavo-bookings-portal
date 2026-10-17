@@ -173,9 +173,9 @@ export const CLIENT_GUIDES: readonly Guide[] = [
   },
   {
     slug: "vehicles-and-follow-ups",
-    title: "Vehicles and follow-ups",
+    title: "Vehicles and reminders",
     summary:
-      "Every job is booked against a vehicle, so you can see a car's history at a glance — and follow-ups remind you and the customer when a coating or treatment is due again.",
+      "Every job is booked against a vehicle, so you can see a car's history at a glance — and reminders tell you and the customer when a wash, coating or treatment is due again.",
     category: "clients",
     verticals: ["car_detailing"],
     minutes: 4,
@@ -212,18 +212,18 @@ export const CLIENT_GUIDES: readonly Guide[] = [
         },
       },
       {
-        heading: "Set a follow-up interval",
-        body: "On a service — a ceramic coating, say — set the **follow-up** interval under **Services**: *every 2 years*, *every 6 months*. When a job with that service is marked done, RECAVO schedules the follow-up for that vehicle automatically.",
-        link: { to: "/services", label: "Open Services" },
+        heading: "Add a reminder",
+        body: "Open **Reminders** in the sidebar and press **Add reminder**: pick the service — a maintenance wash, a ceramic coating — how often it is due again (*every 2 months*, *every 2 years*, or your own number of months), how many days ahead to remind, and what to call it. The same reminders can also be edited on the service itself under **Services**. When a job with that service is marked done, RECAVO schedules the reminder for that vehicle automatically.",
+        link: { to: "/follow-ups", label: "Open Reminders" },
       },
       {
-        heading: "Follow-ups",
-        body: "**Follow-ups** in the sidebar lists every scheduled repeat, with when it's due and when the reminder goes to the customer. Click **Book** to turn one into a job with the customer, vehicle and service filled in, or use its menu to snooze it or dismiss it. The customer gets a reminder ahead of the due date so they come back to you rather than someone else.",
+        heading: "Who is due",
+        body: "Under your reminders, **Who is due** lists every scheduled repeat, with when it's due and when the reminder goes to the customer. Click **Book** to turn one into a job with the customer, vehicle and service filled in, or use its menu to snooze it or dismiss it. The customer gets a reminder ahead of the due date so they come back to you rather than someone else.",
         image: {
           name: "follow-ups",
-          alt: "The Follow-ups page with an upcoming coating top-up showing the vehicle, due date, reminder date and a Book button.",
+          alt: "The Reminders page with an upcoming coating top-up showing the vehicle, due date, reminder date and a Book button.",
         },
-        link: { to: "/follow-ups", label: "Open Follow-ups" },
+        link: { to: "/follow-ups", label: "Open Reminders" },
       },
     ],
     related: ["create-your-services", "client-profile-and-history", "add-a-booking"],

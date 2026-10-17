@@ -41,11 +41,11 @@ export function CustomerFollowUpsCard({
 
   return (
     <SectionCard
-      title="Follow-ups"
+      title="Reminders"
       description="When this client is due back — scheduled from each finished job whose service has a follow-up reminder."
       action={
         <Link to="/follow-ups" className="text-xs font-medium text-primary hover:underline">
-          All follow-ups
+          All reminders
         </Link>
       }
       bodyClassName="p-0"

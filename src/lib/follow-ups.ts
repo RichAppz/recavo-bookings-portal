@@ -1,7 +1,19 @@
-import type { ServiceFollowUp, ServiceFollowUpRule, ServiceFollowUpStatus } from "@/lib/api/types";
+import type {
+  CatalogueService,
+  ServiceFollowUp,
+  ServiceFollowUpRule,
+  ServiceFollowUpStatus,
+} from "@/lib/api/types";
 
-/** Interval presets offered on the service form; "custom" opens a months field. */
+/**
+ * Interval presets offered on the service form and the Reminders page; "custom" opens
+ * a months field. Short ones for upkeep (a maintenance wash every 2 months), long
+ * ones for treatments that wear off.
+ */
 export const FOLLOW_UP_INTERVAL_PRESETS: ReadonlyArray<{ months: number; label: string }> = [
+  { months: 1, label: "1 month" },
+  { months: 2, label: "2 months" },
+  { months: 3, label: "3 months" },
   { months: 6, label: "6 months" },
   { months: 12, label: "1 year" },
   { months: 18, label: "18 months" },
@@ -181,6 +193,85 @@ export function rulesFromDrafts(drafts: readonly FollowUpRuleDraft[]): FollowUpR
     });
   }
   return { ok: true, rules };
+}
+
+/** One reminder rule with the service it hangs off — a row on the Reminders page. */
+export type ReminderRuleRow = {
+  serviceId: string;
+  serviceName: string;
+  serviceActive: boolean;
+  rule: ServiceFollowUpRule;
+};
+
+/**
+ * Every reminder rule across the catalogue, for the Reminders page: active services
+ * first, A–Z by name, and within a service soonest interval first. Services without
+ * rules contribute nothing.
+ */
+export function reminderRuleRows(
+  services: readonly Pick<CatalogueService, "id" | "name" | "active" | "followUps">[],
+): ReminderRuleRow[] {
+  return services
+    .slice()
+    .sort((a, b) => (a.active === b.active ? a.name.localeCompare(b.name) : a.active ? -1 : 1))
+    .flatMap((s) =>
+      s.followUps
+        .slice()
+        .sort((a, b) => a.intervalMonths - b.intervalMonths)
+        .map((rule) => ({
+          serviceId: s.id,
+          serviceName: s.name,
+          serviceActive: s.active,
+          rule,
+        })),
+    );
+}
+
+/**
+ * The `followUps` payload for a service after one rule is saved from the Reminders
+ * page: the edited rule (matched by id) replaced in place, or a new one appended.
+ * The other rules are sent back untouched, ids included, so the API keeps the
+ * follow-ups they have already scheduled.
+ */
+export function rulesWithSaved(
+  existing: readonly ServiceFollowUpRule[],
+  saved: FollowUpRuleInput,
+): FollowUpRuleInput[] {
+  const keep = existing.map((r): FollowUpRuleInput => ({
+    id: r.id,
+    intervalMonths: r.intervalMonths,
+    leadDays: r.leadDays,
+    label: r.label ?? null,
+  }));
+  if (saved.id) {
+    const index = keep.findIndex((r) => r.id === saved.id);
+    if (index >= 0) {
+      keep[index] = saved;
+      return keep;
+    }
+  }
+  return [...keep, saved];
+}
+
+/** The `followUps` payload with one rule removed; an empty list switches reminders off. */
+export function rulesWithout(
+  existing: readonly ServiceFollowUpRule[],
+  ruleId: string,
+): FollowUpRuleInput[] {
+  return existing
+    .filter((r) => r.id !== ruleId)
+    .map((r) => ({
+      id: r.id,
+      intervalMonths: r.intervalMonths,
+      leadDays: r.leadDays,
+      label: r.label ?? null,
+    }));
+}
+
+/** "Remind 14 days before" / "Remind on the day". */
+export function leadDaysLabel(leadDays: number): string {
+  if (leadDays === 0) return "Remind on the day";
+  return `Remind ${leadDays} ${leadDays === 1 ? "day" : "days"} before`;
 }
 
 /** Where a follow-up sits relative to today, for grouping and badges. */

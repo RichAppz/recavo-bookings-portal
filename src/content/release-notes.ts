@@ -6,6 +6,17 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-17",
+    title: "Reminders in the menu, set up in one tap",
+    items: [
+      {
+        kind: "new",
+        text: "Follow-ups is now Reminders, and it is where you set them up as well as see who is due. Press Add reminder, pick the service, how often it is due again — every 2 months, every 2 years, or your own number of months — how many days ahead to remind, and what to call it. Every reminder you have is listed at the top of the page; tap one to change or remove it. The same reminders still show on each service under Services, and on a phone the Reminders page is the quick way in.",
+        where: "Reminders → Add reminder",
+      },
+    ],
+  },
+  {
     date: "2026-10-16",
     title: "A new booking page for your clients, and you decide how it looks",
     items: [

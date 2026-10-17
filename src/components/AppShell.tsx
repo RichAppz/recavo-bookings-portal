@@ -204,11 +204,12 @@ const NAV: NavGroup[] = [
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },
       { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-      // Clients due a repeat (ceramic top-up every 2 years). All verticals: a PT can
-      // use it for re-assessments just as well.
+      // Reminders to clients that they are due back (a wash every 2 months, a ceramic
+      // top-up every 2 years), set up and listed here. All verticals: a PT can use it
+      // for re-assessments just as well.
       {
         to: "/follow-ups",
-        label: "Follow-ups",
+        label: "Reminders",
         icon: BellRing,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL],
       },

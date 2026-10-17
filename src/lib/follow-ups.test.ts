@@ -2,15 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ServiceFollowUp } from "./api/types.ts";
 import {
+  FOLLOW_UP_INTERVAL_PRESETS,
   draftsFromRules,
   followUpBucket,
   followUpIntervalLabel,
   followUpRuleSummary,
   followUpRulesSummary,
+  leadDaysLabel,
   newFollowUpDraft,
   oneMonthFrom,
   relativeDueLabel,
+  reminderRuleRows,
   rulesFromDrafts,
+  rulesWithSaved,
+  rulesWithout,
 } from "./follow-ups.ts";
 
 const NOW = new Date("2026-09-13T12:00:00.000Z");
@@ -177,5 +182,91 @@ describe("relativeDueLabel", () => {
 describe("oneMonthFrom", () => {
   it("is a calendar month ahead", () => {
     assert.equal(oneMonthFrom(new Date("2026-09-13T12:00:00.000Z")), "2026-10-13T12:00:00.000Z");
+  });
+});
+
+describe("interval presets", () => {
+  it("offer the short upkeep intervals a wash needs as well as the long ones", () => {
+    assert.deepEqual(
+      FOLLOW_UP_INTERVAL_PRESETS.map((p) => p.months),
+      [1, 2, 3, 6, 12, 18, 24, 36],
+    );
+    assert.equal(FOLLOW_UP_INTERVAL_PRESETS.find((p) => p.months === 2)?.label, "2 months");
+    assert.equal(followUpIntervalLabel(2), "every 2 months");
+    assert.equal(followUpIntervalLabel(1), "every month");
+  });
+});
+
+const RULE_A = { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" };
+const RULE_B = { id: "r_b", intervalMonths: 2, leadDays: 7, label: null };
+const RULE_C = { id: "r_c", intervalMonths: 12, leadDays: 14, label: null };
+
+describe("reminderRuleRows", () => {
+  it("lists every rule, active services A–Z first, soonest interval first within one", () => {
+    const rows = reminderRuleRows([
+      { id: "s_old", name: "Old wax", active: false, followUps: [RULE_C] },
+      { id: "s_coat", name: "Ceramic coating", active: true, followUps: [RULE_A, RULE_B] },
+      { id: "s_wash", name: "Maintenance wash", active: true, followUps: [] },
+      { id: "s_alloy", name: "Alloy refurb", active: true, followUps: [RULE_C] },
+    ]);
+    assert.deepEqual(
+      rows.map((r) => [r.serviceName, r.rule.id, r.serviceActive]),
+      [
+        ["Alloy refurb", "r_c", true],
+        ["Ceramic coating", "r_b", true],
+        ["Ceramic coating", "r_a", true],
+        ["Old wax", "r_c", false],
+      ],
+    );
+  });
+});
+
+describe("rulesWithSaved / rulesWithout", () => {
+  it("appends a new rule after the existing ones, ids kept", () => {
+    assert.deepEqual(rulesWithSaved([RULE_A], { intervalMonths: 2, leadDays: 7, label: null }), [
+      { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
+      { intervalMonths: 2, leadDays: 7, label: null },
+    ]);
+  });
+
+  it("replaces an edited rule in place by id", () => {
+    assert.deepEqual(
+      rulesWithSaved([RULE_A, RULE_B], {
+        id: "r_b",
+        intervalMonths: 3,
+        leadDays: 7,
+        label: "Wash",
+      }),
+      [
+        { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
+        { id: "r_b", intervalMonths: 3, leadDays: 7, label: "Wash" },
+      ],
+    );
+  });
+
+  it("treats an unknown id as a new rule rather than dropping it", () => {
+    const out = rulesWithSaved([RULE_A], {
+      id: "r_gone",
+      intervalMonths: 6,
+      leadDays: 14,
+      label: null,
+    });
+    assert.equal(out.length, 2);
+    assert.equal(out[1]?.id, "r_gone");
+  });
+
+  it("removes one rule and leaves the rest, so an empty list switches reminders off", () => {
+    assert.deepEqual(rulesWithout([RULE_A, RULE_B], "r_a"), [
+      { id: "r_b", intervalMonths: 2, leadDays: 7, label: null },
+    ]);
+    assert.deepEqual(rulesWithout([RULE_A], "r_a"), []);
+  });
+});
+
+describe("leadDaysLabel", () => {
+  it("reads naturally for none, one and many days", () => {
+    assert.equal(leadDaysLabel(0), "Remind on the day");
+    assert.equal(leadDaysLabel(1), "Remind 1 day before");
+    assert.equal(leadDaysLabel(14), "Remind 14 days before");
   });
 });
