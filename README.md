@@ -90,16 +90,32 @@ Needs Rust (`curl https://sh.rustup.rs -sSf | sh`) and Xcode command line tools.
 | `npm run desktop:build`            | Build `RECAVO.app` + `.dmg` against staging → `src-tauri/target/release/bundle/` |
 | `npm run desktop:build:production` | Same, against production (`src-tauri/tauri.production.conf.json`)                |
 | `npm run desktop:test`             | Rust unit tests for the navigation / deep-link rules                             |
+| `npm run desktop:release`          | Signed + notarised universal `.dmg` for the website (see below)                  |
 
-Run the build from a terminal you can interact with: the `.dmg` step scripts Finder to lay out the
+Run builds from a terminal you can interact with: the `.dmg` step scripts Finder to lay out the
 drag-to-Applications window, and macOS asks once to allow that (without it the `.app` is built and
 the `.dmg` step fails with "AppleEvent timed out").
 
-Builds are only ad-hoc signed unless a Developer ID certificate is available. To ship a `.dmg` people
-can open without Gatekeeper warnings, set `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`
-(app-specific) and `APPLE_TEAM_ID` before `desktop:build:production`; Tauri signs and notarises as
-part of the build. Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` per
-release.
+### Releasing for download
+
+`desktop:dev` / `desktop:build` output is only ad-hoc signed: fine on the Mac that built it, but a
+download of it is blocked by Gatekeeper ("Apple could not verify…"). `npm run desktop:release`
+(`scripts/desktop-release.sh`) produces what the website can link to: a universal (Apple Silicon +
+Intel) production build, signed with the **Developer ID Application** certificate under the
+hardened runtime, notarised by Apple, stapled, and attached to a GitHub release at
+
+```
+https://github.com/RichAppz/recavo-bookings-portal/releases/latest/download/RECAVO-mac.dmg
+```
+
+One-time setup: create a _Developer ID Application_ certificate for RichAppz Limited (Xcode →
+Settings → Accounts → Manage Certificates → + → Developer ID Application; account holder only — the
+_Apple Distribution_ certificate is App Store–only and does not satisfy Gatekeeper). Notarisation
+reuses the App Store Connect API key fastlane already uses. Publishing needs `gh auth login`.
+
+Per release: bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` (the release is
+tagged `desktop-v<version>`), then run `npm run desktop:release` (`-- --no-publish` to only build).
+There is no auto-update yet, so people re-download to upgrade.
 
 ## Push notifications
 
