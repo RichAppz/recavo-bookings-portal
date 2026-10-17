@@ -100,6 +100,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Invoices → draft → Vehicle",
       },
       {
+        kind: "fixed",
+        text: "The client's saved vehicles offered under the Vehicle field now carry the registration, make and model (“EO76 ZWZ · Audi · RS5”) rather than just the short display name, so what you tap is exactly what the invoice prints. The vehicle filled in from a booking already worked this way; if a draft was made before the registration was added to the car, retype it or pick the chip.",
+        where: "Invoices → draft → Vehicle",
+      },
+      {
         kind: "new",
         text: "A booking with notes on it now says so at the top of its drawer — “Note from the client”, “Internal note” or “Notes on this booking” — next to the status pills; tap it to jump straight to them. What the client typed when booking is shown in its own box on Details, where before only your internal notes were.",
         where: "Calendar → open a booking",

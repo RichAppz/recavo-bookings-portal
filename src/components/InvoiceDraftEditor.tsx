@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { useCustomer, useCustomerLinkedRecords, useCustomers } from "@/lib/api/hooks";
+import {
+  useCustomer,
+  useCustomerLinkedRecords,
+  useCustomers,
+  useLinkedRecordDefinition,
+} from "@/lib/api/hooks";
 import { useUpdateInvoice, type Invoice } from "@/lib/api/invoices";
 import type { Customer } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
@@ -32,6 +37,7 @@ import {
   type InvoiceLineDraft,
   type LineDraftError,
 } from "@/lib/invoices";
+import { summariseLinkedRecord, summaryFieldsOf } from "@/lib/linked-record-summary";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useFormattedChange } from "@/hooks/use-formatted-change";
 import { cn } from "@/lib/utils";
@@ -113,8 +119,15 @@ export function InvoiceDraftEditor({
     null;
 
   // The client's saved vehicles, offered one tap away so a second car can be added
-  // without retyping its registration. Anything already on the invoice is left out.
+  // without retyping its registration. Each chip carries the same "reg · make · model"
+  // text the PDF prints (not just the display label), so what is picked is what is
+  // invoiced. Anything already on the invoice is left out.
   const customerRecords = useCustomerLinkedRecords(recordSupported ? customerId : undefined);
+  const recordDefinition = useLinkedRecordDefinition();
+  const summaryFields = useMemo(
+    () => summaryFieldsOf(recordDefinition.data?.fields),
+    [recordDefinition.data?.fields],
+  );
   const typedRecord = recordSupported ? linkedRecordInput(recordBase, recordValues) : null;
   const typedRecordValue = typedRecord?.value ?? "";
   const recordSuggestions = useMemo(() => {
@@ -122,9 +135,19 @@ export function InvoiceDraftEditor({
       linkedRecordEntries({ value: typedRecordValue }).map((v) => v.toLowerCase()),
     );
     return (customerRecords.data ?? [])
-      .filter((r) => r.status === "active" && !present.has(r.displayLabel.trim().toLowerCase()))
+      .filter((r) => r.status === "active")
+      .map((r) => ({
+        id: r.id,
+        text: formatRecordValue(
+          summariseLinkedRecord(
+            { displayLabel: r.displayLabel, values: r.values as Record<string, unknown> },
+            summaryFields,
+          ),
+        ),
+      }))
+      .filter((r) => !present.has(r.text.trim().toLowerCase()))
       .slice(0, 6);
-  }, [customerRecords.data, typedRecordValue]);
+  }, [customerRecords.data, summaryFields, typedRecordValue]);
   const recordRowsFull = recordValues.length >= INVOICE_LINKED_RECORD_LIMITS.maxEntries;
   const onRecordChange = useFormattedChange(
     formatRecordValue,
@@ -451,11 +474,11 @@ export function InvoiceDraftEditor({
                   size="sm"
                   className="max-w-full"
                   disabled={recordRowsFull && !recordValues.some((v) => v.trim() === "")}
-                  title={`Add ${r.displayLabel}`}
-                  onClick={() => addRecordValue(r.displayLabel)}
+                  title={`Add ${r.text}`}
+                  onClick={() => addRecordValue(r.text)}
                 >
                   <Plus className="size-3.5 shrink-0" />
-                  <span className="truncate">{r.displayLabel}</span>
+                  <span className="truncate">{r.text}</span>
                 </Button>
               ))}
             </div>
