@@ -56543,6 +56543,8 @@ export interface components {
             vatMinor: number;
             totalMinor: number;
             paidMinor: number;
+            /** @description The deposit that secured the booking, snapshotted when the draft was created from it (and carried over by void-and-redo). Read-only. Null for manual invoices and bookings without a deposit. The PDF and the portal label the money received so far "Deposit taken" instead of "Paid" while 0 < paidMinor <= depositMinor and a balance is still due. */
+            depositMinor: number | null;
             vatRateBps?: number | null;
             pricesIncludeVat?: boolean;
             /** @enum {string} */

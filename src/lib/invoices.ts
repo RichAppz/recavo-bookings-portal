@@ -95,6 +95,12 @@ export type Invoice = {
   vatMinor: number;
   totalMinor: number;
   paidMinor: number;
+  /**
+   * The deposit that secured the booking, snapshotted when the draft was created from
+   * it. Null for manual invoices and bookings without a deposit; absent from an API
+   * build that predates the field. See `paidRowLabel` in `src/lib/invoice-labels.ts`.
+   */
+  depositMinor?: number | null;
   vatRateBps: number | null;
   pricesIncludeVat: boolean;
   taxTreatment: InvoiceTaxTreatment;

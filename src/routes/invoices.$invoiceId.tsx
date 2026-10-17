@@ -68,6 +68,7 @@ import {
 import { customerDisplayName } from "@/lib/api/types";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { formatInTz, formatMoney, ukDate } from "@/lib/format";
+import { paidRowLabel } from "@/lib/invoice-labels";
 import {
   formatVatRate,
   invoiceAllows,
@@ -535,7 +536,7 @@ function InvoiceDetail() {
             </div>
             {inv.paidMinor > 0 ? (
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Paid</dt>
+                <dt className="text-muted-foreground">{paidRowLabel(inv)}</dt>
                 <dd className="tabular-nums">−{formatMoney(inv.paidMinor, inv.currency)}</dd>
               </div>
             ) : null}
