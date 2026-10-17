@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import type { ServiceFollowUp } from "./api/types.ts";
 import {
   FOLLOW_UP_INTERVAL_PRESETS,
+  clientReminderFromDraft,
   draftsFromRules,
+  existingOpenReminder,
   followUpBucket,
   followUpIntervalLabel,
   followUpRuleSummary,
@@ -16,6 +18,7 @@ import {
   rulesFromDrafts,
   rulesWithSaved,
   rulesWithout,
+  type ClientReminderDraft,
 } from "./follow-ups.ts";
 
 const NOW = new Date("2026-09-13T12:00:00.000Z");
@@ -28,6 +31,7 @@ function followUp(overrides: Partial<ServiceFollowUp>): ServiceFollowUp {
     bookingId: "bk",
     serviceId: "svc",
     ruleId: "rule_1",
+    source: "rule",
     linkedRecordId: null,
     serviceName: "Ceramic coating",
     label: "Ceramic top-up",
@@ -268,5 +272,100 @@ describe("leadDaysLabel", () => {
     assert.equal(leadDaysLabel(0), "Remind on the day");
     assert.equal(leadDaysLabel(1), "Remind 1 day before");
     assert.equal(leadDaysLabel(14), "Remind 14 days before");
+  });
+});
+
+describe("clientReminderFromDraft", () => {
+  const base: ClientReminderDraft = {
+    customerId: "cust",
+    serviceId: "svc",
+    linkedRecordId: null,
+    lastDone: "2026-09-01",
+    preset: "2",
+    customMonths: "",
+    leadDays: "7",
+    label: " Valet reminder ",
+  };
+  const opts = { timezone: "Europe/London", now: NOW };
+
+  it("builds the API body with the due date and reminder moment the API will compute", () => {
+    const out = clientReminderFromDraft(base, opts);
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    assert.deepEqual(out.body, {
+      customerId: "cust",
+      serviceId: "svc",
+      linkedRecordId: null,
+      lastDoneAt: "2026-09-01T12:00:00.000Z",
+      intervalMonths: 2,
+      leadDays: 7,
+      label: "Valet reminder",
+    });
+    assert.equal(out.dueAt.toISOString(), "2026-11-01T12:00:00.000Z");
+    assert.equal(out.remindAt.toISOString(), "2026-10-25T12:00:00.000Z");
+  });
+
+  it("takes today for a blank last-done date, in the business's zone", () => {
+    const out = clientReminderFromDraft({ ...base, lastDone: "" }, opts);
+    assert.equal(out.ok, true);
+    if (!out.ok) return;
+    assert.equal(out.body.lastDoneAt, "2026-09-13T12:00:00.000Z");
+    // Sydney is already on the 14th at midday UTC on the 13th... but not at 12:00Z.
+    const late = clientReminderFromDraft(
+      { ...base, lastDone: "" },
+      { timezone: "Pacific/Auckland", now: new Date("2026-09-13T13:00:00.000Z") },
+    );
+    assert.equal(late.ok && late.body.lastDoneAt, "2026-09-14T12:00:00.000Z");
+  });
+
+  it("clamps month ends like the API and accepts a custom interval", () => {
+    const out = clientReminderFromDraft(
+      { ...base, lastDone: "2026-01-31", preset: "custom", customMonths: "1" },
+      { ...opts, now: new Date("2026-02-01T09:00:00.000Z") },
+    );
+    assert.equal(out.ok && out.dueAt.toISOString(), "2026-02-28T12:00:00.000Z");
+  });
+
+  it("names the field that is wrong", () => {
+    const field = (d: Partial<ClientReminderDraft>) => {
+      const out = clientReminderFromDraft({ ...base, ...d }, opts);
+      return out.ok ? "ok" : out.field;
+    };
+    assert.equal(field({ customerId: "" }), "customerId");
+    assert.equal(field({ serviceId: "" }), "serviceId");
+    assert.equal(field({ lastDone: "2026-13-40" }), "lastDone");
+    assert.equal(field({ lastDone: "2026-09-20" }), "lastDone");
+    assert.equal(field({ preset: "custom", customMonths: "0" }), "intervalMonths");
+    assert.equal(field({ leadDays: "400" }), "leadDays");
+    assert.equal(field({ label: "x".repeat(81) }), "label");
+    // Last done in June with a 2-month interval: due in August, already behind us.
+    assert.equal(field({ lastDone: "2026-06-01" }), "intervalMonths");
+    // Yesterday counts as not-in-the-future even a few hours ahead of UTC.
+    assert.equal(field({ lastDone: "2026-09-13" }), "ok");
+  });
+});
+
+describe("existingOpenReminder", () => {
+  const a = followUp({ id: "a", serviceId: "svc", dueAt: "2028-01-01T00:00:00.000Z" });
+  const b = followUp({
+    id: "b",
+    serviceId: "svc",
+    linkedRecordId: "car_2",
+    dueAt: "2027-01-01T00:00:00.000Z",
+  });
+  const closed = followUp({ id: "c", serviceId: "svc", status: "dismissed" });
+  const other = followUp({ id: "d", serviceId: "svc_other" });
+
+  it("finds the soonest open one for the service, ignoring closed rows and other services", () => {
+    assert.equal(existingOpenReminder([closed, other, a, b], "svc", null)?.id, "b");
+    assert.equal(existingOpenReminder([closed, other], "svc", null), null);
+    assert.equal(existingOpenReminder(undefined, "svc", null), null);
+  });
+
+  it("skips a different vehicle when both sides name one", () => {
+    assert.equal(existingOpenReminder([b], "svc", "car_1"), null);
+    assert.equal(existingOpenReminder([b], "svc", "car_2")?.id, "b");
+    // One side unspecified: still counts as the same thing.
+    assert.equal(existingOpenReminder([a], "svc", "car_1")?.id, "a");
   });
 });

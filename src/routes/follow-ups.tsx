@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BellRing, Pencil, Plus, Repeat } from "lucide-react";
+import { BellRing, Pencil, Plus, Repeat, UserRoundPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { ClientReminderDialog } from "@/components/ClientReminderDialog";
 import { FollowUpActions } from "@/components/FollowUpActions";
 import { ReminderRuleDialog, type ReminderRuleTarget } from "@/components/ReminderRuleDialog";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
@@ -107,6 +108,8 @@ function FollowUpsPage() {
   const rules = useMemo(() => reminderRuleRows(services.data ?? []), [services.data]);
   const [ruleTarget, setRuleTarget] = useState<ReminderRuleTarget | null>(null);
   const addRule = () => setRuleTarget({ mode: "add" });
+  // A one-off reminder for one client, with no finished job behind it.
+  const [clientReminderOpen, setClientReminderOpen] = useState(false);
 
   // Group by how urgent each one is; the API already orders by due date within.
   const groups = useMemo(() => {
@@ -125,11 +128,21 @@ function FollowUpsPage() {
         title="Reminders"
         description={`Remind clients when they are due back. Each reminder is set on a ${serviceNoun} and scheduled from every finished ${tenant.terminology.booking.toLowerCase()}; the client (and you) are told ahead of the date.`}
         actions={
-          canEditRules ? (
-            <Button onClick={addRule}>
-              <Plus className="size-4" />
-              Add reminder
-            </Button>
+          canBook || canEditRules ? (
+            <div className="flex flex-wrap gap-2">
+              {canBook ? (
+                <Button variant="outline" onClick={() => setClientReminderOpen(true)}>
+                  <UserRoundPlus className="size-4" />
+                  Remind a client
+                </Button>
+              ) : null}
+              {canEditRules ? (
+                <Button onClick={addRule}>
+                  <Plus className="size-4" />
+                  Add reminder
+                </Button>
+              ) : null}
+            </div>
           ) : undefined
         }
       />
@@ -226,8 +239,8 @@ function FollowUpsPage() {
           <div className="grid gap-0.5">
             <h2 className="text-sm font-semibold">Who is due</h2>
             <p className="text-xs text-muted-foreground">
-              Scheduled from finished {tenant.terminology.booking.toLowerCase()}s; book them in,
-              snooze or dismiss.
+              Scheduled from finished {tenant.terminology.booking.toLowerCase()}s, or set by you for
+              one client; book them in, snooze or dismiss.
             </p>
           </div>
           <Select value={view} onValueChange={(v) => setView(v as View)}>
@@ -270,11 +283,21 @@ function FollowUpsPage() {
                     : EMPTY_NO_RULES
               }
               action={
-                view === "open" && rules.length === 0 && canEditRules ? (
-                  <Button variant="outline" onClick={addRule}>
-                    <Plus className="size-4" />
-                    Add a reminder
-                  </Button>
+                view === "open" && (canBook || (rules.length === 0 && canEditRules)) ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {canBook ? (
+                      <Button variant="outline" onClick={() => setClientReminderOpen(true)}>
+                        <UserRoundPlus className="size-4" />
+                        Remind a client
+                      </Button>
+                    ) : null}
+                    {rules.length === 0 && canEditRules ? (
+                      <Button variant="outline" onClick={addRule}>
+                        <Plus className="size-4" />
+                        Add a reminder
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : undefined
               }
             />
@@ -336,7 +359,7 @@ function FollowUpsPage() {
                           {relativeDueLabel(f.dueAt)})
                           <span className="text-muted-foreground">
                             {" "}
-                            · last done{" "}
+                            · {f.source === "manual" ? "set by you · last done" : "last done"}{" "}
                             {formatInTz(f.lastDoneAt, timezone, { dateStyle: "medium" })}
                             {f.status === "sent" && f.sentAt
                               ? ` · reminded ${formatInTz(f.sentAt, timezone, { dateStyle: "medium" })}`
@@ -386,6 +409,13 @@ function FollowUpsPage() {
         defaultCustomerId={booking?.customerId}
         defaultServiceId={booking?.serviceId}
         defaultLinkedRecordId={booking?.linkedRecordId ?? undefined}
+      />
+
+      <ClientReminderDialog
+        open={clientReminderOpen}
+        onOpenChange={setClientReminderOpen}
+        services={services.data ?? []}
+        serviceNoun={serviceNoun}
       />
 
       <ReminderRuleDialog

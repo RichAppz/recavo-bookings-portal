@@ -336,3 +336,155 @@ export function oneMonthFrom(now: Date = new Date()): string {
   out.setMonth(out.getMonth() + 1);
   return out.toISOString();
 }
+
+/* ---------------- A reminder set by hand for one client ---------------- */
+
+/**
+ * Form state for "Remind a client": who, what, when it was last done (a calendar
+ * date; blank means today), and the same interval / notice / label fields as a rule.
+ */
+export type ClientReminderDraft = {
+  customerId: string;
+  serviceId: string;
+  linkedRecordId: string | null;
+  /** `YYYY-MM-DD`, or "" for today. */
+  lastDone: string;
+  preset: string;
+  customMonths: string;
+  leadDays: string;
+  label: string;
+};
+
+export type ClientReminderField = "customerId" | "serviceId" | "lastDone" | FollowUpRuleField;
+
+export type ClientReminderResult =
+  | {
+      ok: true;
+      body: {
+        customerId: string;
+        serviceId: string;
+        linkedRecordId: string | null;
+        lastDoneAt: string;
+        intervalMonths: number;
+        leadDays: number;
+        label: string | null;
+      };
+      dueAt: Date;
+      remindAt: Date;
+    }
+  | { ok: false; field: ClientReminderField; message: string };
+
+/**
+ * Adds calendar months in UTC, clamping to the month's last day — the API's rule, so
+ * the due date shown before saving is the one that comes back.
+ */
+export function addCalendarMonths(date: Date, months: number): Date {
+  const out = new Date(date.getTime());
+  const day = out.getUTCDate();
+  out.setUTCDate(1);
+  out.setUTCMonth(out.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(day, lastDay));
+  return out;
+}
+
+/**
+ * A calendar date as an instant: midday UTC, so the same day shows everywhere from
+ * the Azores to Moscow and the due date lands on the day the business expects.
+ */
+export function dateAtMidday(day: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const out = new Date(`${day}T12:00:00.000Z`);
+  return Number.isNaN(out.getTime()) || !out.toISOString().startsWith(day) ? null : out;
+}
+
+/** Today as `YYYY-MM-DD` in the given zone (the date input's default). */
+export function todayIn(timezone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Validates the form into the `POST …/follow-ups` body, with the due date and reminder
+ * moment the API will compute. Blank "last done" means today; a due date already past
+ * is refused here (the API would too) with the interval field, since that is what to
+ * change.
+ */
+export function clientReminderFromDraft(
+  draft: ClientReminderDraft,
+  opts: { timezone: string; now?: Date },
+): ClientReminderResult {
+  const now = opts.now ?? new Date();
+  if (!draft.customerId) {
+    return { ok: false, field: "customerId", message: "Pick who this reminder is for." };
+  }
+  if (!draft.serviceId) {
+    return { ok: false, field: "serviceId", message: "Pick what it is for." };
+  }
+  const day = draft.lastDone.trim() || todayIn(opts.timezone, now);
+  const lastDoneAt = dateAtMidday(day);
+  if (!lastDoneAt) {
+    return { ok: false, field: "lastDone", message: "Enter the date it was last done." };
+  }
+  if (lastDoneAt.getTime() > now.getTime() + DAY_MS) {
+    return { ok: false, field: "lastDone", message: "Last done can't be in the future." };
+  }
+  const rule = rulesFromDrafts([
+    {
+      key: "client-reminder",
+      id: null,
+      preset: draft.preset,
+      customMonths: draft.customMonths,
+      leadDays: draft.leadDays,
+      label: draft.label,
+    },
+  ]);
+  if (!rule.ok) return { ok: false, field: rule.field, message: rule.message };
+  const [input] = rule.rules;
+  const dueAt = addCalendarMonths(lastDoneAt, input!.intervalMonths);
+  const remindAt = new Date(dueAt.getTime() - input!.leadDays * DAY_MS);
+  if (dueAt.getTime() <= now.getTime()) {
+    return {
+      ok: false,
+      field: "intervalMonths",
+      message: "That would already be due. Pick a longer interval or a later last-done date.",
+    };
+  }
+  return {
+    ok: true,
+    body: {
+      customerId: draft.customerId,
+      serviceId: draft.serviceId,
+      linkedRecordId: draft.linkedRecordId,
+      lastDoneAt: lastDoneAt.toISOString(),
+      intervalMonths: input!.intervalMonths,
+      leadDays: input!.leadDays,
+      label: input!.label,
+    },
+    dueAt,
+    remindAt,
+  };
+}
+
+/**
+ * The open follow-up a client already has for this service (and vehicle, when both
+ * say), so the form can say "Lee already has one due 30 Sept 2028" before adding a
+ * second.
+ */
+export function existingOpenReminder<
+  T extends Pick<ServiceFollowUp, "status" | "serviceId" | "linkedRecordId" | "dueAt">,
+>(followUps: readonly T[] | undefined, serviceId: string, linkedRecordId: string | null): T | null {
+  let found: T | null = null;
+  for (const f of followUps ?? []) {
+    if (!isOpenFollowUp(f) || f.serviceId !== serviceId) continue;
+    if (linkedRecordId && f.linkedRecordId && f.linkedRecordId !== linkedRecordId) continue;
+    if (!found || new Date(f.dueAt) < new Date(found.dueAt)) found = f;
+  }
+  return found;
+}

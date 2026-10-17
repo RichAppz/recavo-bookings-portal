@@ -15,6 +15,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Reminders → Add reminder",
       },
       {
+        kind: "new",
+        text: "Remind one client, without waiting for a finished job. On Reminders, press Remind a client: pick who, which service, when it was last done (today if you leave it blank), how long until it is due again and how far ahead to remind, and you see the due date and reminder day before you save. Handy for work done before you used RECAVO, or a client you simply want to chase in two months. It then behaves like any other reminder — they and you are told, it shows under Who is due marked “set by you”, and booking the service again closes it. A client's page has the same button under Reminders.",
+        where: "Reminders → Remind a client",
+      },
+      {
         kind: "improved",
         text: "Offer links now open in the new booking page design, the same as everything else your clients see. A private link (one that doesn't show your full catalogue) opens on a page that leads with the offer — its sessions and packages at the offer's price, with your about, team, reviews and location underneath — and nothing from the catalogue. Buying a package, from an offer or from your Packages list, is now three short steps in the same style: details, review and pay (or a request you confirm, if you don't take cards online), and a done screen with the way into their account.",
         where: "Offer links → the link you share",

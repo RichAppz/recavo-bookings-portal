@@ -51461,7 +51461,167 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /**
+         * Set a follow-up for a client by hand
+         * @description A reminder for one client that no finished job scheduled — "remind Lee about his valet in 2 months". `dueAt` = `lastDoneAt` (now when omitted; never in the future) + `intervalMonths`; `remindAt` = `dueAt` − `leadDays` (14 when omitted). The due date must still be ahead. From then on it behaves like a scheduled follow-up: the worker sends it, the client booking the service again closes it, and the usual actions apply. `400` with the field on an out-of-range value, a past due date (`intervalMonths: DUE_IN_PAST`) or an unknown customer, service or record. Requires `booking.create` and an `Idempotency-Key`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        customerId: string;
+                        /** Format: uuid */
+                        serviceId: string;
+                        /**
+                         * Format: uuid
+                         * @description The vehicle (or other record) it is about.
+                         */
+                        linkedRecordId?: string | null;
+                        /**
+                         * Format: date-time
+                         * @description When the work was last done; defaults to now.
+                         */
+                        lastDoneAt?: string;
+                        intervalMonths: number;
+                        /** @default 14 */
+                        leadDays?: number;
+                        /** @description What the reminder calls it; the service name when blank. */
+                        label?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Follow-up */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            followUp: components["schemas"]["ServiceFollowUp"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -56275,7 +56435,7 @@ export interface components {
              */
             label: string | null;
         };
-        /** @description Created when a job that includes a service with a follow-up rule is completed (or its end passes unmarked). `dueAt` = job end + intervalMonths; `remindAt` = dueAt − leadDays. The worker sends the reminder when `remindAt` passes (unless snoozed) and marks it `sent`. A repeat booking of the same service (same vehicle when both are known) marks it `completed`; cancelling/deleting the job marks it `cancelled`. */
+        /** @description Created when a job that includes a service with a follow-up rule is completed (or its end passes unmarked), or set by hand for one client (`source: manual`, no `bookingId`/`ruleId`). `dueAt` = last done + intervalMonths; `remindAt` = dueAt − leadDays. The worker sends the reminder when `remindAt` passes (unless snoozed) and marks it `sent`. A repeat booking of the same service (same vehicle when both are known) marks it `completed`; cancelling/deleting the job marks it `cancelled`. */
         ServiceFollowUp: {
             /** Format: uuid */
             id: string;
@@ -56285,13 +56445,18 @@ export interface components {
             customerId: string;
             /**
              * Format: uuid
-             * @description The job it was scheduled from.
+             * @description The job it was scheduled from; null for a follow-up set by hand.
              */
-            bookingId: string;
+            bookingId: string | null;
             /** Format: uuid */
             serviceId: string;
-            /** @description Which of the service’s follow-up rules scheduled it (`Service.followUps[].id`). */
-            ruleId: string;
+            /** @description Which of the service’s follow-up rules scheduled it (`Service.followUps[].id`); null for a follow-up set by hand. */
+            ruleId: string | null;
+            /**
+             * @description `rule`: scheduled from a finished job; `manual`: staff set it for the client.
+             * @enum {string}
+             */
+            source: "rule" | "manual";
             /**
              * Format: uuid
              * @description The vehicle (or other linked record) the job was done on, when it had one.
@@ -56305,7 +56470,7 @@ export interface components {
             title: string;
             /**
              * Format: date-time
-             * @description The job’s end.
+             * @description The job’s end, or the date staff gave when setting it by hand.
              */
             lastDoneAt: string;
             /** Format: date-time */

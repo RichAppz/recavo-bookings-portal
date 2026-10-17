@@ -28,6 +28,7 @@ import { CustomerAddressFields } from "@/components/CustomerAddressFields";
 import { addressToForm, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import { DetailGhost, TableGhost } from "@/components/ghost";
 import { AddBookingModal } from "@/components/AddBookingModal";
+import { ClientReminderDialog } from "@/components/ClientReminderDialog";
 import { CustomerFollowUpsCard } from "@/components/CustomerFollowUpsCard";
 import { CustomerWaitlistCard } from "@/components/CustomerWaitlistCard";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
@@ -135,6 +136,7 @@ import {
   useRecordCustomerConsent,
   useRunReminders,
   useSendMessage,
+  useServices,
   useUnassignCustomerTag,
   useUpdateCustomer,
   useUpdateCustomerStatus,
@@ -197,6 +199,8 @@ function ClientProfile() {
   const [bookingOpen, setBookingOpen] = useState(false);
   // "Book" from a follow-up row: the service and vehicle come along with the client.
   const [bookingFollowUp, setBookingFollowUp] = useState<ServiceFollowUp | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const servicesForReminder = useServices();
   // "Book" from a waitlist row: service, vehicle, place and person come along too, and
   // the entry closes itself once the booking exists.
   const [bookingWaitlist, setBookingWaitlist] = useState<WaitlistEntry | null>(null);
@@ -379,6 +383,7 @@ function ClientProfile() {
                     setBookingOpen(true);
                   }
             }
+            onRemind={anonymised ? undefined : () => setReminderOpen(true)}
           />
           <CustomerWaitlistCard
             customerId={client.id}
@@ -693,6 +698,16 @@ function ClientProfile() {
           </Button>
         </Can>
       </div>
+
+      <ClientReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        services={servicesForReminder.data ?? []}
+        serviceNoun={(
+          tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
+        ).toLowerCase()}
+        defaults={{ customerId: client.id }}
+      />
 
       <AddBookingModal
         key={bookingWaitlist?.id ?? bookingFollowUp?.id ?? "plain"}

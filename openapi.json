@@ -3656,7 +3656,7 @@
       },
       "ServiceFollowUp": {
         "type": "object",
-        "description": "Created when a job that includes a service with a follow-up rule is completed (or its end passes unmarked). `dueAt` = job end + intervalMonths; `remindAt` = dueAt − leadDays. The worker sends the reminder when `remindAt` passes (unless snoozed) and marks it `sent`. A repeat booking of the same service (same vehicle when both are known) marks it `completed`; cancelling/deleting the job marks it `cancelled`.",
+        "description": "Created when a job that includes a service with a follow-up rule is completed (or its end passes unmarked), or set by hand for one client (`source: manual`, no `bookingId`/`ruleId`). `dueAt` = last done + intervalMonths; `remindAt` = dueAt − leadDays. The worker sends the reminder when `remindAt` passes (unless snoozed) and marks it `sent`. A repeat booking of the same service (same vehicle when both are known) marks it `completed`; cancelling/deleting the job marks it `cancelled`.",
         "required": [
           "id",
           "businessId",
@@ -3664,6 +3664,7 @@
           "bookingId",
           "serviceId",
           "ruleId",
+          "source",
           "linkedRecordId",
           "serviceName",
           "label",
@@ -3696,17 +3697,31 @@
             "format": "uuid"
           },
           "bookingId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
-            "description": "The job it was scheduled from."
+            "description": "The job it was scheduled from; null for a follow-up set by hand."
           },
           "serviceId": {
             "type": "string",
             "format": "uuid"
           },
           "ruleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which of the service’s follow-up rules scheduled it (`Service.followUps[].id`); null for a follow-up set by hand."
+          },
+          "source": {
             "type": "string",
-            "description": "Which of the service’s follow-up rules scheduled it (`Service.followUps[].id`)."
+            "enum": [
+              "rule",
+              "manual"
+            ],
+            "description": "`rule`: scheduled from a finished job; `manual`: staff set it for the client."
           },
           "linkedRecordId": {
             "type": [
@@ -3734,7 +3749,7 @@
           "lastDoneAt": {
             "type": "string",
             "format": "date-time",
-            "description": "The job’s end."
+            "description": "The job’s end, or the date staff gave when setting it by hand."
           },
           "dueAt": {
             "type": "string",
@@ -87090,6 +87105,268 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set a follow-up for a client by hand",
+        "description": "A reminder for one client that no finished job scheduled — \"remind Lee about his valet in 2 months\". `dueAt` = `lastDoneAt` (now when omitted; never in the future) + `intervalMonths`; `remindAt` = `dueAt` − `leadDays` (14 when omitted). The due date must still be ahead. From then on it behaves like a scheduled follow-up: the worker sends it, the client booking the service again closes it, and the usual actions apply. `400` with the field on an out-of-range value, a past due date (`intervalMonths: DUE_IN_PAST`) or an unknown customer, service or record. Requires `booking.create` and an `Idempotency-Key`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "customerId",
+                  "serviceId",
+                  "intervalMonths"
+                ],
+                "properties": {
+                  "customerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "serviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "linkedRecordId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "The vehicle (or other record) it is about."
+                  },
+                  "lastDoneAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When the work was last done; defaults to now."
+                  },
+                  "intervalMonths": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 120
+                  },
+                  "leadDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 365,
+                    "default": 14
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 80,
+                    "description": "What the reminder calls it; the service name when blank."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Follow-up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "followUp"
+                  ],
+                  "properties": {
+                    "followUp": {
+                      "$ref": "#/components/schemas/ServiceFollowUp"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"

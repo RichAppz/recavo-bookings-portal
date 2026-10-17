@@ -1308,6 +1308,44 @@ export function useFollowUpAction() {
   });
 }
 
+/** Body of `POST …/follow-ups`: a reminder set by hand for one client. */
+export type CreateFollowUpInput = {
+  customerId: string;
+  serviceId: string;
+  linkedRecordId?: string | null;
+  /** When the work was last done (ISO); the API uses now when omitted. */
+  lastDoneAt?: string;
+  intervalMonths: number;
+  leadDays?: number;
+  label?: string | null;
+};
+
+/**
+ * Set a follow-up for one client without a finished job behind it. Idempotent on a
+ * generated key so a double tap never makes two; the API answers 400 with the field
+ * when the due date is already past or a value is out of range.
+ */
+export function useCreateFollowUp() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn(
+      async (body: CreateFollowUpInput, idempotencyKey: string) => {
+        const res = await api.post<{ followUp: ServiceFollowUp }>(
+          `/api/v1/businesses/${businessId}/follow-ups`,
+          body,
+          { idempotencyKey },
+        );
+        return res.data.followUp;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 /* ---------------- Waitlist ---------------- */
 
 export type WaitlistListFilters = {
