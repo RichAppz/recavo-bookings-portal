@@ -456,14 +456,15 @@ function ExtraTimesEditor({
                     // Keyed by the row's own key, never by a value that changes while
                     // typing: remounting a focused <input type="time"> upsets Safari.
                     <div key={row.key} className="grid gap-1.5 px-2.5 py-2">
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)_6.5rem_6.5rem_2.25rem] items-center gap-2">
+                      {/* Wraps: day on the first line, times on the second when the dialog is narrow. */}
+                      <div className="flex flex-wrap items-center gap-2">
                         <Select
                           value={row.mode}
                           onValueChange={(v) =>
                             update(row.key, { mode: v as ExtraTimeRow["mode"] })
                           }
                         >
-                          <SelectTrigger aria-label="Repeat" className="w-[5rem]">
+                          <SelectTrigger aria-label="Repeat" className="w-[5.25rem] shrink-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -476,7 +477,7 @@ function ExtraTimesEditor({
                             value={String(row.dayOfWeek)}
                             onValueChange={(v) => update(row.key, { dayOfWeek: Number(v) })}
                           >
-                            <SelectTrigger aria-label="Day">
+                            <SelectTrigger aria-label="Day" className="w-[8.5rem] flex-1">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -491,31 +492,37 @@ function ExtraTimesEditor({
                           <Input
                             type="date"
                             aria-label="Date"
+                            className="w-[9.5rem] flex-1"
                             value={row.date}
                             onChange={(e) => update(row.key, { date: e.target.value })}
                           />
                         )}
-                        <Input
-                          type="time"
-                          aria-label="From"
-                          value={row.start}
-                          onChange={(e) => update(row.key, { start: e.target.value })}
-                        />
-                        <Input
-                          type="time"
-                          aria-label="To"
-                          value={row.end}
-                          onChange={(e) => update(row.key, { end: e.target.value })}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Remove time"
-                          onClick={() => remove(row.key)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            aria-label="From"
+                            className="w-[6.5rem]"
+                            value={row.start}
+                            onChange={(e) => update(row.key, { start: e.target.value })}
+                          />
+                          <span className="text-xs text-muted-foreground">to</span>
+                          <Input
+                            type="time"
+                            aria-label="To"
+                            className="w-[6.5rem]"
+                            value={row.end}
+                            onChange={(e) => update(row.key, { end: e.target.value })}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Remove time"
+                            onClick={() => remove(row.key)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </div>
                       {error ? <p className="text-xs text-destructive">{error}</p> : null}
                     </div>
