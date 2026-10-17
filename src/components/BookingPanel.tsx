@@ -72,7 +72,9 @@ import { BookingFollowUpDetail } from "@/components/BookingFollowUpDetail";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { useBookingUpsellOffer, useDeclineUpsellOffer } from "@/lib/api/upsells";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
-import { useBookingInvoices } from "@/lib/api/invoices";
+import { useBookingInvoices, type Invoice } from "@/lib/api/invoices";
+import { invoiceForMessage } from "@/lib/invoice-history";
+import { PERMISSIONS } from "@/lib/permissions";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1383,6 +1385,10 @@ export function BookingPanel({
                           entry={entry}
                           timezone={timezone}
                           booking={booking}
+                          invoices={
+                            tenant.can(PERMISSIONS.INVOICE_READ) ? invoices.data : undefined
+                          }
+                          onOpenInvoice={onClose}
                         />
                       ))}
                     </ul>
@@ -2082,14 +2088,26 @@ function HistoryRow({
   entry,
   timezone,
   booking,
+  invoices,
+  onOpenInvoice,
 }: {
   entry: BookingHistoryEntry;
   timezone: string;
   booking: Pick<Booking, "allDay">;
+  /** The booking's invoices, when the viewer may read them — lets an invoice email open it. */
+  invoices: Invoice[] | undefined;
+  onOpenInvoice: () => void;
 }) {
   // Messages sent about the booking (confirmation, reminders…) with delivery status.
   if (isMessageHistoryEntry(entry)) {
-    return <BookingMessageHistoryRow entry={entry} timezone={timezone} />;
+    return (
+      <BookingMessageHistoryRow
+        entry={entry}
+        timezone={timezone}
+        invoice={invoiceForMessage(entry, invoices)}
+        onOpenInvoice={onOpenInvoice}
+      />
+    );
   }
   if (entry.kind === "amended") {
     return <AmendedHistoryRow entry={entry} timezone={timezone} />;

@@ -25,6 +25,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "book.recavo.app/your-link?offer=…",
       },
       {
+        kind: "improved",
+        text: 'In a booking\'s History tab, the "Invoice · Email" row now opens the invoice it sent — tap anywhere on the row to see it, download the PDF or send it again. Nothing extra is stored to make this work: the invoice is already kept and its PDF is produced on demand.',
+        where: "Booking → History",
+      },
+      {
         kind: "fixed",
         text: "Discounted prices on the booking page now always show both pence digits — 10% off £45 reads £40.50, not £40.5.",
         where: "Booking page",
