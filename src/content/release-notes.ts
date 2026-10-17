@@ -21,6 +21,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "new",
+        text: "Clients now see their offers on your booking page. Anyone who arrives by an offer link, or signs in and has been given one, gets an Offers section with each offer's sessions and packages at the offer's price, ready to book. It sits just above Sessions to start with; move it wherever you like, or turn it off, under Sections. Nobody else sees it.",
+        where: "Booking page → Sections",
+      },
+      {
+        kind: "new",
         text: "Shorten your booking link to something you can say out loud. Old links keep working: anyone using the previous address is taken to the new one.",
         where: "Business → Booking page → Link and sharing",
       },

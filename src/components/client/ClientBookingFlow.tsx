@@ -47,6 +47,7 @@ import {
   usePortalCredits,
   usePortalLink,
   usePortalMe,
+  usePortalPackageLinks,
   usePublicAvailability,
   usePublicCancellationPolicy,
   usePublicLocations,
@@ -59,11 +60,13 @@ import {
   useStartPublicBookingPayment,
   type PublicBookingPayment,
   type PublicBusinessProfile,
+  type PublicService,
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/query-keys";
 import type { AvailabilitySlot, BankTransferInstructions, Booking } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
 import { addCalendarDays, nextAvailableLabel, shortPlace } from "@/lib/client-booking";
+import { offersToShow } from "@/lib/client-offers";
 import {
   EMPTY_CONTACT,
   authenticationSucceeded,
@@ -135,6 +138,8 @@ export function ClientBookingFlow({
   onStarted,
   onClearRedirectParams,
   onPickPackage,
+  offerCode = null,
+  onPickOfferPackage,
 }: {
   business: PublicBusinessProfile;
   page: BookingPageContent;
@@ -146,6 +151,10 @@ export function ClientBookingFlow({
   onClearRedirectParams: () => void;
   /** Packages are bought through the catalogue flow; the landing hands over to it. */
   onPickPackage: (packageId: string) => void;
+  /** The offer link they arrived by (`?offer=`), shown in the landing's Offers section. */
+  offerCode?: string | null;
+  /** A package from an offer: the catalogue flow buys it with the offer's code applied. */
+  onPickOfferPackage?: (code: string, packageId: string) => void;
 }) {
   const businessId = business.id;
   const tz = business.defaultTimezone;
@@ -207,7 +216,26 @@ export function ClientBookingFlow({
   const me = usePortalMe(hasAccountHere ? businessId : undefined);
   const credits = usePortalCredits(hasAccountHere ? businessId : undefined);
 
-  const service = services.data?.find((s) => s.id === serviceId) ?? null;
+  // Offers: the link they arrived by plus, as a customer here, the ones they were
+  // given. An offer can name a session the public list hides, so those are bookable
+  // too; the link's code goes with the availability and hold calls to say so.
+  const arrivedBy = usePublicPackageLink(businessId, offerCode ?? undefined);
+  const myOffers = usePortalPackageLinks(hasAccountHere ? businessId : undefined);
+  const offers = useMemo(
+    () => offersToShow(arrivedBy.data ?? null, myOffers.data),
+    [arrivedBy.data, myOffers.data],
+  );
+  const allServices = useMemo<PublicService[]>(() => {
+    const byId = new Map<string, PublicService>();
+    for (const s of services.data ?? []) byId.set(s.id, s);
+    for (const offer of offers)
+      for (const s of offer.services) if (!byId.has(s.id)) byId.set(s.id, s);
+    return [...byId.values()];
+  }, [services.data, offers]);
+  // Set when the code came from tapping an offer rather than being typed on Review.
+  const [promoFromOffer, setPromoFromOffer] = useState(false);
+
+  const service = allServices.find((s) => s.id === serviceId) ?? null;
   const selectedPackage = packages.data?.packages.find((p) => p.id === selectedPackageId) ?? null;
 
   // Desktop opens with the first session chosen, so the card shows times straight away.
@@ -254,17 +282,17 @@ export function ClientBookingFlow({
   const location = locations.data?.find((l) => l.id === activeLocationId) ?? null;
 
   // Promo codes are offer-link codes. The link is looked up as typed; a code that
-  // names this session with a discount is applied to the hold.
+  // names this session goes with the hold (it may unlock a hidden session, carry a
+  // discount, or both).
   const promo = usePublicPackageLink(businessId, details.promoCode.trim() || undefined);
-  const promoDiscount =
-    promo.isSuccess && serviceId && promo.data.services.some((s) => s.id === serviceId)
-      ? (promo.data.link.discount ?? null)
-      : null;
-  const linkCode = promoDiscount ? details.promoCode.trim() : null;
+  const promoNamesService =
+    promo.isSuccess && Boolean(serviceId) && promo.data.services.some((s) => s.id === serviceId);
+  const promoDiscount = promoNamesService ? (promo.data?.link.discount ?? null) : null;
+  const linkCode = promoNamesService ? details.promoCode.trim() : null;
   const promoError = details.promoCode.trim()
     ? promo.isError
       ? "That code isn't valid"
-      : promo.isSuccess && !promoDiscount
+      : promo.isSuccess && !promoNamesService
         ? "This code doesn't apply to this session"
         : null
     : null;
@@ -539,6 +567,11 @@ export function ClientBookingFlow({
 
   const pickService = (id: string) => {
     setSelectedPackageId(null);
+    // A code picked up from an offer belongs to that offer's sessions, not this one.
+    if (promoFromOffer) {
+      setPromoFromOffer(false);
+      setDetails((d) => ({ ...d, promoCode: "" }));
+    }
     if (id === serviceId && desktop) return;
     setServiceId(id);
     setStaffId(null);
@@ -546,6 +579,25 @@ export function ClientBookingFlow({
     setSelectedSlot(null);
     setDate(today);
     if (desktop) return;
+    setStep("time");
+    window.scrollTo({ top: 0 });
+  };
+
+  /** A session from an offer: the same as picking it, with the offer's code applied. */
+  const pickOfferService = (code: string, id: string) => {
+    setSelectedPackageId(null);
+    setDetails((d) => ({ ...d, promoCode: code }));
+    setPromoFromOffer(true);
+    if (id === serviceId && desktop) return;
+    setServiceId(id);
+    setStaffId(null);
+    setExtraIds([]);
+    setSelectedSlot(null);
+    setDate(today);
+    if (desktop) {
+      document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     setStep("time");
     window.scrollTo({ top: 0 });
   };
@@ -888,8 +940,14 @@ export function ClientBookingFlow({
   const extrasPrice = extrasChosen.reduce((sum, u) => sum + u.priceMinor, 0);
   const slotPrice = selectedSlot?.priceMinor ?? service?.basePriceMinor ?? 0;
   const listPrice = (selectedSlot?.listPriceMinor ?? slotPrice) + extrasPrice;
+  // Times fetched with the code already carry the discounted price (and the list price
+  // beside it); only a code applied after the time was picked still needs taking off here.
+  const slotAlreadyDiscounted =
+    selectedSlot?.listPriceMinor != null && selectedSlot.listPriceMinor !== selectedSlot.priceMinor;
   const previewPrice =
-    slotPrice + extrasPrice - (promoDiscount ? discountMinorOff(promoDiscount, slotPrice) : 0);
+    slotPrice +
+    extrasPrice -
+    (promoDiscount && !slotAlreadyDiscounted ? discountMinorOff(promoDiscount, slotPrice) : 0);
   const cancellationHours = business.cancellationWindowHours ?? 0;
   const deadlineFor = (start: string | null) =>
     start && cancellationHours > 0
@@ -948,13 +1006,18 @@ export function ClientBookingFlow({
   const promoLabel =
     promoDiscount && details.promoCode.trim()
       ? `${details.promoCode.trim()} · ${describeDiscount(promoDiscount, business.currency)}`
-      : null;
+      : promoNamesService && details.promoCode.trim()
+        ? `${details.promoCode.trim()} · Offer applied`
+        : null;
   const promoState: PromoState = {
     code: details.promoCode.trim(),
     label: promoLabel,
     error: promoError,
     pending: reholding || (Boolean(details.promoCode.trim()) && promo.isPending),
-    onApply: (code) => setDetails((d) => ({ ...d, promoCode: code.toUpperCase() })),
+    onApply: (code) => {
+      setPromoFromOffer(false);
+      setDetails((d) => ({ ...d, promoCode: code.toUpperCase() }));
+    },
   };
 
   const detailsSummary: DetailsSummary | null =
@@ -1113,6 +1176,11 @@ export function ClientBookingFlow({
             selectedServiceId={selectedPackageId ? null : serviceId}
             selectedPackageId={selectedPackageId}
             bookingCard={bookingCard}
+            offers={offers}
+            onPickOfferService={pickOfferService}
+            onPickOfferPackage={(code, id) =>
+              onPickOfferPackage ? onPickOfferPackage(code, id) : onPickPackage(id)
+            }
           />
         ) : null}
 

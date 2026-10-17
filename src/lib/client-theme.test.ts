@@ -9,6 +9,8 @@ import {
   headerStyle,
   initials,
   normaliseBookingPage,
+  normaliseSections,
+  orderedSectionKeys,
   presetFromHeaderUrl,
   sectionEnabled,
   textOnAccent,
@@ -106,10 +108,70 @@ describe("normaliseBookingPage", () => {
     });
     assert.deepEqual(
       page.sections.map((s) => s.key),
-      ["location", "about", "reviews", "staff", "gallery"],
+      ["offers", "sessions", "location", "about", "reviews", "staff", "gallery"],
     );
     assert.equal(sectionEnabled(page, "location"), true);
     assert.equal(sectionEnabled(page, "reviews"), false);
+  });
+
+  it("puts offers above sessions, both on, for a page published before they existed", () => {
+    const page = normaliseBookingPage({
+      sections: [
+        { key: "reviews", enabled: true },
+        { key: "about", enabled: true },
+        { key: "staff", enabled: false },
+        { key: "location", enabled: true },
+        { key: "gallery", enabled: false },
+      ],
+    });
+    assert.deepEqual(page.sections.slice(0, 2), [
+      { key: "offers", enabled: true },
+      { key: "sessions", enabled: true },
+    ]);
+    assert.deepEqual(orderedSectionKeys(page), [
+      "offers",
+      "sessions",
+      "reviews",
+      "about",
+      "location",
+    ]);
+  });
+
+  it("slots a missing offers section directly above sessions wherever sessions sits", () => {
+    const page = normaliseBookingPage({
+      sections: [
+        { key: "reviews", enabled: true },
+        { key: "sessions", enabled: true },
+        { key: "about", enabled: true },
+      ],
+    });
+    assert.deepEqual(
+      page.sections.map((s) => s.key),
+      ["reviews", "offers", "sessions", "about", "staff", "location", "gallery"],
+    );
+  });
+
+  it("keeps the order the business chose and never turns sessions off", () => {
+    const page = normaliseBookingPage({
+      sections: [
+        { key: "sessions", enabled: false },
+        { key: "offers", enabled: false },
+        { key: "about", enabled: true },
+      ],
+    });
+    assert.deepEqual(
+      page.sections.slice(0, 3).map((s) => `${s.key}:${s.enabled}`),
+      ["sessions:true", "offers:false", "about:true"],
+    );
+    assert.deepEqual(orderedSectionKeys(page), ["sessions", "about"]);
+  });
+
+  it("normaliseSections with nothing gives the defaults, offers first", () => {
+    assert.deepEqual(normaliseSections(undefined), DEFAULT_BOOKING_PAGE.sections);
+    assert.deepEqual(
+      DEFAULT_BOOKING_PAGE.sections.slice(0, 2).map((s) => s.key),
+      ["offers", "sessions"],
+    );
   });
 
   it("drops unknown themes and duplicate sections", () => {

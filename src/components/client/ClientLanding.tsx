@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { ChevronRight, MapPin, Navigation, Share, Star } from "lucide-react";
 import { toast } from "sonner";
+import { OfferCard } from "@/components/client/ClientOffers";
 import {
   BarSummary,
   BottomBar,
@@ -17,6 +18,7 @@ import type {
   PublicBusinessProfile,
   PublicLocation,
   PublicPackage,
+  PublicPackageLink,
   PublicReviews,
   PublicService,
   PublicStaff,
@@ -24,13 +26,22 @@ import type {
 import { directionsUrl } from "@/lib/calendar-links";
 import { reviewsChipLabel, shortPlace } from "@/lib/client-booking";
 import { hoursLabel, price } from "@/lib/client-journey";
-import { headerStyle, sectionEnabled, type BookingPageContent } from "@/lib/client-theme";
+import { offersSectionVisible, sampleOffer } from "@/lib/client-offers";
+import {
+  headerStyle,
+  orderedSectionKeys,
+  sectionEnabled,
+  type BookingPageContent,
+  type BookingPageSectionKey,
+} from "@/lib/client-theme";
 import { formatDuration } from "@/lib/format";
 import { validityLabel } from "@/lib/packages";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
 export type NextAvailable = { label: string; serviceId: string } | null;
+
+type SectionNodes = Partial<Record<BookingPageSectionKey, ReactNode>>;
 
 export function ClientLanding({
   business,
@@ -53,6 +64,9 @@ export function ClientLanding({
   selectedServiceId = null,
   selectedPackageId = null,
   bookingCard,
+  offers = [],
+  onPickOfferService,
+  onPickOfferPackage,
 }: {
   business: Pick<PublicBusinessProfile, "tradingName" | "slug" | "branding" | "address">;
   page: BookingPageContent;
@@ -65,6 +79,14 @@ export function ClientLanding({
   nextAvailable: NextAvailable;
   onPickService: (serviceId: string) => void;
   onPickPackage: (packageId: string) => void;
+  /**
+   * Offer links this visitor can use here: the one they arrived by and, signed in,
+   * the ones the business gave them. Empty hides the Offers section (the preview
+   * shows a sample instead).
+   */
+  offers?: PublicPackageLink[];
+  onPickOfferService?: (code: string, serviceId: string) => void;
+  onPickOfferPackage?: (code: string, packageId: string) => void;
   onBookNow: () => void;
   onSignIn: () => void;
   /** When the visitor is already signed in with an account at this studio. */
@@ -108,6 +130,26 @@ export function ClientLanding({
   const showAbout = sectionEnabled(page, "about") && Boolean(page.about?.trim());
   const showLocation =
     sectionEnabled(page, "location") && (Boolean(address) || Boolean(page.venue.parkingNote));
+  const offerList = preview ? [sampleOffer(services, packages)] : offers;
+  const showOffers = offersSectionVisible({
+    enabled: sectionEnabled(page, "offers"),
+    offers: offerList,
+    preview,
+  });
+  // The business orders the sections (Booking page → Sections); Sessions is always among them.
+  const order = orderedSectionKeys(page);
+  const pickOfferService = onPickOfferService ?? ((_code: string, id: string) => onPickService(id));
+  const pickOfferPackage = onPickOfferPackage ?? ((_code: string, id: string) => onPickPackage(id));
+  const offerCards = offerList.map((offer) => (
+    <OfferCard
+      key={offer.link.code}
+      offer={offer}
+      onPickService={pickOfferService}
+      onPickPackage={pickOfferPackage}
+      selectedServiceId={selectedServiceId}
+      selectedPackageId={selectedPackageId}
+    />
+  ));
   const inPerson = locations.some((l) => l.type === "physical");
   const online = locations.some((l) => l.type !== "physical");
   const where = inPerson && online ? "In person or online" : online ? "Online" : "In person";
@@ -158,6 +200,137 @@ export function ClientLanding({
   );
 
   if (layout === "desktop") {
+    const desktopSections: SectionNodes = {
+      offers: showOffers ? (
+        <section className="mt-8 scroll-mt-6" id="offers">
+          <DesktopHeading>Offers</DesktopHeading>
+          <div className="space-y-3">{offerCards}</div>
+        </section>
+      ) : null,
+      sessions: (
+        <section className="mt-8 scroll-mt-6" id="sessions">
+          <DesktopHeading>Sessions</DesktopHeading>
+          {services.length === 0 && packages.length === 0 ? (
+            <ClientCard>
+              <p className="px-4 py-5 text-[15px] text-muted-foreground">
+                This business hasn't added any sessions yet.
+              </p>
+            </ClientCard>
+          ) : (
+            <ClientCard>
+              {hasCategories(services) && groupByCategory(services).length > 1 ? (
+                groupByCategory(services).map((group) => (
+                  <div key={group.category ?? "other"}>
+                    {group.category ? (
+                      <p className="border-b border-border bg-muted/40 px-5 py-2 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
+                        {group.category}
+                      </p>
+                    ) : null}
+                    <RadioRows
+                      services={group.items}
+                      locations={locations}
+                      selectedId={selectedServiceId}
+                      onPick={onPickService}
+                    />
+                  </div>
+                ))
+              ) : (
+                <RadioRows
+                  services={services}
+                  locations={locations}
+                  selectedId={selectedServiceId}
+                  onPick={onPickService}
+                />
+              )}
+              {packages.length > 0 ? (
+                <ul className="divide-y divide-border border-t border-border">
+                  {packages.map((pkg) => (
+                    <li key={pkg.id}>
+                      <RadioRow
+                        active={selectedPackageId === pkg.id}
+                        onClick={() => onPickPackage(pkg.id)}
+                        title={pkg.name}
+                        subtitle={`${pkg.creditsIssued} ${pkg.creditsIssued === 1 ? "session" : "sessions"} · Use within ${validityLabel(pkg.validity)}`}
+                        price={price(pkg.priceMinor, pkg.currency)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </ClientCard>
+          )}
+        </section>
+      ),
+      reviews: showReviews ? (
+        <section className="mt-10">
+          <DesktopHeading
+            trailing={<GoogleLink reviews={reviews} preview={preview} className="text-[13px]" />}
+          >
+            What clients say
+          </DesktopHeading>
+          <ul className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-3">
+            {reviews.reviews.slice(0, 6).map((review) => (
+              <li key={`${review.publishedAt}-${review.author}`}>
+                <ReviewCard review={review} className="h-full" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null,
+      about: showAbout ? (
+        <section className="mt-10">
+          <DesktopHeading>About</DesktopHeading>
+          <p className="max-w-[640px] whitespace-pre-line text-[16px] leading-relaxed text-foreground/85">
+            {page.about}
+          </p>
+        </section>
+      ) : null,
+      staff: showStaff ? (
+        <section className="mt-10">
+          <DesktopHeading>Trainers</DesktopHeading>
+          <ul className="flex flex-wrap gap-x-8 gap-y-4">
+            {staff.map((person) => (
+              <li key={person.id} className="flex items-center gap-3">
+                <PersonMark name={person.displayName} className="h-11 w-11 text-[13px]" />
+                <div>
+                  <p className="text-[16px] font-semibold leading-tight">{person.displayName}</p>
+                  {person.title ? (
+                    <p className="text-[13px] text-muted-foreground">{person.title}</p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null,
+      location: showLocation ? (
+        <section className="mt-10">
+          <DesktopHeading>Location and parking</DesktopHeading>
+          <div className="flex items-start gap-3">
+            <MapPin className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              {venue ? <p className="text-[16px] font-semibold">{venue.name}</p> : null}
+              {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
+              {page.venue.parkingNote ? (
+                <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+              ) : null}
+            </div>
+            {address && !preview ? (
+              <a
+                href={directionsUrl(address)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
+              >
+                <Navigation className="h-4 w-4" />
+                Directions
+              </a>
+            ) : null}
+          </div>
+        </section>
+      ) : null,
+    };
+
     return (
       <div className="pb-4">
         <ClientColumn wide className="pt-2">
@@ -201,138 +374,9 @@ export function ClientLanding({
                 </button>
               ) : null}
 
-              <section className="mt-8 scroll-mt-6" id="sessions">
-                <DesktopHeading>Sessions</DesktopHeading>
-                {services.length === 0 && packages.length === 0 ? (
-                  <ClientCard>
-                    <p className="px-4 py-5 text-[15px] text-muted-foreground">
-                      This business hasn't added any sessions yet.
-                    </p>
-                  </ClientCard>
-                ) : (
-                  <ClientCard>
-                    {hasCategories(services) && groupByCategory(services).length > 1 ? (
-                      groupByCategory(services).map((group) => (
-                        <div key={group.category ?? "other"}>
-                          {group.category ? (
-                            <p className="border-b border-border bg-muted/40 px-5 py-2 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
-                              {group.category}
-                            </p>
-                          ) : null}
-                          <RadioRows
-                            services={group.items}
-                            locations={locations}
-                            selectedId={selectedServiceId}
-                            onPick={onPickService}
-                          />
-                        </div>
-                      ))
-                    ) : (
-                      <RadioRows
-                        services={services}
-                        locations={locations}
-                        selectedId={selectedServiceId}
-                        onPick={onPickService}
-                      />
-                    )}
-                    {packages.length > 0 ? (
-                      <ul className="divide-y divide-border border-t border-border">
-                        {packages.map((pkg) => (
-                          <li key={pkg.id}>
-                            <RadioRow
-                              active={selectedPackageId === pkg.id}
-                              onClick={() => onPickPackage(pkg.id)}
-                              title={pkg.name}
-                              subtitle={`${pkg.creditsIssued} ${pkg.creditsIssued === 1 ? "session" : "sessions"} · Use within ${validityLabel(pkg.validity)}`}
-                              price={price(pkg.priceMinor, pkg.currency)}
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </ClientCard>
-                )}
-              </section>
-
-              {showReviews ? (
-                <section className="mt-10">
-                  <DesktopHeading
-                    trailing={
-                      <GoogleLink reviews={reviews} preview={preview} className="text-[13px]" />
-                    }
-                  >
-                    What clients say
-                  </DesktopHeading>
-                  <ul className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-3">
-                    {reviews.reviews.slice(0, 6).map((review) => (
-                      <li key={`${review.publishedAt}-${review.author}`}>
-                        <ReviewCard review={review} className="h-full" />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              {showAbout ? (
-                <section className="mt-10">
-                  <DesktopHeading>About</DesktopHeading>
-                  <p className="max-w-[640px] whitespace-pre-line text-[16px] leading-relaxed text-foreground/85">
-                    {page.about}
-                  </p>
-                </section>
-              ) : null}
-
-              {showStaff ? (
-                <section className="mt-10">
-                  <DesktopHeading>Trainers</DesktopHeading>
-                  <ul className="flex flex-wrap gap-x-8 gap-y-4">
-                    {staff.map((person) => (
-                      <li key={person.id} className="flex items-center gap-3">
-                        <PersonMark name={person.displayName} className="h-11 w-11 text-[13px]" />
-                        <div>
-                          <p className="text-[16px] font-semibold leading-tight">
-                            {person.displayName}
-                          </p>
-                          {person.title ? (
-                            <p className="text-[13px] text-muted-foreground">{person.title}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              {showLocation ? (
-                <section className="mt-10">
-                  <DesktopHeading>Location and parking</DesktopHeading>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      {venue ? <p className="text-[16px] font-semibold">{venue.name}</p> : null}
-                      {address ? (
-                        <p className="text-[15px] text-muted-foreground">{address}</p>
-                      ) : null}
-                      {page.venue.parkingNote ? (
-                        <p className="mt-1 text-[14px] text-foreground/80">
-                          {page.venue.parkingNote}
-                        </p>
-                      ) : null}
-                    </div>
-                    {address && !preview ? (
-                      <a
-                        href={directionsUrl(address)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
-                      >
-                        <Navigation className="h-4 w-4" />
-                        Directions
-                      </a>
-                    ) : null}
-                  </div>
-                </section>
-              ) : null}
+              {order.map((key) => (
+                <Fragment key={key}>{desktopSections[key]}</Fragment>
+              ))}
             </div>
 
             <aside className="desk:sticky desk:top-6">{bookingCard}</aside>
@@ -345,6 +389,165 @@ export function ClientLanding({
       </div>
     );
   }
+
+  const phoneSections: SectionNodes = {
+    offers: showOffers ? (
+      <div className="mt-6 scroll-mt-4" id="offers">
+        <SectionLabel>Offers</SectionLabel>
+        <div className="space-y-3">{offerCards}</div>
+      </div>
+    ) : null,
+    sessions: (
+      <>
+        <div className="mt-6 scroll-mt-4" id="sessions">
+          <SectionLabel>Sessions</SectionLabel>
+          {services.length === 0 ? (
+            <ClientCard>
+              <p className="px-4 py-5 text-[15px] text-muted-foreground">
+                Nothing to book online just now. Check back soon.
+              </p>
+            </ClientCard>
+          ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
+            <div className="space-y-4">
+              {groupByCategory(services).map((group) => (
+                <div key={group.category ?? "other"}>
+                  {group.category ? (
+                    <p className="mb-1.5 text-[13px] text-muted-foreground">{group.category}</p>
+                  ) : null}
+                  <ServiceList
+                    services={group.items}
+                    locations={locations}
+                    onPick={onPickService}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ServiceList services={services} locations={locations} onPick={onPickService} />
+          )}
+        </div>
+
+        {packages.length > 0 ? (
+          <div className="mt-6">
+            <SectionLabel>Packages</SectionLabel>
+            <ClientCard>
+              <ul className="divide-y divide-border">
+                {packages.map((pkg) => (
+                  <li key={pkg.id}>
+                    <button
+                      type="button"
+                      onClick={() => onPickPackage(pkg.id)}
+                      className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-muted"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] font-semibold">{pkg.name}</span>
+                        <span className="block text-[13px] text-muted-foreground">
+                          {pkg.creditsIssued} {pkg.creditsIssued === 1 ? "session" : "sessions"} ·
+                          Use within {validityLabel(pkg.validity)}
+                        </span>
+                      </span>
+                      <span className="text-[16px] font-semibold">
+                        {price(pkg.priceMinor, pkg.currency)}
+                      </span>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </ClientCard>
+          </div>
+        ) : null}
+      </>
+    ),
+    reviews: showReviews ? (
+      <div className="mt-6">
+        <SectionLabel
+          trailing={
+            <GoogleLink reviews={reviews} preview={preview} className="text-[12px]" short />
+          }
+        >
+          What clients say
+        </SectionLabel>
+        <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+          {reviews.reviews.map((review) => (
+            <li
+              key={`${review.publishedAt}-${review.author}`}
+              className="w-[260px] shrink-0 snap-start"
+            >
+              <ReviewCard review={review} className="h-full" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null,
+    about: showAbout ? (
+      <div className="mt-6">
+        <SectionLabel>About</SectionLabel>
+        <ClientCard>
+          <p className="whitespace-pre-line px-4 py-4 text-[15px] leading-relaxed">{page.about}</p>
+        </ClientCard>
+      </div>
+    ) : null,
+    staff: showStaff ? (
+      <div className="mt-6">
+        <SectionLabel>Team</SectionLabel>
+        <ClientCard>
+          <ul className="divide-y divide-border">
+            {staff.map((person) => (
+              <li key={person.id} className="flex items-start gap-3 px-4 py-3.5">
+                <PersonMark name={person.displayName} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[16px] font-semibold">{person.displayName}</p>
+                  {person.title ? (
+                    <p className="text-[13px] text-muted-foreground">{person.title}</p>
+                  ) : null}
+                  {person.bio ? (
+                    <p className="mt-1 text-[14px] leading-relaxed text-foreground/80">
+                      {person.bio}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </ClientCard>
+      </div>
+    ) : null,
+    location: showLocation ? (
+      <div className="mt-6">
+        <SectionLabel>Location and parking</SectionLabel>
+        <ClientCard>
+          <div className="flex items-start gap-3 px-4 py-4">
+            <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              {locations
+                .filter((l) => l.type === "physical")
+                .map((l) => (
+                  <p key={l.id} className="text-[16px] font-semibold">
+                    {l.name}
+                  </p>
+                ))}
+              {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
+              {page.venue.parkingNote ? (
+                <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+              ) : null}
+            </div>
+            {address && !preview ? (
+              <a
+                href={directionsUrl(address)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
+              >
+                <Navigation className="h-4 w-4" />
+                Directions
+              </a>
+            ) : null}
+          </div>
+        </ClientCard>
+      </div>
+    ) : null,
+  };
 
   return (
     // In the editor's phone frame the landing owns its own scroller and the bar is a
@@ -418,162 +621,9 @@ export function ClientLanding({
             </button>
           )}
 
-          <div className="mt-6 scroll-mt-4" id="sessions">
-            <SectionLabel>Sessions</SectionLabel>
-            {services.length === 0 ? (
-              <ClientCard>
-                <p className="px-4 py-5 text-[15px] text-muted-foreground">
-                  Nothing to book online just now. Check back soon.
-                </p>
-              </ClientCard>
-            ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
-              <div className="space-y-4">
-                {groupByCategory(services).map((group) => (
-                  <div key={group.category ?? "other"}>
-                    {group.category ? (
-                      <p className="mb-1.5 text-[13px] text-muted-foreground">{group.category}</p>
-                    ) : null}
-                    <ServiceList
-                      services={group.items}
-                      locations={locations}
-                      onPick={onPickService}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ServiceList services={services} locations={locations} onPick={onPickService} />
-            )}
-          </div>
-
-          {packages.length > 0 ? (
-            <div className="mt-6">
-              <SectionLabel>Packages</SectionLabel>
-              <ClientCard>
-                <ul className="divide-y divide-border">
-                  {packages.map((pkg) => (
-                    <li key={pkg.id}>
-                      <button
-                        type="button"
-                        onClick={() => onPickPackage(pkg.id)}
-                        className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-muted"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[16px] font-semibold">{pkg.name}</span>
-                          <span className="block text-[13px] text-muted-foreground">
-                            {pkg.creditsIssued} {pkg.creditsIssued === 1 ? "session" : "sessions"} ·
-                            Use within {validityLabel(pkg.validity)}
-                          </span>
-                        </span>
-                        <span className="text-[16px] font-semibold">
-                          {price(pkg.priceMinor, pkg.currency)}
-                        </span>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </ClientCard>
-            </div>
-          ) : null}
-
-          {showReviews ? (
-            <div className="mt-6">
-              <SectionLabel
-                trailing={
-                  <GoogleLink reviews={reviews} preview={preview} className="text-[12px]" short />
-                }
-              >
-                What clients say
-              </SectionLabel>
-              <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-                {reviews.reviews.map((review) => (
-                  <li
-                    key={`${review.publishedAt}-${review.author}`}
-                    className="w-[260px] shrink-0 snap-start"
-                  >
-                    <ReviewCard review={review} className="h-full" />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {showAbout ? (
-            <div className="mt-6">
-              <SectionLabel>About</SectionLabel>
-              <ClientCard>
-                <p className="whitespace-pre-line px-4 py-4 text-[15px] leading-relaxed">
-                  {page.about}
-                </p>
-              </ClientCard>
-            </div>
-          ) : null}
-
-          {showStaff ? (
-            <div className="mt-6">
-              <SectionLabel>Team</SectionLabel>
-              <ClientCard>
-                <ul className="divide-y divide-border">
-                  {staff.map((person) => (
-                    <li key={person.id} className="flex items-start gap-3 px-4 py-3.5">
-                      <PersonMark name={person.displayName} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[16px] font-semibold">{person.displayName}</p>
-                        {person.title ? (
-                          <p className="text-[13px] text-muted-foreground">{person.title}</p>
-                        ) : null}
-                        {person.bio ? (
-                          <p className="mt-1 text-[14px] leading-relaxed text-foreground/80">
-                            {person.bio}
-                          </p>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </ClientCard>
-            </div>
-          ) : null}
-
-          {showLocation ? (
-            <div className="mt-6">
-              <SectionLabel>Location and parking</SectionLabel>
-              <ClientCard>
-                <div className="flex items-start gap-3 px-4 py-4">
-                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    {locations
-                      .filter((l) => l.type === "physical")
-                      .map((l) => (
-                        <p key={l.id} className="text-[16px] font-semibold">
-                          {l.name}
-                        </p>
-                      ))}
-                    {address ? (
-                      <p className="text-[15px] text-muted-foreground">{address}</p>
-                    ) : null}
-                    {page.venue.parkingNote ? (
-                      <p className="mt-1 text-[14px] text-foreground/80">
-                        {page.venue.parkingNote}
-                      </p>
-                    ) : null}
-                  </div>
-                  {address && !preview ? (
-                    <a
-                      href={directionsUrl(address)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
-                    >
-                      <Navigation className="h-4 w-4" />
-                      Directions
-                    </a>
-                  ) : null}
-                </div>
-              </ClientCard>
-            </div>
-          ) : null}
+          {order.map((key) => (
+            <Fragment key={key}>{phoneSections[key]}</Fragment>
+          ))}
 
           <PoweredBy />
         </ClientColumn>

@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { z } from "zod";
 import { BookingFlow } from "@/components/BookingFlow";
 import { ClientBookingFlow, type BookingStart } from "@/components/client/ClientBookingFlow";
 import { ClientTheme, OutlineButton, PoweredBy, StudioMark } from "@/components/client/ClientPage";
 import { Wordmark } from "@/components/Wordmark";
-import { closedBusinessFromError, usePublicBusiness } from "@/lib/api/hooks";
+import { closedBusinessFromError, usePublicBusiness, usePublicPackageLink } from "@/lib/api/hooks";
 import { rememberCameFrom } from "@/lib/auth/came-from";
 import { DEFAULT_BOOKING_PAGE, normaliseBookingPage } from "@/lib/client-theme";
 
 /**
- * `?offer=<code>` is a package link the studio shared: the page then shows only
- * the packages in that link. `?package=<id>` buys one package from the landing's
- * Packages list. `?service=` (with optional `location`, `date` and `start`) is how
+ * `?offer=<code>` is an offer link the studio shared: the page shows it in its Offers
+ * section (a private link, which keeps the visitor to what it names, still opens on
+ * its own). `?package=<id>` buys one package from the landing's Packages list, with
+ * `offer` alongside when it came from an offer so the offer's price is charged.
+ * `?service=` (with optional `location`, `date` and `start`) is how
  * the account hands a client straight to a session, day or time they picked
  * there; those are consumed on arrival and dropped from the address bar. Stripe's
  * redirect parameters share this search space and are read straight off the URL,
@@ -59,6 +62,8 @@ function SlugBookingPage() {
   const { offer, package: packageId, service, location, date, start } = Route.useSearch();
   const navigate = useNavigate();
   const business = usePublicBusiness(slug);
+  // Resolved here to tell a private offer (its own page) from one the landing shows.
+  const offerLink = usePublicPackageLink(business.data?.id, offer);
 
   // Read once on arrival: the flow keeps its own state from here, and a refresh
   // or Back should not drop the person onto the same pre-filled step again.
@@ -92,6 +97,16 @@ function SlugBookingPage() {
     });
   }, [currentSlug, redirectedFrom, slug, navigate]);
 
+  // A revoked offer link is an ordinary outcome: say so once and show the full page.
+  const offerGone = Boolean(offer) && offerLink.isError;
+  useEffect(() => {
+    if (!offerGone) return;
+    toast.error(
+      `That offer link is no longer active, so here is everything${tradingName ? ` ${tradingName}` : ""} offers.`,
+    );
+    void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true });
+  }, [offerGone, tradingName, slug, navigate]);
+
   if (business.isError) {
     const closed = closedBusinessFromError(business.error);
     if (closed) return <NotTakingBookings name={closed.tradingName} logoUrl={closed.logoUrl} />;
@@ -99,10 +114,16 @@ function SlugBookingPage() {
   }
   if (!business.data) return <ResolvingPage />;
 
+  // The offer they came by stays in the address bar through the flow's own clean-ups.
+  const keepOffer = offer ? { offer } : {};
+
   const page = normaliseBookingPage(business.data.page);
 
-  // Offer links and package purchases still run through the catalogue flow.
-  if (offer || packageId) {
+  if (offer && offerLink.isPending) return <ResolvingPage />;
+  const privateOffer = Boolean(offer) && offerLink.data?.link.showFullCatalogue === false;
+
+  // Package purchases and private offers still run through the catalogue flow.
+  if (packageId || privateOffer) {
     return (
       <BookingFlow
         businessId={business.data.id}
@@ -127,12 +148,18 @@ function SlugBookingPage() {
       business={business.data}
       page={page}
       start={handOff}
-      onStarted={() => void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true })}
+      offerCode={offerLink.isSuccess ? (offer ?? null) : null}
+      onStarted={() =>
+        void navigate({ to: "/$slug", params: { slug }, search: keepOffer, replace: true })
+      }
       onClearRedirectParams={() =>
-        void navigate({ to: "/$slug", params: { slug }, search: {}, replace: true })
+        void navigate({ to: "/$slug", params: { slug }, search: keepOffer, replace: true })
       }
       onPickPackage={(id) =>
         void navigate({ to: "/$slug", params: { slug }, search: { package: id } })
+      }
+      onPickOfferPackage={(code, id) =>
+        void navigate({ to: "/$slug", params: { slug }, search: { offer: code, package: id } })
       }
     />
   );

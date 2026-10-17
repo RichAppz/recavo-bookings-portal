@@ -6447,6 +6447,20 @@ export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummar
   });
 }
 
+/** The offer links this customer has at one studio, for the booking page's Offers section. */
+export function usePortalPackageLinks(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalPackageLinks(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ links: PublicPackageLink[] }>("/api/v1/portal/package-links", {
+        query: { businessId },
+      });
+      return res.data.links;
+    },
+  });
+}
+
 export function usePortalCredits(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.portalCredits(businessId ?? ""),

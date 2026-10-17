@@ -13,7 +13,19 @@ import type { CSSProperties } from "react";
 export const BOOKING_PAGE_THEMES = ["studio", "night", "editorial"] as const;
 export type BookingPageTheme = (typeof BOOKING_PAGE_THEMES)[number];
 
-export const BOOKING_PAGE_SECTIONS = ["reviews", "about", "staff", "location", "gallery"] as const;
+/**
+ * The page's sections in the order the business sets. `sessions` is always on; it is
+ * listed so the others, notably `offers`, can be placed above or below it.
+ */
+export const BOOKING_PAGE_SECTIONS = [
+  "offers",
+  "sessions",
+  "reviews",
+  "about",
+  "staff",
+  "location",
+  "gallery",
+] as const;
 export type BookingPageSectionKey = (typeof BOOKING_PAGE_SECTIONS)[number];
 
 export type BookingPageSection = { key: BookingPageSectionKey; enabled: boolean };
@@ -45,6 +57,8 @@ export const DEFAULT_BOOKING_PAGE: BookingPageContent = {
   description: null,
   about: null,
   sections: [
+    { key: "offers", enabled: true },
+    { key: "sessions", enabled: true },
     { key: "reviews", enabled: true },
     { key: "about", enabled: true },
     { key: "staff", enabled: true },
@@ -56,6 +70,11 @@ export const DEFAULT_BOOKING_PAGE: BookingPageContent = {
 };
 
 export const SECTION_LABELS: Record<BookingPageSectionKey, { title: string; hint: string }> = {
+  offers: {
+    title: "Offers",
+    hint: "Offer links a client has, shown when they're signed in or arrive by one",
+  },
+  sessions: { title: "Sessions", hint: "Your sessions and packages; always shown" },
   reviews: { title: "Google reviews", hint: "Your Google rating and latest reviews" },
   about: { title: "About", hint: "A few sentences about the business" },
   staff: { title: "Team", hint: "People marked as visible on the booking page" },
@@ -298,17 +317,6 @@ export function normaliseBookingPage(
     raw?.theme && (BOOKING_PAGE_THEMES as readonly string[]).includes(raw.theme)
       ? raw.theme
       : DEFAULT_BOOKING_PAGE.theme;
-  const seen = new Set<string>();
-  const sections: BookingPageSection[] = [];
-  for (const s of raw?.sections ?? []) {
-    if (!(BOOKING_PAGE_SECTIONS as readonly string[]).includes(s.key) || seen.has(s.key)) continue;
-    seen.add(s.key);
-    sections.push({ key: s.key, enabled: Boolean(s.enabled) });
-  }
-  const hadSections = seen.size > 0;
-  for (const d of DEFAULT_BOOKING_PAGE.sections) {
-    if (!seen.has(d.key)) sections.push(hadSections ? { key: d.key, enabled: false } : d);
-  }
   return {
     theme,
     headerImageUrl: raw?.headerImageUrl ?? null,
@@ -316,7 +324,7 @@ export function normaliseBookingPage(
     accentColour: raw?.accentColour ?? null,
     description: raw?.description ?? null,
     about: raw?.about ?? null,
-    sections,
+    sections: normaliseSections(raw?.sections),
     reviewsMinStars: raw?.reviewsMinStars ?? 4,
     venue: {
       address: raw?.venue?.address ?? null,
@@ -325,6 +333,52 @@ export function normaliseBookingPage(
   };
 }
 
+/**
+ * Every section exactly once in the stored order. Mirrors the API's rule: a list from
+ * before `offers` and `sessions` existed gets both at the front, on (where its sessions
+ * already were); a list that has `sessions` but not `offers` gets `offers` directly above
+ * it; anything else missing is appended, off. No list at all means the defaults.
+ */
+export function normaliseSections(
+  raw: readonly { key: string; enabled: boolean }[] | null | undefined,
+): BookingPageSection[] {
+  if (!raw || raw.length === 0) return DEFAULT_BOOKING_PAGE.sections.map((s) => ({ ...s }));
+  const seen = new Set<BookingPageSectionKey>();
+  const out: BookingPageSection[] = [];
+  for (const s of raw) {
+    if (!isSectionKey(s.key) || seen.has(s.key)) continue;
+    seen.add(s.key);
+    out.push({ key: s.key, enabled: s.key === "sessions" ? true : Boolean(s.enabled) });
+  }
+  if (!seen.has("sessions")) {
+    const front: BookingPageSection[] = [];
+    if (!seen.has("offers")) front.push({ key: "offers", enabled: true });
+    front.push({ key: "sessions", enabled: true });
+    out.unshift(...front);
+  } else if (!seen.has("offers")) {
+    out.splice(
+      out.findIndex((s) => s.key === "sessions"),
+      0,
+      { key: "offers", enabled: true },
+    );
+  }
+  for (const key of BOOKING_PAGE_SECTIONS) {
+    if (!out.some((s) => s.key === key)) out.push({ key, enabled: false });
+  }
+  return out;
+}
+
+function isSectionKey(value: string): value is BookingPageSectionKey {
+  return (BOOKING_PAGE_SECTIONS as readonly string[]).includes(value);
+}
+
 export function sectionEnabled(page: BookingPageContent, key: BookingPageSectionKey): boolean {
   return page.sections.find((s) => s.key === key)?.enabled ?? false;
+}
+
+/** The keys to draw, top to bottom: the enabled ones in the business's order. */
+export function orderedSectionKeys(page: BookingPageContent): BookingPageSectionKey[] {
+  return normaliseSections(page.sections)
+    .filter((s) => s.enabled)
+    .map((s) => s.key);
 }

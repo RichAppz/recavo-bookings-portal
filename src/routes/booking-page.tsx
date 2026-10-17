@@ -748,12 +748,13 @@ function SectionsTab({ page, edit, disabled }: TabProps) {
     <>
       <SectionCard
         title="Sections"
-        description="What appears under your sessions, in this order. Sessions and the Book button are always shown."
+        description="What appears on your page, in this order. Sessions and the Book button are always shown; Offers appears only to clients who have one."
       >
         <ul className="divide-y">
           {page.sections.map((section, index) => {
             const meta = SECTION_LABELS[section.key];
             const comingSoon = section.key === "gallery";
+            const alwaysOn = section.key === "sessions";
             return (
               <li key={section.key} className="flex items-center gap-3 px-4 py-3 sm:px-5">
                 <div className="flex flex-col">
@@ -781,8 +782,8 @@ function SectionsTab({ page, edit, disabled }: TabProps) {
                   <p className="text-xs text-muted-foreground">{meta.hint}</p>
                 </div>
                 <Switch
-                  checked={section.enabled && !comingSoon}
-                  disabled={disabled || comingSoon}
+                  checked={(section.enabled || alwaysOn) && !comingSoon}
+                  disabled={disabled || comingSoon || alwaysOn}
                   onCheckedChange={(checked) => toggle(index, checked)}
                   aria-label={`Show ${meta.title}`}
                 />
