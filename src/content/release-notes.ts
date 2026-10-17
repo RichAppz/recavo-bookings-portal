@@ -40,6 +40,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Business → Booking page → Content → Google reviews",
       },
       {
+        kind: "improved",
+        text: "Automotive businesses no longer see an Occupancy rate card. It measured seats booked against capacity, which only means something for classes — a job is always one car in one slot, so the figure could only ever read 0% or 100%. The Overview and Reports now show Average job value in its place, and Reports drops the seats-vs-capacity chart and talks about jobs, completion rate and job outcomes.",
+        where: "Overview and Reports (automotive)",
+      },
+      {
         kind: "new",
         text: "Invoice lines can carry detail under the heading. Press Enter in a line's description to add up to five more lines — “Paint correction”, then “Bonnet and both front wings” and “Two-stage machine polish” beneath it. The heading prints as before and the detail sits under it in smaller grey type, on the PDF and on the invoice page.",
         where: "Invoices → draft → Lines → Description",
