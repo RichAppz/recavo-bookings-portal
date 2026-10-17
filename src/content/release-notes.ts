@@ -106,6 +106,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "fixed",
+        text: "Preview and Download on a draft invoice now include what you have just typed. They save your edits first (the buttons read “Save & preview” / “Save & download PDF” while there is something unsaved), so the PDF always matches the form. Issuing does the same, so an edit you forgot to save is never left off the final invoice. If a line can't be saved, you're told and taken to it.",
+        where: "Invoices → draft → Preview / Download PDF / Issue",
+      },
+      {
+        kind: "fixed",
         text: "Upload your logo and it now appears on invoices you had already started, not just new ones. A draft takes its business details from your current settings when you preview or download it, and an invoice issued before you had a logo prints the one you have now. Logo uploads themselves also work again.",
         where: "Settings → Configuration → Logo, then Invoices → Preview",
       },

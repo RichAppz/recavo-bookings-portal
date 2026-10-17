@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Ban,
@@ -17,7 +17,11 @@ import { PdfPreview } from "@/components/PdfPreview";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { DetailGhost } from "@/components/ghost";
-import { InvoiceDraftEditor } from "@/components/InvoiceDraftEditor";
+import {
+  INVOICE_DRAFT_EDITOR_ID,
+  InvoiceDraftEditor,
+  type InvoiceDraftEditorHandle,
+} from "@/components/InvoiceDraftEditor";
 import { InvoiceOriginTag, InvoiceStatusBadge } from "@/components/InvoicesTable";
 import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { EmptyState, SectionCard } from "@/components/ui-bits";
@@ -136,6 +140,8 @@ function InvoiceDetail() {
   const [confirmPaid, setConfirmPaid] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
+  const editor = useRef<InvoiceDraftEditorHandle>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
   const [upsell, setUpsell] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
 
@@ -185,9 +191,24 @@ function InvoiceDetail() {
     return true;
   };
 
+  // PDFs are rendered from the saved draft and issuing freezes it, so unsaved edits are
+  // saved first — otherwise the preview shows the last saved copy and looks as if the
+  // change was ignored.
+  const savePendingEdits = async (): Promise<boolean> => {
+    if (!editorDirty || !editor.current) return true;
+    const saved = await editor.current.save();
+    if (saved) return true;
+    toast.error("Fix the highlighted fields first", {
+      description: "Your latest changes couldn't be saved, so they aren't on the invoice yet.",
+    });
+    document.getElementById(INVOICE_DRAFT_EDITOR_ID)?.scrollIntoView({ behavior: "smooth" });
+    return false;
+  };
+
   const downloadPdf = async () => {
     setPdfBusy("download");
     try {
+      if (!(await savePendingEdits())) return;
       const outcome = await saveBlob(await fetchInvoicePdf(businessId, inv));
       if (outcome === "unsupported") {
         toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
@@ -204,6 +225,7 @@ function InvoiceDetail() {
   const previewPdf = async () => {
     setPdfBusy("preview");
     try {
+      if (!(await savePendingEdits())) return;
       const { blob } = await fetchInvoicePdf(businessId, inv);
       setPreviewBlob(blob);
     } catch (err) {
@@ -217,6 +239,8 @@ function InvoiceDetail() {
 
   const doIssue = async (withSend: boolean) => {
     if (!guardEntitled()) return;
+    // Issuing freezes the saved draft; edits still sitting in the form would be lost.
+    if (!(await savePendingEdits())) return;
     try {
       const issued = await issue.mutateAsync({ invoiceId: inv.id, send: withSend });
       toast.success(
@@ -362,11 +386,20 @@ function InvoiceDetail() {
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void previewPdf()}>
-            <Eye className="size-4" /> {pdfBusy === "preview" ? "Loading…" : "Preview"}
+            <Eye className="size-4" />{" "}
+            {pdfBusy === "preview" ? "Loading…" : editorDirty ? "Save & preview" : "Preview"}
           </Button>
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void downloadPdf()}>
             <Download className="size-4" />{" "}
-            {pdfBusy === "download" ? "Preparing…" : isNativeApp() ? "Share PDF" : "Download PDF"}
+            {pdfBusy === "download"
+              ? "Preparing…"
+              : isNativeApp()
+                ? editorDirty
+                  ? "Save & share PDF"
+                  : "Share PDF"
+                : editorDirty
+                  ? "Save & download PDF"
+                  : "Download PDF"}
           </Button>
           {allows("issue") ? (
             <DropdownMenu>
@@ -440,7 +473,12 @@ function InvoiceDetail() {
       </div>
 
       {inv.status === "draft" ? (
-        <InvoiceDraftEditor invoice={inv} disabled={!canManage || entitled === false} />
+        <InvoiceDraftEditor
+          ref={editor}
+          invoice={inv}
+          disabled={!canManage || entitled === false}
+          onDirtyChange={setEditorDirty}
+        />
       ) : null}
 
       {inv.status === "draft" && entitled === false && canManage ? (
