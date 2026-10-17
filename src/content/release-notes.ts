@@ -26,6 +26,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "new",
+        text: "Offer links can now open extra times. When you create a link with sessions in it, add times you don't normally offer for each one — every Sunday 10:00 to 14:00, say, or one particular Saturday evening — and only clients who book through that link will see them. Anything already in your diary stays unavailable, and you can change the extra times on a link you have already sent.",
+        where: "Offer links → New offer link → Extra times",
+      },
+      {
+        kind: "new",
         text: "Shorten your booking link to something you can say out loud. Old links keep working: anyone using the previous address is taken to the new one.",
         where: "Business → Booking page → Link and sharing",
       },

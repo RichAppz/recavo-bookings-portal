@@ -94,6 +94,7 @@ import {
 } from "@/lib/client-theme";
 import { formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
+import { hasExtraTimesForService } from "@/lib/offer-extra-times";
 
 type Step = "landing" | "time" | "details" | "review" | "done";
 
@@ -291,6 +292,12 @@ export function ClientBookingFlow({
     promo.isSuccess && Boolean(serviceId) && promo.data.services.some((s) => s.id === serviceId);
   const promoDiscount = promoNamesService ? (promo.data?.link.discount ?? null) : null;
   const linkCode = promoNamesService ? details.promoCode.trim() : null;
+  // The offer opens times this session does not normally sell; worth a line on the
+  // picker so a Sunday slot does not look like a mistake.
+  const offerNote =
+    linkCode && hasExtraTimesForService(promo.data?.link.extraAvailability, serviceId)
+      ? "Extra times are available to you through this offer."
+      : null;
   const promoError = details.promoCode.trim()
     ? promo.isError
       ? "That code isn't valid"
@@ -1097,6 +1104,7 @@ export function ClientBookingFlow({
         priceMinor={previewPrice}
         currency={selectedSlot?.currency ?? service?.currency ?? business.currency}
         cancellationWindowHours={cancellationHours}
+        offerNote={offerNote}
       />
     </div>
   ) : null;
@@ -1180,6 +1188,7 @@ export function ClientBookingFlow({
             loading={timesLoading}
             selected={selectedSlot}
             onSelect={setSelectedSlot}
+            offerNote={offerNote}
             onBack={() => setStep("landing")}
             onContinue={() => {
               if (!selectedSlot) return;

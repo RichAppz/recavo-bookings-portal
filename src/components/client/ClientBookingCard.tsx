@@ -42,6 +42,7 @@ export function ClientBookingCard({
   priceMinor,
   currency,
   cancellationWindowHours,
+  offerNote = null,
 }: {
   service: PublicService | null;
   /** A package picked instead of a session: the card becomes a buy card. */
@@ -71,6 +72,8 @@ export function ClientBookingCard({
   priceMinor: number;
   currency: string;
   cancellationWindowHours: number;
+  /** A line above the calendar, e.g. when an offer opens times not normally on sale. */
+  offerNote?: string | null;
 }) {
   const [month, setMonth] = useState(() => monthOf(date));
   // A "next free" jump can land in another month; follow it.
@@ -135,6 +138,12 @@ export function ClientBookingCard({
             />
           ))}
         </div>
+      ) : null}
+
+      {offerNote ? (
+        <p className="mt-3 rounded-[10px] border border-primary/30 bg-primary-soft px-3 py-2 text-[13px] text-foreground">
+          {offerNote}
+        </p>
       ) : null}
 
       <ClientMonthCalendar

@@ -45,6 +45,7 @@ export function ClientDateTime({
   nextAvailableDate,
   priceMinor,
   currency,
+  offerNote = null,
 }: {
   service: PublicService;
   timezone: string;
@@ -74,6 +75,8 @@ export function ClientDateTime({
   nextAvailableDate: string | null;
   priceMinor: number;
   currency: string;
+  /** A line above the day strip, e.g. when an offer opens times not normally on sale. */
+  offerNote?: string | null;
 }) {
   const days = useMemo(
     () =>
@@ -188,6 +191,12 @@ export function ClientDateTime({
               })}
             </div>
           </div>
+        ) : null}
+
+        {offerNote ? (
+          <p className="mt-4 rounded-[12px] border border-primary/30 bg-primary-soft px-3 py-2 text-[13px] text-foreground">
+            {offerNote}
+          </p>
         ) : null}
 
         <div className="mt-6 flex items-end justify-between">
