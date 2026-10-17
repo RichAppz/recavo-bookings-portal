@@ -65,6 +65,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Top bar → Bell",
       },
       {
+        kind: "improved",
+        text: "On a desktop or tablet you can tuck the side menu away to give the calendar the full width. Press the hide button at the top of the menu; it slides off and a small handle sits in the bottom-left corner to bring it back. RECAVO remembers your choice on that device.",
+        where: "Side menu → Hide menu",
+      },
+      {
         kind: "new",
         text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
         where: "Services → edit a service → Follow-up reminders → Add another reminder",

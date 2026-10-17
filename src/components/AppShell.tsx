@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
@@ -27,6 +27,8 @@ import {
   Menu,
   Package,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -254,6 +256,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [bookingOpen, setBookingOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   // null = closed; an object (possibly empty) = open with those fields prefilled.
@@ -436,9 +439,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside
         className={cn(
-          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
+          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-out",
           mobileNav ? "translate-x-0" : "-translate-x-full",
+          // On a desktop the sidebar is a fixed column unless the person has tucked
+          // it away; the phone drawer state never leaks into that.
+          sidebarHidden ? "lg:-translate-x-full" : "lg:translate-x-0",
         )}
+        aria-hidden={sidebarHidden ? true : undefined}
       >
         <div className="flex items-center justify-between px-5 py-5">
           <Wordmark />
@@ -450,6 +457,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-label="Close navigation"
           >
             <X className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground lg:inline-flex"
+            onClick={() => setSidebarHidden(true)}
+            aria-label="Hide menu"
+            title="Hide menu"
+            tabIndex={sidebarHidden ? -1 : undefined}
+          >
+            <PanelLeftClose className="size-5" />
           </Button>
         </div>
 
@@ -623,7 +641,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:pl-sidebar">
+      {/* Where the menu went: a small handle in the bottom-left corner that slides it back. */}
+      {sidebarHidden ? (
+        <button
+          type="button"
+          onClick={() => setSidebarHidden(false)}
+          aria-label="Show menu"
+          title="Show menu"
+          data-testid="show-sidebar"
+          className="pb-safe pl-safe fixed bottom-0 left-0 z-50 hidden lg:block"
+        >
+          <span className="mb-4 ml-4 flex size-11 items-center justify-center rounded-full bg-sidebar text-sidebar-foreground shadow-lg ring-1 ring-sidebar-border transition hover:bg-sidebar-accent">
+            <PanelLeftOpen className="size-5" />
+          </span>
+        </button>
+      ) : null}
+
+      <div
+        className={cn(
+          "transition-[padding] duration-300 ease-out",
+          sidebarHidden ? "lg:pl-0" : "lg:pl-sidebar",
+        )}
+      >
         <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
           <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
             <Button
@@ -833,4 +872,31 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 export function useQuickActions() {
   return useState<QuickAction>(null);
+}
+
+const SIDEBAR_HIDDEN_KEY = "recavo.sidebar.hidden";
+
+/**
+ * Whether the desktop sidebar is tucked away. Read after mount so the server and
+ * first client render agree, then remembered per device.
+ */
+function useSidebarHidden(): [boolean, (hidden: boolean) => void] {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setHidden(localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1");
+    } catch {
+      // Storage unavailable: the sidebar simply starts open.
+    }
+  }, []);
+  const update = useCallback((next: boolean) => {
+    setHidden(next);
+    try {
+      if (next) localStorage.setItem(SIDEBAR_HIDDEN_KEY, "1");
+      else localStorage.removeItem(SIDEBAR_HIDDEN_KEY);
+    } catch {
+      // Best effort; the choice still applies for this page view.
+    }
+  }, []);
+  return [hidden, update];
 }
