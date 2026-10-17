@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
@@ -26,6 +26,9 @@ import {
   MessageSquare,
   Menu,
   Package,
+  Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -54,6 +57,7 @@ import {
 import { PersonAvatar } from "@/components/ui-bits";
 import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
+import { PushBellPrompt } from "@/components/PushBellPrompt";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { EventModal } from "@/components/EventModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
@@ -71,8 +75,11 @@ import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
 import { NoBusinessInApp } from "@/components/NoBusinessInApp";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
+import { HeaderBackButton } from "@/components/BackLink";
 import {
   useLinkedRecordDefinition,
+  useDismissAllNotifications,
+  useDismissNotification,
   useMarkNotificationRead,
   useNotifications,
   usePortalBusinesses,
@@ -197,11 +204,12 @@ const NAV: NavGroup[] = [
         anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
       },
       { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-      // Clients due a repeat (ceramic top-up every 2 years). All verticals: a PT can
-      // use it for re-assessments just as well.
+      // Reminders to clients that they are due back (a wash every 2 months, a ceramic
+      // top-up every 2 years), set up and listed here. All verticals: a PT can use it
+      // for re-assessments just as well.
       {
         to: "/follow-ups",
-        label: "Follow-ups",
+        label: "Reminders",
         icon: BellRing,
         anyOf: [PERMISSIONS.BOOKING_READ_ALL],
       },
@@ -220,6 +228,14 @@ const NAV: NavGroup[] = [
   {
     heading: "Business",
     items: [
+      // How the public page looks and reads; the NEW badge in the nav row marks it
+      // until the next release.
+      {
+        to: "/booking-page",
+        label: "Booking page",
+        icon: Palette,
+        anyOf: [PERMISSIONS.BUSINESS_READ],
+      },
       {
         to: "/messages",
         label: "Messages",
@@ -242,6 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [bookingOpen, setBookingOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   // null = closed; an object (possibly empty) = open with those fields prefilled.
@@ -264,6 +281,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const notifications = useNotifications();
   const markNotificationRead = useMarkNotificationRead();
+  const dismissNotification = useDismissNotification();
+  const dismissAllNotifications = useDismissAllNotifications();
   const canSeeWaitlist = tenant.can(PERMISSIONS.BOOKING_READ_ALL);
   const waitlistSummary = useWaitlistSummary({ enabled: canSeeWaitlist });
   const waiting = waitlistSummary.data?.waiting ?? 0;
@@ -422,9 +441,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside
         className={cn(
-          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
+          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-out",
           mobileNav ? "translate-x-0" : "-translate-x-full",
+          // On a desktop the sidebar is a fixed column unless the person has tucked
+          // it away; the phone drawer state never leaks into that.
+          sidebarHidden ? "lg:-translate-x-full" : "lg:translate-x-0",
         )}
+        aria-hidden={sidebarHidden ? true : undefined}
       >
         <div className="flex items-center justify-between px-5 py-5">
           <Wordmark />
@@ -436,6 +459,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-label="Close navigation"
           >
             <X className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground lg:inline-flex"
+            onClick={() => setSidebarHidden(true)}
+            aria-label="Hide menu"
+            title="Hide menu"
+            tabIndex={sidebarHidden ? -1 : undefined}
+          >
+            <PanelLeftClose className="size-5" />
           </Button>
         </div>
 
@@ -480,6 +514,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                                 aria-label={`${waiting} waiting`}
                               >
                                 {waiting}
+                              </span>
+                            ) : null}
+                            {item.to === "/booking-page" ? (
+                              <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sidebar-primary-foreground">
+                                NEW
                               </span>
                             ) : null}
                           </Link>
@@ -604,7 +643,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:pl-sidebar">
+      {/* Where the menu went: a small handle in the bottom-left corner that slides it back. */}
+      {sidebarHidden ? (
+        <button
+          type="button"
+          onClick={() => setSidebarHidden(false)}
+          aria-label="Show menu"
+          title="Show menu"
+          data-testid="show-sidebar"
+          className="pb-safe pl-safe fixed bottom-0 left-0 z-50 hidden lg:block"
+        >
+          <span className="mb-4 ml-4 flex size-11 items-center justify-center rounded-full bg-sidebar text-sidebar-foreground shadow-lg ring-1 ring-sidebar-border transition hover:bg-sidebar-accent">
+            <PanelLeftOpen className="size-5" />
+          </span>
+        </button>
+      ) : null}
+
+      <div
+        className={cn(
+          "transition-[padding] duration-300 ease-out",
+          sidebarHidden ? "lg:pl-0" : "lg:pl-sidebar",
+        )}
+      >
         <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
           <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
             <Button
@@ -616,6 +676,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu className="size-6 sm:size-5" />
             </Button>
+            {/* Every click in the app can be undone from here; the desktop and phone
+                shells have no browser chrome, so this is their only Back. */}
+            <HeaderBackButton />
 
             <SetupHeaderButton
               onClick={() => {
@@ -671,6 +734,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <PushBellPrompt />
                   {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
                     // The API says where each alert leads (a package request opens that
                     // request, a follow-up the follow-ups list). Older rows about a booking
@@ -679,23 +743,57 @@ export function AppShell({ children }: { children: ReactNode }) {
                     return (
                       <DropdownMenuItem
                         key={n.id}
-                        className="flex-col items-start gap-0.5"
+                        className="items-start gap-2"
                         onClick={() => {
                           if (!n.readAt) markNotificationRead.mutate(n.id);
                           if (href) void navigate({ href });
                         }}
                       >
-                        <span className="flex items-center gap-1.5 text-sm font-medium">
-                          {href ? <BellRing className="size-3.5 text-primary" /> : null}
-                          {n.subject}
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
+                            {href ? <BellRing className="size-3.5 shrink-0 text-primary" /> : null}
+                            <span className="truncate">{n.subject}</span>
+                          </span>
+                          {/* The clamp box is a flex child; without an explicit width it sizes to its
+                              text and wraps past the menu's edge instead of inside it. */}
+                          <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
+                            {n.body}
+                          </span>
                         </span>
-                        <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                        {/* Stopping the click here keeps the row's open/mark-read from firing and
+                            leaves the menu open so several can be cleared in a row. Pointer
+                            events must still bubble: Radix treats a pointerup it did not see
+                            the pointerdown for as a click on the row. */}
+                        <button
+                          type="button"
+                          aria-label={`Clear “${n.subject}”`}
+                          data-testid="clear-notification"
+                          className="-mt-0.5 -mr-1 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dismissNotification.mutate(n.id);
+                          }}
+                        >
+                          <X className="size-3.5" />
+                        </button>
                       </DropdownMenuItem>
                     );
                   })}
                   {(notifications.data?.notifications ?? []).length === 0 ? (
                     <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
-                  ) : null}
+                  ) : (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="justify-center text-xs text-muted-foreground"
+                        data-testid="clear-all-notifications"
+                        onClick={() => dismissAllNotifications.mutate()}
+                      >
+                        Clear all
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -777,4 +875,31 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 export function useQuickActions() {
   return useState<QuickAction>(null);
+}
+
+const SIDEBAR_HIDDEN_KEY = "recavo.sidebar.hidden";
+
+/**
+ * Whether the desktop sidebar is tucked away. Read after mount so the server and
+ * first client render agree, then remembered per device.
+ */
+function useSidebarHidden(): [boolean, (hidden: boolean) => void] {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setHidden(localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1");
+    } catch {
+      // Storage unavailable: the sidebar simply starts open.
+    }
+  }, []);
+  const update = useCallback((next: boolean) => {
+    setHidden(next);
+    try {
+      if (next) localStorage.setItem(SIDEBAR_HIDDEN_KEY, "1");
+      else localStorage.removeItem(SIDEBAR_HIDDEN_KEY);
+    } catch {
+      // Best effort; the choice still applies for this page view.
+    }
+  }, []);
+  return [hidden, update];
 }

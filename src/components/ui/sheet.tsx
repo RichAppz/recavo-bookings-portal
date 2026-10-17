@@ -5,6 +5,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { X } from "lucide-react";
 
+import { keepOpenForToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const Sheet = SheetPrimitive.Root;
@@ -60,13 +61,17 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
+>(({ side = "right", className, children, onInteractOutside, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
     {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
     <SheetPrimitive.Content
       ref={ref}
       data-sheet-side={side}
+      onInteractOutside={(e) => {
+        keepOpenForToast(e);
+        onInteractOutside?.(e);
+      }}
       className={cn(sheetVariants({ side }), className)}
       {...props}
     >

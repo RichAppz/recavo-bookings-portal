@@ -341,6 +341,8 @@ export interface BookingFlowProps {
   readonly initialServiceId?: string;
   readonly initialLocationId?: string;
   readonly initialSlot?: AvailabilitySlot | null;
+  /** Opens straight on a package's Details step (the client booking page's Packages list). */
+  readonly initialPackageId?: string | null;
   /**
    * Code from a package link the studio shared (`?offer=`). The first step then
    * shows only that link's packages — including ones kept off the public page —
@@ -361,6 +363,7 @@ export function BookingFlow({
   initialServiceId,
   initialLocationId,
   initialSlot = null,
+  initialPackageId = null,
   offerCode = null,
   onLeaveOffer,
 }: BookingFlowProps) {
@@ -368,10 +371,10 @@ export function BookingFlow({
   const navigate = useNavigate();
   const auth = useAuth();
   const signedIn = auth.status === "authenticated";
-  const [step, setStep] = useState(initialSlot ? STEP_DETAILS : STEP_CHOOSE);
+  const [step, setStep] = useState(initialSlot || initialPackageId ? STEP_DETAILS : STEP_CHOOSE);
   /** Which of the two journeys the customer is on, chosen on the first step. */
-  const [mode, setMode] = useState<"service" | "package">("service");
-  const [packageId, setPackageId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"service" | "package">(initialPackageId ? "package" : "service");
+  const [packageId, setPackageId] = useState<string | null>(initialPackageId);
   const [serviceId, setServiceId] = useState<string | null>(initialServiceId ?? null);
   const [locationId, setLocationId] = useState<string | null>(
     initialLocationId ?? initialSlot?.locationId ?? null,

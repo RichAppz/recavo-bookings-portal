@@ -2,13 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ServiceFollowUp } from "./api/types.ts";
 import {
-  draftFromRule,
+  FOLLOW_UP_INTERVAL_PRESETS,
+  draftsFromRules,
   followUpBucket,
   followUpIntervalLabel,
   followUpRuleSummary,
+  followUpRulesSummary,
+  leadDaysLabel,
+  newFollowUpDraft,
   oneMonthFrom,
   relativeDueLabel,
-  ruleFromDraft,
+  reminderRuleRows,
+  rulesFromDrafts,
+  rulesWithSaved,
+  rulesWithout,
 } from "./follow-ups.ts";
 
 const NOW = new Date("2026-09-13T12:00:00.000Z");
@@ -20,6 +27,7 @@ function followUp(overrides: Partial<ServiceFollowUp>): ServiceFollowUp {
     customerId: "cust",
     bookingId: "bk",
     serviceId: "svc",
+    ruleId: "rule_1",
     linkedRecordId: null,
     serviceName: "Ceramic coating",
     label: "Ceramic top-up",
@@ -51,66 +59,95 @@ describe("followUpIntervalLabel / followUpRuleSummary", () => {
 
   it("uses the rule's label when it has one, else 'Top-up'", () => {
     assert.equal(
-      followUpRuleSummary({ intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" }),
+      followUpRuleSummary({ intervalMonths: 24, label: "Ceramic top-up" }),
       "Ceramic top-up every 2 years",
     );
+    assert.equal(followUpRuleSummary({ intervalMonths: 6, label: null }), "Top-up every 6 months");
+  });
+
+  it("lists several rules soonest first on the service card", () => {
     assert.equal(
-      followUpRuleSummary({ intervalMonths: 6, leadDays: 7, label: null }),
-      "Top-up every 6 months",
+      followUpRulesSummary([
+        { intervalMonths: 24, label: "Ceramic top-up" },
+        { intervalMonths: 12, label: "Valet" },
+      ]),
+      "Valet every year · Ceramic top-up every 2 years",
     );
   });
 });
 
-describe("draftFromRule / ruleFromDraft", () => {
-  it("round-trips a preset and a custom interval", () => {
-    const preset = draftFromRule({ intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" });
-    assert.deepEqual(preset, {
-      enabled: true,
-      preset: "24",
-      customMonths: "",
-      leadDays: "14",
-      label: "Ceramic top-up",
-    });
-    assert.deepEqual(ruleFromDraft(preset), {
-      ok: true,
-      rule: { intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
-    });
+describe("draftsFromRules / rulesFromDrafts", () => {
+  const topUp = { id: "rule_top", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" };
+  const custom = { id: "rule_custom", intervalMonths: 30, leadDays: 0, label: null };
 
-    const custom = draftFromRule({ intervalMonths: 30, leadDays: 0, label: null });
-    assert.equal(custom.preset, "custom");
-    assert.equal(custom.customMonths, "30");
-    assert.deepEqual(ruleFromDraft(custom), {
+  it("round-trips a preset and a custom interval, keeping each rule's id", () => {
+    const drafts = draftsFromRules([topUp, custom]);
+    assert.deepEqual(
+      drafts.map(({ key: _key, ...rest }) => rest),
+      [
+        { id: "rule_top", preset: "24", customMonths: "", leadDays: "14", label: "Ceramic top-up" },
+        { id: "rule_custom", preset: "custom", customMonths: "30", leadDays: "0", label: "" },
+      ],
+    );
+    assert.deepEqual(rulesFromDrafts(drafts), {
       ok: true,
-      rule: { intervalMonths: 30, leadDays: 0, label: null },
+      rules: [
+        { id: "rule_top", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
+        { id: "rule_custom", intervalMonths: 30, leadDays: 0, label: null },
+      ],
     });
   });
 
-  it("is off by default, defaults the lead time, trims the label", () => {
-    const off = draftFromRule(null);
-    assert.equal(off.enabled, false);
-    assert.deepEqual(ruleFromDraft(off), { ok: true, rule: null });
-    assert.deepEqual(ruleFromDraft({ ...off, enabled: true, leadDays: "", label: "  " }), {
+  it("is off with no rules, defaults the lead time, trims the label, sends no id for a new rule", () => {
+    assert.deepEqual(draftsFromRules(undefined), []);
+    assert.deepEqual(rulesFromDrafts([]), { ok: true, rules: [] });
+    const fresh = newFollowUpDraft([]);
+    assert.equal(fresh.id, null);
+    assert.equal(fresh.preset, "24");
+    assert.deepEqual(rulesFromDrafts([{ ...fresh, leadDays: "", label: "  " }]), {
       ok: true,
-      rule: { intervalMonths: 24, leadDays: 14, label: null },
+      rules: [{ intervalMonths: 24, leadDays: 14, label: null }],
     });
   });
 
-  it("refuses out-of-range or non-integer values with the field named", () => {
-    const base = { ...draftFromRule(null), enabled: true };
-    assert.equal(ruleFromDraft({ ...base, preset: "custom", customMonths: "0" }).ok, false);
-    assert.equal(
-      (ruleFromDraft({ ...base, preset: "custom", customMonths: "1.5" }) as { field: string })
-        .field,
-      "intervalMonths",
+  it("offers an interval not already used when adding another reminder", () => {
+    const first = newFollowUpDraft([]);
+    const second = newFollowUpDraft([first]);
+    assert.equal(second.preset, "12");
+    const third = newFollowUpDraft([first, second]);
+    assert.equal(third.preset, "6");
+    assert.notEqual(second.key, third.key);
+  });
+
+  it("refuses out-of-range or non-integer values, naming the reminder and field", () => {
+    const base = newFollowUpDraft([]);
+    const bad = (patch: Partial<typeof base>) =>
+      rulesFromDrafts([base, { ...newFollowUpDraft([base]), ...patch }]) as {
+        ok: false;
+        index: number;
+        field: string;
+      };
+    assert.equal(rulesFromDrafts([{ ...base, preset: "custom", customMonths: "0" }]).ok, false);
+    assert.deepEqual(
+      [
+        bad({ preset: "custom", customMonths: "1.5" }).index,
+        bad({ preset: "custom", customMonths: "1.5" }).field,
+      ],
+      [1, "intervalMonths"],
     );
-    assert.equal(
-      (ruleFromDraft({ ...base, leadDays: "400" }) as { field: string }).field,
-      "leadDays",
-    );
-    assert.equal(
-      (ruleFromDraft({ ...base, label: "x".repeat(81) }) as { field: string }).field,
-      "label",
-    );
+    assert.equal(bad({ leadDays: "400" }).field, "leadDays");
+    assert.equal(bad({ label: "x".repeat(81) }).field, "label");
+  });
+
+  it("refuses two reminders with the same interval, pointing at the second", () => {
+    const first = newFollowUpDraft([]);
+    const result = rulesFromDrafts([first, { ...newFollowUpDraft([first]), preset: "24" }]);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.index, 1);
+      assert.equal(result.field, "intervalMonths");
+      assert.match(result.message, /Reminder 1 already uses 2 years/);
+    }
   });
 });
 
@@ -145,5 +182,91 @@ describe("relativeDueLabel", () => {
 describe("oneMonthFrom", () => {
   it("is a calendar month ahead", () => {
     assert.equal(oneMonthFrom(new Date("2026-09-13T12:00:00.000Z")), "2026-10-13T12:00:00.000Z");
+  });
+});
+
+describe("interval presets", () => {
+  it("offer the short upkeep intervals a wash needs as well as the long ones", () => {
+    assert.deepEqual(
+      FOLLOW_UP_INTERVAL_PRESETS.map((p) => p.months),
+      [1, 2, 3, 6, 12, 18, 24, 36],
+    );
+    assert.equal(FOLLOW_UP_INTERVAL_PRESETS.find((p) => p.months === 2)?.label, "2 months");
+    assert.equal(followUpIntervalLabel(2), "every 2 months");
+    assert.equal(followUpIntervalLabel(1), "every month");
+  });
+});
+
+const RULE_A = { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" };
+const RULE_B = { id: "r_b", intervalMonths: 2, leadDays: 7, label: null };
+const RULE_C = { id: "r_c", intervalMonths: 12, leadDays: 14, label: null };
+
+describe("reminderRuleRows", () => {
+  it("lists every rule, active services A–Z first, soonest interval first within one", () => {
+    const rows = reminderRuleRows([
+      { id: "s_old", name: "Old wax", active: false, followUps: [RULE_C] },
+      { id: "s_coat", name: "Ceramic coating", active: true, followUps: [RULE_A, RULE_B] },
+      { id: "s_wash", name: "Maintenance wash", active: true, followUps: [] },
+      { id: "s_alloy", name: "Alloy refurb", active: true, followUps: [RULE_C] },
+    ]);
+    assert.deepEqual(
+      rows.map((r) => [r.serviceName, r.rule.id, r.serviceActive]),
+      [
+        ["Alloy refurb", "r_c", true],
+        ["Ceramic coating", "r_b", true],
+        ["Ceramic coating", "r_a", true],
+        ["Old wax", "r_c", false],
+      ],
+    );
+  });
+});
+
+describe("rulesWithSaved / rulesWithout", () => {
+  it("appends a new rule after the existing ones, ids kept", () => {
+    assert.deepEqual(rulesWithSaved([RULE_A], { intervalMonths: 2, leadDays: 7, label: null }), [
+      { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
+      { intervalMonths: 2, leadDays: 7, label: null },
+    ]);
+  });
+
+  it("replaces an edited rule in place by id", () => {
+    assert.deepEqual(
+      rulesWithSaved([RULE_A, RULE_B], {
+        id: "r_b",
+        intervalMonths: 3,
+        leadDays: 7,
+        label: "Wash",
+      }),
+      [
+        { id: "r_a", intervalMonths: 24, leadDays: 14, label: "Ceramic top-up" },
+        { id: "r_b", intervalMonths: 3, leadDays: 7, label: "Wash" },
+      ],
+    );
+  });
+
+  it("treats an unknown id as a new rule rather than dropping it", () => {
+    const out = rulesWithSaved([RULE_A], {
+      id: "r_gone",
+      intervalMonths: 6,
+      leadDays: 14,
+      label: null,
+    });
+    assert.equal(out.length, 2);
+    assert.equal(out[1]?.id, "r_gone");
+  });
+
+  it("removes one rule and leaves the rest, so an empty list switches reminders off", () => {
+    assert.deepEqual(rulesWithout([RULE_A, RULE_B], "r_a"), [
+      { id: "r_b", intervalMonths: 2, leadDays: 7, label: null },
+    ]);
+    assert.deepEqual(rulesWithout([RULE_A], "r_a"), []);
+  });
+});
+
+describe("leadDaysLabel", () => {
+  it("reads naturally for none, one and many days", () => {
+    assert.equal(leadDaysLabel(0), "Remind on the day");
+    assert.equal(leadDaysLabel(1), "Remind 1 day before");
+    assert.equal(leadDaysLabel(14), "Remind 14 days before");
   });
 });

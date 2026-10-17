@@ -27,6 +27,7 @@ import {
   readPendingReferral,
   stashPendingReferral,
 } from "@/lib/auth/pending-referral";
+import { EMAIL_CODE_LENGTH as CODE_LENGTH } from "@/lib/auth/email-code";
 import { settleSocialSignIn } from "@/lib/auth/social-sign-in";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
@@ -34,8 +35,6 @@ const searchSchema = z.object({
   ref: z.string().optional(),
 });
 
-/** Must match the Supabase project's "OTP Length" auth setting (currently 8). */
-const CODE_LENGTH = 8;
 const RESEND_SECONDS = 30;
 
 export const Route = createFileRoute("/register")({

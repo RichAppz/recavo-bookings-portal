@@ -130,7 +130,7 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
       {!chargesReady && !bankReady ? (
         <p className="mt-3 text-sm text-amber-950 dark:text-amber-50">
           {enabled
-            ? "Clients still cannot pay online — at least one payment method must be set up."
+            ? "Until Stripe or bank transfer is set up, your page takes bookings as pay on the day."
             : noStripe
               ? "Set up a way to get paid first — add your bank transfer details."
               : "Set up a way to get paid first — connect Stripe or add bank transfer details."}

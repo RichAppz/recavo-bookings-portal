@@ -59,11 +59,11 @@ import {
   useServiceUpsells,
   useUpsellsEntitled,
 } from "@/lib/api/upsells";
-import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
+import { FollowUpRuleEditor, type FollowUpRuleError } from "@/components/FollowUpRuleEditor";
 import {
-  draftFromRule,
-  followUpRuleSummary,
-  ruleFromDraft,
+  draftsFromRules,
+  followUpRulesSummary,
+  rulesFromDrafts,
   type FollowUpRuleDraft,
 } from "@/lib/follow-ups";
 import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
@@ -292,13 +292,17 @@ function ServicesPage() {
                           {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
                         </span>
                       ) : null}
-                      {s.followUp ? (
+                      {s.followUps.length > 0 ? (
                         <span
                           className="flex items-center gap-1.5 text-muted-foreground"
-                          title={`Clients (and you) are reminded ${s.followUp.leadDays} days before it is due again`}
+                          title={
+                            s.followUps.length === 1
+                              ? `Clients (and you) are reminded ${s.followUps[0]!.leadDays} days before it is due again`
+                              : `${s.followUps.length} reminders: clients (and you) are told before each is due`
+                          }
                         >
                           <BellRing className="size-4" />
-                          {followUpRuleSummary(s.followUp)}
+                          {followUpRulesSummary(s.followUps)}
                         </span>
                       ) : null}
                     </div>
@@ -601,15 +605,12 @@ function ServiceDialog({
       setUpsellRows(rowsFromUpsells(serviceUpsells.data));
     }
   }, [open, upsellsDirty, serviceUpsells.data]);
-  // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
-  // so it saves with the service itself. All verticals.
-  const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
-    draftFromRule(service?.followUp),
+  // Follow-up reminders ("valet after a year, ceramic top-up every 2 years"): part of
+  // the service payload, so they save with the service itself. All verticals.
+  const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpRuleDraft[]>(() =>
+    draftsFromRules(service?.followUps),
   );
-  const [followUpError, setFollowUpError] = useState<{
-    field: "intervalMonths" | "leadDays" | "label";
-    message: string;
-  } | null>(null);
+  const [followUpError, setFollowUpError] = useState<FollowUpRuleError | null>(null);
   // The defaults arrive after the dialog opens; adopt them until staff start editing.
   useEffect(() => {
     if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
@@ -651,7 +652,7 @@ function ServiceDialog({
     setUpsellRows(s && serviceUpsells.data ? rowsFromUpsells(serviceUpsells.data) : []);
     setUpsellsDirty(false);
     setUpsellInvalid(null);
-    setFollowUpDraft(draftFromRule(s?.followUp));
+    setFollowUpDrafts(draftsFromRules(s?.followUps));
     setFollowUpError(null);
   };
 
@@ -780,10 +781,18 @@ function ServiceDialog({
     }
     setUpsellInvalid(null);
 
-    const followUp = ruleFromDraft(followUpDraft);
-    if (!followUp.ok) {
-      setFollowUpError({ field: followUp.field, message: followUp.message });
-      toast.error("Check the follow-up reminder");
+    const followUps = rulesFromDrafts(followUpDrafts);
+    if (!followUps.ok) {
+      setFollowUpError({
+        index: followUps.index,
+        field: followUps.field,
+        message: followUps.message,
+      });
+      toast.error(
+        followUpDrafts.length > 1
+          ? `Check follow-up reminder ${followUps.index + 1}`
+          : "Check the follow-up reminder",
+      );
       throw new Error("validation");
     }
     setFollowUpError(null);
@@ -801,7 +810,7 @@ function ServiceDialog({
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: offerWindows,
-      followUp: followUp.rule,
+      followUps: followUps.rules,
     };
 
     setFieldErrors({});
@@ -1194,9 +1203,9 @@ function ServiceDialog({
 
           {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
           <FollowUpRuleEditor
-            draft={followUpDraft}
+            drafts={followUpDrafts}
             onChange={(next) => {
-              setFollowUpDraft(next);
+              setFollowUpDrafts(next);
               setFollowUpError(null);
             }}
             error={followUpError}

@@ -22,6 +22,8 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId, "history"] as const,
   bookingPayments: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "payments"] as const,
+  bookingSettlements: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "settlements"] as const,
 
   /** Prefix for every calendar-block list — invalidate after any block write. */
   calendarBlocksAll: (businessId: string) => ["biz", businessId, "calendar-blocks"] as const,
@@ -192,6 +194,19 @@ export const queryKeys = {
     ["public", businessId, "availability", filters ?? {}] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
+  publicStaff: (businessId: string) => ["public", businessId, "staff"] as const,
+  publicCancellationPolicy: (businessId: string) =>
+    ["public", businessId, "policies", "cancellation"] as const,
+  publicReviews: (businessId: string) => ["public", businessId, "reviews"] as const,
+  /** The Google listing a studio connected for its booking page, staff side. */
+  googlePlace: (businessId: string) => ["biz", businessId, "booking-page", "google-place"] as const,
+  googlePlaceSearch: (businessId: string, q: string) =>
+    ["biz", businessId, "booking-page", "google-place", "search", q] as const,
+  /** The studio's own booking page settings (draft + published), staff side. */
+  bookingPage: (businessId: string) => ["biz", businessId, "booking-page"] as const,
+  slugAvailability: (businessId: string, slug: string) =>
+    ["biz", businessId, "slug-availability", slug] as const,
+  portalWaitlist: (businessId: string) => ["portal", businessId, "waitlist"] as const,
 
   /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
   portalBusinesses: () => ["portal", "businesses"] as const,
@@ -207,6 +222,7 @@ export const queryKeys = {
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
+  portalPurchases: (businessId: string) => ["portal", businessId, "purchases"] as const,
   portalPackageRequests: (businessId: string) =>
     ["portal", businessId, "package-requests"] as const,
   portalPackageLinks: (businessId: string) => ["portal", businessId, "package-links"] as const,

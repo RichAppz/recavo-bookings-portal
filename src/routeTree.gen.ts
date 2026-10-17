@@ -15,6 +15,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AppShellRouteImport } from './routes/app-shell'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as BookingPageRouteImport } from './routes/booking-page'
 import { Route as BookingsRouteImport } from './routes/bookings'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as ConnectRouteImport } from './routes/connect'
@@ -91,6 +92,11 @@ const BillingRoute = BillingRouteImport.update({
 const BookRoute = BookRouteImport.update({
   id: '/book',
   path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookingPageRoute = BookingPageRouteImport.update({
+  id: '/booking-page',
+  path: '/booking-page',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingsRoute = BookingsRouteImport.update({
@@ -338,6 +344,7 @@ export interface FileRoutesByFullPath {
   '/app-shell': typeof AppShellRoute
   '/billing': typeof BillingRouteWithChildren
   '/book': typeof BookRoute
+  '/booking-page': typeof BookingPageRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
@@ -392,6 +399,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/app-shell': typeof AppShellRoute
   '/book': typeof BookRoute
+  '/booking-page': typeof BookingPageRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/app-shell': typeof AppShellRoute
   '/billing': typeof BillingRouteWithChildren
   '/book': typeof BookRoute
+  '/booking-page': typeof BookingPageRoute
   '/bookings': typeof BookingsRoute
   '/calendar': typeof CalendarRoute
   '/connect': typeof ConnectRouteWithChildren
@@ -505,6 +514,7 @@ export interface FileRouteTypes {
     | '/app-shell'
     | '/billing'
     | '/book'
+    | '/booking-page'
     | '/bookings'
     | '/calendar'
     | '/connect'
@@ -559,6 +569,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/app-shell'
     | '/book'
+    | '/booking-page'
     | '/bookings'
     | '/calendar'
     | '/connect'
@@ -614,6 +625,7 @@ export interface FileRouteTypes {
     | '/app-shell'
     | '/billing'
     | '/book'
+    | '/booking-page'
     | '/bookings'
     | '/calendar'
     | '/connect'
@@ -670,6 +682,7 @@ export interface RootRouteChildren {
   AppShellRoute: typeof AppShellRoute
   BillingRoute: typeof BillingRouteWithChildren
   BookRoute: typeof BookRoute
+  BookingPageRoute: typeof BookingPageRoute
   BookingsRoute: typeof BookingsRoute
   CalendarRoute: typeof CalendarRoute
   ConnectRoute: typeof ConnectRouteWithChildren
@@ -752,6 +765,13 @@ declare module '@tanstack/react-router' {
       path: '/book'
       fullPath: '/book'
       preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/booking-page': {
+      id: '/booking-page'
+      path: '/booking-page'
+      fullPath: '/booking-page'
+      preLoaderRoute: typeof BookingPageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bookings': {
@@ -1129,6 +1149,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppShellRoute: AppShellRoute,
   BillingRoute: BillingRouteWithChildren,
   BookRoute: BookRoute,
+  BookingPageRoute: BookingPageRoute,
   BookingsRoute: BookingsRoute,
   CalendarRoute: CalendarRoute,
   ConnectRoute: ConnectRouteWithChildren,

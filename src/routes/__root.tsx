@@ -21,6 +21,7 @@ import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { RecoveryPending } from "@/components/RecoveryPending";
 import { NativeReturnGate } from "@/components/NativeReturnGate";
 import { OfflineProvider } from "@/components/OfflineProvider";
+import { PushBootstrap } from "@/components/PushBootstrap";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
@@ -222,6 +223,7 @@ function RootComponent() {
             <Toaster />
             <MfaDialog />
             <PullToRefresh />
+            <PushBootstrap />
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>

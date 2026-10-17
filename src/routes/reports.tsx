@@ -41,6 +41,7 @@ import {
 import { ApiError } from "@/lib/api/errors";
 import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
+import { averageJobValueMinor, fourthStatFor } from "@/lib/dashboard-stats";
 import { monthStartIn, previousReportRange, reportRange, todayIn } from "@/lib/report-range";
 import { toast } from "sonner";
 
@@ -97,6 +98,9 @@ function ReportsPage() {
   // Reports are in the business's calendar, not the browser's: September for a London
   // business is September in London wherever the owner is reading this from.
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  // A detailer completes jobs one car at a time: seat occupancy means nothing to them,
+  // so the fourth figure and the occupancy chart give way to the average job value.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [fromDate, setFromDate] = useState(() => monthStartIn(timezone));
   const [toDate, setToDate] = useState(() => todayIn(timezone));
   const [locationId, setLocationId] = useState<string>("all");
@@ -125,6 +129,11 @@ function ReportsPage() {
     locationId: locationId === "all" ? null : locationId,
   });
   const requestExport = useRequestExport();
+  const fourthStat = fourthStatFor(
+    tenant.business?.industryTemplateKey,
+    dashboard.data?.bookings ?? { count: 0, valueMinor: 0 },
+  );
+  const previousAverageMinor = previous.data ? averageJobValueMinor(previous.data.bookings) : null;
 
   const planGate = dashboard.isError ? planGateMessage(dashboard.error) : null;
 
@@ -138,7 +147,10 @@ function ReportsPage() {
 
   const attendanceBreakdown = dashboard.data
     ? [
-        { name: "Attended", value: dashboard.data.attendance.attended },
+        {
+          name: isCarDetailing ? "Completed" : "Attended",
+          value: dashboard.data.attendance.attended,
+        },
         { name: "No-show", value: dashboard.data.attendance.noShow },
         { name: "Cancelled", value: dashboard.data.attendance.cancelled },
       ]
@@ -320,7 +332,7 @@ function ReportsPage() {
                 }
               />
               <StatCard
-                label="Attendance rate"
+                label={isCarDetailing ? "Completion rate" : "Attendance rate"}
                 value={pct(
                   dashboard.data.attendance.attended + dashboard.data.attendance.noShow > 0
                     ? (dashboard.data.attendance.attended /
@@ -329,7 +341,23 @@ function ReportsPage() {
                     : 0,
                 )}
               />
-              <StatCard label="Occupancy rate" value={pct(dashboard.data.occupancy.rate * 100)} />
+              {fourthStat.kind === "occupancy" ? (
+                <StatCard label="Occupancy rate" value={pct(dashboard.data.occupancy.rate * 100)} />
+              ) : (
+                <StatCard
+                  label="Average job value"
+                  value={
+                    fourthStat.averageMinor === null
+                      ? "—"
+                      : formatMoney(fourthStat.averageMinor, dashboard.data.basis.currency)
+                  }
+                  change={
+                    previous.data && fourthStat.averageMinor !== null
+                      ? pctChange(fourthStat.averageMinor, previousAverageMinor ?? 0)
+                      : undefined
+                  }
+                />
+              )}
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
@@ -378,8 +406,12 @@ function ReportsPage() {
               </SectionCard>
 
               <SectionCard
-                title="Attendance"
-                description="Attended, no-show and cancelled sessions"
+                title={isCarDetailing ? "Job outcomes" : "Attendance"}
+                description={
+                  isCarDetailing
+                    ? "Completed, no-show and cancelled jobs"
+                    : "Attended, no-show and cancelled sessions"
+                }
               >
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -405,39 +437,41 @@ function ReportsPage() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard title="Occupancy" description="Seats booked vs capacity">
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={12}
-                        width={110}
-                      />
-                      <ChartTooltip />
-                      {/* Raw tokens, not the `--color-*` aliases: an alias resolves once on
+              {isCarDetailing ? null : (
+                <SectionCard title="Occupancy" description="Seats booked vs capacity">
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tickLine={false}
+                          axisLine={false}
+                          fontSize={12}
+                          width={110}
+                        />
+                        <ChartTooltip />
+                        {/* Raw tokens, not the `--color-*` aliases: an alias resolves once on
                           `:root`, so the capacity bar came out near-white in dark mode. */}
-                      <Bar
-                        dataKey="capacity"
-                        name="Capacity"
-                        fill="var(--secondary)"
-                        radius={[0, 8, 8, 0]}
-                      />
-                      <Bar
-                        dataKey="booked"
-                        name="Booked"
-                        fill="var(--primary)"
-                        radius={[0, 8, 8, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </SectionCard>
+                        <Bar
+                          dataKey="capacity"
+                          name="Capacity"
+                          fill="var(--secondary)"
+                          radius={[0, 8, 8, 0]}
+                        />
+                        <Bar
+                          dataKey="booked"
+                          name="Booked"
+                          fill="var(--primary)"
+                          radius={[0, 8, 8, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </SectionCard>
+              )}
 
               <SectionCard title="Packages and credits" description="Prepaid activity in range">
                 <dl className="grid grid-cols-2 gap-4 text-sm">

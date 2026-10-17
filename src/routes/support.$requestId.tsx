@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, LifeBuoy } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { CheckCircle2, LifeBuoy } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { SupportAttachmentGallery, SupportImagePicker } from "@/components/SupportImages";
@@ -8,6 +8,7 @@ import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { BackLink } from "@/components/BackLink";
 import { useSupportImages } from "@/hooks/use-support-images";
 import { ApiError } from "@/lib/api";
 import { useReplyToSupportRequest, useSupportRequest } from "@/lib/api/support";
@@ -42,13 +43,7 @@ function SupportThreadPage() {
   const tenant = useTenant();
   const timezone = tenant.business?.defaultTimezone || "Europe/London";
 
-  const back = (
-    <Button variant="ghost" size="sm" asChild>
-      <Link to="/support">
-        <ArrowLeft className="size-4" /> All requests
-      </Link>
-    </Button>
-  );
+  const back = <BackLink fallbackTo="/support" fallbackLabel="All requests" />;
 
   if (thread.isLoading) {
     return (

@@ -18,6 +18,7 @@ import {
   Repeat,
   Send,
   Sparkles,
+  StickyNote,
   Trash2,
   X,
 } from "lucide-react";
@@ -84,6 +85,7 @@ import {
   useBusinessId,
   useBookingHistory,
   useBookingPayments,
+  useBookingSettlements,
   useCustomer,
   useDeleteBooking,
   useLinkedRecord,
@@ -126,6 +128,12 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import {
+  bookingMoneyLines,
+  ledgerBehind,
+  recordedDirectionLabel,
+  settlementMethodLabel,
+} from "@/lib/booking-money";
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { emptySlotsMessage } from "@/lib/availability-windows";
@@ -169,7 +177,10 @@ import {
 } from "@/lib/booking-reminders";
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { describeClientLift } from "@/lib/client-lift";
+import { bookingNotes, bookingNotesLabel, hasBookingNotes } from "@/lib/booking-notes";
 import { cn } from "@/lib/utils";
+
+const NOTES_SECTION_ID = "booking-panel-notes";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
   "cancelled_by_customer",
@@ -242,6 +253,11 @@ export function BookingPanel({
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
+  // Cash / bank / terminal money staff recorded by hand lives in the settlement ledger,
+  // not in `payments`; the Payments tab lists both.
+  const settlements = useBookingSettlements(booking?.id, booking?.paidMinor);
+  const moneyLines = bookingMoneyLines(payments.data, settlements.data);
+  const ledgerCatchingUp = ledgerBehind(settlements.data, booking?.paidMinor);
   // Same query the Payments tab uses, so this costs nothing extra.
   const invoices = useBookingInvoices(booking?.id);
 
@@ -260,6 +276,7 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
+  const notes = bookingNotes(booking ?? {});
   // Each service at what it was booked at (with its list), the whole-job discount or
   // adjustment (if any) and the total (RECA-532). The list total differs from
   // priceMinor only when staff priced a service or the job differently.
@@ -927,6 +944,27 @@ export function BookingPanel({
                     Lift needed
                   </span>
                 ) : null}
+                {/* Notes sit at the foot of Details, so flag them up here and jump to
+                    them on tap — otherwise "park round the back" is read at the kerb. */}
+                {hasBookingNotes(notes) ? (
+                  <button
+                    type="button"
+                    data-testid="booking-notes-pill"
+                    onClick={() => {
+                      setTab("details");
+                      requestAnimationFrame(() => {
+                        document
+                          .getElementById(NOTES_SECTION_ID)
+                          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/15"
+                    title="Show the notes"
+                  >
+                    <StickyNote className="size-3" aria-hidden />
+                    {bookingNotesLabel(notes)}
+                  </button>
+                ) : null}
                 {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
@@ -1298,12 +1336,28 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {booking.notesInternal ? (
-                    <div>
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        Internal notes
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">{booking.notesInternal}</p>
+                  {hasBookingNotes(notes) ? (
+                    <div id={NOTES_SECTION_ID} className="scroll-mt-4 space-y-4">
+                      {notes.customer ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Note from the client
+                          </p>
+                          <p className="mt-2 rounded-xl border border-primary/30 bg-primary-soft p-3 text-sm whitespace-pre-wrap">
+                            {notes.customer}
+                          </p>
+                        </div>
+                      ) : null}
+                      {notes.internal ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Internal notes
+                          </p>
+                          <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
+                            {notes.internal}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -1437,45 +1491,84 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {payments.isLoading ? (
+                  {payments.isLoading || settlements.isLoading ? (
                     <TableGhost rows={3} />
-                  ) : payments.isError ? (
+                  ) : payments.isError && settlements.isError ? (
                     <p className="text-xs text-destructive">Couldn't load payments.</p>
-                  ) : (payments.data ?? []).length === 0 ? (
-                    <EmptyState
-                      title="No payments yet"
-                      description="Payments taken for this booking will appear here."
-                    />
+                  ) : moneyLines.length === 0 ? (
+                    ledgerCatchingUp ? (
+                      // The booking already counts the money; the ledger lists it a
+                      // moment later and the query is re-asking in the background.
+                      <TableGhost rows={1} />
+                    ) : (
+                      <EmptyState
+                        title="No payments yet"
+                        description="Card payments and any you record by hand will appear here."
+                      />
+                    )
                   ) : (
-                    <ul className="divide-y rounded-xl border">
-                      {payments.data!.map((p) => (
-                        <li key={p.id} className="flex items-center justify-between gap-3 p-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">
-                              {formatMoney(p.amountMinor, p.currency)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatInTz(p.createdAt, timezone, {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <StatusBadge status={p.state} />
-                            {p.receiptUrl ? (
-                              <a
-                                href={p.receiptUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-medium text-primary underline"
-                              >
-                                Receipt
-                              </a>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
+                    <ul className="divide-y rounded-xl border" data-testid="booking-money">
+                      {moneyLines.map((line) =>
+                        line.kind === "payment" ? (
+                          <li key={line.id} className="flex items-center justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.payment.amountMinor, line.payment.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Card ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={line.payment.state} />
+                              {line.payment.receiptUrl ? (
+                                <a
+                                  href={line.payment.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-medium text-primary underline"
+                                >
+                                  Receipt
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ) : (
+                          <li
+                            key={line.id}
+                            className="flex items-center justify-between gap-3 p-3"
+                            data-testid="recorded-payment"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.amountMinor, line.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {settlementMethodLabel(line.method)} ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                                line.direction === "payment" ||
+                                  line.direction === "dispute_reversal"
+                                  ? "bg-success-soft text-success"
+                                  : "bg-secondary text-secondary-foreground",
+                              )}
+                            >
+                              {recordedDirectionLabel(line.direction)}
+                            </span>
+                          </li>
+                        ),
+                      )}
                     </ul>
                   )}
 
@@ -1726,6 +1819,12 @@ export function BookingPanel({
           pending={busy === "payment"}
           onSubmit={async (amountMinor, method) => {
             setBusy("payment");
+            // The API completes a started job the moment it is paid in full (see
+            // recordPayment); mirror that so the panel doesn't flash "Attended" late.
+            const settlesStartedJob =
+              amountMinor >= settlement.outstandingMinor &&
+              booking.status === "confirmed" &&
+              new Date(booking.start).getTime() <= Date.now();
             try {
               const outcome = await outbox({
                 label: `Recorded ${formatMoney(amountMinor, booking.currency)} from ${customerName}`,
@@ -1735,7 +1834,13 @@ export function BookingPanel({
                 booking: {
                   businessId,
                   bookingId: booking.id,
-                  patch: { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
+                  patch: settlesStartedJob
+                    ? {
+                        paidMinor: (booking.paidMinor ?? 0) + amountMinor,
+                        attendanceStatus: "attended",
+                        status: "completed",
+                      }
+                    : { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
                 },
               });
               if (outcome.queued) {
@@ -1743,12 +1848,22 @@ export function BookingPanel({
                 setRecordOpen(false);
                 return;
               }
+              if (settlesStartedJob) {
+                // Completing the job may issue an invoice a moment later (ADR 0019 §7).
+                for (const delay of [1500, 4000]) {
+                  setTimeout(() => {
+                    void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+                  }, delay);
+                }
+              }
               toast.success(
-                amountMinor >= settlement.outstandingMinor
-                  ? "Payment recorded — paid in full"
-                  : recordIntent === "deposit" && amountMinor >= depositOwedMinor
-                    ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
-                    : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+                settlesStartedJob
+                  ? "Paid in full — job marked done"
+                  : amountMinor >= settlement.outstandingMinor
+                    ? "Payment recorded — paid in full"
+                    : recordIntent === "deposit" && amountMinor >= depositOwedMinor
+                      ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
+                      : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
               );
               setRecordOpen(false);
             } catch (err) {
@@ -2487,7 +2602,7 @@ function RescheduleDialog({
                     // Keep an overridden span whole when the first day passes the last.
                     if (lastDay !== null && e.target.value > lastDay) setLastDay(e.target.value);
                   }}
-                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                 />
                 {mode === "custom" && !booking.allDay ? (
                   <input
@@ -2495,7 +2610,7 @@ function RescheduleDialog({
                     aria-label="Start time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                   />
                 ) : null}
               </div>
@@ -2526,7 +2641,7 @@ function RescheduleDialog({
                       value={effectiveLastDay}
                       onChange={(e) => setLastDay(e.target.value)}
                       aria-invalid={lastDayInvalid}
-                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm aria-invalid:border-destructive"
                     />
                   </div>
                 </div>

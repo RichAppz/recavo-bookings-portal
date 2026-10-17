@@ -101,6 +101,12 @@ export type Package = schemas["Package"];
 export type PackageLink = schemas["PackageLink"];
 /** Money off through an offer link: a whole percentage, or a fixed amount in minor units. */
 export type PackageLinkDiscount = NonNullable<PackageLink["discount"]>;
+/**
+ * An extra bookable window an offer link opens for one of its sessions: a weekly rule
+ * (`dayOfWeek` 1–7, Monday = 1) or one local calendar day (`date`), with half-open
+ * wall-clock minutes. Only a client arriving with the link's code sees these times.
+ */
+export type PackageLinkExtraWindow = PackageLink["extraAvailability"][number];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];
@@ -108,12 +114,19 @@ export type EntitlementView = schemas["EntitlementView"];
 export type CreditLedgerEntry = schemas["CreditLedgerEntry"];
 export type PublicCataloguePlan = schemas["PublicCataloguePlan"];
 export type Payment = schemas["Payment"];
+/** One movement of money against a booking from the settlement ledger (card or recorded by hand). */
+export type BookingSettlementLine = schemas["BookingSettlement"];
 export type Refund = schemas["Refund"];
 export type PaymentReceipt = schemas["PaymentReceipt"];
 export type ConnectAccount = schemas["ConnectAccount"];
 export type Conversation = schemas["Conversation"];
 export type ConversationMessage = schemas["ConversationMessage"];
 export type Notification = schemas["Notification"];
+/** A phone or browser the signed-in user has turned push notifications on for. */
+export type PushDevice = schemas["PushDevice"];
+export type PushPlatform = PushDevice["platform"];
+/** Which push providers this deployment can deliver through, and the VAPID key for browsers. */
+export type PushConfig = schemas["PushConfig"];
 export type Dashboard = schemas["Dashboard"];
 export type FileResource = schemas["File"];
 export type Resource = schemas["Resource"];

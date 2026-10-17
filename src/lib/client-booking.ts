@@ -1,3 +1,5 @@
+import { formatInTz, formatTimeInTz, isoDateInTz } from "./format.ts";
+
 /**
  * The booking fields these helpers read. Structural (not the `Booking` schema type)
  * because the portal API sends the customer a slimmer booking than staff get:
@@ -58,4 +60,98 @@ export function addCalendarDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);
   const next = new Date(Date.UTC(y!, m! - 1, d! + days));
   return next.toISOString().slice(0, 10);
+}
+
+/** "Today, 17:00" / "Tomorrow, 09:00" / "Mon 20 Oct, 09:00": the landing's next free time. */
+export function nextAvailableLabel(startIso: string, timeZone: string, today: string): string {
+  const day = isoDateInTz(startIso, timeZone);
+  const dayLabel =
+    day === today
+      ? "Today"
+      : day === addCalendarDays(today, 1)
+        ? "Tomorrow"
+        : formatInTz(startIso, timeZone, { weekday: "short", day: "numeric", month: "short" });
+  return `${dayLabel}, ${formatTimeInTz(startIso, timeZone)}`;
+}
+
+/** `YYYY-MM` of a calendar day. */
+export function monthOf(date: string): string {
+  return date.slice(0, 7);
+}
+
+/** `YYYY-MM` plus whole months. */
+export function addMonths(month: string, months: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(y!, m! - 1 + months, 1));
+  return next.toISOString().slice(0, 7);
+}
+
+/**
+ * The cells of a Monday-first month grid: `null` for the blanks before the 1st,
+ * then every day of the month as `YYYY-MM-DD`. Always a whole number of weeks.
+ */
+export function monthGrid(month: string): (string | null)[] {
+  const [y, m] = month.split("-").map(Number);
+  const first = new Date(Date.UTC(y!, m! - 1, 1));
+  const lead = (first.getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  const cells: (string | null)[] = Array.from({ length: lead }, () => null);
+  for (let d = 1; d <= days; d += 1) {
+    cells.push(`${month}-${String(d).padStart(2, "0")}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+/**
+ * "Leeds LS6" from "12 Mill Street, Leeds LS6 2AB": the town and the outward
+ * half of a UK postcode, for the landing chip. Falls back to the last part of
+ * the address when there is no postcode to anchor on.
+ */
+export function shortPlace(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const last = parts[parts.length - 1]!;
+  const postcode = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})?$/i.exec(last);
+  if (!postcode) return last;
+  const outward = postcode[1]!.toUpperCase();
+  const town = last.slice(0, postcode.index).trim() || parts[parts.length - 2] || "";
+  return [town, outward].filter(Boolean).join(" ");
+}
+
+/* ------------------------------------------------------------ google reviews */
+
+type ReviewLike = { author: string; rating: number; text: string; publishedAt: string };
+
+/** "Sarah Kent" → "Sarah K."; one word stays as it is. Mirrors the API's public projection. */
+export function shortAuthorName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "A Google user";
+  if (parts.length === 1) return parts[0]!;
+  return `${parts[0]} ${parts[parts.length - 1]!.charAt(0).toUpperCase()}.`;
+}
+
+/**
+ * What the public page would show for a stored snapshot: at or above the star floor,
+ * with text, newest first, author shortened. Lets the editor preview a draft's floor
+ * from the staff-side snapshot without another request.
+ */
+export function filterReviews<T extends ReviewLike>(reviews: readonly T[], minStars: number): T[] {
+  return reviews
+    .filter((r) => r.rating >= minStars && r.text.trim().length > 0)
+    .slice()
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .map((r) => ({ ...r, author: shortAuthorName(r.author) }));
+}
+
+/** "4.9 · 86 Google reviews" for the landing chip; null when there is nothing to say. */
+export function reviewsChipLabel(
+  reviews: { rating: number | null; reviewCount: number } | null | undefined,
+): string | null {
+  if (!reviews || reviews.rating === null || reviews.reviewCount === 0) return null;
+  return `${reviews.rating.toFixed(1)} · ${reviews.reviewCount} Google ${reviews.reviewCount === 1 ? "review" : "reviews"}`;
 }

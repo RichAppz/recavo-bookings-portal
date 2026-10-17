@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { paths } from "./schema";
 import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
 import { useLiveConnected } from "@/lib/live/live-status";
+import { ledgerBehind } from "@/lib/booking-money";
 import { toast } from "sonner";
 import {
   keepPreviousData,
@@ -31,6 +32,7 @@ import type {
   AvailabilitySlot,
   Booking,
   BookingHistoryEntry,
+  BookingSettlementLine,
   CalendarBlock,
   CorrectBookingTimeBody,
   Business,
@@ -46,6 +48,7 @@ import type {
   BookingConsumablesUsage,
   Conversation,
   ConversationMessage,
+  WaitlistPreferences,
   CreditLedgerEntry,
   Customer,
   CustomerNote,
@@ -72,6 +75,7 @@ import type {
   Package,
   PackageLink,
   PackageLinkDiscount,
+  PackageLinkExtraWindow,
   PackagePurchase,
   Payment,
   PaymentReceipt,
@@ -96,6 +100,13 @@ import type {
   UserProfileUpdate,
 } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
+import {
+  normaliseBookingPage,
+  type BookingPageContent,
+  type BookingPageSection,
+  type BookingPageSettings,
+  type BookingPageTheme,
+} from "@/lib/client-theme";
 import { deriveBusinessOnboarding } from "@/lib/onboarding/derive";
 import {
   getSkippedStepsLocally,
@@ -801,6 +812,32 @@ export function useBookingPayments(bookingId: string | undefined) {
   return useQuery({
     ...bookingPaymentsQueryOptions(businessId, bookingId ?? ""),
     enabled: Boolean(businessId && bookingId),
+  });
+}
+
+/**
+ * Every movement of money against a booking from the settlement ledger — including the
+ * cash, bank-transfer and terminal amounts staff recorded by hand, which never become a
+ * `Payment`. The ledger is projected from events a poll after the booking's paid total
+ * moves, so while it still shows less than `paidMinor` this re-asks every couple of
+ * seconds (bounded) rather than leaving "No payments yet" under "Paid in full".
+ */
+export function useBookingSettlements(
+  bookingId: string | undefined,
+  paidMinor: number | null | undefined,
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingSettlements(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ settlements: BookingSettlementLine[] }>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/settlements`,
+      );
+      return res.data.settlements;
+    },
+    refetchInterval: (query) =>
+      ledgerBehind(query.state.data, paidMinor) && query.state.dataUpdateCount < 15 ? 2000 : false,
   });
 }
 
@@ -2493,10 +2530,31 @@ export function useCreatePackageLink() {
       showFullCatalogue?: boolean;
       /** Money off everything the link names; omitted = list prices. */
       discount?: PackageLinkDiscount | null;
+      /** Extra bookable times per named session, only for clients with the code. */
+      extraAvailability?: PackageLinkExtraWindow[];
     }) => {
       const res = await api.post<{ link: PackageLink }>(
         `/api/v1/businesses/${businessId}/package-links`,
         body,
+      );
+      return res.data.link;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.packageLinks(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Replace the extra bookable times on a live link; the rest of a link is fixed once shared. */
+export function useUpdatePackageLinkExtraTimes() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { linkId: string; extraAvailability: PackageLinkExtraWindow[] }) => {
+      const res = await api.patch<{ link: PackageLink }>(
+        `/api/v1/businesses/${businessId}/package-links/${vars.linkId}`,
+        { extraAvailability: vars.extraAvailability },
       );
       return res.data.link;
     },
@@ -2955,6 +3013,77 @@ export function useMarkNotificationRead() {
       return { snapshots };
     },
     onError: (err, _id, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
+      toastApiError(err);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
+    },
+  });
+}
+
+type NotificationsPage = { notifications: Notification[]; nextCursor?: string | null };
+
+/** Clear one notification from the bell. Optimistically removes the row. */
+export function useDismissNotification() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await api.post<{ notification: Notification }>(
+        `/api/v1/businesses/${businessId}/notifications/${notificationId}/dismiss`,
+        {},
+      );
+      return res.data.notification;
+    },
+    onMutate: async (notificationId) => {
+      await qc.cancelQueries({ queryKey: ["biz", businessId, "notifications"] });
+      const snapshots = qc.getQueriesData<NotificationsPage>({
+        queryKey: ["biz", businessId, "notifications"],
+      });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData(key, {
+          ...data,
+          notifications: data.notifications.filter((n) => n.id !== notificationId),
+        });
+      }
+      return { snapshots };
+    },
+    onError: (err, _id, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
+      toastApiError(err);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "notifications"] });
+    },
+  });
+}
+
+/** Clear everything in the bell for the signed-in user. */
+export function useDismissAllNotifications() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post<{ dismissed: number }>(
+        `/api/v1/businesses/${businessId}/notifications/dismiss-all`,
+        {},
+      );
+      return res.data.dismissed;
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["biz", businessId, "notifications"] });
+      const snapshots = qc.getQueriesData<NotificationsPage>({
+        queryKey: ["biz", businessId, "notifications"],
+      });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData(key, { ...data, notifications: [] });
+      }
+      return { snapshots };
+    },
+    onError: (err, _vars, ctx) => {
       for (const [key, data] of ctx?.snapshots ?? []) qc.setQueryData(key, data);
       toastApiError(err);
     },
@@ -5070,6 +5199,356 @@ export interface PublicBusinessProfile {
   currency: string;
   defaultTimezone: string;
   branding: { logoUrl: string | null; accentColour: string | null };
+  /** The published booking page look + content; optional until every API build returns it. */
+  page?: Partial<BookingPageContent> | null;
+  /** Which ways this business takes payment, so Review offers exactly those. */
+  paymentMethods?: { card: boolean; bankTransfer: boolean; onTheDay: boolean };
+  /** Hours before the start a customer can still move or cancel without losing money. */
+  cancellationWindowHours?: number;
+  /** The business's legal address as one line, when it has one. */
+  address?: string | null;
+  /**
+   * Set when the link that resolved this business was an old one the business has
+   * since changed, so the page can move the visitor to the current link.
+   */
+  redirectedFromSlug?: string | null;
+}
+
+/** A team member as the booking page shows them. */
+export type PublicStaff = {
+  id: string;
+  displayName: string;
+  title: string | null;
+  bio: string | null;
+  locationIds: string[];
+  eligibleServiceIds: string[];
+};
+
+export type PublicCancellationPolicy = {
+  id: string;
+  version: number;
+  content: string | null;
+  effectiveAt: string;
+};
+
+export function usePublicStaff(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicStaff(businessId ?? ""),
+    enabled: Boolean(businessId),
+    staleTime: 5 * 60 * 1000,
+    // Older API builds have no such route; the page simply offers no team picker.
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ staff: PublicStaff[] }>(
+          `/api/v1/public/businesses/${businessId}/staff`,
+          { public: true },
+        );
+        return res.data.staff;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return [] as PublicStaff[];
+        throw err;
+      }
+    },
+  });
+}
+
+export type GoogleReview = {
+  author: string;
+  authorPhotoUrl: string | null;
+  rating: number;
+  text: string;
+  relativeTime: string;
+  publishedAt: string;
+};
+
+/** What a visitor sees: the published page's star floor already applied. */
+export type PublicReviews = {
+  placeName: string;
+  mapsUrl: string;
+  rating: number | null;
+  reviewCount: number;
+  reviews: GoogleReview[];
+};
+
+export function usePublicReviews(businessId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.publicReviews(businessId ?? ""),
+    enabled: Boolean(businessId) && enabled,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ reviews: PublicReviews | null }>(
+          `/api/v1/public/businesses/${businessId}/reviews`,
+          { public: true },
+        );
+        return res.data.reviews;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+  });
+}
+
+export function usePublicCancellationPolicy(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicCancellationPolicy(businessId ?? ""),
+    enabled: Boolean(businessId),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ policy: PublicCancellationPolicy | null }>(
+          `/api/v1/public/businesses/${businessId}/policies/cancellation`,
+          { public: true },
+        );
+        return res.data.policy;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+  });
+}
+
+/* ---------------- Booking page editor (staff side) ---------------- */
+
+export type BookingPageDraftPatch = {
+  theme?: BookingPageTheme;
+  headerImageUrl?: string | null;
+  headerFocalPoint?: { x: number; y: number };
+  accentColour?: string | null;
+  description?: string | null;
+  about?: string | null;
+  sections?: BookingPageSection[];
+  reviewsMinStars?: 0 | 4 | 5;
+  venue?: { address?: string | null; parkingNote?: string | null };
+};
+
+function normaliseBookingPageSettings(
+  raw: Partial<BookingPageSettings> | null | undefined,
+): BookingPageSettings {
+  return {
+    draft: normaliseBookingPage(raw?.draft),
+    published: normaliseBookingPage(raw?.published),
+    draftUpdatedAt: raw?.draftUpdatedAt ?? null,
+    publishedAt: raw?.publishedAt ?? null,
+  };
+}
+
+export function useBookingPage() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingPage(businessId),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page`,
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+  });
+}
+
+/* ---------------------------------------------------------- google reviews */
+
+export type GooglePlaceCandidate = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  rating: number | null;
+  reviewCount: number;
+};
+
+/** The connected listing with its stored snapshot (full author names, every star). */
+export type GooglePlaceConnection = {
+  placeId: string;
+  name: string;
+  address: string | null;
+  mapsUrl: string;
+  rating: number | null;
+  reviewCount: number;
+  reviews: GoogleReview[];
+  connectedAt: string;
+  fetchedAt: string;
+};
+
+export type GooglePlaceStatus = {
+  googlePlace: GooglePlaceConnection | null;
+  /** False when the server has no Google key, so lookups cannot work yet. */
+  configured: boolean;
+};
+
+export function useGooglePlace() {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.googlePlace(businessId),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<GooglePlaceStatus>(
+          `/api/v1/businesses/${businessId}/booking-page/google-place`,
+        );
+        return res.data;
+      } catch (err) {
+        // Older API builds have no such route; the editor then shows nothing to connect.
+        if (err instanceof ApiError && err.status === 404) {
+          return { googlePlace: null, configured: false } satisfies GooglePlaceStatus;
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+export function useGooglePlaceSearch(q: string) {
+  const businessId = useBusinessId();
+  const query = q.trim();
+  return useQuery<GooglePlaceCandidate[], ApiError>({
+    queryKey: queryKeys.googlePlaceSearch(businessId, query),
+    enabled: Boolean(businessId) && query.length >= 2,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<{ candidates: GooglePlaceCandidate[] }>(
+        `/api/v1/businesses/${businessId}/booking-page/google-place/search`,
+        { query: { q: query } },
+      );
+      return res.data.candidates;
+    },
+  });
+}
+
+export function useConnectGooglePlace() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<GooglePlaceConnection, ApiError, string>({
+    mutationFn: async (placeId) => {
+      const res = await api.put<{ googlePlace: GooglePlaceConnection }>(
+        `/api/v1/businesses/${businessId}/booking-page/google-place`,
+        { placeId },
+      );
+      return res.data.googlePlace;
+    },
+    onSuccess: (googlePlace) => {
+      qc.setQueryData<GooglePlaceStatus>(queryKeys.googlePlace(businessId), (prev) => ({
+        configured: prev?.configured ?? true,
+        googlePlace,
+      }));
+      void qc.invalidateQueries({ queryKey: queryKeys.publicReviews(businessId) });
+    },
+  });
+}
+
+export function useDisconnectGooglePlace() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, void>({
+    mutationFn: async () => {
+      await api.delete(`/api/v1/businesses/${businessId}/booking-page/google-place`);
+    },
+    onSuccess: () => {
+      qc.setQueryData<GooglePlaceStatus>(queryKeys.googlePlace(businessId), (prev) => ({
+        configured: prev?.configured ?? true,
+        googlePlace: null,
+      }));
+      void qc.invalidateQueries({ queryKey: queryKeys.publicReviews(businessId) });
+    },
+  });
+}
+
+export function useUpdateBookingPageDraft() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, BookingPageDraftPatch>({
+    mutationFn: async (patch) => {
+      const res = await api.patch<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page`,
+        patch,
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+  });
+}
+
+export function usePublishBookingPage() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, void>({
+    mutationFn: async () => {
+      const res = await api.post<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/publish`,
+        {},
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+      // The public page is keyed by handle; drop every cached copy so a preview refetches.
+      void qc.invalidateQueries({ queryKey: ["public", "business"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useDiscardBookingPageDraft() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, void>({
+    mutationFn: async () => {
+      const res = await api.post<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/discard`,
+        {},
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Raw image bytes, like the logo upload; lands on the draft. */
+export function useUploadBookingPageHeader() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<BookingPageSettings, ApiError, File>({
+    mutationFn: async (file) => {
+      const res = await api.put<{ bookingPage: BookingPageSettings }>(
+        `/api/v1/businesses/${businessId}/booking-page/header`,
+        file,
+        { headers: { "Content-Type": file.type || "application/octet-stream" } },
+      );
+      return normaliseBookingPageSettings(res.data.bookingPage);
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.bookingPage(businessId), data);
+    },
+  });
+}
+
+export function useSlugAvailability(slug: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.slugAvailability(businessId, slug ?? ""),
+    enabled: Boolean(businessId && slug && slug.length >= 3),
+    staleTime: 30 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const res = await api.get<{ slug: string; available: boolean; reason: string | null }>(
+        `/api/v1/businesses/${businessId}/slug-availability`,
+        { query: { slug } },
+      );
+      return res.data;
+    },
+  });
 }
 
 /**
@@ -5091,10 +5570,33 @@ export function usePublicBusiness(handle: string | undefined, by: "slug" | "id" 
         by === "slug"
           ? `/api/v1/public/businesses/by-slug/${encodeURIComponent(handle!)}`
           : `/api/v1/public/businesses/${handle}/profile`;
-      const res = await api.get<{ business: PublicBusinessProfile }>(path, { public: true });
-      return res.data.business;
+      const res = await api.get<{
+        business: PublicBusinessProfile;
+        redirectedFromSlug?: string | null;
+      }>(path, { public: true });
+      return {
+        ...res.data.business,
+        redirectedFromSlug: res.data.redirectedFromSlug ?? null,
+      } satisfies PublicBusinessProfile;
     },
   });
+}
+
+/**
+ * The reason a public link 404'd, when the API says: a business that exists but is
+ * not taking online bookings is told apart from a link that goes nowhere.
+ */
+export function closedBusinessFromError(
+  err: unknown,
+): { tradingName: string | null; logoUrl: string | null } | null {
+  if (!(err instanceof ApiError) || err.status !== 404) return null;
+  if (err.extensions.reason !== "not_taking_bookings") return null;
+  const tradingName = err.extensions.tradingName;
+  const logoUrl = err.extensions.logoUrl;
+  return {
+    tradingName: typeof tradingName === "string" ? tradingName : null,
+    logoUrl: typeof logoUrl === "string" ? logoUrl : null,
+  };
 }
 
 export function usePublicServices(businessId: string | undefined) {
@@ -5137,6 +5639,8 @@ export function usePublicAvailability(
     linkCode?: string | null;
     /** Upsell add-ons ticked with the service; slots are sized and priced for the whole job. */
     additionalServiceIds?: readonly string[];
+    /** Only this team member's times; omit for "anyone". */
+    staffId?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -5149,6 +5653,7 @@ export function usePublicAvailability(
     from: filters.from!,
     to: filters.to!,
     ...(filters.linkCode ? { linkCode: filters.linkCode } : {}),
+    ...(filters.staffId ? { staffId: filters.staffId } : {}),
     ...(filters.additionalServiceIds?.length
       ? { additionalServiceIds: filters.additionalServiceIds.join(",") }
       : {}),
@@ -5234,6 +5739,8 @@ export type PublicPackageLink = PublicPackageCatalogue & {
     name: string;
     showFullCatalogue?: boolean;
     discount?: PackageLinkDiscount | null;
+    /** Extra bookable times the offer opens, per session; absent on older API builds. */
+    extraAvailability?: PackageLinkExtraWindow[];
   };
   services: PublicService[];
 };
@@ -5523,6 +6030,29 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
         return res.data;
       },
     ),
+  });
+}
+
+/**
+ * Gives a held time back before it would expire on its own: the client went back
+ * to pick another time, or a promo code means the slot must be re-held at the new
+ * price. Best effort: a server without the route (404) is treated as done.
+ */
+export function useReleasePublicBookingHold(businessId: string | undefined) {
+  return useMutation({
+    mutationFn: async (vars: { bookingId: string; holdToken: string }) => {
+      try {
+        await api.post<unknown>(
+          `/api/v1/public/businesses/${businessId}/booking-holds/release`,
+          vars,
+          { public: true },
+        );
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 409)) return false;
+        throw err;
+      }
+    },
   });
 }
 
@@ -5941,6 +6471,20 @@ export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummar
   });
 }
 
+/** The offer links this customer has at one studio, for the booking page's Offers section. */
+export function usePortalPackageLinks(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalPackageLinks(businessId ?? ""),
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ links: PublicPackageLink[] }>("/api/v1/portal/package-links", {
+        query: { businessId },
+      });
+      return res.data.links;
+    },
+  });
+}
+
 export function usePortalCredits(businessId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.portalCredits(businessId ?? ""),
@@ -5953,6 +6497,22 @@ export function usePortalCredits(businessId: string | undefined) {
     },
   });
 }
+
+/**
+ * A package the customer bought, however they paid. A card purchase also shows up
+ * in payments with `paymentRef` pointing at that payment; a bank transfer the
+ * business confirmed or a sale staff keyed in exists only here.
+ */
+export type PortalPurchase = {
+  id: string;
+  packageId: string;
+  packageName: string | null;
+  creditsIssued: number | null;
+  amountMinor: number;
+  currency: string;
+  paymentRef: string | null;
+  purchasedAt: string;
+};
 
 /** One row of a customer's account, tagged with the studio it came from. */
 export type FromStudio<T> = T & { readonly studio: PortalBusinessSummary };
@@ -6012,6 +6572,21 @@ export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefi
     combine: (results) => combineByStudio(results, list),
   });
 
+  // Packages bought by bank transfer or sold by staff never produce a card payment,
+  // so the Purchases list needs the sale record as well as the receipts.
+  const purchases = useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.portalPurchases(studio.id),
+      queryFn: async () => {
+        const res = await api.get<{ purchases: PortalPurchase[] }>("/api/v1/portal/purchases", {
+          query: { businessId: studio.id },
+        });
+        return res.data.purchases;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+
   // Packages asked for while a studio had no card processing; a pending one is why
   // the Credits view may be empty even though the customer "bought" something.
   const packageRequests = useQueries({
@@ -6028,7 +6603,7 @@ export function usePortalAcrossStudios(studios: PortalBusinessSummary[] | undefi
     combine: (results) => combineByStudio(results, list),
   });
 
-  return { bookings, credits, payments, packageRequests };
+  return { bookings, credits, payments, purchases, packageRequests };
 }
 
 function combineByStudio<T>(
@@ -6069,6 +6644,91 @@ export function useBookWithPortalCredit(businessId: string | undefined) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.portalBookings(businessId ?? "") });
       void qc.invalidateQueries({ queryKey: queryKeys.portalCredits(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** The customer's own open waitlist entry, as the account page shows it. */
+export type PortalWaitlistEntry = {
+  id: string;
+  status: string;
+  service: { id: string; name: string } | null;
+  variant: { id: string; name: string } | null;
+  location: { id: string; name: string } | null;
+  staff: { id: string; displayName: string } | null;
+  preferences: WaitlistPreferences;
+  notes: string | null;
+  createdAt: string;
+};
+
+export function usePortalWaitlist(businessId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.portalWaitlist(businessId ?? ""),
+    enabled: Boolean(businessId),
+    retry: false,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ entries: PortalWaitlistEntry[] }>("/api/v1/portal/waitlist", {
+          query: { businessId },
+        });
+        return res.data.entries;
+      } catch (err) {
+        // Older API builds have no such route; the card simply does not appear.
+        if (err instanceof ApiError && err.status === 404) return [] as PortalWaitlistEntry[];
+        throw err;
+      }
+    },
+  });
+}
+
+export function useLeavePortalWaitlist(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<PortalWaitlistEntry, ApiError, { entryId: string }>({
+    mutationFn: createIdempotentMutationFn(
+      async (vars: { entryId: string }, idempotencyKey: string) => {
+        const res = await api.post<{ entry: PortalWaitlistEntry }>(
+          `/api/v1/portal/waitlist/${vars.entryId}/leave`,
+          {},
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.entry;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalWaitlist(businessId ?? "") });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Past the free-move window the customer asks rather than moves: the request lands
+ * in their conversation with the business, with the booking reference attached.
+ */
+export function useRequestPortalBookingMove(businessId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation<
+    ConversationMessage,
+    ApiError,
+    { bookingId: string; preferredTimes: string; note?: string | null }
+  >({
+    mutationFn: createIdempotentMutationFn(
+      async (
+        vars: { bookingId: string; preferredTimes: string; note?: string | null },
+        idempotencyKey: string,
+      ) => {
+        const res = await api.post<{ message: ConversationMessage }>(
+          `/api/v1/portal/bookings/${vars.bookingId}/move-request`,
+          { preferredTimes: vars.preferredTimes, note: vars.note ?? null },
+          { query: { businessId }, idempotencyKey },
+        );
+        return res.data.message;
+      },
+    ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.portalMessages(businessId ?? "") });
+      void qc.invalidateQueries({ queryKey: queryKeys.portalConversation(businessId ?? "") });
     },
     onError: (err) => toastApiError(err),
   });

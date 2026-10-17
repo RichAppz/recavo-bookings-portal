@@ -47,7 +47,7 @@ export const GUIDE_CATEGORIES: readonly {
     label: "Clients",
     description: {
       personal_training: "Client records, packages and credits, and what you've sent them.",
-      car_detailing: "Client records, their vehicles, follow-ups and what you've sent them.",
+      car_detailing: "Client records, their vehicles, reminders and what you've sent them.",
     },
   },
   {

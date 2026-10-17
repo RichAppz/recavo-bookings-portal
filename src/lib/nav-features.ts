@@ -40,8 +40,8 @@ export const NAV_FEATURES: {
   {
     key: "follow_ups",
     path: "/follow-ups",
-    label: "Follow-ups",
-    hint: "Clients due a repeat visit.",
+    label: "Reminders",
+    hint: "Remind clients when they are due back, and see who is due.",
   },
   {
     key: "records",

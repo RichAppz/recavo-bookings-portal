@@ -1,7 +1,19 @@
-import type { ServiceFollowUp, ServiceFollowUpRule, ServiceFollowUpStatus } from "@/lib/api/types";
+import type {
+  CatalogueService,
+  ServiceFollowUp,
+  ServiceFollowUpRule,
+  ServiceFollowUpStatus,
+} from "@/lib/api/types";
 
-/** Interval presets offered on the service form; "custom" opens a months field. */
+/**
+ * Interval presets offered on the service form and the Reminders page; "custom" opens
+ * a months field. Short ones for upkeep (a maintenance wash every 2 months), long
+ * ones for treatments that wear off.
+ */
 export const FOLLOW_UP_INTERVAL_PRESETS: ReadonlyArray<{ months: number; label: string }> = [
+  { months: 1, label: "1 month" },
+  { months: 2, label: "2 months" },
+  { months: 3, label: "3 months" },
   { months: 6, label: "6 months" },
   { months: 12, label: "1 year" },
   { months: 18, label: "18 months" },
@@ -24,15 +36,36 @@ export function followUpIntervalLabel(months: number): string {
   return months === 1 ? "every month" : `every ${months} months`;
 }
 
-/** The hint on a service card: "Top-up every 2 years" (or the rule's own label). */
-export function followUpRuleSummary(rule: ServiceFollowUpRule): string {
+/** One rule's summary: "Ceramic top-up every 2 years" (or "Top-up …" without a label). */
+export function followUpRuleSummary(
+  rule: Pick<ServiceFollowUpRule, "intervalMonths" | "label">,
+): string {
   const what = rule.label?.trim() || "Top-up";
   return `${what} ${followUpIntervalLabel(rule.intervalMonths)}`;
 }
 
-/** Form state for the rule editor; strings so partially typed numbers survive. */
+/** The hint on a service card: every rule, soonest first — "Valet every year · Top-up every 2 years". */
+export function followUpRulesSummary(
+  rules: readonly Pick<ServiceFollowUpRule, "intervalMonths" | "label">[],
+): string {
+  return rules
+    .slice()
+    .sort((a, b) => a.intervalMonths - b.intervalMonths)
+    .map(followUpRuleSummary)
+    .join(" · ");
+}
+
+/** The most reminders one service can carry; mirrors the API. */
+export const FOLLOW_UP_MAX_RULES = 5;
+
+/**
+ * Form state for one reminder in the editor; strings so partially typed numbers
+ * survive. `id` is the saved rule's id (null for one added this session) so the API
+ * keeps its scheduled follow-ups; `key` is only for React.
+ */
 export type FollowUpRuleDraft = {
-  enabled: boolean;
+  key: string;
+  id: string | null;
   /** A preset's months, or "custom". */
   preset: string;
   customMonths: string;
@@ -40,19 +73,17 @@ export type FollowUpRuleDraft = {
   label: string;
 };
 
-export function draftFromRule(rule: ServiceFollowUpRule | null | undefined): FollowUpRuleDraft {
-  if (!rule) {
-    return {
-      enabled: false,
-      preset: "24",
-      customMonths: "",
-      leadDays: String(FOLLOW_UP_DEFAULT_LEAD_DAYS),
-      label: "",
-    };
-  }
+let draftSeq = 0;
+function nextKey(): string {
+  draftSeq += 1;
+  return `fu-draft-${draftSeq}`;
+}
+
+export function draftFromRule(rule: ServiceFollowUpRule): FollowUpRuleDraft {
   const preset = FOLLOW_UP_INTERVAL_PRESETS.find((p) => p.months === rule.intervalMonths);
   return {
-    enabled: true,
+    key: rule.id,
+    id: rule.id,
     preset: preset ? String(preset.months) : "custom",
     customMonths: preset ? "" : String(rule.intervalMonths),
     leadDays: String(rule.leadDays),
@@ -60,43 +91,187 @@ export function draftFromRule(rule: ServiceFollowUpRule | null | undefined): Fol
   };
 }
 
-export type FollowUpRuleDraftResult =
-  | { ok: true; rule: ServiceFollowUpRule | null }
-  | { ok: false; field: "intervalMonths" | "leadDays" | "label"; message: string };
+export function draftsFromRules(
+  rules: readonly ServiceFollowUpRule[] | null | undefined,
+): FollowUpRuleDraft[] {
+  return (rules ?? []).map(draftFromRule);
+}
 
-/** Validates the draft into the API payload; `null` when the reminder is switched off. */
-export function ruleFromDraft(draft: FollowUpRuleDraft): FollowUpRuleDraftResult {
-  if (!draft.enabled) return { ok: true, rule: null };
-  const months =
-    draft.preset === "custom" ? Number(draft.customMonths.trim()) : Number(draft.preset);
-  if (
-    !Number.isInteger(months) ||
-    months < FOLLOW_UP_MIN_INTERVAL_MONTHS ||
-    months > FOLLOW_UP_MAX_INTERVAL_MONTHS
-  ) {
-    return {
-      ok: false,
-      field: "intervalMonths",
-      message: `Enter a whole number of months between ${FOLLOW_UP_MIN_INTERVAL_MONTHS} and ${FOLLOW_UP_MAX_INTERVAL_MONTHS}.`,
-    };
+/**
+ * A blank reminder to add to the list. Its interval is the first preset not already
+ * used, so "Add another" after a 2-year top-up offers something other than 2 years
+ * (6 months first: a maintenance wash is the usual second reminder).
+ */
+export function newFollowUpDraft(existing: readonly FollowUpRuleDraft[]): FollowUpRuleDraft {
+  const taken = new Set(existing.map((d) => draftMonths(d)));
+  const order = existing.length === 0 ? [24, 12, 6, 18, 36] : [12, 6, 18, 24, 36];
+  const months = order.find((m) => !taken.has(m));
+  return {
+    key: nextKey(),
+    id: null,
+    preset: months ? String(months) : "custom",
+    customMonths: "",
+    leadDays: String(FOLLOW_UP_DEFAULT_LEAD_DAYS),
+    label: "",
+  };
+}
+
+function draftMonths(draft: FollowUpRuleDraft): number {
+  return draft.preset === "custom" ? Number(draft.customMonths.trim()) : Number(draft.preset);
+}
+
+/** What the API accepts for one rule: an existing id to keep, or none for a new one. */
+export type FollowUpRuleInput = {
+  id?: string;
+  intervalMonths: number;
+  leadDays: number;
+  label: string | null;
+};
+
+export type FollowUpRuleField = "intervalMonths" | "leadDays" | "label";
+
+export type FollowUpRulesDraftResult =
+  | { ok: true; rules: FollowUpRuleInput[] }
+  | { ok: false; index: number; field: FollowUpRuleField; message: string };
+
+/**
+ * Validates every draft into the API payload (an empty list switches reminders off).
+ * The first problem is reported with the reminder it belongs to; two reminders with the
+ * same interval are refused because they would be the same message twice.
+ */
+export function rulesFromDrafts(drafts: readonly FollowUpRuleDraft[]): FollowUpRulesDraftResult {
+  const rules: FollowUpRuleInput[] = [];
+  const seen = new Map<number, number>();
+  for (const [index, draft] of drafts.entries()) {
+    const months = draftMonths(draft);
+    if (
+      !Number.isInteger(months) ||
+      months < FOLLOW_UP_MIN_INTERVAL_MONTHS ||
+      months > FOLLOW_UP_MAX_INTERVAL_MONTHS
+    ) {
+      return {
+        ok: false,
+        index,
+        field: "intervalMonths",
+        message: `Enter a whole number of months between ${FOLLOW_UP_MIN_INTERVAL_MONTHS} and ${FOLLOW_UP_MAX_INTERVAL_MONTHS}.`,
+      };
+    }
+    const first = seen.get(months);
+    if (first !== undefined) {
+      return {
+        ok: false,
+        index,
+        field: "intervalMonths",
+        message: `Reminder ${first + 1} already uses ${followUpIntervalLabel(months).replace(/^every /, "")}. Pick a different interval or remove one.`,
+      };
+    }
+    seen.set(months, index);
+    const lead =
+      draft.leadDays.trim() === "" ? FOLLOW_UP_DEFAULT_LEAD_DAYS : Number(draft.leadDays);
+    if (!Number.isInteger(lead) || lead < 0 || lead > FOLLOW_UP_MAX_LEAD_DAYS) {
+      return {
+        ok: false,
+        index,
+        field: "leadDays",
+        message: `Enter a whole number of days between 0 and ${FOLLOW_UP_MAX_LEAD_DAYS}.`,
+      };
+    }
+    const label = draft.label.trim();
+    if (label.length > FOLLOW_UP_MAX_LABEL_LENGTH) {
+      return {
+        ok: false,
+        index,
+        field: "label",
+        message: `Keep the label under ${FOLLOW_UP_MAX_LABEL_LENGTH} characters.`,
+      };
+    }
+    rules.push({
+      ...(draft.id ? { id: draft.id } : {}),
+      intervalMonths: months,
+      leadDays: lead,
+      label: label || null,
+    });
   }
-  const lead = draft.leadDays.trim() === "" ? FOLLOW_UP_DEFAULT_LEAD_DAYS : Number(draft.leadDays);
-  if (!Number.isInteger(lead) || lead < 0 || lead > FOLLOW_UP_MAX_LEAD_DAYS) {
-    return {
-      ok: false,
-      field: "leadDays",
-      message: `Enter a whole number of days between 0 and ${FOLLOW_UP_MAX_LEAD_DAYS}.`,
-    };
+  return { ok: true, rules };
+}
+
+/** One reminder rule with the service it hangs off — a row on the Reminders page. */
+export type ReminderRuleRow = {
+  serviceId: string;
+  serviceName: string;
+  serviceActive: boolean;
+  rule: ServiceFollowUpRule;
+};
+
+/**
+ * Every reminder rule across the catalogue, for the Reminders page: active services
+ * first, A–Z by name, and within a service soonest interval first. Services without
+ * rules contribute nothing.
+ */
+export function reminderRuleRows(
+  services: readonly Pick<CatalogueService, "id" | "name" | "active" | "followUps">[],
+): ReminderRuleRow[] {
+  return services
+    .slice()
+    .sort((a, b) => (a.active === b.active ? a.name.localeCompare(b.name) : a.active ? -1 : 1))
+    .flatMap((s) =>
+      s.followUps
+        .slice()
+        .sort((a, b) => a.intervalMonths - b.intervalMonths)
+        .map((rule) => ({
+          serviceId: s.id,
+          serviceName: s.name,
+          serviceActive: s.active,
+          rule,
+        })),
+    );
+}
+
+/**
+ * The `followUps` payload for a service after one rule is saved from the Reminders
+ * page: the edited rule (matched by id) replaced in place, or a new one appended.
+ * The other rules are sent back untouched, ids included, so the API keeps the
+ * follow-ups they have already scheduled.
+ */
+export function rulesWithSaved(
+  existing: readonly ServiceFollowUpRule[],
+  saved: FollowUpRuleInput,
+): FollowUpRuleInput[] {
+  const keep = existing.map((r): FollowUpRuleInput => ({
+    id: r.id,
+    intervalMonths: r.intervalMonths,
+    leadDays: r.leadDays,
+    label: r.label ?? null,
+  }));
+  if (saved.id) {
+    const index = keep.findIndex((r) => r.id === saved.id);
+    if (index >= 0) {
+      keep[index] = saved;
+      return keep;
+    }
   }
-  const label = draft.label.trim();
-  if (label.length > FOLLOW_UP_MAX_LABEL_LENGTH) {
-    return {
-      ok: false,
-      field: "label",
-      message: `Keep the label under ${FOLLOW_UP_MAX_LABEL_LENGTH} characters.`,
-    };
-  }
-  return { ok: true, rule: { intervalMonths: months, leadDays: lead, label: label || null } };
+  return [...keep, saved];
+}
+
+/** The `followUps` payload with one rule removed; an empty list switches reminders off. */
+export function rulesWithout(
+  existing: readonly ServiceFollowUpRule[],
+  ruleId: string,
+): FollowUpRuleInput[] {
+  return existing
+    .filter((r) => r.id !== ruleId)
+    .map((r) => ({
+      id: r.id,
+      intervalMonths: r.intervalMonths,
+      leadDays: r.leadDays,
+      label: r.label ?? null,
+    }));
+}
+
+/** "Remind 14 days before" / "Remind on the day". */
+export function leadDaysLabel(leadDays: number): string {
+  if (leadDays === 0) return "Remind on the day";
+  return `Remind ${leadDays} ${leadDays === 1 ? "day" : "days"} before`;
 }
 
 /** Where a follow-up sits relative to today, for grouping and badges. */

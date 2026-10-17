@@ -13,6 +13,7 @@ import {
   MessageSquarePlus,
   Package,
   PackageCheck,
+  Receipt,
   Sparkles,
   TrendingUp,
   UserPlus,
@@ -84,6 +85,7 @@ import type { Booking, CalendarBlock } from "@/lib/api/types";
 import { ApiError } from "@/lib/api";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatInTz, formatMoney, isAllDayEvent, isoDate, pct, ukDate } from "@/lib/format";
+import { fourthStatFor } from "@/lib/dashboard-stats";
 import { currentMonthRange, lastDaysRange } from "@/lib/report-range";
 import { localDay, segmentOn } from "@/lib/working-days";
 import { isSessionEntry } from "@/lib/session-landing";
@@ -208,6 +210,13 @@ function Overview() {
     [rangeKey, businessTimezone],
   );
   const dashboard = useDashboard({ from: range.from, to: range.to });
+  const fourthStat = fourthStatFor(
+    tenant.business?.industryTemplateKey,
+    dashboard.data?.bookings ?? { count: 0, valueMinor: 0 },
+  );
+  // The figures can land before the business record does; until it has, the trade is
+  // unknown, so hold the ghosts rather than flash seat occupancy at a detailer.
+  const statsPending = dashboard.isLoading || (!tenant.business && tenant.isLoading);
   const waitlistSummary = useWaitlistSummary({ enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL) });
   const waiting = waitlistSummary.data?.waiting ?? 0;
   const upsellSummary = useUpsellOffersSummary({
@@ -339,7 +348,7 @@ function Overview() {
           </div>
         </div>
 
-        {dashboard.isLoading ? (
+        {statsPending ? (
           <StatsGhost />
         ) : dashboard.isError ? (
           isPlanGated(dashboard.error) ? (
@@ -404,16 +413,29 @@ function Overview() {
                   hint={`${dashboard.data.attendance.noShow} no-shows · ${dashboard.data.attendance.cancelled} cancelled`}
                   icon={<TrendingUp className="size-4.5" />}
                 />
-                <StatCard
-                  label={isCarDetailing ? "Diary filled" : "Occupancy rate"}
-                  value={pct(dashboard.data.occupancy.rate * 100)}
-                  hint={
-                    isCarDetailing
-                      ? `${dashboard.data.occupancy.seats} of ${dashboard.data.occupancy.capacity} slots booked`
-                      : `${dashboard.data.occupancy.seats} of ${dashboard.data.occupancy.capacity} seats`
-                  }
-                  icon={<Users className="size-4.5" />}
-                />
+                {fourthStat.kind === "occupancy" ? (
+                  <StatCard
+                    label="Occupancy rate"
+                    value={pct(dashboard.data.occupancy.rate * 100)}
+                    hint={`${dashboard.data.occupancy.seats} of ${dashboard.data.occupancy.capacity} seats`}
+                    icon={<Users className="size-4.5" />}
+                  />
+                ) : (
+                  <StatCard
+                    label="Average job value"
+                    value={
+                      fourthStat.averageMinor === null
+                        ? "—"
+                        : formatMoney(fourthStat.averageMinor, dashboard.data.basis.currency)
+                    }
+                    hint={
+                      fourthStat.count === 0
+                        ? `No ${Bookings.toLowerCase()} in this range`
+                        : `Across ${fourthStat.count} ${fourthStat.count === 1 ? bookingNoun.toLowerCase() : Bookings.toLowerCase()}`
+                    }
+                    icon={<Receipt className="size-4.5" />}
+                  />
+                )}
               </div>
             )}
 

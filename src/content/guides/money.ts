@@ -189,10 +189,20 @@ export const MONEY_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Pick a range",
-        body: "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Bookings**, **Attendance rate** and **Occupancy rate** — cover that range and compare it with the period before.",
+        body: {
+          personal_training:
+            "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Bookings**, **Attendance rate** and **Occupancy rate** — cover that range and compare it with the period before.",
+          car_detailing:
+            "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Jobs**, **Completion rate** and **Average job value** — cover that range and compare it with the period before.",
+        },
         image: {
           name: "reports",
-          alt: "The Reports page with a date range and cards for revenue, bookings, attendance rate and occupancy rate.",
+          alt: {
+            personal_training:
+              "The Reports page with a date range and cards for revenue, bookings, attendance rate and occupancy rate.",
+            car_detailing:
+              "The Reports page with a date range and cards for revenue, jobs, completion rate and average job value.",
+          },
         },
         link: { to: "/reports", label: "Open Reports" },
       },
@@ -202,7 +212,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
           personal_training:
             "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Attendance** counts attended, no-show and cancelled sessions, **Occupancy** compares seats booked with capacity, and **Packages and credits** totals what you've sold and how many credits were used.",
           car_detailing:
-            "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Attendance** counts completed, no-show and cancelled jobs, and **Occupancy** compares bay time booked with what was available.",
+            "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Job outcomes** counts completed, no-show and cancelled jobs, and **Packages and credits** totals what you've sold and how many credits were used.",
         },
         image: {
           name: "reports-detail",

@@ -4,7 +4,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
-  ArrowLeft,
   ArrowRightLeft,
   CalendarPlus,
   Hourglass,
@@ -100,6 +99,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { BackLink } from "@/components/BackLink";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -275,12 +275,7 @@ function ClientProfile() {
 
   return (
     <>
-      <Link
-        to="/clients"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> All clients
-      </Link>
+      <BackLink fallbackTo="/clients" fallbackLabel="All clients" />
 
       <div className="surface-card flex flex-col gap-5 p-6 lg:flex-row lg:items-center">
         <CustomerAvatar customer={client} size={72} editable />

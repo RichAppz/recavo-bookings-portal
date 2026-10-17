@@ -34,7 +34,21 @@ export type ProblemDetails = {
   errors?: ProblemFieldError[];
   conflicts?: BookingConflict[];
   overridable?: boolean;
+  [extension: string]: unknown;
 };
+
+const STANDARD_PROBLEM_KEYS = new Set([
+  "type",
+  "title",
+  "status",
+  "code",
+  "detail",
+  "requestId",
+  "errors",
+  "conflicts",
+  "overridable",
+  "instance",
+]);
 
 export class ApiError extends Error {
   readonly status: number;
@@ -48,6 +62,8 @@ export class ApiError extends Error {
   readonly conflicts: BookingConflict[];
   /** True when re-sending with `dropIn: true` would be accepted (all-day ↔ timed clash). */
   readonly overridable: boolean;
+  /** Any non-standard members the problem carried (e.g. `reason` on a public 404). */
+  readonly extensions: Record<string, unknown>;
 
   constructor(input: {
     status: number;
@@ -59,6 +75,7 @@ export class ApiError extends Error {
     type?: string;
     conflicts?: BookingConflict[];
     overridable?: boolean;
+    extensions?: Record<string, unknown>;
   }) {
     const title = input.title ?? "Something went wrong";
     super(input.detail ? `${title}: ${input.detail}` : title);
@@ -72,6 +89,7 @@ export class ApiError extends Error {
     this.type = input.type;
     this.conflicts = input.conflicts ?? [];
     this.overridable = input.overridable === true;
+    this.extensions = input.extensions ?? {};
   }
 
   /** A clash staff may override by booking as a drop-in (or sharing the day). */
@@ -113,6 +131,9 @@ export function parseProblemDetails(body: unknown, status: number, requestId?: s
       type: typeof p.type === "string" ? p.type : undefined,
       conflicts: Array.isArray(p.conflicts) ? p.conflicts : [],
       overridable: p.overridable === true,
+      extensions: Object.fromEntries(
+        Object.entries(p).filter(([key]) => !STANDARD_PROBLEM_KEYS.has(key)),
+      ),
     });
   }
 
@@ -196,6 +217,21 @@ export function describeFieldErrors(errors: readonly ProblemFieldError[]): strin
     .filter((p) => p !== "");
   // Duplicates read as a stutter when several lines fail the same way.
   return [...new Set(parts)].join(". ");
+}
+
+/**
+ * One line a person can act on, for inline error states. A 404 on a route the
+ * portal expects means the API is behind the portal, which is worth saying
+ * plainly rather than echoing "Route not found".
+ */
+export function describeApiError(error: unknown, fallback = "Something went wrong"): string {
+  if (!(error instanceof ApiError)) return fallback;
+  const ref = error.requestId ? ` Ref: ${error.requestId}` : "";
+  if (error.status === 404 && error.detail === "Route not found") {
+    return `This part of RECAVO isn't switched on for this server yet.${ref}`;
+  }
+  const text = error.detail || describeFieldErrors(error.fieldErrors) || error.title || fallback;
+  return `${text}${ref}`;
 }
 
 export function toastApiError(error: unknown, fallback = "Something went wrong") {
