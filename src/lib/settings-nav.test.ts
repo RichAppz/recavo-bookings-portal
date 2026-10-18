@@ -65,6 +65,11 @@ describe("settings nav model", () => {
       page: "policies",
       assist: true,
     });
+    // The URL search parser hands `?assist=1` over as the number 1.
+    assert.deepEqual(legacySettingsTarget({ tab: "policies", assist: 1 }), {
+      page: "policies",
+      assist: true,
+    });
     assert.deepEqual(legacySettingsTarget({ tab: "policies", assist: true }), {
       page: "policies",
       assist: true,

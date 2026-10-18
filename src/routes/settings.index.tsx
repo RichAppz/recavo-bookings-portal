@@ -25,7 +25,7 @@ export const Route = createFileRoute("/settings/")({
       throw redirect({
         to: "/settings/$page",
         params: { page: target.page },
-        search: target.assist ? { assist: "1" } : {},
+        search: target.assist ? { assist: true } : {},
         hash: target.hash,
         replace: true,
       });

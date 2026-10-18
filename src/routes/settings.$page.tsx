@@ -38,7 +38,11 @@ function SettingsPageRoute() {
   const search = Route.useSearch();
   const tenant = useTenant();
   const key = (isSettingsPageKey(page) ? page : "business") as SettingsPageKey;
-  const assist = search.assist === true || search.assist === "1" || search.assist === "true";
+  const assist =
+    search.assist === true ||
+    search.assist === 1 ||
+    search.assist === "1" ||
+    search.assist === "true";
 
   switch (key) {
     case "profile":

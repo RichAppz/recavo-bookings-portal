@@ -313,9 +313,13 @@ function matchesQuery(item: SettingsNavItem, q: string): boolean {
  */
 export function legacySettingsTarget(search: {
   tab?: string | undefined;
-  assist?: string | boolean | undefined;
+  assist?: string | number | boolean | undefined;
 }): { page: SettingsPageKey; assist?: true; hash?: "privacy" } {
-  const assist = search.assist === true || search.assist === "1" || search.assist === "true";
+  const assist =
+    search.assist === true ||
+    search.assist === 1 ||
+    search.assist === "1" ||
+    search.assist === "true";
   switch (search.tab) {
     case "account":
       return { page: "profile" };

@@ -12,8 +12,8 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
  */
 const searchSchema = z.object({
   tab: z.string().optional(),
-  /** RECA-512 — open AI policy assist when `1` / `true`. */
-  assist: z.union([z.literal("1"), z.literal("true"), z.boolean()]).optional(),
+  /** RECA-512 — open AI policy assist when `1` / `true` (the URL parser hands `1` over as a number). */
+  assist: z.union([z.literal("1"), z.literal("true"), z.literal(1), z.boolean()]).optional(),
   session_id: z.string().optional(),
   checkoutAttemptId: z.string().optional(),
 });

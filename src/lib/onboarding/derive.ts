@@ -68,7 +68,7 @@ const STEP_META: Record<
     title: "Publish cancellation & terms",
     description: "Set clear policies before clients book online.",
     required: false,
-    href: "/settings?tab=policies&assist=1",
+    href: "/settings/policies?assist=1",
   },
   package: {
     title: "Offer a package",
