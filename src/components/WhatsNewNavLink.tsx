@@ -29,10 +29,41 @@ function useUnseenReleases(): number {
   return unseen;
 }
 
-/** Sidebar footer link to the release log, with a count while there's something unread. */
-export function WhatsNewNavLink({ onClick }: { onClick?: () => void }) {
+/**
+ * Sidebar footer link to the release log, with a count while there's something
+ * unread. `compact` renders just the icon (and count) for the collapsed footer.
+ */
+export function WhatsNewNavLink({
+  onClick,
+  compact = false,
+}: {
+  onClick?: () => void;
+  compact?: boolean;
+}) {
   const unseen = useUnseenReleases();
   const active = useRouterState({ select: (s) => s.location.pathname }) === "/whats-new";
+  const countLabel = `${unseen} new ${unseen === 1 ? "update" : "updates"}`;
+
+  if (compact) {
+    return (
+      <Link
+        to="/whats-new"
+        onClick={onClick}
+        title="What's new"
+        aria-label={unseen > 0 ? `What's new — ${countLabel}` : "What's new"}
+        className={cn(
+          "flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold tabular-nums transition-colors",
+          active || unseen > 0
+            ? "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/80"
+            : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <Sparkles className={cn("size-4", unseen > 0 && "text-sidebar-primary")} aria-hidden />
+        {unseen > 0 ? <span className="text-sidebar-primary">{unseen}</span> : null}
+      </Link>
+    );
+  }
+
   return (
     <Link
       to="/whats-new"
@@ -52,7 +83,7 @@ export function WhatsNewNavLink({ onClick }: { onClick?: () => void }) {
       {unseen > 0 ? (
         <span
           className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground"
-          aria-label={`${unseen} new ${unseen === 1 ? "update" : "updates"}`}
+          aria-label={countLabel}
         >
           {unseen}
         </span>

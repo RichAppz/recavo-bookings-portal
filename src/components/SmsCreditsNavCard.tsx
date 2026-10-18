@@ -7,9 +7,16 @@ import { cn } from "@/lib/utils";
 /**
  * Sidebar card with the text credit balance (ADR 0020). Hidden on Growth (texts
  * included) and until the balance is known; goes amber when low and red at zero,
- * matching the card on the Billing page. Click → the credits page.
+ * matching the card on the Billing page. Click → the credits page. `compact`
+ * renders an icon with the balance for the collapsed footer.
  */
-export function SmsCreditsNavCard({ onClick }: { onClick?: () => void }) {
+export function SmsCreditsNavCard({
+  onClick,
+  compact = false,
+}: {
+  onClick?: () => void;
+  compact?: boolean;
+}) {
   const { credits, level } = useSmsCreditsSummary();
   if (!credits || level === "unlimited" || level === "unknown") return null;
 
@@ -22,6 +29,29 @@ export function SmsCreditsNavCard({ onClick }: { onClick?: () => void }) {
       : level === "low"
         ? `Running low${buyHint}`
         : `Prepaid texts${buyHint}`;
+  const label = `${balance} text ${balance === 1 ? "credit" : "credits"} left — open text credits`;
+
+  if (compact) {
+    return (
+      <Link
+        to="/billing/sms-credits"
+        onClick={onClick}
+        title={`Text credits — ${subtitle}`}
+        aria-label={label}
+        className={cn(
+          "flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[12px] font-bold tabular-nums transition-colors",
+          level === "empty"
+            ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            : level === "low"
+              ? "bg-amber-500 text-white hover:bg-amber-500/90"
+              : "bg-sidebar-accent/70 text-sidebar-accent-foreground hover:bg-sidebar-accent",
+        )}
+      >
+        <MessageSquareText className="size-4" aria-hidden />
+        {balance}
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -35,7 +65,7 @@ export function SmsCreditsNavCard({ onClick }: { onClick?: () => void }) {
             ? "bg-amber-500/15 hover:bg-amber-500/25"
             : "bg-sidebar-accent/70 hover:bg-sidebar-accent",
       )}
-      aria-label={`${balance} text ${balance === 1 ? "credit" : "credits"} left — open text credits`}
+      aria-label={label}
     >
       <span
         className={cn(

@@ -11,16 +11,46 @@ function isComplete(data: BusinessOnboarding | undefined): boolean {
   return Boolean(data) && (data!.status === "complete" || data!.percentComplete >= 100);
 }
 
-export function SetupNavCard({ onClick }: { onClick: () => void }) {
+export function SetupNavCard({
+  onClick,
+  compact = false,
+}: {
+  onClick: () => void;
+  /** Just the percentage, for the collapsed sidebar footer. */
+  compact?: boolean;
+}) {
   const { data, isLoading } = useBusinessOnboarding();
   const percent = data?.percentComplete ?? 0;
   const remaining = Math.max(0, (data?.requiredTotal ?? 0) - (data?.requiredCompleted ?? 0));
 
   if (isLoading && !data) {
-    return <div className="h-[72px] animate-pulse rounded-xl bg-sidebar-accent/70" aria-hidden />;
+    return (
+      <div
+        className={
+          compact
+            ? "size-9 animate-pulse rounded-lg bg-sidebar-accent/70"
+            : "h-[72px] animate-pulse rounded-xl bg-sidebar-accent/70"
+        }
+        aria-hidden
+      />
+    );
   }
 
   if (!data || isComplete(data)) return null;
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={`Get set up — ${percent}% complete`}
+        className="flex h-9 shrink-0 items-center rounded-lg bg-sidebar-primary px-2 text-[12px] font-bold tabular-nums text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+        aria-label={`Get set up, ${percent}% complete`}
+      >
+        {percent}%
+      </button>
+    );
+  }
 
   return (
     <button

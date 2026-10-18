@@ -8,6 +8,8 @@ import {
   Building2,
   CalendarDays,
   Car,
+  ChevronDown,
+  ChevronRight,
   ChevronsUpDown,
   ClipboardList,
   Clock,
@@ -65,6 +67,7 @@ import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
 import { BillingBanner, TrialPill } from "@/components/BillingBanner";
+import { BillingNavCard } from "@/components/BillingNavCard";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
 import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
@@ -259,6 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
+  const [footerCollapsed, setFooterCollapsed] = useSidebarFooterCollapsed();
   const [bookingOpen, setBookingOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   // null = closed; an object (possibly empty) = open with those fields prefilled.
@@ -539,16 +543,51 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Building2 className="size-5 lg:size-4.5" /> Platform view
             </Link>
           ) : null}
-          <SetupNavCard
-            onClick={() => {
-              setMobileNav(false);
-              setSetupOpenRequest((n) => n + 1);
-            }}
-          />
-          <SmsCreditsNavCard onClick={() => setMobileNav(false)} />
-          <WhatsNewNavLink onClick={() => setMobileNav(false)} />
-          {/* Guides and Support live in the top bar's Help menu (HelpMenu). The demo
-              tour is still reachable from the setup checklist. */}
+          {/* Setup progress, billing trouble, text credits and What's new. Folds
+              down to a row of icons so the footer stays short; the choice is
+              remembered per device. Guides and Support live in the top bar's
+              Help menu (HelpMenu). */}
+          <div
+            className={cn(footerCollapsed ? "flex flex-wrap items-center gap-1.5" : "space-y-1")}
+          >
+            <button
+              type="button"
+              onClick={() => setFooterCollapsed(!footerCollapsed)}
+              aria-expanded={!footerCollapsed}
+              aria-controls="sidebar-updates"
+              title={footerCollapsed ? "Show details" : "Collapse"}
+              className={cn(
+                "flex items-center rounded-lg text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/80",
+                footerCollapsed
+                  ? "size-9 shrink-0 justify-center"
+                  : "w-full justify-between px-3 py-1 text-[11px] font-semibold tracking-[0.14em] uppercase",
+              )}
+            >
+              {footerCollapsed ? (
+                <ChevronRight className="size-4" aria-hidden />
+              ) : (
+                <>
+                  <span>Alerts &amp; updates</span>
+                  <ChevronDown className="size-4" aria-hidden />
+                </>
+              )}
+              <span className="sr-only">
+                {footerCollapsed ? "Show alerts and updates" : "Collapse alerts and updates"}
+              </span>
+            </button>
+            <div id="sidebar-updates" className={cn(footerCollapsed ? "contents" : "space-y-1")}>
+              <SetupNavCard
+                compact={footerCollapsed}
+                onClick={() => {
+                  setMobileNav(false);
+                  setSetupOpenRequest((n) => n + 1);
+                }}
+              />
+              <BillingNavCard compact={footerCollapsed} onClick={() => setMobileNav(false)} />
+              <SmsCreditsNavCard compact={footerCollapsed} onClick={() => setMobileNav(false)} />
+              <WhatsNewNavLink compact={footerCollapsed} onClick={() => setMobileNav(false)} />
+            </div>
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -878,28 +917,42 @@ export function useQuickActions() {
 }
 
 const SIDEBAR_HIDDEN_KEY = "recavo.sidebar.hidden";
+const SIDEBAR_FOOTER_KEY = "recavo.sidebar.footer.collapsed";
 
 /**
- * Whether the desktop sidebar is tucked away. Read after mount so the server and
- * first client render agree, then remembered per device.
+ * A per-device yes/no remembered in localStorage. Read after mount so the server
+ * and first client render agree (both start at `false`).
  */
-function useSidebarHidden(): [boolean, (hidden: boolean) => void] {
-  const [hidden, setHidden] = useState(false);
+function useRememberedFlag(key: string): [boolean, (next: boolean) => void] {
+  const [on, setOn] = useState(false);
   useEffect(() => {
     try {
-      setHidden(localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1");
+      setOn(localStorage.getItem(key) === "1");
     } catch {
-      // Storage unavailable: the sidebar simply starts open.
+      // Storage unavailable: the default simply applies.
     }
-  }, []);
-  const update = useCallback((next: boolean) => {
-    setHidden(next);
-    try {
-      if (next) localStorage.setItem(SIDEBAR_HIDDEN_KEY, "1");
-      else localStorage.removeItem(SIDEBAR_HIDDEN_KEY);
-    } catch {
-      // Best effort; the choice still applies for this page view.
-    }
-  }, []);
-  return [hidden, update];
+  }, [key]);
+  const update = useCallback(
+    (next: boolean) => {
+      setOn(next);
+      try {
+        if (next) localStorage.setItem(key, "1");
+        else localStorage.removeItem(key);
+      } catch {
+        // Best effort; the choice still applies for this page view.
+      }
+    },
+    [key],
+  );
+  return [on, update];
+}
+
+/** Whether the desktop sidebar is tucked away. */
+function useSidebarHidden(): [boolean, (hidden: boolean) => void] {
+  return useRememberedFlag(SIDEBAR_HIDDEN_KEY);
+}
+
+/** Whether the sidebar's alerts-and-updates cards are folded to a row of icons. */
+function useSidebarFooterCollapsed(): [boolean, (collapsed: boolean) => void] {
+  return useRememberedFlag(SIDEBAR_FOOTER_KEY);
 }

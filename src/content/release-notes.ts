@@ -24,6 +24,16 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "A failed payment now gives you 48 hours of full access before the workspace goes read-only, and we email you at both points: when the card is declined (with the exact time your access would pause and a Pay now link) and again if it does pause. The 48 hours start from the moment we first see the payment has failed, even if Stripe's own notification to us is late, so nobody is locked out without warning. The Plan page and the red banner show the time as well as the date.",
         where: "Plan",
       },
+      {
+        kind: "new",
+        text: "A failed subscription payment now shows in the menu too, next to Text credits: amber with the time your full access runs until, red once the workspace is read-only, and a tap takes you to Pay now.",
+        where: "Menu",
+      },
+      {
+        kind: "improved",
+        text: "The cards at the foot of the menu — setup progress, payment warnings, Text credits and What's new — fold down to a row of small icons with the Alerts & updates toggle, so the menu stays short. Each icon still opens the same page, and the choice is remembered on this device.",
+        where: "Menu",
+      },
     ],
   },
   {
