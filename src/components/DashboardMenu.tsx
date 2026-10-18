@@ -346,12 +346,21 @@ export function DashboardMenu({
 
         {/* Account card + More */}
         <div className={cn("shrink-0 px-3 pt-2 pb-3", strip && "px-2")}>
-          {moreOpen ? (
+          {/* Grid-row animation: the list stays in the DOM so the height can tween; `inert` keeps it out of the tab order while closed. */}
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none",
+              moreOpen ? "mb-2 grid-rows-[1fr] opacity-100" : "mb-0 grid-rows-[0fr] opacity-0",
+            )}
+          >
             <ul
               id="menu-more"
+              inert={!moreOpen}
+              aria-hidden={!moreOpen}
               className={cn(
-                "mb-2 space-y-0.5 border-t border-sidebar-border pt-2",
-                strip && "border-t-0 pt-0",
+                "min-h-0 space-y-0.5 overflow-hidden rounded-[14px] bg-secondary/60 transition-[padding] duration-200 ease-out motion-reduce:transition-none",
+                moreOpen && "p-1.5",
+                strip && moreOpen && "p-1",
               )}
             >
               {moreRows.map((r) => (
@@ -425,7 +434,7 @@ export function DashboardMenu({
                 </li>
               ))}
             </ul>
-          ) : null}
+          </div>
 
           <div
             className={cn("flex gap-2", strip ? "flex-col-reverse items-center" : "items-stretch")}
