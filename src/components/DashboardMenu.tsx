@@ -134,7 +134,7 @@ export function DashboardMenu({
           onClick={() => setSectionOpen(key, !open)}
           aria-expanded={open}
           aria-controls={`menu-section-${key}`}
-          className="flex min-h-7 items-center gap-1.5 rounded-md text-[11px] font-bold tracking-[0.1em] text-muted-foreground uppercase hover:text-foreground"
+          className="flex min-h-7 items-center gap-1.5 rounded-md text-[11px] font-semibold tracking-[0.1em] text-muted-foreground/60 uppercase hover:text-muted-foreground"
         >
           {heading}
           {open ? (

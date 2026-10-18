@@ -132,7 +132,7 @@ function SettingsIndex({ active, className }: { active: SettingsPageKey; classNa
         <div className="grid gap-5">
           {groups.map((group) => (
             <div key={group.key}>
-              <p className="mb-1 px-2 text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+              <p className="mb-1 px-2 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground/60 uppercase">
                 {group.label}
               </p>
               <ul className="grid gap-0.5">
