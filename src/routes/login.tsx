@@ -37,6 +37,7 @@ function isEmailNotConfirmed(err: unknown): boolean {
 const searchSchema = z.object({
   redirect: z.string().optional(),
   ref: z.string().optional(),
+  email: z.string().optional(),
 });
 
 /**
@@ -122,11 +123,11 @@ function CustomerLogin() {
 
 function StaffLogin() {
   const { signIn, signInWithGoogle, signInWithApple, confirmSignUp, resendSignUpCode } = useAuth();
-  const { ref } = Route.useSearch();
+  const { ref, email: emailFromLink } = Route.useSearch();
   // Sign-up is offered wherever a plan can be bought (web via Stripe, iOS app
   // via In-App Purchase); a store app that cannot sell only signs members in.
   const canSignUpHere = useSaasPurchasesAllowed();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => emailFromLink?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { z } from "zod";
+import { createFileRoute, Link, Navigate, redirect } from "@tanstack/react-router";
 import {
   AlertTriangle,
   BadgePoundSterling,
@@ -97,7 +98,18 @@ function nounFor(noun: string, count: number): string {
   return lower.endsWith("s") ? lower : `${lower}s`;
 }
 
+const homeSearchSchema = z.object({
+  email: z.string().optional(),
+});
+
 export const Route = createFileRoute("/")({
+  validateSearch: homeSearchSchema,
+  beforeLoad: ({ search }) => {
+    const email = search.email?.trim();
+    if (email) {
+      throw redirect({ to: "/register", search: { email } });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Overview — RECAVO" },

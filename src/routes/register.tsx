@@ -28,10 +28,12 @@ import {
   stashPendingReferral,
 } from "@/lib/auth/pending-referral";
 import { settleSocialSignIn } from "@/lib/auth/social-sign-in";
+import { recordWebsiteTrialStart } from "@/lib/record-trial-start";
 import { DEFAULT_VERTICAL, VERTICALS, type VerticalKey } from "@/lib/verticals";
 
 const searchSchema = z.object({
   ref: z.string().optional(),
+  email: z.string().optional(),
 });
 
 /** Must match the Supabase project's "OTP Length" auth setting (currently 8). */
@@ -57,11 +59,11 @@ function RegisterPage() {
   const { signUp, confirmSignUp, resendSignUpCode, signInWithGoogle, signInWithApple, status } =
     useAuth();
   const navigate = useNavigate();
-  const { ref } = Route.useSearch();
+  const { ref, email: emailFromLink } = Route.useSearch();
   const [name, setName] = useState("");
   const [business, setBusiness] = useState("");
   const [vertical, setVertical] = useState<VerticalKey>(DEFAULT_VERTICAL);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => emailFromLink?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState(() =>
     displayReferralCode(ref ?? readPendingReferral() ?? ""),
@@ -82,6 +84,13 @@ function RegisterPage() {
     stashPendingReferral(incoming);
     setReferralCode(displayReferralCode(incoming));
   }, [ref]);
+
+  useEffect(() => {
+    const incoming = emailFromLink?.trim();
+    if (!incoming) return;
+    setEmail(incoming);
+    void recordWebsiteTrialStart(incoming);
+  }, [emailFromLink]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -285,7 +294,10 @@ function RegisterPage() {
           Already have an account?{" "}
           <Link
             to="/login"
-            search={referralCode.trim() ? { ref: referralCode.trim() } : undefined}
+            search={{
+              ...(email.trim() ? { email: email.trim() } : {}),
+              ...(referralCode.trim() ? { ref: referralCode.trim() } : {}),
+            }}
             className="font-medium text-primary hover:underline"
           >
             Sign in
