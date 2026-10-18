@@ -75,10 +75,11 @@ describe("favourites", () => {
 });
 
 describe("alertCount", () => {
-  it("counts amber and mint badges, not grey or missing ones", () => {
+  it("counts amber badges only, not mint, grey or missing ones", () => {
     assert.equal(
       alertCount([
         { tone: "amber", text: "7" },
+        { tone: "amber", text: "Payment failed" },
         { tone: "mint", text: "5" },
         { tone: "grey", text: "1 left" },
         null,

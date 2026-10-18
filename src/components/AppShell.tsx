@@ -759,9 +759,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button className="h-10 w-10 px-0 [&_svg]:size-5 sm:h-9 sm:w-auto sm:px-4 sm:[&_svg]:size-4">
+                    <Button
+                      aria-label="New booking"
+                      className="h-10 w-10 px-0 [&_svg]:size-5 sm:h-9 sm:w-auto sm:px-4 sm:[&_svg]:size-4"
+                    >
                       <Plus />
-                      <span className="hidden sm:inline">New booking</span>
+                      <span className="hidden sm:inline" aria-hidden>
+                        New booking
+                      </span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">

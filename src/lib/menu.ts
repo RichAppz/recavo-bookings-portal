@@ -115,9 +115,10 @@ export interface MenuBadge {
 }
 
 /**
- * The bubble on the More button: how many rows inside carry something that wants
- * a look (amber or mint). Grey badges are information only and don't count.
+ * The amber bubble on the closed More button: how many rows inside need
+ * attention (amber). Mint (new) and grey (information) badges wait until the
+ * group is opened.
  */
 export function alertCount(badges: ReadonlyArray<MenuBadge | null | undefined>): number {
-  return badges.filter((b) => b && (b.tone === "amber" || b.tone === "mint")).length;
+  return badges.filter((b) => b?.tone === "amber").length;
 }
