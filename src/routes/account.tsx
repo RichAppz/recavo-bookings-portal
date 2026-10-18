@@ -286,6 +286,10 @@ function AccountContent({
   const openBooking = (studio: PortalBusinessSummary) =>
     void navigate({ to: "/$slug", params: { slug: studio.slug }, search: {} });
 
+  // Packages sit under the Sessions card on the business's page.
+  const openPackages = (studio: PortalBusinessSummary) =>
+    void navigate({ to: "/$slug", params: { slug: studio.slug }, search: {}, hash: "sessions" });
+
   // A time picked on the calendar carries through: the page opens on that session
   // and day and, if the time is still free, straight on to their details.
   const openBookingAt = (paid: CalendarPaidSlot) =>
@@ -327,12 +331,13 @@ function AccountContent({
             studios={studios}
             upcoming={upcoming}
             usable={usable}
+            pendingRequests={pendingRequests}
             history={history}
             loading={bookings.isPending}
             payingId={payingId}
             onPay={(booking) => void payNow(booking)}
             onBook={(studio) => openBooking(studio)}
-            pendingBanner={<PendingPackageRequests requests={pendingRequests} solo={solo} />}
+            onSeePackages={(studio) => openPackages(studio)}
           />
         ) : view === "calendar" ? (
           <SessionCalendar
@@ -550,9 +555,9 @@ function Offers({
 }
 
 /**
- * Packages the customer has asked for that the studio has not confirmed yet. Shown on
- * the Overview and above Credits so "I sent it, they haven't confirmed" is visible
- * wherever they land rather than only once the credits appear.
+ * Packages the customer has asked for that the studio has not confirmed yet, listed in
+ * full on the Credits page. The Overview folds the same requests into its Credits card
+ * as "+N on the way" instead.
  */
 function PendingPackageRequests({
   requests,

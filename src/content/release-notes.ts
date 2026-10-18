@@ -21,6 +21,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "A client's account overview no longer opens with a big “Package request sent” box. The Credits card now tells the whole story in one place: sessions left with “+10 on the way” underneath while a package waits on you; a quiet “0 — your 10 session block is on its way” with Book and pay for a session when they have nothing usable yet; and, if they have no credits at all, a short invitation to see your packages — shown only when you actually sell some.",
+        where: "Client account → Overview",
+      },
+      {
+        kind: "improved",
         text: "Service cards on a one-person business no longer carry an “Offered: whenever you're available” line — it said nothing you didn't know. The line still appears when a service is limited to certain days or times.",
         where: "Services",
       },

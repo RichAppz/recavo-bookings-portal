@@ -6509,6 +6509,27 @@ export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummar
   });
 }
 
+/**
+ * The packages each studio sells publicly, tagged with the studio. The account's
+ * Credits card only invites someone to buy when there is something to buy.
+ */
+export function usePublicPackagesAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
+  const list = useMemo(() => studios ?? [], [studios]);
+  return useQueries({
+    queries: list.map((studio) => ({
+      queryKey: queryKeys.publicPackages(studio.id),
+      queryFn: async () => {
+        const res = await api.get<PublicPackageCatalogue>(
+          `/api/v1/public/businesses/${studio.id}/packages`,
+          { public: true },
+        );
+        return res.data.packages;
+      },
+    })),
+    combine: (results) => combineByStudio(results, list),
+  });
+}
+
 /** The offer links this customer has at one studio, for the booking page's Offers section. */
 export function usePortalPackageLinks(businessId: string | undefined) {
   return useQuery({

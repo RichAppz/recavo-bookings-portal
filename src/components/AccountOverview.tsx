@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, CalendarPlus, Navigation } from "lucide-react";
+import { CalendarDays, CalendarPlus, Navigation, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,25 @@ import {
   usePortalWaitlist,
   usePublicBusiness,
   usePublicLocations,
+  usePublicPackagesAcrossStudios,
   usePublicStaff,
   type FromStudio,
   type PortalBusinessSummary,
   type PortalCredit,
+  type PortalPackageRequest,
   type PortalWaitlistEntry,
 } from "@/lib/api/hooks";
 import type { Booking, Payment } from "@/lib/api/types";
 import { bookingNeedsPayment, bookingSettlement } from "@/lib/booking-payment";
 import { downloadIcs, directionsUrl, googleCalendarUrl } from "@/lib/calendar-links";
 import { paymentChip, relativeWhen, type ChipTone } from "@/lib/client-account";
+import {
+  creditsCards,
+  pendingHeadline,
+  pendingLine,
+  type CreditsCardModel,
+  type PendingSummary,
+} from "@/lib/credits-card";
 import { formatInTz, formatMoney } from "@/lib/format";
 import { initials } from "@/lib/client-theme";
 import { cn } from "@/lib/utils";
@@ -58,51 +67,43 @@ export function AccountOverview({
   studios,
   upcoming,
   usable,
+  pendingRequests,
   history,
   loading,
   payingId,
   onPay,
   onBook,
-  pendingBanner,
+  onSeePackages,
 }: {
   solo: boolean;
   studios: PortalBusinessSummary[];
   upcoming: FromStudio<Booking>[];
   usable: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
   history: FromStudio<Payment>[];
   loading: boolean;
   payingId: string | null;
   onPay: (booking: FromStudio<Booking>) => void;
   onBook: (studio: PortalBusinessSummary) => void;
-  pendingBanner?: React.ReactNode;
+  onSeePackages: (studio: PortalBusinessSummary) => void;
 }) {
   const next = upcoming[0];
   const rest = upcoming.slice(1);
 
-  // One credits card per business that has any; the first is the headline card.
-  const creditsByStudio = new Map<
-    string,
-    { studio: PortalBusinessSummary; total: number; useBy: string }
-  >();
-  for (const c of usable) {
-    const cur = creditsByStudio.get(c.studio.id);
-    if (cur) {
-      cur.total += c.available;
-      if (c.expiresAt < cur.useBy) cur.useBy = c.expiresAt;
-    } else {
-      creditsByStudio.set(c.studio.id, {
-        studio: c.studio,
-        total: c.available,
-        useBy: c.expiresAt,
+  // The "buy a package" invitation needs something to buy; until the catalogues
+  // have loaded nothing is shown rather than a card that may vanish.
+  const packages = usePublicPackagesAcrossStudios(studios);
+  const creditCards = packages.isPending
+    ? []
+    : creditsCards({
+        studios,
+        credits: usable,
+        requests: pendingRequests,
+        packages: packages.data,
       });
-    }
-  }
-  const creditCards = [...creditsByStudio.values()];
 
   return (
     <>
-      {pendingBanner}
-
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         {loading && !next ? (
           <div className="h-[200px] animate-pulse rounded-3xl bg-foreground/90" />
@@ -128,25 +129,12 @@ export function AccountOverview({
         <div className="space-y-4">
           {creditCards.length > 0 ? (
             creditCards.map((card) => (
-              <div key={card.studio.id} className="surface-card flex items-center gap-4 p-4 sm:p-5">
-                <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-[26px] font-bold text-primary tabular-nums">
-                  {card.total}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[17px] font-semibold">Session credits</p>
-                  <p className="truncate text-[14px] text-muted-foreground">
-                    {card.studio.tradingName} · Use by{" "}
-                    {formatInTz(card.useBy, "Europe/London", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
-                <Button className="shrink-0 rounded-full" onClick={() => onBook(card.studio)}>
-                  Book
-                </Button>
-              </div>
+              <CreditsCard
+                key={card.studio.id}
+                card={card}
+                onBook={onBook}
+                onSeePackages={onSeePackages}
+              />
             ))
           ) : solo ? (
             <div className="surface-card flex items-center justify-between gap-4 p-4 sm:p-5">
@@ -284,6 +272,132 @@ export function AccountOverview({
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * The Credits card in its three looks (see `creditsCards`). The pending package
+ * request lives inside it as "+N on the way", so a request that is waiting on the
+ * studio is one quiet line beside the balance it will top up, not a banner.
+ */
+function CreditsCard({
+  card,
+  onBook,
+  onSeePackages,
+}: {
+  card: CreditsCardModel<PortalBusinessSummary>;
+  onBook: (studio: PortalBusinessSummary) => void;
+  onSeePackages: (studio: PortalBusinessSummary) => void;
+}) {
+  const viewAll = (
+    <Link
+      to="/account"
+      search={{ view: "credits" }}
+      className="shrink-0 text-[14px] font-semibold underline underline-offset-4"
+    >
+      View all
+    </Link>
+  );
+  const pendingRow = (pending: PendingSummary, tone: "credits" | "pending") => (
+    <div
+      data-testid="credits-pending"
+      className="flex items-center justify-between gap-3 rounded-xl bg-warning-soft/60 px-3 py-2.5 text-[13px]"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-warning" />
+        <span className="truncate">
+          <span className="font-semibold">{pendingLine(pending)}</span>
+          <span className="text-muted-foreground">
+            {tone === "credits"
+              ? ` · waiting for ${card.studio.tradingName} to confirm payment`
+              : " · awaiting payment"}
+          </span>
+        </span>
+      </span>
+      {tone === "pending" ? <Chip label="Pending" tone="warn" /> : null}
+    </div>
+  );
+
+  if (card.kind === "none") {
+    return (
+      <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card-none">
+        <p className="text-[17px] font-semibold">Credits</p>
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <Ticket className="size-4.5" />
+          </span>
+          <p className="text-[14px] text-muted-foreground">
+            No credits yet. Buy a package and save on every session.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          onClick={() => onSeePackages(card.studio)}
+        >
+          See packages
+        </Button>
+      </div>
+    );
+  }
+
+  if (card.kind === "pending") {
+    return (
+      <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card-pending">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[17px] font-semibold">Credits</p>
+          {viewAll}
+        </div>
+        <div className="flex items-start gap-3">
+          <span className="text-[34px] font-bold leading-none text-muted-foreground/60 tabular-nums">
+            0
+          </span>
+          <p className="pt-1 text-[14px] text-muted-foreground">
+            {pendingHeadline(card.pending, card.studio.tradingName)}
+          </p>
+        </div>
+        {pendingRow(card.pending, "pending")}
+        <Button
+          variant="outline"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          onClick={() => onBook(card.studio)}
+        >
+          Book and pay for a session
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[17px] font-semibold">Credits</p>
+        {viewAll}
+      </div>
+      <div className="flex items-start gap-3">
+        <span className="text-[34px] font-bold leading-none tabular-nums">{card.total}</span>
+        <div className="min-w-0 pt-0.5 text-[14px]">
+          <p className="truncate">
+            {card.total === 1 ? "session" : "sessions"} left · {card.studio.tradingName}
+          </p>
+          <p className="text-muted-foreground">
+            Use by{" "}
+            {formatInTz(card.useBy, "Europe/London", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </p>
+        </div>
+      </div>
+      {card.pending ? pendingRow(card.pending, "credits") : null}
+      <Button
+        className="h-11 w-full rounded-full text-[15px] font-semibold"
+        onClick={() => onBook(card.studio)}
+      >
+        Book with a credit
+      </Button>
+    </div>
   );
 }
 
