@@ -6516,6 +6516,8 @@ export function usePortalPackageLinksAcrossStudios(studios: PortalBusinessSummar
 export function usePublicPackagesAcrossStudios(studios: PortalBusinessSummary[] | undefined) {
   const list = useMemo(() => studios ?? [], [studios]);
   return useQueries({
+    // Same key and cached shape as usePublicPackages: the booking page reads this
+    // entry next, so it has to find the whole catalogue there, not a bare list.
     queries: list.map((studio) => ({
       queryKey: queryKeys.publicPackages(studio.id),
       queryFn: async () => {
@@ -6523,10 +6525,18 @@ export function usePublicPackagesAcrossStudios(studios: PortalBusinessSummary[] 
           `/api/v1/public/businesses/${studio.id}/packages`,
           { public: true },
         );
-        return res.data.packages;
+        return res.data;
       },
     })),
-    combine: (results) => combineByStudio(results, list),
+    combine: (results) => ({
+      data: results.flatMap((result, i) =>
+        (result.data?.packages ?? []).map(
+          (pkg) => ({ ...pkg, studio: list[i] }) as FromStudio<PublicPackage>,
+        ),
+      ),
+      isPending: results.some((r) => r.isPending),
+      isPartial: results.some((r) => r.isError),
+    }),
   });
 }
 
