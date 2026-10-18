@@ -133,7 +133,7 @@ export function DashboardMenu({
           type="button"
           onClick={() => setSectionOpen(key, !open)}
           aria-expanded={open}
-          aria-controls={`menu-section-${key}`}
+          aria-controls={`menu-${variant}-section-${key}`}
           className="flex min-h-7 items-center gap-1.5 rounded-md text-[11px] font-semibold tracking-[0.1em] text-muted-foreground/60 uppercase hover:text-muted-foreground"
         >
           {heading}
@@ -306,7 +306,7 @@ export function DashboardMenu({
                 </button>,
               )}
               {!closed.has(FAVOURITES_KEY) ? (
-                <div id={`menu-section-${FAVOURITES_KEY}`}>
+                <div id={`menu-${variant}-section-${FAVOURITES_KEY}`}>
                   {menu.favourites.length > 0 ? (
                     <ul className="mt-1 space-y-0.5">
                       {menu.favourites.map((item) => row(item, { favourite: true }))}
@@ -334,7 +334,7 @@ export function DashboardMenu({
                 <>
                   {sectionHeading(section.key, section.heading)}
                   {!closed.has(section.key as MenuSectionKey) ? (
-                    <ul id={`menu-section-${section.key}`} className="mt-1 space-y-0.5">
+                    <ul id={`menu-${variant}-section-${section.key}`} className="mt-1 space-y-0.5">
                       {section.items.map((item) => row(item))}
                     </ul>
                   ) : null}
@@ -354,7 +354,7 @@ export function DashboardMenu({
             )}
           >
             <ul
-              id="menu-more"
+              id={`menu-${variant}-more`}
               inert={!moreOpen}
               aria-hidden={!moreOpen}
               className={cn(
@@ -491,7 +491,7 @@ export function DashboardMenu({
               type="button"
               onClick={() => updatePreferences({ moreOpen: !moreOpen })}
               aria-expanded={moreOpen}
-              aria-controls="menu-more"
+              aria-controls={`menu-${variant}-more`}
               aria-label={
                 alerts > 0 && !moreOpen
                   ? `More options: ${alerts} need${alerts === 1 ? "s" : ""} attention`
