@@ -46,21 +46,21 @@ Source of truth for behaviour: `src/routes/settings.tsx` and the components it r
 
 ### Tabs (current order)
 
-| # | Tab | Scope | Who can change things |
-|---|-----|-------|-----------------------|
-| 1 | Account | The signed-in **person** (same across all their businesses) | The person themselves |
-| 2 | Security | The signed-in **person** | The person themselves |
-| 3 | Business | This business | `business.update` (Owner, Administrator) |
-| 4 | Configuration | This business | `business.update` |
-| 5 | Team | This business | `team.invite`, `team.manage_permissions` |
-| 6 | Policies | This business | `business.update` |
-| 7 | Privacy | This business | `business.update` |
-| 8 | Notifications | Mixed: push is per person/device; reminders and templates are per business | `business.update` for reminders/templates |
-| 9 | Audit | This business (read-only) | `audit.read` |
-| 10 | Payments | This business | `business.update`, `connect.manage` |
-| 11 | Billing | This business's RECAVO subscription | Owner, Administrator, Finance, or `billing.manage` |
+| #   | Tab           | Scope                                                                      | Who can change things                              |
+| --- | ------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1   | Account       | The signed-in **person** (same across all their businesses)                | The person themselves                              |
+| 2   | Security      | The signed-in **person**                                                   | The person themselves                              |
+| 3   | Business      | This business                                                              | `business.update` (Owner, Administrator)           |
+| 4   | Configuration | This business                                                              | `business.update`                                  |
+| 5   | Team          | This business                                                              | `team.invite`, `team.manage_permissions`           |
+| 6   | Policies      | This business                                                              | `business.update`                                  |
+| 7   | Privacy       | This business                                                              | `business.update`                                  |
+| 8   | Notifications | Mixed: push is per person/device; reminders and templates are per business | `business.update` for reminders/templates          |
+| 9   | Audit         | This business (read-only)                                                  | `audit.read`                                       |
+| 10  | Payments      | This business                                                              | `business.update`, `connect.manage`                |
+| 11  | Billing       | This business's RECAVO subscription                                        | Owner, Administrator, Finance, or `billing.manage` |
 
-**Must keep:** the split between *person* settings (Account, Security, push) and *business*
+**Must keep:** the split between _person_ settings (Account, Security, push) and _business_
 settings. A person with several businesses has one profile/password/2FA but separate business
 configuration. The current design signals this only with copy ("Your own account, not this
 business's settings"); the new design should make the distinction structural (e.g. two groups,
@@ -112,13 +112,13 @@ Two-column layout on desktop: profile form left, context + preferences right.
 
 Title "Your profile". Subtitle "Your own account, not this business's settings."
 
-| Field | Control | Notes |
-|-------|---------|-------|
-| Email | Text, **disabled** | Hint: "Your email, password and two-factor settings are part of sign-in, not your profile." |
-| Name | Text, placeholder "Alex Morgan" | Max 120. Errors: "Enter a name, or clear the field to remove it." / "Names can be at most 120 characters." |
-| Phone | Tel, placeholder "+44 7700 900123" | Optional. Hint "Used to reach you about your own account." Error: "Enter 7–15 digits, optionally starting with +." |
-| Language | Select | "Not set" plus en-GB, en-US, en-IE, fr-FR, de-DE, es-ES, it-IT, nl-NL, pt-PT, pl-PL, shown as native language names via `Intl.DisplayNames`. Errors: "That language tag is too long." / "That isn't a recognised language tag." |
-| Timezone | Searchable combobox (popover + search) over all IANA zones | Hint: "This device is set to {zone}." when different from saved, or "Saved to your account." Error: "Pick a timezone from the list." |
+| Field    | Control                                                    | Notes                                                                                                                                                                                                                           |
+| -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email    | Text, **disabled**                                         | Hint: "Your email, password and two-factor settings are part of sign-in, not your profile."                                                                                                                                     |
+| Name     | Text, placeholder "Alex Morgan"                            | Max 120. Errors: "Enter a name, or clear the field to remove it." / "Names can be at most 120 characters."                                                                                                                      |
+| Phone    | Tel, placeholder "+44 7700 900123"                         | Optional. Hint "Used to reach you about your own account." Error: "Enter 7–15 digits, optionally starting with +."                                                                                                              |
+| Language | Select                                                     | "Not set" plus en-GB, en-US, en-IE, fr-FR, de-DE, es-ES, it-IT, nl-NL, pt-PT, pl-PL, shown as native language names via `Intl.DisplayNames`. Errors: "That language tag is too long." / "That isn't a recognised language tag." |
+| Timezone | Searchable combobox (popover + search) over all IANA zones | Hint: "This device is set to {zone}." when different from saved, or "Saved to your account." Error: "Pick a timezone from the list."                                                                                            |
 
 - Button "Save profile" — disabled until a field changed; "Saving…" while pending.
 - Field-level errors come back from the API by code (`REQUIRED`, `TOO_LONG`, `INVALID`) and are
@@ -132,6 +132,7 @@ your staff record." Shows the current display name and email as a read-only prev
 ### 2.3 Emails from RECAVO (card)
 
 One switch, saves instantly:
+
 - "Tips and getting-started emails" — copy: a short note from Rich in the first few weeks, then
   milestones; never more than one a day.
 - Footer line: "Billing notices and security emails are always sent."
@@ -164,6 +165,7 @@ are closed; a 30-day export window applies.
 ### 3.2 Two-factor authentication (card)
 
 Subtitle: "Privileged actions require a code from an authenticator app once this is on."
+
 - **Enrolled:** "An authenticator app is enrolled on this account." + button "Unenrol" → AlertDialog
   "Remove two-factor authentication?" (Cancel / Remove).
 - **Not enrolled:** copy recommending Google Authenticator, 1Password or Authy + button
@@ -184,13 +186,13 @@ Two cards side by side on desktop.
 Header shows a status badge (active / trial / closed…) and "Industry: {label}" (e.g. Personal
 training, Car detailing) — industry is **read-only** here.
 
-| Field | Control | Notes |
-|-------|---------|-------|
-| Trading name | Text | The name clients see |
-| Legal name | Text | Optional |
-| Currency | Text (ISO 4217, e.g. GBP) | Validated by the API |
-| Timezone | Text (IANA) | Validated by the API |
-| Locale | Text (e.g. en-GB) | Validated by the API |
+| Field        | Control                   | Notes                |
+| ------------ | ------------------------- | -------------------- |
+| Trading name | Text                      | The name clients see |
+| Legal name   | Text                      | Optional             |
+| Currency     | Text (ISO 4217, e.g. GBP) | Validated by the API |
+| Timezone     | Text (IANA)               | Validated by the API |
+| Locale       | Text (e.g. en-GB)         | Validated by the API |
 
 - Button "Save changes" (gated `business.update`; fallback "Requires business.update"). Toast
   "Business profile updated". The save carries the record `version`, so a stale save is rejected
@@ -201,6 +203,7 @@ training, Car detailing) — industry is **read-only** here.
 ### 4.2 Booking page (card)
 
 Title "Booking page". Controls the public booking link slug.
+
 - Input "Public booking link" with a copy button (toast "Booking link copied"); live preview of the
   full public URL beneath, slugified as you type (lowercase, hyphens, max 60 characters).
 - Amber warning when changed: "Anywhere you have already shared {old URL} — printed, on social,
@@ -241,12 +244,12 @@ appear everywhere clients and staff see them.
 Subtitle: booking bars are coloured by payment status; events have their own colour; blank means
 the default.
 
-| Row | Hint |
-|-----|------|
-| Paid / nothing to collect | Fully paid or free bookings |
-| Deposit / part paid | Something still owed |
-| Unpaid | Nothing taken yet |
-| Events | Group sessions and events (shown hatched in the sample) |
+| Row                       | Hint                                                    |
+| ------------------------- | ------------------------------------------------------- |
+| Paid / nothing to collect | Fully paid or free bookings                             |
+| Deposit / part paid       | Something still owed                                    |
+| Unpaid                    | Nothing taken yet                                       |
+| Events                    | Group sessions and events (shown hatched in the sample) |
 
 Each row: hex input (placeholder shows the default), native colour picker, "Default" reset chip,
 live swatch. Footer: "Save colours", "Reset all to defaults", "Unsaved changes" hint.
@@ -303,6 +306,7 @@ Single primary button; disabled while accent colour / logo URL / VAT rate are in
 ### 6.1 Memberships (card)
 
 List of people in the business: name, email · role labels, status badge.
+
 - Owner row shows "Owner role is fixed" instead of a control.
 - Other rows: role **Select** (gated `team.manage_permissions`) with the invitable roles:
   Administrator, Manager, Staff, Reception, Finance, Restricted staff. Changing saves at once;
@@ -336,6 +340,7 @@ Legal documents clients accept when booking.
 
 Fields prefilled from the business: Business name, Cancellation window (hours), Late cancel /
 no-show notes (textarea), Refund / package notes (textarea), Locale, Industry.
+
 - Buttons: "Draft with AI" (pending label "Drafting… up to a minute") and "Seed defaults instead".
 - If the AI service is unavailable: a notice and only the seed option.
 - Result panel: disclaimer, model name, a **Cancellation policy** draft and a **Terms and
@@ -410,7 +415,7 @@ before each booking. Changes apply to upcoming bookings straight away; reminders
 never repeated."
 
 - Rule rows (up to **5**): `Send [amount] [minutes|hours|days|years before] by [Client's
-  preference | Email | SMS]` + trash icon. Labels only on the first row.
+preference | Email | SMS]` + trash icon. Labels only on the first row.
 - Validation per row: "Enter a whole number.", "Between 5 minutes and 2 years before.",
   "Two reminders can't go at the same time."
 - "Add reminder" (outline, disabled at 5 with "Up to 5 reminders.").
@@ -432,6 +437,7 @@ emails get the details table and buttons added under your text; texts get a link
 
 For **each template** (booking confirmed, reminder, cancelled, package ready, invoice, etc. — list
 comes from the API with label + description):
+
 - Two side-by-side editors on desktop, **Email** and **Text message**; tabs below `md` with a dot
   marking a customised channel.
 - Each editor: label with icon, pill "Customised" (mint) or "Default" (grey); hint — Email:
@@ -473,6 +479,7 @@ span the full width.
 
 Whole section tints mint when On and **amber** when Off (icon tile swaps from banknote to warning
 triangle). Title "Take payment online" with an **On / Off** pill.
+
 - Copy on: "Priced sessions booked on your public page are paid by card before they are
   confirmed."
 - Copy off: "Clients can book priced sessions without paying. You will have to collect payment
@@ -499,6 +506,7 @@ stays locked until the three UK fields are valid. Button "Save bank details". In
 ### 11.3 Payment processing (card) — Stripe Connect
 
 Hidden when the platform has hidden Stripe and nothing is connected.
+
 - **Not connected:** platform-hold notice (if any) → empty state "No payout account connected —
   Connect Stripe to take card payments. Recavo never stores your bank details." with button
   "Set up payments" (→ `/payments` onboarding) → **Stripe fees note** ("What Stripe will charge":
@@ -515,6 +523,7 @@ automatically when a job is marked attended. Included with Growth; a £8/month b
 Business." plus "Choose a plan to switch it on." when there is no subscription.
 
 Right-hand **entitlement control**, one of:
+
 - Active badge + "Included in {plan}"
 - Active badge + "Bolt-on · £8/month" + "Remove" (AlertDialog "Remove invoicing?" — body explains
   nothing issued is lost and the unused month is credited; "Keep invoicing" / "Remove add-on")
@@ -528,6 +537,7 @@ Below, when not entitled: grey note "You can still view and download invoices al
 These settings apply once invoicing is on your plan."
 
 Settings (gated `business.update`):
+
 - Switch row "Invoice automatically when a job is completed" with explanation.
 - Number prefix (default `INV-`, ≤12 chars, letters/digits/-/_) with live hint "Next invoice:
   INV-0001. Changing this later doesn't renumber existing invoices."
@@ -551,6 +561,7 @@ two as reductions of it.
 ### 12.1 Web (Stripe)
 
 Vertical stack:
+
 1. **Discount banner** (green) when a partner/referral coupon is on the subscription: "Discount
    applied: 20% off until {date}. {label}. Plan prices shown on this page are before the discount."
 2. **Access line** while locked without a plan: e.g. "Choose a plan to start your 14-day trial.
@@ -593,7 +604,7 @@ Same stack but prices come from the store, plan cards carry trial text from the 
 offer ("14 days free, then £29/month. Renews automatically until cancelled."), buttons "Manage
 subscription" (opens store subscription page) and "Restore purchases", a footer with Terms /
 Privacy Policy links, and add-ons/text bundles bought through the store. A subscription billed
-through Stripe or the *other* store is shown read-only with copy telling them where to manage it.
+through Stripe or the _other_ store is shown read-only with copy telling them where to manage it.
 
 ### 12.3 Store app without in-app purchase
 
