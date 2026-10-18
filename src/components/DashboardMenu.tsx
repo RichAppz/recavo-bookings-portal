@@ -356,7 +356,7 @@ export function DashboardMenu({
               inert={!moreOpen}
               aria-hidden={!moreOpen}
               className={cn(
-                "min-h-0 space-y-0.5 overflow-hidden rounded-[14px] bg-secondary/60 transition-[padding] duration-200 ease-out motion-reduce:transition-none",
+                "min-h-0 space-y-0.5 overflow-hidden rounded-[14px] bg-secondary transition-[padding] duration-200 ease-out motion-reduce:transition-none",
                 moreOpen && "p-1.5",
                 strip && moreOpen && "p-1",
               )}
