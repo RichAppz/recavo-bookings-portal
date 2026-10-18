@@ -215,9 +215,8 @@ export function DashboardMenu({
           <span className="truncate">{item.label}</span>
           <span className="ml-auto flex shrink-0 items-center gap-2">
             {item.badge ? <Badge badge={item.badge} /> : null}
-            {active ? (
-              <span className="size-[7px] rounded-full bg-mint" aria-hidden />
-            ) : starred && !editing ? (
+            {active ? <span className="size-[7px] rounded-full bg-mint" aria-hidden /> : null}
+            {starred && !editing ? (
               <Star className="size-3.5 fill-star text-star" aria-hidden />
             ) : null}
           </span>
