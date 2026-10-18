@@ -166,7 +166,7 @@ export function ClientMessagesPage() {
               <nav aria-label="Message templates" className="grid content-start gap-4">
                 {groups.map((group) => (
                   <div key={group.key}>
-                    <p className="mb-1.5 px-1 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                    <p className="mb-1.5 px-1 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground/60 uppercase">
                       {group.label}
                     </p>
                     <GroupedBlock

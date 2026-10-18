@@ -269,7 +269,7 @@ export function ActivityPage() {
           <div className="grid gap-5">
             {byDay.map((day) => (
               <section key={day.key} aria-label={day.heading}>
-                <h3 className="mb-2 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                <h3 className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground/60 uppercase">
                   {day.heading}
                 </h3>
                 <GroupedBlock as="ul">
