@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import {
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   GripVertical,
   LayoutGrid,
   PanelLeftClose,
@@ -503,7 +502,7 @@ export function DashboardMenu({
               )}
             >
               {moreOpen ? (
-                <ChevronUp className="size-5" aria-hidden />
+                <ChevronDown className="size-5" aria-hidden />
               ) : (
                 <LayoutGrid className="size-5" aria-hidden />
               )}
