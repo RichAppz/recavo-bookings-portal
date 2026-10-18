@@ -333,7 +333,7 @@ function PaymentFailedCard({
               {locked
                 ? "Your workspace is read-only until it’s paid — nothing has been removed, and everything comes back the moment it goes through."
                 : subscription.graceEndsAt
-                  ? `You still have full access until ${formatInTz(subscription.graceEndsAt, tz, { dateStyle: "long" })}; after that the workspace goes read-only until it’s paid.`
+                  ? `You still have full access until ${formatInTz(subscription.graceEndsAt, tz, { dateStyle: "long", timeStyle: "short" })}; after that the workspace goes read-only until it’s paid.`
                   : "You still have access for now; the workspace goes read-only if it stays unpaid."}
             </p>
           </div>

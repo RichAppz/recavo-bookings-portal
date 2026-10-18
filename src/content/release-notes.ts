@@ -19,6 +19,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "The plan buttons say Subscribe rather than Start free trial once you have already had your trial.",
         where: "Plan",
       },
+      {
+        kind: "new",
+        text: "A failed payment now gives you 48 hours of full access before the workspace goes read-only, and we email you at both points: when the card is declined (with the exact time your access would pause and a Pay now link) and again if it does pause. The 48 hours start from the moment we first see the payment has failed, even if Stripe's own notification to us is late, so nobody is locked out without warning. The Plan page and the red banner show the time as well as the date.",
+        where: "Plan",
+      },
     ],
   },
   {

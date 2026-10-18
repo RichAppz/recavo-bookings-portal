@@ -91,8 +91,9 @@ export function BillingBanner() {
     if (url) void openHostedFlow(url);
   };
 
+  // A 48-hour window: the time of day matters, not just the date.
   const graceEnds = current?.graceEndsAt
-    ? formatInTz(current.graceEndsAt, tz, { dateStyle: "medium" })
+    ? formatInTz(current.graceEndsAt, tz, { dateStyle: "medium", timeStyle: "short" })
     : null;
 
   // Where the payment method lives depends on who bills: Stripe's portal for a
