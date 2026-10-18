@@ -1,23 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
+import { useSettingsDraft } from "@/components/settings/save-bar";
+import { TimezoneCombobox, browserTimezone } from "@/components/TimezoneCombobox";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ApiError, toastApiError } from "@/lib/api";
 import { useUpdateMe } from "@/lib/api/hooks";
 import type { UserProfileUpdate } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-store";
-import { cn } from "@/lib/utils";
+import { LOCALE_OPTIONS, localeLabel } from "@/lib/settings-labels";
 
 /**
  * The signed-in person's own account, as owned by `PATCH /api/v1/me`.
@@ -29,55 +21,11 @@ import { cn } from "@/lib/utils";
  * Three neighbouring things are not editable here and must not be conflated
  * with it: the Supabase credentials (email, password, 2FA), a staff member's
  * public-facing display name, and a business's own customer record.
+ *
+ * Inside Settings the page's save bar owns Save (`useSettingsDraft`); elsewhere
+ * the form keeps its own button.
  */
 const NOT_SET = "__unset__";
-
-/** Enough coverage for the markets we sell in; the API accepts any BCP 47 tag. */
-const LOCALES = [
-  "en-GB",
-  "en-US",
-  "en-IE",
-  "fr-FR",
-  "de-DE",
-  "es-ES",
-  "it-IT",
-  "nl-NL",
-  "pt-PT",
-  "pl-PL",
-] as const;
-
-function localeLabel(tag: string): string {
-  try {
-    const display = new Intl.DisplayNames(["en"], { type: "language" }).of(tag);
-    return display && display !== tag ? `${display} (${tag})` : tag;
-  } catch {
-    return tag;
-  }
-}
-
-/**
- * The API validates against the runtime's zone table and rejects abbreviations
- * and UTC offsets, so offering the same table is the only way to guarantee the
- * value we send is one it will accept.
- */
-function supportedTimezones(): string[] {
-  const withValues = Intl as typeof Intl & {
-    supportedValuesOf?: (key: string) => string[];
-  };
-  try {
-    return withValues.supportedValuesOf?.("timeZone") ?? [];
-  } catch {
-    return [];
-  }
-}
-
-function browserTimezone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
-  } catch {
-    return null;
-  }
-}
 
 type Draft = {
   name: string;
@@ -106,7 +54,7 @@ function draftFrom(user: {
   };
 }
 
-export function AccountProfileForm() {
+export function AccountProfileForm({ showEmail = true }: { showEmail?: boolean }) {
   const { user } = useAuth();
   const updateMe = useUpdateMe();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(user ?? {}));
@@ -143,7 +91,7 @@ export function AccountProfileForm() {
     } catch (err) {
       if (!(err instanceof ApiError)) {
         toastApiError(err);
-        return;
+        throw err;
       }
       const next: Partial<Record<keyof Draft, string>> = {};
       let unhandled = false;
@@ -156,18 +104,40 @@ export function AccountProfileForm() {
       // `body/REQUIRED` and `body/INVALID` describe the request rather than a
       // field, and both mean we built it wrong — surface them loudly.
       if (unhandled || Object.keys(next).length === 0) toastApiError(err);
+      throw err;
     }
   }
 
+  const bar = useSettingsDraft({
+    dirty: changed.length > 0,
+    valid: true,
+    saving: updateMe.isPending,
+    save,
+    discard: () => {
+      setDraft(saved);
+      setFieldErrors({});
+    },
+  });
+
+  const detected = useMemo(browserTimezone, []);
+  // Nothing reads this preference yet, so promising it changes anything the
+  // user can see — email times, for instance — would be a lie.
+  const timezoneHint =
+    detected && detected !== draft.timezone
+      ? `This device is set to ${detected}.`
+      : "Saved to your account.";
+
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2">
-        <Label>Email</Label>
-        <Input type="email" value={user?.email ?? ""} disabled />
-        <p className="text-xs text-muted-foreground">
-          Your email, password and two-factor settings are part of sign-in, not your profile.
-        </p>
-      </div>
+      {showEmail ? (
+        <div className="grid gap-2">
+          <Label>Email</Label>
+          <Input type="email" value={user?.email ?? ""} disabled />
+          <p className="text-xs text-muted-foreground">
+            Your email, password and two-factor settings are part of sign-in, not your profile.
+          </p>
+        </div>
+      ) : null}
 
       <TextField
         id="profile-name"
@@ -201,10 +171,11 @@ export function AccountProfileForm() {
         >
           <option value={NOT_SET}>Not set</option>
           {/* A tag the account already holds may sit outside our shortlist. */}
-          {draft.locale && !LOCALES.includes(draft.locale as (typeof LOCALES)[number]) ? (
+          {draft.locale &&
+          !LOCALE_OPTIONS.includes(draft.locale as (typeof LOCALE_OPTIONS)[number]) ? (
             <option value={draft.locale}>{localeLabel(draft.locale)}</option>
           ) : null}
-          {LOCALES.map((tag) => (
+          {LOCALE_OPTIONS.map((tag) => (
             <option key={tag} value={tag}>
               {localeLabel(tag)}
             </option>
@@ -215,19 +186,31 @@ export function AccountProfileForm() {
         ) : null}
       </div>
 
-      <TimezoneField
-        value={draft.timezone}
-        onChange={set("timezone")}
-        error={fieldErrors.timezone}
-      />
+      <div className="grid gap-2">
+        <Label htmlFor="profile-timezone">Time zone</Label>
+        <TimezoneCombobox
+          id="profile-timezone"
+          value={draft.timezone}
+          onChange={set("timezone")}
+          allowUnset
+          invalid={Boolean(fieldErrors.timezone)}
+        />
+        {fieldErrors.timezone ? (
+          <p className="text-destructive text-xs">{fieldErrors.timezone}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">{timezoneHint}</p>
+        )}
+      </div>
 
-      <Button
-        className="w-fit"
-        disabled={updateMe.isPending || changed.length === 0}
-        onClick={save}
-      >
-        {updateMe.isPending ? "Saving…" : "Save profile"}
-      </Button>
+      {bar.managed ? null : (
+        <Button
+          className="w-fit"
+          disabled={updateMe.isPending || changed.length === 0}
+          onClick={() => void save().catch(() => undefined)}
+        >
+          {updateMe.isPending ? "Saving…" : "Save profile"}
+        </Button>
+      )}
     </div>
   );
 }
@@ -287,97 +270,6 @@ function TextField({
       ) : hint ? (
         <p className="text-xs text-muted-foreground">{hint}</p>
       ) : null}
-    </div>
-  );
-}
-
-function TimezoneField({
-  value,
-  onChange,
-  error,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const zones = useMemo(supportedTimezones, []);
-  const detected = useMemo(browserTimezone, []);
-
-  // Nothing reads this preference yet, so promising it changes anything the
-  // user can see — email times, for instance — would be a lie.
-  const hint =
-    detected && detected !== value
-      ? `This device is set to ${detected}.`
-      : "Saved to your account.";
-
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor="profile-timezone">Timezone</Label>
-      {zones.length === 0 ? (
-        <Input
-          id="profile-timezone"
-          value={value}
-          placeholder="Europe/London"
-          aria-invalid={error ? true : undefined}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <Popover modal open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              id="profile-timezone"
-              variant="outline"
-              role="combobox"
-              aria-expanded={open}
-              className={cn("justify-between font-normal", !value && "text-muted-foreground")}
-            >
-              {value || "Not set"}
-              <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search timezones…" />
-              <CommandList>
-                <CommandEmpty>No timezone found.</CommandEmpty>
-                <CommandGroup>
-                  <CommandItem
-                    value="Not set"
-                    onSelect={() => {
-                      onChange("");
-                      setOpen(false);
-                    }}
-                  >
-                    <Check className={cn("mr-2 size-4", value ? "opacity-0" : "opacity-100")} />
-                    Not set
-                  </CommandItem>
-                  {zones.map((zone) => (
-                    <CommandItem
-                      key={zone}
-                      value={zone}
-                      onSelect={() => {
-                        onChange(zone);
-                        setOpen(false);
-                      }}
-                    >
-                      <Check
-                        className={cn("mr-2 size-4", value === zone ? "opacity-100" : "opacity-0")}
-                      />
-                      {zone}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      )}
-      {error ? (
-        <p className="text-destructive text-xs">{error}</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      )}
     </div>
   );
 }

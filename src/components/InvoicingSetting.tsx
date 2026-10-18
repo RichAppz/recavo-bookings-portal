@@ -2,6 +2,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
+import {
+  GroupedBlock,
+  PlanGatedRow,
+  StatusPill,
+  SwitchRow,
+  useSavedTick,
+} from "@/components/settings/primitives";
+import { useSettingsDraft } from "@/components/settings/save-bar";
 import { StatusBadge } from "@/components/ui-bits";
 import {
   AlertDialog,
@@ -72,8 +80,18 @@ function fromConfig(saved: InvoicingConfig | undefined): FormState {
  * payment terms and the PDF footer save on their own; the bolt-on control reads
  * the same subscription view the paywall does, so what it shows is what the API
  * will allow.
+ *
+ * `card` is the self-contained block; `section` (Settings → Get paid) is the
+ * plan-gated row plus fields under the page's save bar, with the automatic
+ * invoicing switch saving straight away.
  */
-export function InvoicingSetting({ className }: { className?: string }) {
+export function InvoicingSetting({
+  className,
+  variant = "card",
+}: {
+  className?: string;
+  variant?: "card" | "section";
+}) {
   const tenant = useTenant();
   const navigate = useNavigate();
   const update = useUpdateConfiguration();
@@ -82,6 +100,8 @@ export function InvoicingSetting({ className }: { className?: string }) {
   const entitled = useInvoicingEntitled();
   const addAddon = useAddSubscriptionAddon();
   const removeAddon = useRemoveSubscriptionAddon();
+  const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
+  const [autoTick, flashAuto] = useSavedTick();
 
   // `invoicing` isn't on the committed OpenAPI snapshot yet; read it through the
   // local shape until the schema is refreshed.
@@ -116,28 +136,57 @@ export function InvoicingSetting({ className }: { className?: string }) {
   const footerValid = form.footerNote.length <= FOOTER_MAX;
   const formValid = prefixValid && dueDaysValid && footerValid;
 
-  const save = async () => {
+  const persist = async (next: FormState) => {
     try {
       await update.mutateAsync({
         invoicing: {
-          autoSendOnCompletion: form.autoSendOnCompletion,
-          numberPrefix: form.numberPrefix,
-          dueDays: dueDaysNumber,
-          footerNote: form.footerNote.trim() || null,
+          autoSendOnCompletion: next.autoSendOnCompletion,
+          numberPrefix: next.numberPrefix,
+          dueDays: Number(next.dueDays),
+          footerNote: next.footerNote.trim() || null,
         },
       } as Parameters<typeof update.mutateAsync>[0] & { invoicing: InvoicingConfig });
       setDirty(false);
-      toast.success("Invoicing settings saved");
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors.length > 0) {
-        const next: Partial<Record<keyof FormState, string>> = {};
+        const nextErrors: Partial<Record<keyof FormState, string>> = {};
         for (const fe of err.fieldErrors) {
           const key = fe.field.replace(/^invoicing\./, "") as keyof FormState;
-          if (key in form) next[key] = fe.message ?? fe.code;
+          if (key in next) nextErrors[key] = fe.message ?? fe.code;
         }
-        setFieldErrors(next);
+        setFieldErrors(nextErrors);
       }
       // useUpdateConfiguration already toasts.
+      throw err;
+    }
+  };
+
+  const save = async () => {
+    await persist(form);
+    toast.success("Invoicing settings saved");
+  };
+
+  const bar = useSettingsDraft({
+    dirty: variant === "section" && canEdit && entitled === true && dirty,
+    valid: formValid,
+    saving: update.isPending,
+    save,
+    discard: () => {
+      setForm(fromConfig(saved));
+      setDirty(false);
+      setFieldErrors({});
+    },
+  });
+
+  /** The automatic-invoicing switch saves on its own, carrying the saved typed values. */
+  const flipAutoSend = async (checked: boolean) => {
+    const base = fromConfig(saved);
+    try {
+      await persist({ ...base, autoSendOnCompletion: checked });
+      setForm((f) => ({ ...f, autoSendOnCompletion: checked }));
+      flashAuto();
+    } catch {
+      // Toasted already.
     }
   };
 
@@ -198,6 +247,57 @@ export function InvoicingSetting({ className }: { className?: string }) {
     }
   };
 
+  const removeDialog = (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" disabled={addonBusy}>
+          Remove
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove invoicing?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You’ll no longer be able to raise, issue or send invoices, and jobs won’t be invoiced
+            automatically. Everything already issued stays available to you and your clients. The
+            unused part of this month is credited to your next bill.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep invoicing</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={async () => {
+              await removeAddon.mutateAsync(INVOICING_ADDON_KEY);
+              toast.success("Invoicing removed");
+            }}
+          >
+            Remove add-on
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  const buyButton = (
+    <Button size="sm" disabled={addonBusy || !current} onClick={() => void buy()}>
+      {iapFlow.state === "purchasing"
+        ? `Waiting for ${currentStoreCopy().name}…`
+        : addAddon.isPending || iapFlow.state === "reconciling"
+          ? "Adding…"
+          : variant === "section"
+            ? `Add for ${price}`
+            : `Add invoicing — ${price}`}
+    </Button>
+  );
+
+  const notOnPlanCopy = !sellsHere
+    ? "Not on your plan"
+    : current && !managedHere
+      ? storeCopyFor(current.provider)
+        ? `Not on your plan — add it in the ${storeCopyFor(current.provider)!.appName}`
+        : "Not on your plan — add it on the website"
+      : "Not on your plan — ask the owner";
+
   let entitlementControl: ReactNode;
   if (subscription.isLoading) {
     entitlementControl = null;
@@ -222,34 +322,7 @@ export function InvoicingSetting({ className }: { className?: string }) {
             Manage in {currentStoreCopy().name}
           </Button>
         ) : canManageBilling ? (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={addonBusy}>
-                Remove
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Remove invoicing?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  You’ll no longer be able to raise, issue or send invoices, and jobs won’t be
-                  invoiced automatically. Everything already issued stays available to you and your
-                  clients. The unused part of this month is credited to your next bill.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Keep invoicing</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    await removeAddon.mutateAsync(INVOICING_ADDON_KEY);
-                    toast.success("Invoicing removed");
-                  }}
-                >
-                  Remove add-on
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          removeDialog
         ) : null}
       </div>
     );
@@ -258,23 +331,203 @@ export function InvoicingSetting({ className }: { className?: string }) {
     entitlementControl = <StatusBadge status="active" />;
   } else {
     entitlementControl = canManageBilling ? (
-      <Button size="sm" disabled={addonBusy || !current} onClick={() => void buy()}>
-        {iapFlow.state === "purchasing"
-          ? `Waiting for ${currentStoreCopy().name}…`
-          : addAddon.isPending || iapFlow.state === "reconciling"
-            ? "Adding…"
-            : `Add invoicing — ${price}`}
-      </Button>
+      buyButton
     ) : (
-      <span className="text-xs text-muted-foreground">
-        {!sellsHere
-          ? "Not on your plan"
-          : current && !managedHere
-            ? storeCopyFor(current.provider)
-              ? `Not on your plan — add it in the ${storeCopyFor(current.provider)!.appName}`
-              : "Not on your plan — add it on the website"
-            : "Not on your plan — ask the owner"}
-      </span>
+      <span className="text-xs text-muted-foreground">{notOnPlanCopy}</span>
+    );
+  }
+
+  const brandingLink = (
+    <Link to="/settings/$page" params={{ page: "branding" }} className="underline">
+      Branding
+    </Link>
+  );
+  const taxLink = (
+    <Link to="/settings/$page" params={{ page: "tax" }} className="underline">
+      Tax
+    </Link>
+  );
+
+  const typedFields = (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor="inv-prefix">Number prefix</Label>
+          <Input
+            id="inv-prefix"
+            value={form.numberPrefix}
+            maxLength={NUMBER_PREFIX_MAX_LENGTH}
+            placeholder={DEFAULT_NUMBER_PREFIX}
+            disabled={!canEdit}
+            aria-invalid={!prefixValid || Boolean(fieldErrors.numberPrefix)}
+            onChange={(e) => set({ numberPrefix: e.target.value })}
+          />
+          <p
+            className={cn(
+              "text-xs",
+              prefixValid && !fieldErrors.numberPrefix
+                ? "text-muted-foreground"
+                : "text-destructive",
+            )}
+          >
+            {fieldErrors.numberPrefix
+              ? fieldErrors.numberPrefix
+              : prefixValid
+                ? `Next invoice: ${nextInvoiceNumberPreview(form.numberPrefix)}. Changing this later doesn’t renumber existing invoices.`
+                : `Up to ${NUMBER_PREFIX_MAX_LENGTH} letters, digits, “-” or “_”.`}
+          </p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="inv-due-days">Payment terms (days)</Label>
+          <Input
+            id="inv-due-days"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={DUE_DAYS_MAX}
+            step={1}
+            value={form.dueDays}
+            disabled={!canEdit}
+            aria-invalid={!dueDaysValid || Boolean(fieldErrors.dueDays)}
+            onChange={(e) => set({ dueDays: e.target.value })}
+          />
+          <p
+            className={cn(
+              "text-xs",
+              dueDaysValid && !fieldErrors.dueDays ? "text-muted-foreground" : "text-destructive",
+            )}
+          >
+            {fieldErrors.dueDays
+              ? fieldErrors.dueDays
+              : dueDaysValid
+                ? dueDaysNumber === 0
+                  ? "Due on the day it’s issued."
+                  : `Due ${dueDaysNumber} day${dueDaysNumber === 1 ? "" : "s"} after issue.`
+                : `A whole number from 0 to ${DUE_DAYS_MAX}.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label htmlFor="inv-footer">Footer note</Label>
+        <Textarea
+          id="inv-footer"
+          rows={2}
+          value={form.footerNote}
+          maxLength={FOOTER_MAX}
+          placeholder="Thank you for your business."
+          disabled={!canEdit}
+          aria-invalid={!footerValid || Boolean(fieldErrors.footerNote)}
+          onChange={(e) => set({ footerNote: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          {fieldErrors.footerNote ??
+            `Printed at the bottom of every PDF. ${form.footerNote.length}/${FOOTER_MAX}`}
+        </p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {bankTransferOn
+          ? "Your bank details from “Pay by bank transfer” are printed under “How to pay” while a balance is due."
+          : "Turn on “Pay by bank transfer” above to print your bank details under “How to pay”."}{" "}
+        Logo and accent colour come from {brandingLink}; VAT rate and registration from {taxLink}.
+      </p>
+    </>
+  );
+
+  if (variant === "section") {
+    const gated = !subscription.isLoading && entitled === false;
+    return (
+      <div className={cn("grid gap-4", className)}>
+        {gated ? (
+          <PlanGatedRow
+            title="Invoicing"
+            hint="Numbered PDF invoices, emailed to clients and issued automatically when a job is marked attended."
+            lock="Add-on"
+            priceLine={sellsHere ? `${price} on Solo and Business · Included with Growth` : null}
+            canBuy={canManageBilling}
+            action={
+              sellsHere && !current ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/settings/$page" params={{ page: "plan" }}>
+                    See plans
+                  </Link>
+                </Button>
+              ) : canManageBilling ? (
+                buyButton
+              ) : (
+                <span className="text-xs text-muted-foreground">{notOnPlanCopy}</span>
+              )
+            }
+          />
+        ) : (
+          <GroupedBlock>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1 basis-56">
+                <p className="text-sm font-medium">Invoicing</p>
+                <p className="text-[13px] text-muted-foreground">
+                  Numbered PDF invoices, emailed to clients and issued automatically when a job is
+                  marked attended.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {subscription.isLoading ? null : addon?.status === "included" ? (
+                  <StatusPill tone="mint">
+                    Included in {subscription.data?.plan?.name ?? "your plan"}
+                  </StatusPill>
+                ) : addon?.status === "active" ? (
+                  <>
+                    <StatusPill tone="mint">Active</StatusPill>
+                    <span className="text-xs text-muted-foreground">
+                      {sellsHere && managedHere ? `Add-on · ${price}` : "Add-on"}
+                    </span>
+                    {canManageBilling && surface === "store" ? (
+                      <Button variant="outline" size="sm" onClick={() => void openIapManagement()}>
+                        Manage in {currentStoreCopy().name}
+                      </Button>
+                    ) : canManageBilling ? (
+                      removeDialog
+                    ) : null}
+                  </>
+                ) : (
+                  <StatusPill tone="mint">Active</StatusPill>
+                )}
+              </div>
+            </div>
+            {canEdit && entitled ? (
+              <SwitchRow
+                id="inv-auto-send"
+                label="Invoice automatically when a job is completed"
+                hint="When a booking is marked attended, an invoice is issued and emailed to the client as a PDF. Off: raise invoices by hand from the booking panel."
+                checked={form.autoSendOnCompletion}
+                saved={autoTick}
+                disabled={update.isPending}
+                onCheckedChange={(checked) => void flipAutoSend(checked)}
+              />
+            ) : null}
+          </GroupedBlock>
+        )}
+        {gated ? (
+          <p className="text-xs text-muted-foreground">
+            You can still view and download invoices already issued. These settings apply once
+            invoicing is on your plan.
+          </p>
+        ) : canEdit ? (
+          <div className="grid gap-4">
+            {typedFields}
+            {bar.managed ? null : (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => void save().catch(() => undefined)}
+                  disabled={update.isPending || !dirty || !formValid}
+                >
+                  {update.isPending ? "Saving…" : "Save invoicing settings"}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -330,98 +583,13 @@ export function InvoicingSetting({ className }: { className?: string }) {
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="inv-prefix">Number prefix</Label>
-              <Input
-                id="inv-prefix"
-                value={form.numberPrefix}
-                maxLength={NUMBER_PREFIX_MAX_LENGTH}
-                placeholder={DEFAULT_NUMBER_PREFIX}
-                aria-invalid={!prefixValid || Boolean(fieldErrors.numberPrefix)}
-                onChange={(e) => set({ numberPrefix: e.target.value })}
-              />
-              <p
-                className={cn(
-                  "text-xs",
-                  prefixValid && !fieldErrors.numberPrefix
-                    ? "text-muted-foreground"
-                    : "text-destructive",
-                )}
-              >
-                {fieldErrors.numberPrefix
-                  ? fieldErrors.numberPrefix
-                  : prefixValid
-                    ? `Next invoice: ${nextInvoiceNumberPreview(form.numberPrefix)}. Changing this later doesn’t renumber existing invoices.`
-                    : `Up to ${NUMBER_PREFIX_MAX_LENGTH} letters, digits, “-” or “_”.`}
-              </p>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="inv-due-days">Payment terms (days)</Label>
-              <Input
-                id="inv-due-days"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={DUE_DAYS_MAX}
-                step={1}
-                value={form.dueDays}
-                aria-invalid={!dueDaysValid || Boolean(fieldErrors.dueDays)}
-                onChange={(e) => set({ dueDays: e.target.value })}
-              />
-              <p
-                className={cn(
-                  "text-xs",
-                  dueDaysValid && !fieldErrors.dueDays
-                    ? "text-muted-foreground"
-                    : "text-destructive",
-                )}
-              >
-                {fieldErrors.dueDays
-                  ? fieldErrors.dueDays
-                  : dueDaysValid
-                    ? dueDaysNumber === 0
-                      ? "Due on the day it’s issued."
-                      : `Due ${dueDaysNumber} day${dueDaysNumber === 1 ? "" : "s"} after issue.`
-                    : `A whole number from 0 to ${DUE_DAYS_MAX}.`}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="inv-footer">Footer note</Label>
-            <Textarea
-              id="inv-footer"
-              rows={2}
-              value={form.footerNote}
-              maxLength={FOOTER_MAX}
-              placeholder="Thank you for your business."
-              aria-invalid={!footerValid || Boolean(fieldErrors.footerNote)}
-              onChange={(e) => set({ footerNote: e.target.value })}
-            />
-            <p className="text-xs text-muted-foreground">
-              {fieldErrors.footerNote ??
-                `Printed at the bottom of every PDF. ${form.footerNote.length}/${FOOTER_MAX}`}
-            </p>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            {bankTransferOn
-              ? "Your bank details from “Pay by bank transfer” are printed under “How to pay” while a balance is due."
-              : "Turn on “Pay by bank transfer” above to print your bank details under “How to pay”."}{" "}
-            Logo and accent colour come from{" "}
-            <Link to="/settings" search={{ tab: "configuration" }} className="underline">
-              Branding
-            </Link>
-            ; VAT rate and registration from{" "}
-            <Link to="/settings" search={{ tab: "configuration" }} className="underline">
-              Tax
-            </Link>
-            .
-          </p>
+          {typedFields}
 
           <div className="flex justify-end">
-            <Button onClick={() => void save()} disabled={update.isPending || !dirty || !formValid}>
+            <Button
+              onClick={() => void save().catch(() => undefined)}
+              disabled={update.isPending || !dirty || !formValid}
+            >
               {update.isPending ? "Saving…" : "Save invoicing settings"}
             </Button>
           </div>

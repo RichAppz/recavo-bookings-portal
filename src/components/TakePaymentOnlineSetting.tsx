@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Banknote } from "lucide-react";
 import { toast } from "sonner";
+import { GroupedBlock, SwitchRow, useSavedTick } from "@/components/settings/primitives";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -19,21 +20,32 @@ import { cn } from "@/lib/utils";
  * Whether priced public bookings must be paid by card before they confirm.
  *
  * Default is off, and a switch without a label reads as "not set" rather than
- * "clients are not paying". This control states On/Off in words and, when off,
+ * "clients are not paying". The card form states On/Off in words and, when off,
  * uses warning colour so the gap is visible on Payments as well as Settings.
+ * The `row` form is the Settings switch row: greyed with the reason beside it
+ * until a way to get paid is ready.
  */
-export function TakePaymentOnlineSetting({ className }: { className?: string }) {
+export function TakePaymentOnlineSetting({
+  className,
+  variant = "card",
+}: {
+  className?: string;
+  variant?: "card" | "row";
+}) {
   const tenant = useTenant();
   const connect = useConnectAccount();
   const paymentsHold = usePaymentsHold();
   const update = useUpdateConfiguration();
-  // Stripe Connect and bank details both live on Settings → Payments; no point
+  const [saved, flash] = useSavedTick();
+  // Stripe Connect and bank details both live on Settings → Get paid; no point
   // sending people there when they're already looking at it.
   const onPaymentSettings = useRouterState({
     select: (s) =>
-      s.location.pathname === "/settings" &&
-      (s.location.search as { tab?: string }).tab === "payments",
+      s.location.pathname === "/settings/get-paid" ||
+      (s.location.pathname === "/settings" &&
+        (s.location.search as { tab?: string }).tab === "payments"),
   });
+  const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
   const enabled = isOnlinePaymentRequired(tenant.configuration);
   // While RECAVO has payments on hold the API refuses new card payments, so Stripe
   // does not count as a way to pay even if the account itself is live.
@@ -55,11 +67,58 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
     } as NonNullable<BusinessConfiguration["booking"]>;
     try {
       await update.mutateAsync({ booking });
+      flash();
       toast.success(next ? "Online payments are on" : "Online payments are off");
     } catch {
       // useUpdateConfiguration already toasts the API error.
     }
   };
+
+  const notReadyLine = enabled
+    ? "Until Stripe or bank transfer is set up, your page takes bookings as pay on the day."
+    : noStripe
+      ? "Set up a way to get paid first — add your bank transfer details."
+      : "Set up a way to get paid first — connect Stripe or add bank transfer details.";
+
+  if (variant === "row") {
+    return (
+      <div className={cn("grid gap-2", className)}>
+        <GroupedBlock>
+          <SwitchRow
+            id="take-payment-online"
+            label="Take payment online"
+            hint={
+              enabled
+                ? "Priced sessions booked on your public page are paid before they are confirmed."
+                : "Clients can book priced sessions without paying. You will have to collect payment yourself."
+            }
+            checked={enabled}
+            saved={saved}
+            disabled={!canEdit || update.isPending}
+            reason={!enabled && !canTurnOn ? "Set up a way to get paid first" : undefined}
+            onCheckedChange={(checked) => void setEnabled(checked)}
+          />
+        </GroupedBlock>
+        {!chargesReady && !bankReady && (enabled || !onPaymentSettings) ? (
+          <p className="text-[13px] text-warning-foreground dark:text-amber">
+            {notReadyLine}
+            {onPaymentSettings ? null : (
+              <>
+                {" "}
+                <Link
+                  to="/settings/$page"
+                  params={{ page: "get-paid" }}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Set up payments
+                </Link>
+              </>
+            )}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section
@@ -129,17 +188,13 @@ export function TakePaymentOnlineSetting({ className }: { className?: string }) 
       </div>
       {!chargesReady && !bankReady ? (
         <p className="mt-3 text-sm text-amber-950 dark:text-amber-50">
-          {enabled
-            ? "Until Stripe or bank transfer is set up, your page takes bookings as pay on the day."
-            : noStripe
-              ? "Set up a way to get paid first — add your bank transfer details."
-              : "Set up a way to get paid first — connect Stripe or add bank transfer details."}
+          {notReadyLine}
           {onPaymentSettings ? (noStripe ? " It's below." : " Both are below.") : null}
         </p>
       ) : null}
       {onPaymentSettings ? null : (
         <Button asChild size="sm" variant="outline" className="mt-4 bg-background">
-          <Link to="/settings" search={{ tab: "payments" }}>
+          <Link to="/settings/$page" params={{ page: "get-paid" }}>
             {chargesReady || bankReady ? "Payment settings" : "Set up payments"}
             <ArrowRight className="size-4" />
           </Link>
