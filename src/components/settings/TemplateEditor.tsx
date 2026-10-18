@@ -374,10 +374,10 @@ function ChannelPane({
 
 function SmsBubble({ text, stale, error }: { text?: string; stale: boolean; error: boolean }) {
   return (
-    <div className="flex justify-end rounded-[18px] bg-secondary/60 p-3 dark:bg-secondary/30">
+    <div className="flex min-w-0 justify-end overflow-hidden rounded-[18px] bg-secondary/60 p-3 dark:bg-secondary/30">
       <div
         className={cn(
-          "min-w-0 max-w-[85%] rounded-[18px] rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground break-words [overflow-wrap:anywhere] whitespace-pre-wrap",
+          "min-w-0 max-w-[85%] rounded-[18px] rounded-br-sm bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground [overflow-wrap:anywhere]",
           stale && "opacity-60",
         )}
         aria-live="polite"
@@ -400,14 +400,14 @@ function MiniEmail({
   error: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-[14px] border bg-background">
+    <div className="min-w-0 overflow-hidden rounded-[14px] border bg-background">
       <div className="border-b bg-secondary/40 px-4 py-2 text-xs dark:bg-secondary/20">
         <span className="text-muted-foreground">Subject: </span>
         <span className="font-medium">{subject}</span>
       </div>
       <div
         className={cn(
-          "px-4 py-3 text-sm break-words [overflow-wrap:anywhere] whitespace-pre-wrap",
+          "px-4 py-3 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]",
           stale && "opacity-60",
         )}
         aria-live="polite"
