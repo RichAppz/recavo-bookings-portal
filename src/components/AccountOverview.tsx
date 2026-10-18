@@ -301,11 +301,11 @@ function CreditsCard({
   const pendingRow = (pending: PendingSummary, tone: "credits" | "pending") => (
     <div
       data-testid="credits-pending"
-      className="flex items-center justify-between gap-3 rounded-xl bg-warning-soft/60 px-3 py-2.5 text-[13px]"
+      className="flex items-start justify-between gap-3 rounded-xl bg-warning-soft/60 px-3 py-2.5 text-[13px] leading-snug"
     >
-      <span className="flex min-w-0 items-center gap-2">
-        <span aria-hidden className="size-2 shrink-0 rounded-full bg-warning" />
-        <span className="truncate">
+      <span className="flex min-w-0 items-start gap-2">
+        <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warning" />
+        <span className="min-w-0">
           <span className="font-semibold">{pendingLine(pending)}</span>
           <span className="text-muted-foreground">
             {tone === "credits"

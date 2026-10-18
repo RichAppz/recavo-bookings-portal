@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, type ReactNode } from "react";
 import { ChevronRight, MapPin, Navigation, Share, Star } from "lucide-react";
 import { toast } from "sonner";
 import { OfferCard, type OfferPick } from "@/components/client/ClientOffers";
@@ -115,6 +115,17 @@ export function ClientLanding({
   /** The desktop booking card (calendar, times, Continue). */
   bookingCard?: ReactNode;
 }) {
+  // A link into a section (#sessions from the account's "See packages") arrives before
+  // the catalogue has rendered, so the router's own hash scroll finds nothing. Scroll
+  // once the sections exist.
+  const catalogueReady = services.length > 0 || packages.length > 0;
+  useEffect(() => {
+    if (preview || !catalogueReady || typeof window === "undefined") return;
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, [preview, catalogueReady]);
+
   const share = async () => {
     if (preview) return;
     const url = typeof window !== "undefined" ? window.location.href.split("?")[0]! : "";
