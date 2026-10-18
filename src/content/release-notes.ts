@@ -6,6 +6,22 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-18",
+    title: "A way back in when a payment fails",
+    items: [
+      {
+        kind: "fixed",
+        text: "If your monthly payment doesn't go through, the Plan page now says so and gets you back in. It shows what is owed and why the card was declined, with Pay now to charge the card Stripe has on file (update it first with Update card in Stripe, if you need to), or Pay with a different card to settle it on Stripe's own page. The moment it goes through your workspace reopens — nothing is removed while it is read-only. Before, this screen offered another free trial, which couldn't be started and left you stuck.",
+        where: "Plan",
+      },
+      {
+        kind: "improved",
+        text: "The plan buttons say Subscribe rather than Start free trial once you have already had your trial.",
+        where: "Plan",
+      },
+    ],
+  },
+  {
     date: "2026-10-17",
     title: "Reminders in the menu, set up in one tap",
     items: [

@@ -77,6 +77,19 @@ export function subscriptionManagedHere(
   return surface === "web" ? provider === "stripe" : provider === store;
 }
 
+/**
+ * A Stripe subscription whose renewal didn't go through (grace or locked out).
+ * The way back in is paying the open invoice, never a new Checkout: the API
+ * refuses one while this row is live. Store subscriptions are the store's to
+ * chase, so they never count.
+ */
+export function isPaymentFailed(
+  subscription: (SubscriptionLike & ProviderLike) | null | undefined,
+): boolean {
+  if (!subscription || isStoreBilled(subscription)) return false;
+  return subscription.status === "past_due" || subscription.status === "unpaid";
+}
+
 export function isBillingPath(pathname: string): boolean {
   return pathname === "/billing" || pathname.startsWith("/billing/");
 }

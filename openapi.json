@@ -61435,6 +61435,10 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
+                    },
                     "addons": {
                       "type": "array",
                       "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
@@ -62093,6 +62097,10 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
+                    },
                     "addons": {
                       "type": "array",
                       "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
@@ -62516,6 +62524,10 @@
                     "billingBypass": {
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                    },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
                     },
                     "addons": {
                       "type": "array",
@@ -63851,6 +63863,10 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
+                    },
                     "addons": {
                       "type": "array",
                       "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
@@ -64489,6 +64505,10 @@
                           "type": "boolean",
                           "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                         },
+                        "trialAvailable": {
+                          "type": "boolean",
+                          "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
+                        },
                         "addons": {
                           "type": "array",
                           "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
@@ -64920,6 +64940,703 @@
         }
       }
     },
+    "/api/v1/businesses/{businessId}/subscription/outstanding": {
+      "get": {
+        "summary": "Outstanding invoice on a lapsed subscription",
+        "description": "The open Stripe invoice still being collected for a past-due / unpaid subscription, with the amount owed and the reason the last charge failed. `{ invoice: null }` when nothing is owed. Requires billing.manage; 409 for store-billed businesses.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Outstanding invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invoice"
+                  ],
+                  "properties": {
+                    "invoice": {
+                      "type": "object",
+                      "nullable": true,
+                      "required": [
+                        "id",
+                        "amountDueMinor",
+                        "currency",
+                        "createdAt",
+                        "hostedInvoiceUrl",
+                        "attemptCount",
+                        "nextPaymentAttemptAt",
+                        "failureMessage"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "amountDueMinor": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "example": "GBP"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "hostedInvoiceUrl": {
+                          "type": "string",
+                          "format": "uri",
+                          "nullable": true
+                        },
+                        "attemptCount": {
+                          "type": "integer"
+                        },
+                        "nextPaymentAttemptAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "failureMessage": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Stripe’s customer-safe reason for the last failed charge."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/subscription/reinstate": {
+      "post": {
+        "summary": "Pay the outstanding invoice and reinstate the subscription",
+        "description": "Charges the saved payment method for the open invoice on a past-due / unpaid subscription. `paid`: the charge went through and the projection was reconciled from Stripe (access restored). `payment_required`: Stripe declined the saved card; open `hostedInvoiceUrl` so the owner can pay with another card (saved as the new default). `nothing_due`: no open invoice remained. Requires billing.manage and Idempotency-Key (forwarded to Stripe so a retry never double-charges). 409 when the subscription is not past due.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reinstate outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "outcome",
+                        "view"
+                      ],
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "paid",
+                            "nothing_due"
+                          ]
+                        },
+                        "view": {
+                          "type": "object",
+                          "required": [
+                            "subscription",
+                            "plan",
+                            "features",
+                            "addons"
+                          ],
+                          "properties": {
+                            "subscription": {
+                              "nullable": true,
+                              "type": "object",
+                              "description": "Current non-terminal subscription projection. Stripe / grace identifiers are included only when the actor holds billing.manage.",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "businessId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "planId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "trialing",
+                                    "active",
+                                    "past_due",
+                                    "cancelled",
+                                    "unpaid",
+                                    "incomplete",
+                                    "incomplete_expired",
+                                    "paused"
+                                  ]
+                                },
+                                "accessState": {
+                                  "type": "string",
+                                  "enum": [
+                                    "none",
+                                    "pending",
+                                    "trial",
+                                    "entitled",
+                                    "grace",
+                                    "restricted",
+                                    "ended"
+                                  ]
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "stripe",
+                                    "apple",
+                                    "google"
+                                  ],
+                                  "description": "Who bills the subscription: Stripe (web Checkout), Apple (App Store In-App Purchase) or Google (Google Play Billing). Stripe self-serve endpoints return 409 for store-billed businesses."
+                                },
+                                "planVersion": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "currentPeriodStart": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                },
+                                "currentPeriodEnd": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                },
+                                "trialStart": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                },
+                                "trialEnd": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                },
+                                "cancelAtPeriodEnd": {
+                                  "type": "boolean"
+                                },
+                                "discount": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "description": "Coupon currently on the Stripe subscription (partner referral programme). Null when the business pays list price.",
+                                  "required": [
+                                    "label",
+                                    "percentOff",
+                                    "amountOffMinor",
+                                    "endsAt"
+                                  ],
+                                  "properties": {
+                                    "label": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "percentOff": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
+                                    "amountOffMinor": {
+                                      "type": "integer",
+                                      "nullable": true
+                                    },
+                                    "endsAt": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "nullable": true,
+                                      "description": "When the discount stops applying; null for open-ended."
+                                    }
+                                  }
+                                },
+                                "limitCompliance": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ok",
+                                    "over_limit",
+                                    "grace_over_limit"
+                                  ]
+                                },
+                                "stripeSubscriptionId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "stripeCustomerId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "stripePriceId": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "graceStartedAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                },
+                                "graceEndsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                }
+                              }
+                            },
+                            "plan": {
+                              "type": "object",
+                              "nullable": true
+                            },
+                            "features": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "boolean"
+                              },
+                              "description": "Effective feature map (plan tier + Stripe entitlements + platform overrides) — the same answer the API enforces, so clients can gate upsells on it (RECA-524/526). Example keys: `reminders.sms`, `custom_records.images`."
+                            },
+                            "billingBypass": {
+                              "type": "boolean",
+                              "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                            },
+                            "trialAvailable": {
+                              "type": "boolean",
+                              "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
+                            },
+                            "addons": {
+                              "type": "array",
+                              "description": "Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription.",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "key",
+                                  "featureKey",
+                                  "unitAmountMinor",
+                                  "currency",
+                                  "interval",
+                                  "status"
+                                ],
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "example": "invoicing"
+                                  },
+                                  "featureKey": {
+                                    "type": "string",
+                                    "example": "invoicing"
+                                  },
+                                  "unitAmountMinor": {
+                                    "type": "integer",
+                                    "example": 800
+                                  },
+                                  "currency": {
+                                    "type": "string",
+                                    "example": "GBP"
+                                  },
+                                  "interval": {
+                                    "type": "string",
+                                    "enum": [
+                                      "month",
+                                      "year"
+                                    ]
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "included",
+                                      "active",
+                                      "available"
+                                    ],
+                                    "description": "`included` — the plan tier bundles the feature (nothing to buy); `active` — held via the add-on or a platform grant; `available` — purchasable via POST /subscription/addons/{addonKey}. Invitation-only add-ons (unlimited texts) are omitted from the list until RECAVO offers them or they are held."
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "outcome",
+                        "hostedInvoiceUrl",
+                        "failureMessage"
+                      ],
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "payment_required"
+                          ]
+                        },
+                        "hostedInvoiceUrl": {
+                          "type": "string",
+                          "format": "uri",
+                          "nullable": true
+                        },
+                        "failureMessage": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Subscription is not waiting on a payment",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{businessId}/subscription/cancel": {
       "post": {
         "summary": "Cancel subscription at period end",
@@ -65118,6 +65835,10 @@
                     "billingBypass": {
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                    },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
                     },
                     "addons": {
                       "type": "array",
@@ -65530,6 +66251,10 @@
                     "billingBypass": {
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                    },
+                    "trialAvailable": {
+                      "type": "boolean",
+                      "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
                     },
                     "addons": {
                       "type": "array",
@@ -66357,6 +67082,10 @@
                         "billingBypass": {
                           "type": "boolean",
                           "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                        },
+                        "trialAvailable": {
+                          "type": "boolean",
+                          "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
                         },
                         "addons": {
                           "type": "array",

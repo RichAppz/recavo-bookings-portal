@@ -4312,6 +4312,12 @@ export type SubscriptionView = {
   addons?: SubscriptionAddon[];
   /** A platform billing_bypass override is standing in for a Stripe subscription. */
   billingBypass?: boolean;
+  /**
+   * A fresh Checkout would still include the one free trial. False once Stripe
+   * has started one for this business, so lapsed accounts are offered
+   * "Subscribe", not another trial.
+   */
+  trialAvailable?: boolean;
 };
 
 export function useSubscription() {
@@ -4520,6 +4526,67 @@ export function useBillingPortal() {
       );
       return res.data;
     }),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** The Stripe invoice still being collected for a past-due / unpaid subscription. */
+export type OutstandingInvoice = {
+  id: string;
+  amountDueMinor: number;
+  currency: string;
+  createdAt: string;
+  hostedInvoiceUrl: string | null;
+  attemptCount: number;
+  nextPaymentAttemptAt: string | null;
+  /** Stripe's customer-safe reason for the last failed charge. */
+  failureMessage: string | null;
+};
+
+export function useOutstandingInvoice(enabled: boolean) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: [...queryKeys.subscription(businessId), "outstanding"] as const,
+    enabled: Boolean(businessId) && enabled,
+    // Owed money changes under us (Stripe retries, the hosted page): never serve it stale.
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const res = await api.get<{ invoice: OutstandingInvoice | null }>(
+        `/api/v1/businesses/${businessId}/subscription/outstanding`,
+      );
+      return res.data;
+    },
+  });
+}
+
+export type ReinstateOutcome =
+  | { outcome: "paid" | "nothing_due"; view: SubscriptionView }
+  | { outcome: "payment_required"; hostedInvoiceUrl: string | null; failureMessage: string | null };
+
+/**
+ * Pay the outstanding invoice with the saved card. A fresh key per attempt, so
+ * "try again" after updating the card is a new charge, not a replay of the decline.
+ */
+export function useReinstateSubscription() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation<ReinstateOutcome, Error, void>({
+    mutationFn: createIdempotentMutationFn<ReinstateOutcome, void>(async (_, idempotencyKey) => {
+      const res = await api.post<ReinstateOutcome>(
+        `/api/v1/businesses/${businessId}/subscription/reinstate`,
+        {},
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: (result) => {
+      if (result.outcome !== "payment_required") {
+        qc.setQueryData(queryKeys.subscription(businessId), result.view);
+      }
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+      invalidateOnboarding(qc, businessId);
+    },
     onError: (err) => toastApiError(err),
   });
 }

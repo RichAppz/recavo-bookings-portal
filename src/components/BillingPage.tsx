@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowDown,
   Check,
   ExternalLink,
@@ -35,7 +37,10 @@ import {
   useAddSubscriptionAddon,
   useBillingCatalogue,
   useBillingPortal,
+  useBusinessId,
   useCancelSubscription,
+  useOutstandingInvoice,
+  useReinstateSubscription,
   useRemoveSubscriptionAddon,
   useResumeSubscription,
   useStartCheckout,
@@ -46,6 +51,7 @@ import {
   type SubscriptionAddon,
   type SubscriptionDiscount,
 } from "@/lib/api/hooks";
+import { queryKeys } from "@/lib/api";
 import type {
   PublicCataloguePlan,
   SaasInterval,
@@ -55,6 +61,7 @@ import type {
 import { useIapProducts, useIapPurchase } from "@/hooks/use-iap";
 import {
   isBillingBlocked,
+  isPaymentFailed,
   isStoreBilled,
   subscriptionAccessState,
   subscriptionManagedHere,
@@ -64,13 +71,12 @@ import { formatInTz, formatMoney } from "@/lib/format";
 import { addonsWithInvoicing } from "@/lib/api/invoices";
 import { openIapManagement, planOrder, type IapProduct } from "@/lib/iap";
 import { INVOICING_ADDON_KEY } from "@/lib/invoices";
-import { billingSurface } from "@/lib/native";
+import { billingSurface, isNativeApp, openHostedFlow } from "@/lib/native";
 import { currentStoreCopy, storeCopyFor } from "@/lib/store-copy";
 import { UPSELLS_ADDON_KEY } from "@/lib/api/upsells";
 import { canManageSaasBilling } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
-import { openHostedFlow } from "@/lib/native";
 
 type PlanPitch = { tagline: string; popular?: boolean; bullets: string[] };
 
@@ -203,19 +209,181 @@ function FeatureRow({ label }: { label: string }) {
   );
 }
 
-function accessCopy(sub: BusinessSubscription | null | undefined): string {
+function accessCopy(sub: BusinessSubscription | null | undefined, trialAvailable: boolean): string {
   switch (subscriptionAccessState(sub)) {
     case "none":
-      return "Choose a plan to start your 14-day trial. We’ll take a card now and only charge when the trial ends.";
+      return trialAvailable
+        ? "Choose a plan to start your 14-day trial. We’ll take a card now and only charge when the trial ends."
+        : "Choose a plan. You’ll be charged today and on the same day each period after that.";
     case "pending":
       return "Checkout isn’t finished yet. Pick a plan again to complete it.";
     case "restricted":
       return "This workspace is read-only until billing is updated.";
     case "ended":
-      return "Your subscription has ended. Choose a plan to reopen the console.";
+      return trialAvailable
+        ? "Your subscription has ended. Choose a plan to reopen the console."
+        : "Your subscription has ended. Choose a plan to reopen the console — you’ve already had your free trial, so billing starts today.";
     default:
       return "Manage your Recavo plan, invoices and cancellation.";
   }
+}
+
+/**
+ * "Your payment didn't go through" — what is owed, why the card failed, and two
+ * ways to fix it: charge the saved card again (after updating it in Stripe, or
+ * just retrying), or pay on Stripe's hosted invoice page with a different card.
+ * Polls while mounted so paying in another tab unlocks this one.
+ */
+function PaymentFailedCard({
+  subscription,
+  planName,
+  locked,
+  tz,
+}: {
+  subscription: BusinessSubscription;
+  planName: string | null;
+  locked: boolean;
+  tz: string;
+}) {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  const outstanding = useOutstandingInvoice(true);
+  const reinstate = useReinstateSubscription();
+  const portal = useBillingPortal();
+  const [declined, setDeclined] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [qc, businessId]);
+
+  const invoice = outstanding.data?.invoice ?? null;
+  const amount = invoice
+    ? formatMoney(invoice.amountDueMinor, invoice.currency, { compact: true })
+    : null;
+  const failure = declined ?? invoice?.failureMessage ?? null;
+  const busy = reinstate.isPending || portal.isPending;
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: queryKeys.subscription(businessId) });
+  };
+
+  const payWithOtherCard = async (url: string) => {
+    if (isNativeApp()) {
+      await openHostedFlow(url);
+      refresh();
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const payNow = async () => {
+    setDeclined(null);
+    const result = await reinstate.mutateAsync();
+    if (result.outcome !== "payment_required") {
+      if (result.outcome === "paid") {
+        toast.success("Payment received", {
+          description: "Thanks — your workspace is open again.",
+        });
+      } else {
+        toast.success("Nothing left to pay", {
+          description: "Stripe shows this invoice as settled. Your plan is up to date.",
+        });
+      }
+      return;
+    }
+    setDeclined(result.failureMessage ?? "Your card was declined again.");
+    toast.error("That card was declined again", {
+      description: result.hostedInvoiceUrl
+        ? "Use “Pay with a different card” to settle it with another card."
+        : "Update your card in Stripe, then try again.",
+    });
+  };
+
+  const openPortal = async () => {
+    const result = await portal.mutateAsync();
+    const url = result.portalUrl ?? result.url;
+    if (url) void openHostedFlow(url);
+  };
+
+  return (
+    <section
+      data-testid="payment-failed-card"
+      className="rounded-3xl border-2 border-amber-300 bg-amber-50/60 p-6 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/30"
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Your payment didn’t go through</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {outstanding.isLoading ? (
+                "Checking what’s outstanding with Stripe…"
+              ) : invoice ? (
+                <>
+                  We couldn’t take {amount} for your {planName ?? "Recavo"} plan
+                  {invoice.attemptCount > 1 ? ` (${invoice.attemptCount} attempts)` : ""}.
+                  {failure ? ` ${failure.endsWith(".") ? failure : `${failure}.`}` : ""}
+                </>
+              ) : (
+                <>Stripe is still collecting the last {planName ?? "Recavo"} payment.</>
+              )}{" "}
+              {locked
+                ? "Your workspace is read-only until it’s paid — nothing has been removed, and everything comes back the moment it goes through."
+                : subscription.graceEndsAt
+                  ? `You still have full access until ${formatInTz(subscription.graceEndsAt, tz, { dateStyle: "long" })}; after that the workspace goes read-only until it’s paid.`
+                  : "You still have access for now; the workspace goes read-only if it stays unpaid."}
+            </p>
+          </div>
+
+          {declined ? (
+            <p role="alert" className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              {declined}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="rounded-full"
+              disabled={busy || outstanding.isLoading}
+              onClick={() => void payNow()}
+            >
+              {reinstate.isPending
+                ? "Taking payment…"
+                : amount
+                  ? `Pay ${amount} now`
+                  : "Check and pay now"}
+            </Button>
+            {invoice?.hostedInvoiceUrl ? (
+              <Button
+                variant="outline"
+                className="rounded-full"
+                disabled={busy}
+                onClick={() => void payWithOtherCard(invoice.hostedInvoiceUrl!)}
+              >
+                Pay with a different card
+                <ExternalLink className="size-4" />
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              className="rounded-full"
+              disabled={busy}
+              onClick={() => void openPortal()}
+            >
+              Update card in Stripe
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            “Pay now” charges the card Stripe has on file. If you’ve just updated it, this is the
+            button to press. Changing plan is available again once the invoice is settled.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 type AddonCopy = {
@@ -998,6 +1166,10 @@ function WebBillingPage() {
   // offers no Stripe buttons or plan chooser for it (the API would refuse).
   const storeBilled = Boolean(current) && !blocked && isStoreBilled(current);
   const storeCopy = storeCopyFor(subscriptionProvider(current));
+  // A failed renewal: the fix is paying the open invoice, so the plan chooser
+  // stays out of the way while the console is locked for it.
+  const lapsed = isPaymentFailed(current);
+  const trialAvailable = subscription.data?.trialAvailable !== false;
 
   const plans = useMemo(() => {
     const list = [...(catalogue.data ?? [])];
@@ -1065,10 +1237,19 @@ function WebBillingPage() {
       {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
       {/* Once a plan is in place the current-plan card carries the state; this line
             is only needed while the console is still locked. */}
-      {blocked ? (
+      {blocked && !lapsed ? (
         <div className="max-w-2xl">
-          <p className="text-sm text-muted-foreground">{accessCopy(current)}</p>
+          <p className="text-sm text-muted-foreground">{accessCopy(current, trialAvailable)}</p>
         </div>
+      ) : null}
+
+      {lapsed && current ? (
+        <PaymentFailedCard
+          subscription={current}
+          planName={currentPlan?.name ?? plan?.name ?? null}
+          locked={blocked}
+          tz={tz}
+        />
       ) : null}
 
       {!blocked && current ? (
@@ -1176,7 +1357,7 @@ function WebBillingPage() {
 
       {!blocked && current ? <SmsCreditsCard /> : null}
 
-      {storeBilled ? null : (
+      {storeBilled || (blocked && lapsed) ? null : (
         <>
           {/* scroll-mt clears the sticky header when the "Upgrade plan" button jumps here. */}
           <div
@@ -1254,7 +1435,11 @@ function WebBillingPage() {
                           disabled={checkout.isPending}
                           onClick={() => void startCheckout(p)}
                         >
-                          {checkout.isPending ? "Starting checkout…" : "Start free trial"}
+                          {checkout.isPending
+                            ? "Starting checkout…"
+                            : trialAvailable
+                              ? "Start free trial"
+                              : `Subscribe to ${p.name}`}
                         </Button>
                       ) : isCurrent ? (
                         <Button className="h-11 w-full rounded-full" variant="secondary" disabled>
