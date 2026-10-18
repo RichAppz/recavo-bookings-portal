@@ -73,8 +73,6 @@
      and the brand colours that stay the same in both modes. */
   --color-panel: var(--panel);
   --color-panel-border: var(--panel-border);
-  --color-menu-card: var(--menu-card);
-  --color-menu-card-border: var(--menu-card-border);
   --color-mint: #2ee6a6;
   --color-navy: #10172a;
   --color-amber: #e99239;
@@ -144,8 +142,6 @@
   --panel: var(--card);
   --panel-border: var(--border);
   --panel-shadow: 0 0 #0000;
-  --menu-card: var(--card);
-  --menu-card-border: var(--border);
 }
 
 /*
@@ -188,10 +184,6 @@
   --panel: #ffffff;
   --panel-border: #e4e0d8;
   --panel-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
-  /* The account card and More button at the foot of the menu: lifted off the
-     app background like the active row, not the same tone as a hovered row. */
-  --menu-card: #ffffff;
-  --menu-card-border: #e0dcd4;
 }
 
 .dash.dark {
@@ -231,8 +223,6 @@
   --panel: #161a22;
   --panel-border: #232833;
   --panel-shadow: 0 0 #0000;
-  --menu-card: #262c37;
-  --menu-card-border: #343b48;
 }
 
 .dark {
