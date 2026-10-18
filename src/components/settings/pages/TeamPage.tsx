@@ -62,6 +62,7 @@ import {
   roleLabels,
 } from "@/lib/permissions";
 import { INVITE_ROLES, ROLE_DESCRIPTIONS } from "@/lib/settings-labels";
+import { useAuth } from "@/lib/auth/auth-store";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 function membershipTone(status: Membership["status"]): "grey" | "mint" | "amber" | "red" {
@@ -156,9 +157,16 @@ function MemberRow({
   canManage: boolean;
 }) {
   const updateMembership = useUpdateMembership();
+  const me = useAuth().user;
   const [confirm, setConfirm] = useState<"remove" | null>(null);
-  const name = userDisplayName(m.user, "Pending teammate");
-  const email = m.user?.email;
+  // The list embeds each account when it can; the signed-in person's own row can
+  // always be named from the session.
+  const account = m.user ?? (me && me.id === m.userId ? me : null);
+  const name = userDisplayName(
+    account,
+    m.status === "invited" ? "Pending teammate" : "Team member",
+  );
+  const email = account?.email;
   const isOwner = holdsBusinessOwnerRole(m.roleKeys);
   const roleKey = m.roleKeys[0] ?? SYSTEM_ROLES.STAFF;
   const role = isOwner ? "Owner" : roleLabels(m.roleKeys, "No roles");

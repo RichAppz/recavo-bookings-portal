@@ -84,13 +84,17 @@ export function ActivityPage() {
 
   // Audit rows carry the actor's user id; the team list turns it into a name.
   const nameFor = useMemo(() => {
-    const byUserId = new Map<string, string>();
+    // Depending on the module, the actor is recorded by user, membership or staff id.
+    const byId = new Map<string, string>();
     for (const m of memberships.data ?? []) {
-      byUserId.set(m.userId, userDisplayName(m.user, "Team member"));
+      const name = userDisplayName(m.user, "Team member");
+      byId.set(m.userId, name);
+      byId.set(m.id, name);
+      if (m.staffId) byId.set(m.staffId, name);
     }
     return (event: AuditEvent): string => {
       if (event.actorType === "system") return "System";
-      return byUserId.get(event.actorId) ?? auditActorLabel(event.actorType);
+      return byId.get(event.actorId) ?? auditActorLabel(event.actorType);
     };
   }, [memberships.data]);
 

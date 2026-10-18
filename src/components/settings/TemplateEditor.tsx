@@ -255,7 +255,7 @@ function ChannelPane({
   const id = `tpl-${template.key}-${channel}`;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="grid min-w-0 content-start gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor={id} className="text-sm font-medium">
@@ -374,10 +374,10 @@ function ChannelPane({
 
 function SmsBubble({ text, stale, error }: { text?: string; stale: boolean; error: boolean }) {
   return (
-    <div className="rounded-[18px] bg-secondary/60 p-3 dark:bg-secondary/30">
+    <div className="flex justify-end rounded-[18px] bg-secondary/60 p-3 dark:bg-secondary/30">
       <div
         className={cn(
-          "ml-auto w-fit max-w-[85%] rounded-[18px] rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground break-words [overflow-wrap:anywhere] whitespace-pre-wrap",
+          "min-w-0 max-w-[85%] rounded-[18px] rounded-br-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground break-words [overflow-wrap:anywhere] whitespace-pre-wrap",
           stale && "opacity-60",
         )}
         aria-live="polite"
