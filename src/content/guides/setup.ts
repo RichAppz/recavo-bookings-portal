@@ -120,7 +120,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
       {
         heading: "Time off and signing in",
         body: "Book holidays under **Time off and blocks** on their card: the calendar is blocked and those days disappear from the booking page. **Invite by email** sends them a sign-in link; once accepted they see their own calendar, and you can widen their access from **Settings → Team**.",
-        link: { to: "/settings", search: { tab: "team" }, label: "Open Team settings" },
+        link: { to: "/settings/team", label: "Open Team settings" },
       },
     ],
     related: ["add-your-location", "create-your-services", "events-and-blocking-time"],
@@ -236,12 +236,12 @@ export const SETUP_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Find your link",
-        body: "Go to **Settings → Business**. Under **Booking page**, the link ends in a short name you can change — keep it short and easy to say out loud. Use the copy button to grab the full link.",
+        body: "Go to **Settings → Business details**. Under **Booking link**, the link ends in a short name you can change — keep it short and easy to say out loud. Use the copy button to grab the full link.",
         image: {
           name: "booking-link",
           alt: "Settings, Business tab, showing the public booking link with a copy button.",
         },
-        link: { to: "/settings", search: { tab: "business" }, label: "Open Business settings" },
+        link: { to: "/settings/business", label: "Open Business details" },
       },
       {
         heading: "See what clients see",
@@ -293,12 +293,12 @@ export const SETUP_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Turn online payment on",
-        body: "Go to **Settings → Payments** and switch **Take payment online** on. Clients booking online now pay (or leave a deposit) by card as they book. While it's off, priced {bookings} can still be made — you just collect the money yourself.",
+        body: "Go to **Settings → Get paid** and switch **Take payment online** on. Clients booking online now pay (or leave a deposit) by card as they book. While it's off, priced {bookings} can still be made — you just collect the money yourself.",
         image: {
           name: "payments-settings",
           alt: "Settings, Payments tab, with the Take payment online switch and the bank transfer section.",
         },
-        link: { to: "/settings", search: { tab: "payments" }, label: "Open Payments settings" },
+        link: { to: "/settings/get-paid", label: "Open Get paid" },
       },
       {
         heading: "Bank transfers",
@@ -341,7 +341,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
           name: "policies",
           alt: "Settings, Policies tab, listing the published cancellation policy and the Create draft form.",
         },
-        link: { to: "/settings", search: { tab: "policies" }, label: "Open Policies" },
+        link: { to: "/settings/policies", label: "Open Policies" },
       },
       {
         heading: "Write and publish",
@@ -389,7 +389,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Open Billing",
-        body: "Go to **Settings → Billing**, or click your business name at the bottom of the sidebar. **Current plan** shows what you're on, when the period ends and whether you're in a trial.",
+        body: "Go to **Settings → RECAVO plan**, or click your business name at the bottom of the sidebar. **Current plan** shows what you're on, when the period ends and whether you're in a trial.",
         image: {
           name: "billing",
           alt: "The Recavo plan page showing the current plan, period end, plan actions and add-ons.",

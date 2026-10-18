@@ -135,12 +135,12 @@ export const MONEY_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Turn invoicing on",
-        body: "Invoicing is included on Growth and an add-on on other plans — switch it on under **Settings → Billing**. Then in **Settings → Payments**, set your **number prefix**, **payment terms** (days until due) and a **footer note**. **Invoice automatically when a job is completed** issues and emails one every time a {booking} is marked attended.",
+        body: "Invoicing is included on Growth and an add-on on other plans — switch it on under **Settings → Get paid** (or **Settings → RECAVO plan**). Then, on the same **Get paid** page, set your **number prefix**, **payment terms** (days until due) and a **footer note**. **Invoice automatically when a job is completed** issues and emails one every time a {booking} is marked attended.",
         image: {
           name: "invoicing-settings",
           alt: "The Invoicing settings with the automatic invoicing switch, number prefix, payment terms and footer note.",
         },
-        link: { to: "/settings", search: { tab: "payments" }, label: "Open Payments settings" },
+        link: { to: "/settings/get-paid", label: "Open Get paid" },
       },
       {
         heading: "Raise one by hand",

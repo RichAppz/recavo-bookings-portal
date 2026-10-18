@@ -26,12 +26,12 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Set the reminder schedule",
-        body: "Go to **Settings → Notifications**. Under **Booking reminders**, add a row for each reminder — *1 day before*, *2 hours before* — and choose how it goes: **Client's preference** follows each client's contact setting, or force **SMS** or **Email**. Changes apply to upcoming {bookings} straight away; reminders already sent are never repeated.",
+        body: "Go to **Settings → Client messages**. Under **Reminders**, choose **Edit timing** and add a row for each reminder — *1 day before*, *2 hours before* — and choose how it goes: **Client's preference** follows each client's contact setting, or force **SMS** or **Email**. Changes apply to upcoming {bookings} straight away; reminders already sent are never repeated.",
         image: {
           name: "reminder-settings",
           alt: "Settings, Notifications tab, with two reminder rows (1 day before by client's preference, 2 hours before by SMS) and the message templates below.",
         },
-        link: { to: "/settings", search: { tab: "notifications" }, label: "Open Notifications" },
+        link: { to: "/settings/client-messages", label: "Open Client messages" },
       },
       {
         heading: "Confirmations",
@@ -106,8 +106,8 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Templates are separate",
-        body: "Confirmations and reminders aren't sent from here — they're automatic, and their wording lives under **Settings → Notifications → Message templates**. See *Confirmations and reminders*.",
-        link: { to: "/settings", search: { tab: "notifications" }, label: "Open Notifications" },
+        body: "Confirmations and reminders aren't sent from here — they're automatic, and their wording lives under **Settings → Client messages**. See *Confirmations and reminders*.",
+        link: { to: "/settings/client-messages", label: "Open Client messages" },
       },
     ],
     related: ["confirmations-and-reminders", "client-profile-and-history"],
@@ -138,12 +138,12 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Edit what clients receive",
-        body: "Under **Settings → Notifications**, **Message templates** holds every message clients get — the confirmation, each reminder, payment requests, cancellations — in an email and a text version. Edit the wording to sound like you. Anything in double braces, like `{{first_name}}`, is filled in for each message; anything in double square brackets, like `[[ at {{location}} ]]`, is only included when the detail is known.",
+        body: "Under **Settings → Client messages**, **Message templates** holds every message clients get — the confirmation, each reminder, payment requests, cancellations — in an email and a text version. Edit the wording to sound like you. Anything in double braces, like `{{first_name}}`, is filled in for each message; anything in double square brackets, like `[[ at {{location}} ]]`, is only included when the detail is known.",
         image: {
           name: "message-templates",
           alt: "The Message templates section with the email and text version of the booking confirmation.",
         },
-        link: { to: "/settings", search: { tab: "notifications" }, label: "Open Notifications" },
+        link: { to: "/settings/client-messages", label: "Open Client messages" },
       },
       {
         heading: "What's added for you",
@@ -151,8 +151,8 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Your own account",
-        body: "Your name, phone, language and timezone are under **Settings → Account**. These are yours, not the business's — the name clients see when they book with you is on your {staff} record. **Emails from RECAVO** on the same tab switches off the tips and getting-started notes we send in your first weeks; billing notices about your subscription are always sent.",
-        link: { to: "/settings", search: { tab: "account" }, label: "Open Account" },
+        body: "Your name, phone, language and timezone are under **Settings → Profile**. These are yours, not the business's — the name clients see when they book with you is on your {staff} record. **Emails from RECAVO** on the same page switches off the tips and getting-started notes we send in your first weeks; billing notices about your subscription are always sent.",
+        link: { to: "/settings/profile", label: "Open Profile" },
       },
     ],
     related: ["confirmations-and-reminders", "send-a-message"],

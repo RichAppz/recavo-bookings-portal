@@ -10,6 +10,26 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
     title: "A way back in when a payment fails",
     items: [
       {
+        kind: "improved",
+        text: "Settings has a new shape. Instead of a row of eleven tabs there is an index down the left — Your account, Business, How it works, Clients, Money, Records — with a search box, and each setting has its own page and address (so a link to Settings → Get paid opens exactly that). An amber dot on the index marks anything that needs you: no way to get paid yet, a failed payment, texts running low. Every switch saves the moment you flip it and shows a small Saved tick; anything you type gathers into one Save bar at the bottom of the page, and leaving with changes unsaved asks first. Old Settings links and bookmarks still work — they land on the right page. Nothing has been taken away: every setting from before is here under a clearer name (Configuration is now Booking rules, Branding, Calendar and Tax and address; Notifications is Client messages; Payments is Get paid; Billing is RECAVO plan; Audit is Activity log).",
+        where: "Settings",
+      },
+      {
+        kind: "improved",
+        text: "Client messages shows reminders as one line (“1 day before by client's choice · 2 hours before by text”) with Edit timing beside it, and every message template in a grouped list — Sessions, Payments, Packages, Extras and invoices — with a green dot on the ones you have reworded. Pick one to edit its email and text wording side by side with a live preview (the text as a phone bubble, the email as a mini email), and add details like the client's first name or the time with a tap rather than typing double braces.",
+        where: "Settings → Client messages",
+      },
+      {
+        kind: "improved",
+        text: "Activity log can be searched and filtered by person, type and date, and hides automatic system jobs unless you switch them on. Entries are grouped by day with who did what and when.",
+        where: "Settings → Activity log",
+      },
+      {
+        kind: "improved",
+        text: "Team shows each person's role with a one-line description of what it allows and a status pill (Active, Invited, Access removed), with a menu on each row to change their role or remove and restore access. Anything on a bigger plan or an add-on is shown with a lock and the price rather than hidden, and pages you can view but not change say so in one line at the top with who to ask.",
+        where: "Settings → Team",
+      },
+      {
         kind: "fixed",
         text: "If your monthly payment doesn't go through, the Plan page now says so and gets you back in. It shows what is owed and why the card was declined, with Pay now to charge the card Stripe has on file (update it first with Update card in Stripe, if you need to), or Pay with a different card to settle it on Stripe's own page. The moment it goes through your workspace reopens — nothing is removed while it is read-only. Before, this screen offered another free trial, which couldn't be started and left you stuck.",
         where: "Plan",

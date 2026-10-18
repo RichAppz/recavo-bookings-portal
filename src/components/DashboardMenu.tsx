@@ -469,7 +469,7 @@ export function DashboardMenu({
                   <DropdownMenuItem onClick={onAddBusiness}>Add a business</DropdownMenuItem>
                 ) : null}
                 <DropdownMenuItem asChild>
-                  <Link to="/settings" search={{ tab: "account" }} onClick={onNavigate}>
+                  <Link to="/settings/$page" params={{ page: "profile" }} onClick={onNavigate}>
                     Your account
                   </Link>
                 </DropdownMenuItem>

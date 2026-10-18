@@ -364,7 +364,7 @@ function Overview() {
                 // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
                 saasPurchasesAllowedInApp() ? (
                   <Button variant="outline" asChild>
-                    <Link to="/settings" search={{ tab: "billing" }}>
+                    <Link to="/settings/$page" params={{ page: "plan" }}>
                       View plans
                     </Link>
                   </Button>

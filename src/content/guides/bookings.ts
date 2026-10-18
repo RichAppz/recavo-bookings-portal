@@ -372,7 +372,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "See them all",
-        body: "**Events** in the sidebar lists every event in a date range, with who it's for and where. Click one to edit or delete it. Bank holidays show on the calendar automatically — turn them on or off under **Settings → Configuration**.",
+        body: "**Events** in the sidebar lists every event in a date range, with who it's for and where. Click one to edit or delete it. Bank holidays show on the calendar automatically — turn them on or off under **Settings → Calendar**.",
         image: {
           name: "events",
           alt: "The Events page listing upcoming events with their date, staff member and location.",

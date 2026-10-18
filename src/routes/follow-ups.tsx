@@ -224,11 +224,11 @@ function FollowUpsPage() {
           Reminders about an upcoming {tenant.terminology.booking.toLowerCase()} (the day before,
           say) are under{" "}
           <Link
-            to="/settings"
-            search={{ tab: "notifications" }}
+            to="/settings/$page"
+            params={{ page: "client-messages" }}
             className="font-medium text-primary hover:underline"
           >
-            Settings → Notifications
+            Settings → Client messages
           </Link>
           .
         </p>

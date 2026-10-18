@@ -364,8 +364,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           key: "billing",
           label: "Plan & billing",
           icon: CreditCard,
-          to: "/settings",
-          search: { tab: "billing" },
+          to: "/settings/plan",
           badge:
             trialDaysLeft <= 7
               ? {

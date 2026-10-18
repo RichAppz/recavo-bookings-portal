@@ -79,12 +79,12 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "What the calendar colours mean",
-        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Configuration → Calendar colours** — pick a colour, or clear the box to go back to the default — then **Save colours**.",
+        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Calendar** — pick a colour, or clear the box to go back to the default — then **Save**.",
         image: {
           name: "calendar-colours",
           alt: "The Calendar colours settings with a colour for paid, deposit or part paid, unpaid and events.",
         },
-        link: { to: "/settings", search: { tab: "configuration" }, label: "Open Configuration" },
+        link: { to: "/settings/booking-rules", label: "Open Booking rules" },
       },
       {
         heading: "Colour by {staff}",
@@ -123,7 +123,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
           name: "security",
           alt: "Settings, Security tab, with the Password form and the Two-factor authentication card with an Enrol authenticator button.",
         },
-        link: { to: "/settings", search: { tab: "security" }, label: "Open Security" },
+        link: { to: "/settings/security", label: "Open Security" },
       },
       {
         heading: "Turn on two-factor",
@@ -132,7 +132,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       {
         heading: "Your team",
         body: "Two-factor is per person, not per business. Ask everyone on your team — especially owners and managers under **Settings → Team** — to turn it on. Lost your phone? Contact support from the **Support** page and we'll verify you and reset it.",
-        link: { to: "/settings", search: { tab: "team" }, label: "Open Team" },
+        link: { to: "/settings/team", label: "Open Team" },
       },
     ],
     related: ["add-staff-and-hours", "whats-new-and-support"],
