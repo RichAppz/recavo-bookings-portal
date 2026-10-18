@@ -33,7 +33,7 @@ export function SettingsPage({
     <div className={cn("min-w-0", className)}>
       <Link
         to="/settings"
-        className="-ml-2 mb-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-muted-foreground hover:text-foreground sm:hidden"
+        className="-ml-2 mb-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
       >
         <ArrowLeft className="size-4" aria-hidden />
         Settings
@@ -51,7 +51,7 @@ export function SettingsPage({
 }
 
 /**
- * Title and help on the left (230px from `sm` up), fields on the right, a thin
+ * Title and help on the left (230px from `md` up), fields on the right, a thin
  * line between neighbours. On a phone the two stack. `aside` sits under the help
  * text — for a status pill or a small secondary action that describes the section.
  */
@@ -74,7 +74,7 @@ export function SettingsSection({
     <section
       id={id}
       className={cn(
-        "grid scroll-mt-24 gap-4 py-7 first:pt-0 last:pb-0 sm:grid-cols-[230px_minmax(0,1fr)] sm:gap-x-10",
+        "grid scroll-mt-24 gap-4 py-7 first:pt-0 last:pb-0 md:grid-cols-[230px_minmax(0,1fr)] md:gap-x-10",
         className,
       )}
       aria-labelledby={id ? `${id}-title` : undefined}

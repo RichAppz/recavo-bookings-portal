@@ -30,9 +30,10 @@ function pageFromPath(pathname: string): SettingsPageKey | null {
 
 /**
  * Settings shell (redesign spec §1–§2): page header, the left index with search
- * and amber dots, and the current page beside it. Under 640px the index is a
- * screen of its own — `/settings` shows the list, `/settings/<page>` shows the
- * page with a back button — done with CSS so the server and client agree.
+ * and amber dots, and the current page beside it. Below `lg` (where the main menu
+ * collapses to a drawer) the index is a screen of its own — `/settings` shows the
+ * list, `/settings/<page>` shows the page with a back button — done with CSS so
+ * the server and client agree.
  */
 export function SettingsLayout({ children }: { children: ReactNode }) {
   const tenant = useTenant();
@@ -57,12 +58,12 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
       ) : !business ? (
         <EmptyState title="Couldn't load your business" description="Please try again shortly." />
       ) : (
-        <div className="grid gap-8 sm:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
+        <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
           <SettingsIndex
             active={pageKey ?? DEFAULT_SETTINGS_PAGE}
-            className={atIndex ? "block" : "hidden sm:block"}
+            className={atIndex ? "block" : "hidden lg:block"}
           />
-          <div className={cn("min-w-0", atIndex ? "hidden sm:block" : "block")}>{children}</div>
+          <div className={cn("min-w-0", atIndex ? "hidden lg:block" : "block")}>{children}</div>
         </div>
       )}
       <SaveBar />
@@ -110,7 +111,7 @@ function SettingsIndex({ active, className }: { active: SettingsPageKey; classNa
   return (
     <nav
       aria-label="Settings"
-      className={cn("min-w-0 sm:sticky sm:top-20 sm:self-start", className)}
+      className={cn("min-w-0 lg:sticky lg:top-20 lg:self-start", className)}
     >
       <div className="relative mb-4">
         <Search
@@ -123,7 +124,7 @@ function SettingsIndex({ active, className }: { active: SettingsPageKey; classNa
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search settings"
           aria-label="Search settings"
-          className="h-10 bg-card pl-9 sm:h-9"
+          className="h-10 bg-card pl-9 lg:h-9"
         />
       </div>
       {groups.length === 0 ? (
@@ -146,7 +147,7 @@ function SettingsIndex({ active, className }: { active: SettingsPageKey; classNa
                         params={{ page: item.key }}
                         aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "flex min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors sm:min-h-9 sm:py-0",
+                          "flex min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors lg:min-h-9 lg:py-0",
                           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
                           isActive
                             ? "bg-secondary font-bold text-foreground"
@@ -165,12 +166,12 @@ function SettingsIndex({ active, className }: { active: SettingsPageKey; classNa
                               </span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 block text-xs font-normal text-muted-foreground sm:hidden">
+                          <span className="mt-0.5 block text-xs font-normal text-muted-foreground lg:hidden">
                             {item.hint}
                           </span>
                         </span>
                         <ChevronRight
-                          className="size-4 shrink-0 text-muted-foreground sm:hidden"
+                          className="size-4 shrink-0 text-muted-foreground lg:hidden"
                           aria-hidden
                         />
                       </Link>
