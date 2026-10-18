@@ -393,16 +393,18 @@ function AccountProfileTab() {
       >
         <AccountProfileForm />
       </SectionCard>
-      <SectionCard title="How your name appears">
-        <p className="text-sm text-muted-foreground">
-          Teammates see this on the Team list. Only you can edit your own name. The name clients see
-          when they book with you is set separately, on your staff record.
-        </p>
-        <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
-        {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
-      </SectionCard>
-      <EmailPreferencesSetting />
-      <DeleteAccountSection />
+      <div className="grid gap-5">
+        <SectionCard title="How your name appears">
+          <p className="text-sm text-muted-foreground">
+            Teammates see this on the Team list. Only you can edit your own name. The name clients
+            see when they book with you is set separately, on your staff record.
+          </p>
+          <p className="mt-4 text-lg font-semibold">{userDisplayName(user, "Add your name")}</p>
+          {user?.email ? <p className="mt-1 text-sm text-muted-foreground">{user.email}</p> : null}
+        </SectionCard>
+        <EmailPreferencesSetting />
+        <DeleteAccountSection />
+      </div>
     </div>
   );
 }
