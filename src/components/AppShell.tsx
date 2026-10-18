@@ -1,38 +1,34 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState, type ReactNode } from "react";
+import { Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Banknote,
   BarChart3,
   Bell,
   BellRing,
+  BookOpen,
   Building2,
   CalendarDays,
   Car,
-  ChevronDown,
-  ChevronRight,
-  ChevronsUpDown,
   ClipboardList,
   Clock,
-  BookOpen,
   CreditCard,
   ExternalLink,
   FileText,
   Gift,
   Hourglass,
   LayoutDashboard,
-  LifeBuoy,
   Layers,
+  LifeBuoy,
   Link2,
+  ListChecks,
   LogOut,
   MapPin,
   MessageSquare,
+  MessageSquareText,
   Menu,
   Package,
   Palette,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
-  Search,
   Settings,
   Sparkles,
   Users,
@@ -56,7 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PersonAvatar } from "@/components/ui-bits";
+import { DashboardMenu, type MenuItemDef, type MoreRowDef } from "@/components/DashboardMenu";
 import { GlobalSearch, type SearchablePage } from "@/components/GlobalSearch";
 import { Wordmark } from "@/components/Wordmark";
 import { PushBellPrompt } from "@/components/PushBellPrompt";
@@ -66,13 +62,8 @@ import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/Add
 import { AddBusinessDialog } from "@/components/AddBusinessDialog";
 import { QuickActionDialogs, type QuickAction } from "@/components/QuickActions";
 import { DemoTour } from "@/components/DemoTour";
-import { BillingBanner, TrialPill } from "@/components/BillingBanner";
-import { BillingNavCard } from "@/components/BillingNavCard";
+import { BillingBanner } from "@/components/BillingBanner";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
-import { SetupHeaderButton, SetupNavCard } from "@/components/SetupNavCard";
-import { SmsCreditsNavCard } from "@/components/SmsCreditsNavCard";
-import { WhatsNewNavLink } from "@/components/WhatsNewNavLink";
-import { HelpMenu } from "@/components/HelpMenu";
 import { OfflinePack } from "@/components/OfflinePack";
 import { CreateFirstBusiness } from "@/components/CreateFirstBusiness";
 import { PageGhost } from "@/components/ghost";
@@ -80,6 +71,7 @@ import { NoBusinessInApp } from "@/components/NoBusinessInApp";
 import { NoCustomerAccount } from "@/components/NoCustomerAccount";
 import { HeaderBackButton } from "@/components/BackLink";
 import {
+  useBusinessOnboarding,
   useLinkedRecordDefinition,
   useDismissAllNotifications,
   useDismissNotification,
@@ -90,11 +82,17 @@ import {
   useSubscription,
   useWaitlistSummary,
 } from "@/lib/api/hooks";
-import { userDisplayName } from "@/lib/api/types";
-import { isBillingBlocked, isBillingPath } from "@/lib/billing/access";
+import { useSupportRequests } from "@/lib/api/support";
+import {
+  billingNavAlert,
+  isBillingBlocked,
+  isBillingPath,
+  subscriptionAccessState,
+} from "@/lib/billing/access";
+import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
-import { saasPurchasesAllowedInApp } from "@/lib/native";
-import { isNativeApp } from "@/lib/native";
+import type { MenuBadge } from "@/lib/menu";
+import { billingSurface, isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useAuth } from "@/lib/auth/auth-store";
@@ -103,6 +101,9 @@ import { hiddenNavFrom, navFeatureForPath } from "@/lib/nav-features";
 import { notificationHref } from "@/lib/notification-link";
 import { markSessionLanded } from "@/lib/session-landing";
 import { useSoloPlan } from "@/lib/sole";
+import { lastActivity } from "@/lib/support";
+import { useUiPreferences } from "@/lib/ui-preferences-store";
+import { useUnseenReleases } from "@/lib/use-unseen-releases";
 import { cn } from "@/lib/utils";
 
 function pluralizeTerm(term: string) {
@@ -143,126 +144,98 @@ type NavItem = {
   anyOf: string[];
 };
 
-type NavGroup = {
-  heading: string;
-  items: NavItem[];
-};
-
-const NAV: NavGroup[] = [
+/**
+ * Every page the menu can show, gated by permission. Which section each sits in
+ * (Schedule, Clients, What you offer, Money) is `MENU_SECTION_OF` in `lib/menu`;
+ * Settings lives in the More group rather than here.
+ */
+const NAV: NavItem[] = [
+  { to: "/", label: "Overview", icon: LayoutDashboard, anyOf: [PERMISSIONS.BUSINESS_READ] },
   {
-    heading: "Schedule",
-    items: [
-      { to: "/", label: "Overview", icon: LayoutDashboard, anyOf: [PERMISSIONS.BUSINESS_READ] },
-      {
-        to: "/calendar",
-        label: "Calendar",
-        icon: CalendarDays,
-        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
-      },
-      {
-        to: "/bookings",
-        label: "Bookings",
-        icon: ClipboardList,
-        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
-      },
-      // Staff events share the diary with bookings, so they share its permissions.
-      {
-        to: "/events",
-        label: "Events",
-        icon: Clock,
-        anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
-      },
-      // Clients who wanted a slot the diary couldn't give them; the badge is how
-      // many are waiting.
-      {
-        to: "/waitlist",
-        label: "Waitlist",
-        icon: Hourglass,
-        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
-      },
-    ],
+    to: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
   },
   {
-    heading: "Studio",
-    items: [
-      { to: "/services", label: "Sessions", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
-      // Materials a job uses up (ceramic, pads). Automotive only — hidden for other
-      // verticals below — and gated like the catalogue it hangs off.
-      {
-        to: "/consumables",
-        label: "Consumables",
-        icon: Package,
-        anyOf: [PERMISSIONS.BUSINESS_READ],
-      },
-      {
-        to: "/packages",
-        label: "Packages",
-        icon: Banknote,
-        anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
-      },
-      {
-        to: "/offer-links",
-        label: "Offer links",
-        icon: Link2,
-        anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
-      },
-      { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-      // Reminders to clients that they are due back (a wash every 2 months, a ceramic
-      // top-up every 2 years), set up and listed here. All verticals: a PT can use it
-      // for re-assessments just as well.
-      {
-        to: "/follow-ups",
-        label: "Reminders",
-        icon: BellRing,
-        anyOf: [PERMISSIONS.BOOKING_READ_ALL],
-      },
-      // Label follows the record schema's terminology ("Vehicles" for detailing);
-      // hidden entirely when the business has no linked-record schema.
-      { to: "/vehicles", label: "Vehicles", icon: Car, anyOf: [PERMISSIONS.CUSTOMER_READ] },
-      {
-        to: "/staff",
-        label: "Staff",
-        icon: UserRound,
-        anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
-      },
-      { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
-    ],
+    to: "/bookings",
+    label: "Bookings",
+    icon: ClipboardList,
+    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+  },
+  // Staff events share the diary with bookings, so they share its permissions.
+  {
+    to: "/events",
+    label: "Events",
+    icon: Clock,
+    anyOf: [PERMISSIONS.BOOKING_READ_ALL, PERMISSIONS.BOOKING_READ_OWN],
+  },
+  // Clients who wanted a slot the diary couldn't give them; the badge is how
+  // many are waiting.
+  { to: "/waitlist", label: "Waitlist", icon: Hourglass, anyOf: [PERMISSIONS.BOOKING_READ_ALL] },
+  { to: "/clients", label: "Clients", icon: Users, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+  // Reminders to clients that they are due back (a wash every 2 months, a ceramic
+  // top-up every 2 years), set up and listed here. All verticals: a PT can use it
+  // for re-assessments just as well.
+  { to: "/follow-ups", label: "Reminders", icon: BellRing, anyOf: [PERMISSIONS.BOOKING_READ_ALL] },
+  { to: "/messages", label: "Messages", icon: MessageSquare, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+  { to: "/referrals", label: "Referrals", icon: Gift, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  // Label follows the record schema's terminology ("Vehicles" for detailing);
+  // hidden entirely when the business has no linked-record schema.
+  { to: "/vehicles", label: "Vehicles", icon: Car, anyOf: [PERMISSIONS.CUSTOMER_READ] },
+  { to: "/services", label: "Sessions", icon: Layers, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  // Materials a job uses up (ceramic, pads). Automotive only — hidden for other
+  // verticals below — and gated like the catalogue it hangs off.
+  { to: "/consumables", label: "Consumables", icon: Package, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  {
+    to: "/packages",
+    label: "Packages",
+    icon: Banknote,
+    anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
   },
   {
-    heading: "Business",
-    items: [
-      // How the public page looks and reads; the NEW badge in the nav row marks it
-      // until the next release.
-      {
-        to: "/booking-page",
-        label: "Booking page",
-        icon: Palette,
-        anyOf: [PERMISSIONS.BUSINESS_READ],
-      },
-      {
-        to: "/messages",
-        label: "Messages",
-        icon: MessageSquare,
-        anyOf: [PERMISSIONS.CUSTOMER_READ],
-      },
-      { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
-      { to: "/invoices", label: "Invoices", icon: FileText, anyOf: [PERMISSIONS.INVOICE_READ] },
-      { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
-      // Billing lives under Settings → Billing; /billing stays routable for Stripe
-      // return URLs and the locked-out landing, but isn't a nav destination.
-      { to: "/referrals", label: "Referrals", icon: Gift, anyOf: [PERMISSIONS.BUSINESS_READ] },
-      { to: "/settings", label: "Settings", icon: Settings, anyOf: [PERMISSIONS.BUSINESS_READ] },
-    ],
+    to: "/offer-links",
+    label: "Offer links",
+    icon: Link2,
+    anyOf: [PERMISSIONS.PACKAGE_MANAGE, PERMISSIONS.BUSINESS_READ],
   },
+  { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  {
+    to: "/staff",
+    label: "Staff",
+    icon: UserRound,
+    anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
+  },
+  // How the public page looks and reads; the New badge marks it until the next release.
+  { to: "/booking-page", label: "Booking page", icon: Palette, anyOf: [PERMISSIONS.BUSINESS_READ] },
+  { to: "/payments", label: "Payments", icon: CreditCard, anyOf: [PERMISSIONS.PAYMENT_READ] },
+  { to: "/invoices", label: "Invoices", icon: FileText, anyOf: [PERMISSIONS.INVOICE_READ] },
+  { to: "/reports", label: "Reports", icon: BarChart3, anyOf: [PERMISSIONS.REPORT_READ] },
+  // Billing lives under Settings → Billing; /billing stays routable for Stripe
+  // return URLs and the locked-out landing, but isn't a nav destination.
 ];
+
+/** Below this width the menu starts folded unless the person has chosen otherwise. */
+const AUTO_COLLAPSE_QUERY = "(min-width: 64rem) and (max-width: 1099px)";
+
+/** Whether a media query matches; `false` on the server and first paint. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    setMatches(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const tenant = useTenant();
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
-  const [footerCollapsed, setFooterCollapsed] = useSidebarFooterCollapsed();
   const [bookingOpen, setBookingOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   // null = closed; an object (possibly empty) = open with those fields prefilled.
@@ -274,6 +247,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const subscription = useSubscription();
   // Staff-only push channel: credits, message history, bookings refresh as the API records them.
   useLiveUpdates();
+
+  // The console's own palette (warm background, floating panel, navy/mint):
+  // scoped to a class on <html> so client-facing pages keep theirs.
+  useEffect(() => {
+    document.documentElement.classList.add("dash");
+    return () => document.documentElement.classList.remove("dash");
+  }, []);
+
+  // Menu layout choices follow the person across devices (see ui-preferences-store).
+  const { preferences, update: updatePreferences } = useUiPreferences();
+  const narrowDesktop = useMediaQuery(AUTO_COLLAPSE_QUERY);
+  const menuCollapsed = preferences.menuCollapsed ?? narrowDesktop;
 
   useEffect(() => setMobileNav(false), [pathname]);
   // Once a real page has rendered, later visits to `/` are the Overview link,
@@ -306,30 +291,152 @@ export function AppShell({ children }: { children: ReactNode }) {
     const feature = navFeatureForPath(to);
     return feature !== undefined && hiddenNav.has(feature);
   };
-  // One answer to "what can this person see?" for both the sidebar and ⌘K search.
-  const visibleNav = NAV.map((group) => ({
-    heading: group.heading,
-    items: group.items.filter(
-      (item) =>
-        item.anyOf.some((p) => tenant.can(p)) &&
-        // The record list only exists for businesses with a schema
-        // (vehicles for detailing); everyone else never sees the item.
-        (item.to !== "/vehicles" || hasLinkedRecords) &&
-        // Consumables are a detailing concept (coatings, pads, chemicals).
-        (item.to !== "/consumables" || isCarDetailing) &&
-        // One-seat plans have no team to manage.
-        (item.to !== "/staff" || !soloPlan) &&
-        !isHiddenByBusiness(item.to),
-    ),
+  // One answer to "what can this person see?" for both the menu and ⌘K search.
+  const visibleNav = NAV.filter(
+    (item) =>
+      item.anyOf.some((p) => tenant.can(p)) &&
+      // The record list only exists for businesses with a schema
+      // (vehicles for detailing); everyone else never sees the item.
+      (item.to !== "/vehicles" || hasLinkedRecords) &&
+      // Consumables are a detailing concept (coatings, pads, chemicals).
+      (item.to !== "/consumables" || isCarDetailing) &&
+      // One-seat plans have no team to manage.
+      (item.to !== "/staff" || !soloPlan) &&
+      !isHiddenByBusiness(item.to),
+  );
+  const canSeeSettings = tenant.can(PERMISSIONS.BUSINESS_READ);
+  const menuItems: MenuItemDef[] = visibleNav.map((item) => ({
+    to: item.to,
+    label: navLabel(item.to, item.label, tenant.terminology),
+    icon: item.icon,
+    badge:
+      item.to === "/waitlist" && waiting > 0
+        ? { tone: "grey", text: String(waiting) }
+        : item.to === "/booking-page"
+          ? { tone: "mint", text: "New" }
+          : null,
   }));
+
+  // The More group: setup, credits, billing, updates and help, with a badge
+  // where something needs attention (amber), is new (mint) or is just a count (grey).
+  const onboarding = useBusinessOnboarding();
+  const setupDone =
+    Boolean(onboarding.data) &&
+    (onboarding.data!.status === "complete" || onboarding.data!.percentComplete >= 100);
+  const setupLeft = Math.max(
+    0,
+    (onboarding.data?.requiredTotal ?? 0) - (onboarding.data?.requiredCompleted ?? 0),
+  );
+  const sms = useSmsCreditsSummary();
+  const billingAlert = billingNavAlert(subscription.data?.subscription, billingSurface());
+  const trialDaysLeft = (() => {
+    const current = subscription.data?.subscription;
+    if (subscriptionAccessState(current) !== "trial" || !current?.trialEnd) return null;
+    return Math.max(0, Math.ceil((new Date(current.trialEnd).getTime() - Date.now()) / 86_400_000));
+  })();
+  const unseen = useUnseenReleases();
+  const supportRequests = useSupportRequests();
+  const awaitingReplies = (supportRequests.data ?? []).filter(
+    (r) => r.status !== "resolved" && lastActivity(r).ours,
+  ).length;
+  const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
+
+  const smsBadge: MenuBadge | null =
+    sms.credits && sms.level !== "unlimited" && sms.level !== "unknown"
+      ? {
+          tone: sms.level === "ok" ? "grey" : "amber",
+          text: String(sms.credits.balance),
+        }
+      : null;
+  const billingRow: MoreRowDef | null = billingAlert
+    ? {
+        key: "billing",
+        label: "Plan & billing",
+        icon: CreditCard,
+        to: "/billing",
+        badge: {
+          tone: "amber",
+          text: billingAlert.level === "locked" ? "Pay now" : "Payment failed",
+        },
+      }
+    : trialDaysLeft !== null
+      ? {
+          key: "billing",
+          label: "Plan & billing",
+          icon: CreditCard,
+          to: "/settings",
+          search: { tab: "billing" },
+          badge:
+            trialDaysLeft <= 7
+              ? {
+                  tone: "amber",
+                  text:
+                    trialDaysLeft === 0
+                      ? "Trial ends today"
+                      : `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left`,
+                }
+              : { tone: "grey", text: "Trial" },
+        }
+      : null;
+  const moreRows: MoreRowDef[] = [
+    ...(canSeeSettings
+      ? [{ key: "settings", label: "Settings", icon: Settings, to: "/settings" }]
+      : []),
+    ...(onboarding.data && !setupDone
+      ? [
+          {
+            key: "setup",
+            label: "Finish setting up",
+            icon: ListChecks,
+            badge: { tone: "grey" as const, text: `${setupLeft} left` },
+            onSelect: () => setSetupOpenRequest((n) => n + 1),
+          },
+        ]
+      : []),
+    ...(smsBadge
+      ? [
+          {
+            key: "sms",
+            label: "Text credits",
+            icon: MessageSquareText,
+            to: "/billing/sms-credits",
+            badge: smsBadge,
+          },
+        ]
+      : []),
+    ...(billingRow ? [billingRow] : []),
+    {
+      key: "whats-new",
+      label: "What's new",
+      icon: Sparkles,
+      to: "/whats-new",
+      badge: unseen > 0 ? { tone: "mint", text: String(unseen) } : null,
+    },
+    { key: "guides", label: "Guides", icon: BookOpen, to: "/support/guides" },
+    ...(tenant.businessId
+      ? [
+          {
+            key: "support",
+            label: "Contact support",
+            icon: LifeBuoy,
+            to: "/support",
+            badge:
+              awaitingReplies > 0 ? { tone: "mint" as const, text: String(awaitingReplies) } : null,
+          },
+        ]
+      : []),
+    ...(canViewPlatform
+      ? [{ key: "platform", label: "Platform view", icon: Building2, to: "/platform" }]
+      : []),
+  ];
+
   const searchablePages: SearchablePage[] = [
-    ...visibleNav.flatMap((group) =>
-      group.items.map((item) => ({
-        to: item.to,
-        label: navLabel(item.to, item.label, tenant.terminology),
-        icon: item.icon,
-      })),
-    ),
+    ...visibleNav.map((item) => ({
+      to: item.to,
+      label: navLabel(item.to, item.label, tenant.terminology),
+      icon: item.icon,
+    })),
+    ...(canSeeSettings ? [{ to: "/settings", label: "Settings", icon: Settings }] : []),
     { to: "/whats-new", label: "What's new", icon: Sparkles },
     { to: "/support/guides", label: "Guides", icon: BookOpen },
     ...(tenant.businessId ? [{ to: "/support", label: "Support", icon: LifeBuoy }] : []),
@@ -341,7 +448,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // nothing, and the screen corrects itself a moment later.
   const portalLink = usePortalLink(noStaffBusiness);
   const portalBusinesses = usePortalBusinesses(noStaffBusiness && portalLink.isFetched);
-  const canViewPlatform = tenant.can(PERMISSIONS.PLATFORM_BILLING_ADMIN);
   // Creating a business ends at the plan chooser, so it is only offered where a
   // plan can be bought: the web (Stripe) and the iOS app (In-App Purchase). A
   // store app that cannot sell shows a plain notice instead; see
@@ -433,459 +539,269 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const menuProps = {
+    items: menuItems,
+    pathname,
+    preferences,
+    updatePreferences,
+    moreRows,
+    business: tenant.business
+      ? {
+          name: tenant.business.tradingName,
+          logoUrl: tenant.configuration?.branding?.logoUrl ?? null,
+          roleLabel: roleLabels(tenant.membership?.roleKeys, "Member"),
+        }
+      : null,
+    businesses: tenant.businesses.map((b) => ({ id: b.id, tradingName: b.tradingName })),
+    onSwitchBusiness: (id: string) => tenant.switchBusiness(id),
+    onAddBusiness: canStartBusinessHere
+      ? () => {
+          setMobileNav(false);
+          setAddBusinessOpen(true);
+        }
+      : undefined,
+    onSignOut: () => void signOut(),
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background lg:flex lg:h-dvh lg:overflow-hidden">
       {tenant.businessId ? <OfflinePack /> : null}
+
+      {/* Phone: a drawer over the page. */}
       {mobileNav ? (
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden"
           onClick={() => setMobileNav(false)}
         />
       ) : null}
-
       <aside
         className={cn(
-          "pt-safe pb-safe pl-safe w-sidebar fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-out",
+          "pt-safe pb-safe pl-safe fixed inset-y-0 left-0 z-50 w-[272px] max-w-[85vw] bg-background shadow-xl transition-transform duration-300 ease-out lg:hidden",
           mobileNav ? "translate-x-0" : "-translate-x-full",
-          // On a desktop the sidebar is a fixed column unless the person has tucked
-          // it away; the phone drawer state never leaks into that.
-          sidebarHidden ? "lg:-translate-x-full" : "lg:translate-x-0",
         )}
-        aria-hidden={sidebarHidden ? true : undefined}
+        aria-hidden={mobileNav ? undefined : true}
       >
-        <div className="flex items-center justify-between px-5 py-5">
-          <Wordmark />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-sidebar-foreground hover:bg-sidebar-accent lg:hidden"
-            onClick={() => setMobileNav(false)}
-            aria-label="Close navigation"
-          >
-            <X className="size-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground lg:inline-flex"
-            onClick={() => setSidebarHidden(true)}
-            aria-label="Hide menu"
-            title="Hide menu"
-            tabIndex={sidebarHidden ? -1 : undefined}
-          >
-            <PanelLeftClose className="size-5" />
-          </Button>
-        </div>
-
-        <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 pb-3">
-          {tenant.isLoading
-            ? Array.from({ length: 8 }, (_, i) => (
-                <div key={i} className="h-10 animate-pulse rounded-xl bg-sidebar-accent/70" />
-              ))
-            : visibleNav.map((group) => {
-                const { items } = group;
-                if (items.length === 0) return null;
-                return (
-                  <div key={group.heading} className="pt-3 first:pt-1">
-                    <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-[0.14em] text-sidebar-foreground/45 uppercase">
-                      {group.heading}
-                    </p>
-                    <div className="space-y-0.5">
-                      {items.map((item) => {
-                        const active =
-                          item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-                        const label = navLabel(item.to, item.label, tenant.terminology);
-                        return (
-                          <Link
-                            key={item.to}
-                            to={item.to}
-                            className={cn(
-                              // Finger-height rows and larger glyphs in the phone drawer;
-                              // the desktop sidebar keeps its denser spacing.
-                              "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium transition-colors lg:py-2.5 lg:text-sm",
-                              active
-                                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                                : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                            )}
-                          >
-                            <item.icon
-                              className={cn("size-5 lg:size-4.5", active && "text-sidebar-primary")}
-                            />
-                            {label}
-                            {item.to === "/waitlist" && waiting > 0 ? (
-                              <span
-                                className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-primary-foreground"
-                                aria-label={`${waiting} waiting`}
-                              >
-                                {waiting}
-                              </span>
-                            ) : null}
-                            {item.to === "/booking-page" ? (
-                              <span className="ml-auto rounded-full bg-sidebar-primary px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-sidebar-primary-foreground">
-                                NEW
-                              </span>
-                            ) : null}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-        </nav>
-
-        <div className="space-y-1 border-t border-sidebar-border p-3">
-          {canViewPlatform ? (
-            <Link
-              to="/platform"
-              className="flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground lg:py-2.5 lg:text-sm"
-            >
-              <Building2 className="size-5 lg:size-4.5" /> Platform view
-            </Link>
-          ) : null}
-          {/* Setup progress, billing trouble, text credits and What's new. Folds
-              down to a row of icons so the footer stays short; the choice is
-              remembered per device. Guides and Support live in the top bar's
-              Help menu (HelpMenu). */}
-          <div
-            className={cn(footerCollapsed ? "flex flex-wrap items-center gap-1.5" : "space-y-1")}
-          >
-            <button
-              type="button"
-              onClick={() => setFooterCollapsed(!footerCollapsed)}
-              aria-expanded={!footerCollapsed}
-              aria-controls="sidebar-updates"
-              title={footerCollapsed ? "Show details" : "Collapse"}
-              className={cn(
-                "flex items-center rounded-lg text-sidebar-foreground/45 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/80",
-                footerCollapsed
-                  ? "size-9 shrink-0 justify-center"
-                  : "w-full justify-between px-3 py-1 text-[11px] font-semibold tracking-[0.14em] uppercase",
-              )}
-            >
-              {footerCollapsed ? (
-                <ChevronRight className="size-4" aria-hidden />
-              ) : (
-                <>
-                  <span>Alerts &amp; updates</span>
-                  <ChevronDown className="size-4" aria-hidden />
-                </>
-              )}
-              <span className="sr-only">
-                {footerCollapsed ? "Show alerts and updates" : "Collapse alerts and updates"}
-              </span>
-            </button>
-            <div id="sidebar-updates" className={cn(footerCollapsed ? "contents" : "space-y-1")}>
-              <SetupNavCard
-                compact={footerCollapsed}
-                onClick={() => {
-                  setMobileNav(false);
-                  setSetupOpenRequest((n) => n + 1);
-                }}
-              />
-              <BillingNavCard compact={footerCollapsed} onClick={() => setMobileNav(false)} />
-              <SmsCreditsNavCard compact={footerCollapsed} onClick={() => setMobileNav(false)} />
-              <WhatsNewNavLink compact={footerCollapsed} onClick={() => setMobileNav(false)} />
-            </div>
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="mt-1 flex w-full items-center gap-3 rounded-xl bg-sidebar-accent/70 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
-                  {(tenant.business?.tradingName ?? "RE").slice(0, 2).toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    {tenant.business?.tradingName ?? "Loading…"}
-                  </span>
-                  <span className="block text-[11px] text-sidebar-foreground/70">
-                    {roleLabels(tenant.membership?.roleKeys, "Member")}
-                  </span>
-                </span>
-                <ChevronsUpDown className="size-4 text-sidebar-foreground/60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-60">
-              <DropdownMenuLabel>Switch business</DropdownMenuLabel>
-              {tenant.businesses.map((b) => (
-                <DropdownMenuItem key={b.id} onClick={() => tenant.switchBusiness(b.id)}>
-                  {b.tradingName}
-                </DropdownMenuItem>
-              ))}
-              {canStartBusinessHere ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setMobileNav(false);
-                      setAddBusinessOpen(true);
-                    }}
-                  >
-                    <Plus className="size-4" /> Add a business
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-              {canViewPlatform ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to="/platform">Platform owner view</Link>
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent/60">
-                <PersonAvatar name={userDisplayName(user, "?")} size={32} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-                    {userDisplayName(user)}
-                  </span>
-                  <span className="block truncate text-[11px] text-sidebar-foreground/70">
-                    {user?.email && userDisplayName(user) !== user.email
-                      ? user.email
-                      : roleLabels(tenant.membership?.roleKeys, "Team member")}
-                  </span>
-                </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem asChild>
-                <Link to="/settings" search={{ tab: "account" }}>
-                  Account settings
-                </Link>
-              </DropdownMenuItem>
-              {tenant.businessId ? (
-                <DropdownMenuItem asChild>
-                  <Link to="/support">
-                    <LifeBuoy className="size-4" /> Contact support
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
-              {tenant.business ? (
-                <DropdownMenuItem asChild>
-                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
-                    Open client booking page
-                  </a>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onClick={() => void signOut()}>
-                <LogOut className="size-4" /> Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {tenant.isLoading ? (
+          <MenuGhost />
+        ) : (
+          <DashboardMenu
+            variant="drawer"
+            collapsed={false}
+            onToggleCollapsed={() => undefined}
+            onClose={() => setMobileNav(false)}
+            onNavigate={() => setMobileNav(false)}
+            {...menuProps}
+          />
+        )}
       </aside>
 
-      {/* Where the menu went: a small handle in the bottom-left corner that slides it back. */}
-      {sidebarHidden ? (
-        <button
-          type="button"
-          onClick={() => setSidebarHidden(false)}
-          aria-label="Show menu"
-          title="Show menu"
-          data-testid="show-sidebar"
-          className="pb-safe pl-safe fixed bottom-0 left-0 z-50 hidden lg:block"
-        >
-          <span className="mb-4 ml-4 flex size-11 items-center justify-center rounded-full bg-sidebar text-sidebar-foreground shadow-lg ring-1 ring-sidebar-border transition hover:bg-sidebar-accent">
-            <PanelLeftOpen className="size-5" />
-          </span>
-        </button>
-      ) : null}
-
-      <div
+      {/* Desktop: the menu sits on the app background, beside the page panel. */}
+      <aside
         className={cn(
-          "transition-[padding] duration-300 ease-out",
-          sidebarHidden ? "lg:pl-0" : "lg:pl-sidebar",
+          "pt-safe pb-safe pl-safe hidden shrink-0 transition-[width] duration-200 ease-out lg:block",
+          menuCollapsed ? "w-[76px]" : "w-[272px]",
         )}
+        data-testid="dashboard-menu"
+        data-collapsed={menuCollapsed ? "true" : "false"}
       >
-        <header className="pt-safe sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-          <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setMobileNav(true)}
-              aria-label="Open navigation"
-            >
-              <Menu className="size-6 sm:size-5" />
-            </Button>
-            {/* Every click in the app can be undone from here; the desktop and phone
-                shells have no browser chrome, so this is their only Back. */}
-            <HeaderBackButton />
+        {tenant.isLoading ? (
+          <MenuGhost />
+        ) : (
+          <DashboardMenu
+            variant="desktop"
+            collapsed={menuCollapsed}
+            onToggleCollapsed={() => updatePreferences({ menuCollapsed: !menuCollapsed })}
+            {...menuProps}
+          />
+        )}
+      </aside>
 
-            <SetupHeaderButton
-              onClick={() => {
-                setMobileNav(false);
-                setSetupOpenRequest((n) => n + 1);
-              }}
-            />
+      <div className="flex min-w-0 flex-1 flex-col lg:min-h-0 lg:py-3 lg:pr-3">
+        {/* The page panel: on a desktop a floating sheet that scrolls on its own
+            while the menu stays put; on a phone the page itself. */}
+        <div
+          className="flex min-h-0 flex-1 flex-col lg:overflow-y-auto lg:rounded-[24px] lg:border lg:border-panel-border lg:bg-panel lg:shadow-panel"
+          data-testid="page-panel"
+        >
+          <header className="pt-safe sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur lg:rounded-t-[24px] lg:bg-panel/90">
+            <div className="px-safe-4 sm:px-safe-6 flex h-16 items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setMobileNav(true)}
+                aria-label="Open menu"
+              >
+                <Menu className="size-6 sm:size-5" />
+              </Button>
+              {/* Every click in the app can be undone from here; the desktop and phone
+                  shells have no browser chrome, so this is their only Back. */}
+              <HeaderBackButton />
 
-            <GlobalSearch pages={searchablePages} />
-            <HelpMenu />
+              <GlobalSearch pages={searchablePages} />
 
-            <div className="ml-auto flex items-center gap-2">
-              {/* A location filter only means something once there is more than one. */}
-              {tenant.locations.length > 1 ? (
-                <Select
-                  value={tenant.currentLocationId}
-                  onValueChange={tenant.setCurrentLocationId}
-                >
-                  <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All locations</SelectItem>
-                    {tenant.locations.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-
-              {accessPending ? null : <TrialPill />}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="relative"
-                    aria-label="Notifications"
+              <div className="ml-auto flex items-center gap-2">
+                {/* A location filter only means something once there is more than one. */}
+                {tenant.locations.length > 1 ? (
+                  <Select
+                    value={tenant.currentLocationId}
+                    onValueChange={tenant.setCurrentLocationId}
                   >
-                    <Bell className="size-4" />
-                    {unread > 0 ? (
-                      <span
-                        className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-[10px] font-semibold text-amber-950"
-                        aria-label={`${unread} unread`}
-                      >
-                        {unread > 9 ? "9+" : unread}
-                      </span>
-                    ) : null}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <PushBellPrompt />
-                  {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
-                    // The API says where each alert leads (a package request opens that
-                    // request, a follow-up the follow-ups list). Older rows about a booking
-                    // open the booking. Anything else just marks itself read.
-                    const href = notificationHref(n);
-                    return (
-                      <DropdownMenuItem
-                        key={n.id}
-                        className="items-start gap-2"
-                        onClick={() => {
-                          if (!n.readAt) markNotificationRead.mutate(n.id);
-                          if (href) void navigate({ href });
-                        }}
-                      >
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                          <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
-                            {href ? <BellRing className="size-3.5 shrink-0 text-primary" /> : null}
-                            <span className="truncate">{n.subject}</span>
-                          </span>
-                          {/* The clamp box is a flex child; without an explicit width it sizes to its
-                              text and wraps past the menu's edge instead of inside it. */}
-                          <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
-                            {n.body}
-                          </span>
+                    <SelectTrigger className="hidden w-[210px] bg-card lg:flex">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All locations</SelectItem>
+                      {tenant.locations.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="relative"
+                      aria-label="Notifications"
+                    >
+                      <Bell className="size-4" />
+                      {unread > 0 ? (
+                        <span
+                          className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 text-[10px] font-semibold text-white"
+                          aria-label={`${unread} unread`}
+                        >
+                          {unread > 9 ? "9+" : unread}
                         </span>
-                        {/* Stopping the click here keeps the row's open/mark-read from firing and
-                            leaves the menu open so several can be cleared in a row. Pointer
-                            events must still bubble: Radix treats a pointerup it did not see
-                            the pointerdown for as a click on the row. */}
-                        <button
-                          type="button"
-                          aria-label={`Clear “${n.subject}”`}
-                          data-testid="clear-notification"
-                          className="-mt-0.5 -mr-1 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            dismissNotification.mutate(n.id);
+                      ) : null}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80">
+                    <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                    <PushBellPrompt />
+                    {(notifications.data?.notifications ?? []).slice(0, 5).map((n) => {
+                      // The API says where each alert leads (a package request opens that
+                      // request, a follow-up the follow-ups list). Older rows about a booking
+                      // open the booking. Anything else just marks itself read.
+                      const href = notificationHref(n);
+                      return (
+                        <DropdownMenuItem
+                          key={n.id}
+                          className="items-start gap-2"
+                          onClick={() => {
+                            if (!n.readAt) markNotificationRead.mutate(n.id);
+                            if (href) void navigate({ href });
                           }}
                         >
-                          <X className="size-3.5" />
-                        </button>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                  {(notifications.data?.notifications ?? []).length === 0 ? (
-                    <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
-                  ) : (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="justify-center text-xs text-muted-foreground"
-                        data-testid="clear-all-notifications"
-                        onClick={() => dismissAllNotifications.mutate()}
-                      >
-                        Clear all
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
+                              {href ? (
+                                <BellRing className="size-3.5 shrink-0 text-primary" />
+                              ) : null}
+                              <span className="truncate">{n.subject}</span>
+                            </span>
+                            {/* The clamp box is a flex child; without an explicit width it sizes to its
+                                text and wraps past the menu's edge instead of inside it. */}
+                            <span className="line-clamp-2 w-full min-w-0 text-xs break-words text-muted-foreground">
+                              {n.body}
+                            </span>
+                          </span>
+                          {/* Stopping the click here keeps the row's open/mark-read from firing and
+                              leaves the menu open so several can be cleared in a row. Pointer
+                              events must still bubble: Radix treats a pointerup it did not see
+                              the pointerdown for as a click on the row. */}
+                          <button
+                            type="button"
+                            aria-label={`Clear “${n.subject}”`}
+                            data-testid="clear-notification"
+                            className="-mt-0.5 -mr-1 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              dismissNotification.mutate(n.id);
+                            }}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    {(notifications.data?.notifications ?? []).length === 0 ? (
+                      <DropdownMenuItem disabled>No notifications yet</DropdownMenuItem>
+                    ) : (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="justify-center text-xs text-muted-foreground"
+                          data-testid="clear-all-notifications"
+                          onClick={() => dismissAllNotifications.mutate()}
+                        >
+                          Clear all
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="h-10 w-10 px-0 [&_svg]:size-5 sm:h-9 sm:w-auto sm:px-4 sm:[&_svg]:size-4">
-                    <Plus />
-                    <span className="hidden sm:inline">Create</span>
+                {tenant.business ? (
+                  <Button variant="outline" asChild className="hidden xl:inline-flex">
+                    {/* The customer hostname, not this one: what a studio opens from
+                        here is the same link it hands out. */}
+                    <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
+                      View booking page <ExternalLink className="size-3.5" />
+                    </a>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuItem onClick={() => setBookingOpen(true)}>
-                    Add booking
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setWaitlistDefaults({})}>
-                    Add to waitlist
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("client")}>Add client</DropdownMenuItem>
-                  {!isCarDetailing ? (
-                    <DropdownMenuItem onClick={() => setQuick("group")}>
-                      Create group session
+                ) : null}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="h-10 w-10 px-0 [&_svg]:size-5 sm:h-9 sm:w-auto sm:px-4 sm:[&_svg]:size-4">
+                      <Plus />
+                      <span className="hidden sm:inline">New booking</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={() => setBookingOpen(true)}>
+                      Add booking
                     </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem onClick={() => setEventOpen(true)}>Add event</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("block")}>
-                    Block availability
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("package")}>
-                    Sell package
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuick("message")}>
-                    Send message
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {tenant.business ? (
-                <Button variant="outline" asChild className="hidden xl:inline-flex">
-                  {/* The customer hostname, not this one: what a studio opens from
-                      here is the same link it hands out. */}
-                  <a href={bookingUrlFor(tenant.business.slug)} target="_blank" rel="noreferrer">
-                    View booking page <ExternalLink className="size-3.5" />
-                  </a>
-                </Button>
-              ) : null}
+                    <DropdownMenuItem onClick={() => setWaitlistDefaults({})}>
+                      Add to waitlist
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setQuick("client")}>
+                      Add client
+                    </DropdownMenuItem>
+                    {!isCarDetailing ? (
+                      <DropdownMenuItem onClick={() => setQuick("group")}>
+                        Create group session
+                      </DropdownMenuItem>
+                    ) : null}
+                    <DropdownMenuItem onClick={() => setEventOpen(true)}>
+                      Add event
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setQuick("block")}>
+                      Block availability
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setQuick("package")}>
+                      Sell package
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setQuick("message")}>
+                      Send message
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
-          {accessPending ? null : <BillingBanner />}
-          {page}
-        </main>
+          <main className="px-safe-4 sm:px-safe-6 mx-auto w-full max-w-[1440px] space-y-6 pt-4 pb-safe-12 sm:p-6">
+            {accessPending ? null : <BillingBanner />}
+            {page}
+          </main>
+        </div>
       </div>
 
       <AddBookingModal
@@ -912,47 +828,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Placeholder rows while the tenant loads, so the menu column keeps its shape. */
+function MenuGhost() {
+  return (
+    <div className="flex h-full flex-col gap-2 px-3 pt-5" aria-hidden>
+      <div className="mb-3 h-9 w-28 animate-pulse rounded-[10px] bg-sidebar-accent" />
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="h-9 animate-pulse rounded-[10px] bg-sidebar-accent/70" />
+      ))}
+    </div>
+  );
+}
+
 export function useQuickActions() {
   return useState<QuickAction>(null);
-}
-
-const SIDEBAR_HIDDEN_KEY = "recavo.sidebar.hidden";
-const SIDEBAR_FOOTER_KEY = "recavo.sidebar.footer.collapsed";
-
-/**
- * A per-device yes/no remembered in localStorage. Read after mount so the server
- * and first client render agree (both start at `false`).
- */
-function useRememberedFlag(key: string): [boolean, (next: boolean) => void] {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    try {
-      setOn(localStorage.getItem(key) === "1");
-    } catch {
-      // Storage unavailable: the default simply applies.
-    }
-  }, [key]);
-  const update = useCallback(
-    (next: boolean) => {
-      setOn(next);
-      try {
-        if (next) localStorage.setItem(key, "1");
-        else localStorage.removeItem(key);
-      } catch {
-        // Best effort; the choice still applies for this page view.
-      }
-    },
-    [key],
-  );
-  return [on, update];
-}
-
-/** Whether the desktop sidebar is tucked away. */
-function useSidebarHidden(): [boolean, (hidden: boolean) => void] {
-  return useRememberedFlag(SIDEBAR_HIDDEN_KEY);
-}
-
-/** Whether the sidebar's alerts-and-updates cards are folded to a row of icons. */
-function useSidebarFooterCollapsed(): [boolean, (collapsed: boolean) => void] {
-  return useRememberedFlag(SIDEBAR_FOOTER_KEY);
 }

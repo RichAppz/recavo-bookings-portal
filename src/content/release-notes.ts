@@ -26,13 +26,23 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "new",
-        text: "A failed subscription payment now shows in the menu too, next to Text credits: amber with the time your full access runs until, red once the workspace is read-only, and a tap takes you to Pay now.",
+        text: "A fresh look for the console. The page now sits on a soft, rounded panel with the menu beside it on a warm background, and the menu is grouped by job: Overview on top, then Schedule, Clients, What you offer and Money. Each group folds away with a tap on its heading, and the button next to the logo collapses the whole menu to a strip of icons (hover one for its name). On a phone the menu is the same drawer as before.",
         where: "Menu",
       },
       {
+        kind: "new",
+        text: "Favourites. Press Edit at the top of the menu and star anything you use a lot — it moves up into Favourites, in the order you choose (drag the handle, or use the arrow keys). Your favourites, folded groups and collapsed menu are saved to your account, so they follow you to any device.",
+        where: "Menu → Favourites",
+      },
+      {
         kind: "improved",
-        text: "The cards at the foot of the menu — setup progress, payment warnings, Text credits and What's new — fold down to a row of small icons with the Alerts & updates toggle, so the menu stays short. Each icon still opens the same page, and the choice is remembered on this device.",
-        where: "Menu",
+        text: "The bottom of the menu is now your business card (switch business, your account, sign out) and a More button holding Settings, Finish setting up, Text credits, Plan & billing, What's new, Guides and Contact support. A number on a row says what is up: amber when something needs you (texts running low, a failed payment, a trial about to end), green when there is something new. The help button has gone from the top bar; Guides and support live under More.",
+        where: "Menu → More",
+      },
+      {
+        kind: "new",
+        text: "A failed subscription payment now shows under More as Plan & billing with an amber Payment failed badge (Pay now once the workspace is read-only), and a tap takes you to the Plan page to settle it.",
+        where: "Menu → More",
       },
     ],
   },

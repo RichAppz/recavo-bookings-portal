@@ -69,6 +69,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Dashboard "soft" look (dashboard-refresh spec): the floating content panel
+     and the brand colours that stay the same in both modes. */
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --color-mint: #2ee6a6;
+  --color-navy: #10172a;
+  --color-amber: #e99239;
+  --color-star: #e0a100;
+  --shadow-panel: var(--panel-shadow);
+  --shadow-active-row: 0 1px 2px rgba(20, 20, 20, 0.06);
   /* Flat surfaces — no elevation shadows anywhere in the product. */
   --shadow-2xs: 0 0 #0000;
   --shadow-xs: 0 0 #0000;
@@ -129,6 +139,90 @@
   --sidebar-accent-foreground: oklch(0.97 0.004 250);
   --sidebar-border: oklch(0.32 0.014 258);
   --sidebar-ring: oklch(0.68 0.12 178);
+  --panel: var(--card);
+  --panel-border: var(--border);
+  --panel-shadow: 0 0 #0000;
+}
+
+/*
+ * The business dashboard ("dash" on <html> while the console shell is mounted):
+ * warm app background with the menu sitting straight on it, white content panel,
+ * navy primary; dark mode is a true dark rather than the old grey. Client-facing
+ * screens never carry the class, so they keep their own palette.
+ */
+.dash {
+  --radius: 0.625rem;
+  --background: #efece6;
+  --foreground: #191e26;
+  --card: #ffffff;
+  --card-foreground: #191e26;
+  --popover: #ffffff;
+  --popover-foreground: #191e26;
+  --primary: #10172a;
+  --primary-foreground: #ffffff;
+  --primary-soft: #d8f8ea;
+  --secondary: #f7f5f1;
+  --secondary-foreground: #4b525c;
+  --muted: #f7f5f1;
+  --muted-foreground: #6a717b;
+  --accent: #f3f0ea;
+  --accent-foreground: #191e26;
+  --warning: #e99239;
+  --warning-foreground: #5a3407;
+  --warning-soft: #fcefe0;
+  --border: #ece9e3;
+  --input: #e0ddd5;
+  --ring: #2ee6a6;
+  --sidebar: #efece6;
+  --sidebar-foreground: #4b525c;
+  --sidebar-primary: #2ee6a6;
+  --sidebar-primary-foreground: #10172a;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #191e26;
+  --sidebar-border: #e0dcd4;
+  --sidebar-ring: #2ee6a6;
+  --panel: #ffffff;
+  --panel-border: #e4e0d8;
+  --panel-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+}
+
+.dash.dark {
+  --background: #0f1218;
+  --foreground: #eef0f3;
+  --card: #161a22;
+  --card-foreground: #eef0f3;
+  --popover: #161a22;
+  --popover-foreground: #eef0f3;
+  --primary: #2ee6a6;
+  --primary-foreground: #10172a;
+  --primary-soft: #16382e;
+  --secondary: #1d222b;
+  --secondary-foreground: #a8afba;
+  --muted: #1d222b;
+  --muted-foreground: #9aa1ad;
+  --accent: #1d222b;
+  --accent-foreground: #eef0f3;
+  --warning: #e99239;
+  --warning-foreground: #ffd9ae;
+  --warning-soft: #3a2a14;
+  --success-foreground: oklch(0.9 0.09 155);
+  --success-soft: oklch(0.32 0.06 155);
+  --info-soft: oklch(0.31 0.05 255);
+  --destructive-soft: oklch(0.33 0.07 22);
+  --border: #232833;
+  --input: #2b313c;
+  --ring: #2ee6a6;
+  --sidebar: #0f1218;
+  --sidebar-foreground: #a8afba;
+  --sidebar-primary: #2ee6a6;
+  --sidebar-primary-foreground: #10172a;
+  --sidebar-accent: #1d222b;
+  --sidebar-accent-foreground: #eef0f3;
+  --sidebar-border: #232833;
+  --sidebar-ring: #2ee6a6;
+  --panel: #161a22;
+  --panel-border: #232833;
+  --panel-shadow: 0 0 #0000;
 }
 
 .dark {
