@@ -436,7 +436,7 @@ export function DashboardMenu({
                   type="button"
                   aria-label={business ? `${business.name}: account menu` : "Account menu"}
                   className={cn(
-                    "flex items-center gap-3 rounded-[14px] bg-secondary text-left transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
+                    "flex items-center gap-3 rounded-[14px] border border-menu-card-border bg-menu-card text-left shadow-active-row transition-colors hover:border-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
                     strip ? "size-12 justify-center" : "min-w-0 flex-1 px-2.5 py-2",
                   )}
                 >
@@ -488,7 +488,7 @@ export function DashboardMenu({
                   ? `More options: ${alerts} need${alerts === 1 ? "s" : ""} attention`
                   : "More options"
               }
-              className="relative flex size-12 shrink-0 items-center justify-center rounded-[14px] bg-secondary text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+              className="relative flex size-12 shrink-0 items-center justify-center rounded-[14px] border border-menu-card-border bg-menu-card text-sidebar-foreground shadow-active-row transition-colors hover:border-muted-foreground/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
             >
               {moreOpen ? (
                 <ChevronUp className="size-5" aria-hidden />
