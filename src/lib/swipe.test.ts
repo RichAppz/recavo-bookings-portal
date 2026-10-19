@@ -3,6 +3,9 @@ import { describe, it } from "node:test";
 import {
   flickDirection,
   followOffset,
+  neighbourOffset,
+  PAGE_GAP,
+  pageStride,
   releaseVelocity,
   scrollEdges,
   swipeAxis,
@@ -140,5 +143,34 @@ describe("scrollEdges", () => {
       atStart: false,
       atEnd: true,
     });
+  });
+});
+
+describe("pageStride / neighbourOffset", () => {
+  it("leaves a gap of background between pages", () => {
+    assert.equal(PAGE_GAP, 16);
+    assert.equal(pageStride(358), 374);
+    assert.equal(pageStride(358, 12), 370);
+    assert.equal(pageStride(0), 0);
+  });
+
+  it("draws the neighbours a page plus the gap either side of the live page", () => {
+    assert.equal(neighbourOffset(0, 1, 358), 374);
+    assert.equal(neighbourOffset(0, -1, 358), -374);
+    assert.equal(neighbourOffset(-112, 1, 358), 262);
+    assert.equal(neighbourOffset(80, -1, 358), -294);
+  });
+
+  it("starts the incoming page exactly where its preview sat", () => {
+    for (const from of [-200, -112, -3.5, 0, 47, 150]) {
+      for (const dir of [1, -1] as const) {
+        const preview = neighbourOffset(from, dir, 358);
+        const ghostEnd = neighbourOffset(0, dir === 1 ? -1 : 1, 358);
+        // The live page lands at 0 and the ghost one stride the other way, so the
+        // gap between them never changes during the slide.
+        assert.equal(preview - from, dir * 374);
+        assert.equal(0 - ghostEnd, dir * 374);
+      }
+    }
   });
 });

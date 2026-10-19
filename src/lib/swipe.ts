@@ -62,6 +62,26 @@ export function flickDirection(
   return swipeDirection(g, minDistance);
 }
 
+/**
+ * Space between two pages while they slide, the way iOS paging leaves a strip of
+ * background between screens. Matches the panels' 12–16px inset rhythm.
+ */
+export const PAGE_GAP = 16;
+
+/** How far one page sits from the next: its width plus the gap between them. */
+export function pageStride(width: number, gap = PAGE_GAP): number {
+  return width > 0 ? width + gap : 0;
+}
+
+/**
+ * Where the neighbour page one step `dir` away is drawn while the live page sits
+ * at `x`. A turn re-renders the live page at exactly this spot, so the hand-over
+ * from preview to live page lands on the same pixel.
+ */
+export function neighbourOffset(x: number, dir: SwipeDir, width: number, gap = PAGE_GAP): number {
+  return x + dir * pageStride(width, gap);
+}
+
 export type SwipeSample = { t: number; x: number };
 
 /**

@@ -9,6 +9,8 @@ import {
 import {
   flickDirection,
   followOffset,
+  neighbourOffset,
+  pageStride,
   releaseVelocity,
   scrollEdges,
   swipeAxis,
@@ -35,8 +37,8 @@ const EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
  *
  * How the hand-over works: on release the outgoing page is cloned into a still
  * picture laid over the pager (scroll positions copied so a scrolled grid doesn't
- * jump), the live element is moved a page-width to the side — exactly where the
- * neighbour was drawn — and re-rendered with the new period in the same commit that
+ * jump), the live element is moved a page-width plus `PAGE_GAP` to the side —
+ * exactly where the neighbour was drawn — and re-rendered with the new period in the same commit that
  * takes the neighbour down, then both animate across. The clone is thrown away when
  * it lands. The live element never carries a transform at rest, so sticky headers
  * and inner scrollers behave exactly as before.
@@ -81,8 +83,10 @@ export function SwipePager({
     const el = inner.current;
     if (el) el.style.transform = x === 0 ? "" : `translate3d(${x}px,0,0)`;
     const w = width();
-    if (prev.current) prev.current.style.transform = `translate3d(${x - w}px,0,0)`;
-    if (next.current) next.current.style.transform = `translate3d(${x + w}px,0,0)`;
+    if (prev.current)
+      prev.current.style.transform = `translate3d(${neighbourOffset(x, -1, w)}px,0,0)`;
+    if (next.current)
+      next.current.style.transform = `translate3d(${neighbourOffset(x, 1, w)}px,0,0)`;
   };
 
   // The neighbours mount part-way through a drag, so line them up with the page
@@ -111,8 +115,8 @@ export function SwipePager({
         ],
         timing,
       );
-    const w = width();
-    const anims = [slide(el, 0), slide(prev.current, -w), slide(next.current, w)].filter(
+    const stride = pageStride(width());
+    const anims = [slide(el, 0), slide(prev.current, -stride), slide(next.current, stride)].filter(
       (a): a is Animation => Boolean(a),
     );
     settling.current = anims;
@@ -142,7 +146,7 @@ export function SwipePager({
       .animate(
         [
           { transform: `translate3d(${from}px,0,0)` },
-          { transform: `translate3d(${-dir * w}px,0,0)` },
+          { transform: `translate3d(${neighbourOffset(0, -dir as SwipeDir, w)}px,0,0)` },
         ],
         { duration: DURATION, easing: EASING, fill: "forwards" },
       )
@@ -150,7 +154,7 @@ export function SwipePager({
     // The new page starts right beside the outgoing one — where its preview already
     // is — so the two move as a strip. Re-rendering the live element and taking the
     // preview down happen in one commit, so nothing flickers in the hand-over.
-    const start = from + dir * w;
+    const start = neighbourOffset(from, dir, w);
     place(start);
     setPeeking(false);
     onPageRef.current(dir);
