@@ -54,7 +54,7 @@ export function followOffset(g: SwipeGesture): number {
 export function flickDirection(
   g: SwipeGesture,
   velocity: number,
-  minVelocity = 0.45,
+  minVelocity = 0.35,
   minDistance = 16,
 ): SwipeDir | null {
   if (Math.abs(velocity) < minVelocity) return null;
