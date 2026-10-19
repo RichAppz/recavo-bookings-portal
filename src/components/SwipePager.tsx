@@ -142,7 +142,9 @@ export function SwipePager({
             ...sidewaysScroller(e.target, e.currentTarget),
             axis: null,
             offset,
-            samples: [],
+            // The landing point counts too: a very fast flick on a 60Hz screen can
+            // be a single move, and the speed from where it started still tells.
+            samples: [{ t: e.timeStamp, x: t.clientX }],
           };
         }}
         onTouchMove={(e: TouchEvent) => {
