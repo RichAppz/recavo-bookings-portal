@@ -242,6 +242,51 @@ export function periodInPast(
   return dayNumber(last) < dayNumber(today);
 }
 
+const addLocalDays = (date: Date, days: number) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
+const mondayOf = (date: Date) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * The days a view draws around its anchor: the one day (from local midnight, since
+ * the anchor carries a time of day), the Monday-first week, or six Monday-first
+ * weeks from the Monday on or before the 1st for Month. List shows a week.
+ */
+export function periodDays(view: "day" | "week" | "month" | "list", anchor: Date): Date[] {
+  if (view === "day") {
+    const start = new Date(anchor);
+    start.setHours(0, 0, 0, 0);
+    return [start];
+  }
+  if (view === "month") {
+    const first = mondayOf(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+    return Array.from({ length: 42 }, (_, i) => addLocalDays(first, i));
+  }
+  const monday = mondayOf(anchor);
+  return Array.from({ length: 7 }, (_, i) => addLocalDays(monday, i));
+}
+
+/**
+ * The anchor one page on (`dir` 1) or back (−1) in the view's own unit: a day, a
+ * week, or a month (landing on the 1st so a 31st never skips a short month).
+ */
+export function shiftAnchor(
+  view: "day" | "week" | "month" | "list",
+  anchor: Date,
+  dir: number,
+): Date {
+  if (view === "month") return new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+  return addLocalDays(anchor, view === "day" ? dir : dir * 7);
+}
+
 /** First word of a name, for the dense phone chips. */
 export function firstName(name: string | null | undefined): string {
   if (!name) return "";

@@ -7,10 +7,12 @@ import {
   firstName,
   layoutOverlaps,
   listDayHeading,
+  periodDays,
   periodInPast,
   periodWord,
   rangeSummary,
   rangeTitle,
+  shiftAnchor,
   shortDuration,
   valueLine,
   visibleHourRange,
@@ -164,5 +166,61 @@ describe("summaries", () => {
     assert.equal(shortDuration(30), "30 min");
     assert.equal(firstName("Sam Taylor"), "Sam");
     assert.equal(firstName(null), "");
+  });
+});
+
+describe("periodDays / shiftAnchor (the page beside the current one)", () => {
+  it("draws a day from local midnight, a Monday-first week, and six weeks for a month", () => {
+    const anchor = new Date(2026, 9, 19, 14, 30); // Mon 19 Oct, mid-afternoon
+    const day = periodDays("day", anchor);
+    assert.equal(day.length, 1);
+    assert.equal(day[0]!.getHours(), 0);
+    assert.equal(day[0]!.getDate(), 19);
+    const week = periodDays("week", new Date(2026, 9, 22)); // a Thursday
+    assert.deepEqual(
+      week.map((d) => d.getDate()),
+      [19, 20, 21, 22, 23, 24, 25],
+    );
+    assert.equal(periodDays("list", new Date(2026, 9, 22)).length, 7);
+    const month = periodDays("month", new Date(2026, 9, 19));
+    assert.equal(month.length, 42);
+    // October 2026 starts on a Thursday, so the grid opens on Mon 28 Sep.
+    assert.equal(month[0]!.getMonth(), 8);
+    assert.equal(month[0]!.getDate(), 28);
+    assert.equal(month[41]!.getMonth(), 10);
+    assert.equal(month[41]!.getDate(), 8);
+  });
+  it("pages a day, a week or a month either way", () => {
+    const anchor = new Date(2026, 9, 31, 9);
+    assert.equal(shiftAnchor("day", anchor, 1).getDate(), 1);
+    assert.equal(shiftAnchor("day", anchor, -1).getDate(), 30);
+    assert.equal(shiftAnchor("week", anchor, 1).getDate(), 7);
+    assert.equal(shiftAnchor("list", anchor, -1).getDate(), 24);
+    // From the 31st, next month lands on the 1st rather than skipping November.
+    const next = shiftAnchor("month", anchor, 1);
+    assert.equal(next.getMonth(), 10);
+    assert.equal(next.getDate(), 1);
+    const back = shiftAnchor("month", new Date(2026, 0, 15), -1);
+    assert.equal(back.getFullYear(), 2025);
+    assert.equal(back.getMonth(), 11);
+  });
+  it("the next page's days start where this page's end", () => {
+    for (const view of ["day", "week", "month"] as const) {
+      const anchor = new Date(2026, 9, 19);
+      const here = periodDays(view, anchor);
+      const there = periodDays(view, shiftAnchor(view, anchor, 1));
+      if (view === "month") {
+        assert.equal(there[0]!.getMonth() <= 10, true);
+        assert.equal(
+          there.some((d) => d.getMonth() === 10 && d.getDate() === 1),
+          true,
+        );
+      } else {
+        const last = here[here.length - 1]!;
+        const expected = new Date(last);
+        expected.setDate(expected.getDate() + 1);
+        assert.equal(there[0]!.getTime(), expected.getTime());
+      }
+    }
   });
 });

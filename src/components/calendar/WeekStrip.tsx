@@ -4,7 +4,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * Spec §3.5: seven cells for the week around the selected day, with a dot under
- * any day that has something on. Swipe to move a week; tap to select a day.
+ * any day that has something on. Swipe to move a week; tap to select a day. The
+ * weeks either side slide in beside it as the finger moves, highlighting the same
+ * weekday the turn will land on.
  */
 export function WeekStrip({
   selected,
@@ -15,15 +17,16 @@ export function WeekStrip({
 }: {
   selected: Date;
   todayIso: string;
+  /** Days with something on, ideally covering the weeks either side as well. */
   busyDays: ReadonlySet<string>;
   onSelect: (day: Date) => void;
   onShiftWeek: (dir: 1 | -1) => void;
 }) {
-  const monday = startOfWeek(selected);
-  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const selectedIso = isoDate(selected);
-  return (
-    <SwipePager onPage={onShiftWeek}>
+  const strip = (selectedDay: Date) => {
+    const monday = startOfWeek(selectedDay);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+    const selectedIso = isoDate(selectedDay);
+    return (
       <div
         role="group"
         aria-label="Pick a day"
@@ -68,6 +71,14 @@ export function WeekStrip({
           );
         })}
       </div>
+    );
+  };
+  return (
+    <SwipePager
+      onPage={onShiftWeek}
+      neighbour={(dir, shown) => (shown ? strip(addDays(selected, dir * 7)) : null)}
+    >
+      {strip(selected)}
     </SwipePager>
   );
 }

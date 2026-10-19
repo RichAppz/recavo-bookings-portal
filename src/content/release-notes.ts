@@ -31,7 +31,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
-        text: "Swiping between days, weeks and months on the calendar now moves with your finger and slides across, the way it does on your phone's own calendar, instead of switching in place. A quick flick turns the page too; let go early and it eases back.",
+        text: "Swiping between days, weeks and months on the calendar now moves with your finger and slides across, the way it does on your phone's own calendar, instead of switching in place. A quick flick turns the page too; let go early and it eases back. The next and previous pages are loaded ahead and come into view beside the one you're on as you drag, so nothing blank or half-loaded ever shows.",
         where: "Calendar",
       },
       {

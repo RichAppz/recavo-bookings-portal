@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CalendarPlus,
@@ -38,14 +38,17 @@ import {
   publicHolidayRegionFrom,
 } from "@/lib/calendar-settings";
 import {
+  periodDays,
   periodInPast,
   periodWord,
   rangeSummary,
   rangeTitle,
+  shiftAnchor,
   valueLine,
 } from "@/lib/calendar-layout";
 import { summariseBookings } from "@/lib/calendar-stats";
-import { usePublicHolidays } from "@/lib/public-holidays";
+import { usePublicHolidays, type PublicHoliday } from "@/lib/public-holidays";
+import type { SwipeDir } from "@/lib/swipe";
 import { useSoleStaff } from "@/lib/sole";
 import { useIsPhone } from "@/hooks/use-media-query";
 import { SwipePager } from "@/components/SwipePager";
@@ -83,7 +86,13 @@ import {
 } from "@/lib/api/hooks";
 import { addDays, formatMoney, isoDate, isoDateInTz, startOfWeek } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
-import { customerDisplayName, type Booking, type CalendarBlock } from "@/lib/api/types";
+import {
+  customerDisplayName,
+  type Booking,
+  type CalendarBlock,
+  type CatalogueService,
+  type Location,
+} from "@/lib/api/types";
 import { paymentColoursFrom, paymentDotStyle, type PaymentColours } from "@/lib/payment-colours";
 import type { PaymentTone } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
@@ -136,6 +145,9 @@ const PAYMENT_LEGEND: { tone: PaymentTone; label: string }[] = [
 /** Two taps on a month cell closer than this open the day rather than adding to it. */
 const DOUBLE_TAP_MS = 280;
 
+/** One stable empty list, so a period's opening-hours memo isn't redone every render while locations load. */
+const NO_LOCATIONS: readonly Location[] = [];
+
 /**
  * The default month-bar fields only apply until the menu is first customised: a
  * stored choice is kept as-is, so someone who deliberately trimmed their bars is not
@@ -154,11 +166,153 @@ function parseMonthBarFields(raw: string): Set<MonthBarField> {
   return set;
 }
 
-/** Six Monday-first weeks from the Monday on or before the 1st. */
-function monthGrid(anchor: Date): Date[] {
-  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
-  return Array.from({ length: 42 }, (_, i) => addDays(first, i));
+/** The filters and lookups a period's data depends on, shared by the page in view and its neighbours. */
+type PeriodInputs = {
+  view: CalendarView;
+  staffFilter: string;
+  showCancelled: "yes" | "no";
+  serviceFilter: string;
+  serviceById: ReadonlyMap<string, CatalogueService>;
+  /** Client names are one lookup per customer, so only when a view shows them. */
+  wantsClient: boolean;
+  holidays: readonly PublicHoliday[];
+  locations: readonly Location[];
+  currentLocationId: string;
+};
+
+type PeriodData = ReturnType<typeof usePeriodData>;
+
+/**
+ * Everything the grid draws for one period: its days, the bookings and events in
+ * them (filtered the way the page is), the holidays, the client / record lookups
+ * and the opening hours that bound the visible day. The page in view uses it, and
+ * so does each neighbouring page the swipe slides in, so the two always agree and
+ * the neighbour's data is already loaded by the time it is turned to.
+ */
+function usePeriodData(anchor: Date, inputs: PeriodInputs) {
+  const {
+    view,
+    staffFilter,
+    showCancelled,
+    serviceFilter,
+    serviceById,
+    wantsClient,
+    holidays,
+    locations,
+    currentLocationId,
+  } = inputs;
+  const days = useMemo(() => periodDays(view, anchor), [view, anchor]);
+  const rangeStart = days[0]!;
+  const rangeEnd = addDays(days[days.length - 1]!, 1);
+
+  const bookings = useBookings({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    staffId: staffFilter !== "all" ? staffFilter : undefined,
+    // A six-week grid clears the server's default page of 50 on any busy month,
+    // and a calendar that quietly omits sessions is worse than no calendar.
+    limit: 200,
+  });
+
+  // Events sit beside bookings on the same grid; the server guarantees they never overlap.
+  const blocks = useCalendarBlocks({
+    from: rangeStart.toISOString(),
+    to: rangeEnd.toISOString(),
+    staffId: staffFilter !== "all" ? staffFilter : undefined,
+  });
+  const events = useMemo(() => blocks.data ?? [], [blocks.data]);
+
+  const filtered = useMemo(
+    () =>
+      (bookings.data?.bookings ?? []).filter(
+        (b) =>
+          (showCancelled === "yes" || !isCancelled(b)) &&
+          matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)),
+      ),
+    [bookings.data, showCancelled, serviceFilter, serviceById],
+  );
+
+  // One batched lookup for every vehicle (or other linked record) in view, so
+  // chips can show the registration without opening the booking.
+  const linkedRecords = useLinkedRecordsById(filtered.map((b) => b.linkedRecordId));
+  const customers = useCustomersById(
+    wantsClient ? filtered.map((b) => b.leadCustomerId) : [],
+    wantsClient,
+  );
+
+  const holidayItems = useMemo<HolidayItem[]>(() => {
+    const from = isoDate(rangeStart);
+    const to = isoDate(rangeEnd);
+    return holidays
+      .filter((h) => from <= h.date && h.date < to)
+      .map((h) => ({
+        ...h,
+        id: `holiday-${h.date}`,
+        start: `${h.date}T00:00:00.000Z`,
+        end: `${h.date}T23:59:00.000Z`,
+        occupiedDays: [h.date],
+      }));
+  }, [holidays, rangeStart, rangeEnd]);
+
+  // Opening hours bound the visible hour range (spec §2.4): the location in the top
+  // bar, or every location when "all" is chosen, over the weekdays on screen.
+  const opening = useMemo(() => {
+    const list = locations.filter(
+      (l) => l.active && (currentLocationId === "all" || l.id === currentLocationId),
+    );
+    const weekdays = new Set(days.map((d) => d.getDay()));
+    let open = Infinity;
+    let close = -Infinity;
+    for (const l of list) {
+      for (const h of l.openingHours) {
+        if (!weekdays.has(h.dayOfWeek)) continue;
+        open = Math.min(open, h.openMinute);
+        close = Math.max(close, h.closeMinute);
+      }
+    }
+    return Number.isFinite(open) && Number.isFinite(close) && close > open
+      ? { openMinute: open, closeMinute: close }
+      : null;
+  }, [locations, currentLocationId, days]);
+
+  return {
+    anchor,
+    days,
+    rangeStart,
+    rangeEnd,
+    bookings,
+    blocks,
+    events,
+    filtered,
+    linkedRecords,
+    customers,
+    holidayItems,
+    opening,
+  };
+}
+
+/**
+ * The page one step either way from the one in view, for the swipe to slide in
+ * beside it. Its queries run whether or not it is drawn, so the next period's
+ * sessions are already in the cache when the finger lands; the markup is only
+ * rendered while the pager is actually showing it.
+ */
+function NeighbourPeriod({
+  anchor,
+  dir,
+  inputs,
+  shown,
+  render,
+}: {
+  anchor: Date;
+  dir: SwipeDir;
+  inputs: PeriodInputs;
+  shown: boolean;
+  render: (period: PeriodData) => ReactNode;
+}) {
+  const shifted = useMemo(() => shiftAnchor(inputs.view, anchor, dir), [inputs.view, anchor, dir]);
+  const period = usePeriodData(shifted, inputs);
+  return shown ? <>{render(period)}</> : null;
 }
 
 const VIEW_OPTIONS: { value: CalendarView; label: string }[] = [
@@ -296,68 +450,26 @@ function CalendarPage() {
     }
   }, [staff.data, staffFilter, setStaffFilter]);
 
-  const days = useMemo(() => {
-    if (view === "day") {
-      // `anchor` carries a time of day ("Today" sets it to `new Date()`), so the
-      // day range must start at local midnight or earlier bookings fall outside it.
-      const start = new Date(anchor);
-      start.setHours(0, 0, 0, 0);
-      return [start];
-    }
-    if (view === "month") return monthGrid(anchor);
-    return Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
-  }, [view, anchor]);
-
-  const rangeStart = days[0]!;
-  const rangeEnd = addDays(days[days.length - 1]!, 1);
-
-  const bookings = useBookings({
-    from: rangeStart.toISOString(),
-    to: rangeEnd.toISOString(),
-    staffId: staffFilter !== "all" ? staffFilter : undefined,
-    // A six-week grid clears the server's default page of 50 on any busy month,
-    // and a calendar that quietly omits sessions is worse than no calendar.
-    limit: 200,
-  });
-
-  // Events sit beside bookings on the same grid; the server guarantees they never overlap.
-  const blocks = useCalendarBlocks({
-    from: rangeStart.toISOString(),
-    to: rangeEnd.toISOString(),
-    staffId: staffFilter !== "all" ? staffFilter : undefined,
-  });
-  const events = useMemo(() => blocks.data ?? [], [blocks.data]);
-
   const serviceById = useMemo(
     () => new Map((services.data ?? []).map((s) => [s.id, s])),
     [services.data],
   );
-  const filtered = useMemo(
-    () =>
-      (bookings.data?.bookings ?? []).filter(
-        (b) =>
-          (showCancelled === "yes" || !isCancelled(b)) &&
-          matchesServiceFilter(serviceFilter, serviceById.get(b.serviceSnapshot.serviceId)),
-      ),
-    [bookings.data, showCancelled, serviceFilter, serviceById],
-  );
-
-  // One batched lookup for every vehicle (or other linked record) in view, so
-  // chips can show the registration without opening the booking.
-  const linkedRecords = useLinkedRecordsById(filtered.map((b) => b.linkedRecordId));
-  const tagFor = (b: Booking) =>
-    b.linkedRecordId ? recordTag(linkedRecords.get(b.linkedRecordId)) : null;
   // Client names sit on week, day and list rows; on the month grid only when the
   // bars are set to show them (it is one lookup per customer).
   const wantsClient = view !== "month" || monthBar.has("client");
-  const customers = useCustomersById(
-    wantsClient ? filtered.map((b) => b.leadCustomerId) : [],
+  const periodInputs: PeriodInputs = {
+    view,
+    staffFilter,
+    showCancelled,
+    serviceFilter,
+    serviceById,
     wantsClient,
-  );
-  const clientFor = (b: Booking) => {
-    const c = b.leadCustomerId ? customers.get(b.leadCustomerId) : undefined;
-    return c ? customerDisplayName(c) : null;
+    holidays: publicHolidays.holidays,
+    locations: locations.data ?? NO_LOCATIONS,
+    currentLocationId: tenant.currentLocationId,
   };
+  const period = usePeriodData(anchor, periodInputs);
+  const { days, rangeStart, rangeEnd, bookings, blocks, events, filtered } = period;
   // "Registration" for a vehicle schema; otherwise whatever the record is called.
   const recordDefinition = useLinkedRecordDefinition();
   const recordFieldLabel = recordDefinition.data?.definition
@@ -379,33 +491,7 @@ function CalendarPage() {
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
   const todayIso = isoDate(new Date());
 
-  // Opening hours bound the visible hour range (spec §2.4): the location in the top
-  // bar, or every location when "all" is chosen, over the weekdays on screen.
-  const opening = useMemo(() => {
-    const list = (locations.data ?? []).filter(
-      (l) => l.active && (tenant.currentLocationId === "all" || l.id === tenant.currentLocationId),
-    );
-    const weekdays = new Set(days.map((d) => d.getDay()));
-    let open = Infinity;
-    let close = -Infinity;
-    for (const l of list) {
-      for (const h of l.openingHours) {
-        if (!weekdays.has(h.dayOfWeek)) continue;
-        open = Math.min(open, h.openMinute);
-        close = Math.max(close, h.closeMinute);
-      }
-    }
-    return Number.isFinite(open) && Number.isFinite(close) && close > open
-      ? { openMinute: open, closeMinute: close }
-      : null;
-  }, [locations.data, tenant.currentLocationId, days]);
-
-  const shift = (dir: number) =>
-    setAnchor((a) =>
-      view === "month"
-        ? new Date(a.getFullYear(), a.getMonth() + dir, 1)
-        : addDays(a, view === "day" ? dir : dir * 7),
-    );
+  const shift = (dir: number) => setAnchor((a) => shiftAnchor(view, a, dir));
   const periodNoun = view === "month" ? "month" : view === "day" ? "day" : "week";
 
   const openDay = (day: Date) => {
@@ -464,29 +550,33 @@ function CalendarPage() {
   const currency = tenant.business?.currency ?? statsBookings[0]?.currency ?? "GBP";
   const money = (minor: number) => formatMoney(minor, currency, { compact: true });
 
-  const holidayItems = useMemo<HolidayItem[]>(() => {
-    const from = isoDate(rangeStart);
-    const to = isoDate(rangeEnd);
-    return publicHolidays.holidays
-      .filter((h) => from <= h.date && h.date < to)
-      .map((h) => ({
-        ...h,
-        id: `holiday-${h.date}`,
-        start: `${h.date}T00:00:00.000Z`,
-        end: `${h.date}T23:59:00.000Z`,
-        occupiedDays: [h.date],
-      }));
-  }, [publicHolidays.holidays, rangeStart, rangeEnd]);
-
   // Days with anything on them, for the dots on the phone week strip. Day view
-  // only loads one day, so the strip borrows a week-wide query of its own.
+  // only loads one day, so the strip borrows a week-wide query of its own; the
+  // weeks either side are loaded too so the strips the swipe slides in already
+  // carry their dots.
   const stripMonday = startOfWeek(anchor);
+  const stripStaff = staffFilter !== "all" ? staffFilter : undefined;
+  const stripOn = phone && (view === "day" || view === "list");
   const stripBookings = useBookings({
     from: stripMonday.toISOString(),
     to: addDays(stripMonday, 7).toISOString(),
-    staffId: staffFilter !== "all" ? staffFilter : undefined,
+    staffId: stripStaff,
     limit: 200,
     enabled: phone && view === "day",
+  });
+  const stripBefore = useBookings({
+    from: addDays(stripMonday, -7).toISOString(),
+    to: stripMonday.toISOString(),
+    staffId: stripStaff,
+    limit: 200,
+    enabled: stripOn,
+  });
+  const stripAfter = useBookings({
+    from: addDays(stripMonday, 7).toISOString(),
+    to: addDays(stripMonday, 14).toISOString(),
+    staffId: stripStaff,
+    limit: 200,
+    enabled: stripOn,
   });
   const busyDays = useMemo(() => {
     const set = new Set<string>();
@@ -496,8 +586,13 @@ function CalendarPage() {
         : filtered;
     for (const b of source) set.add(isoDateInTz(b.start, timezone));
     for (const e of events) set.add(isoDateInTz(e.start, timezone));
+    for (const beside of [stripBefore.data, stripAfter.data]) {
+      for (const b of beside?.bookings ?? []) {
+        if (!isCancelled(b)) set.add(isoDateInTz(b.start, timezone));
+      }
+    }
     return set;
-  }, [view, stripBookings.data, filtered, events, timezone]);
+  }, [view, stripBookings.data, stripBefore.data, stripAfter.data, filtered, events, timezone]);
 
   // The month grid pads out to six weeks, so its title comes from the anchor, not
   // the first cell (which is usually in the month before).
@@ -526,10 +621,10 @@ function CalendarPage() {
   };
   // A past period cannot be filled any more, so the "nothing booked" prompt
   // (add / share) would only be noise there: the grid or list shows nothing.
-  const periodPast = periodInPast(view, anchor, days[days.length - 1]!, new Date());
-  const emptyTitle = periodPast
-    ? null
-    : `Nothing booked ${view === "day" ? "today" : view === "month" ? "this month" : "this week"}`;
+  const emptyTitleFor = (p: PeriodData) =>
+    periodInPast(view, p.anchor, p.days[p.days.length - 1]!, new Date())
+      ? null
+      : `Nothing booked ${view === "day" ? "today" : view === "month" ? "this month" : "this week"}`;
   const emptyActions = (
     <>
       <Button size="sm" onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>
@@ -762,84 +857,113 @@ function CalendarPage() {
       </div>
     );
 
-  const gridProps = {
-    timezone,
-    todayIso,
-    bookings: filtered,
-    events,
-    holidays: holidayItems,
-    staff: staff.data ?? [],
-    soleStaff: Boolean(soleStaff),
-    paymentColours,
-    eventColour,
-    clientFor,
-    tagFor,
-    categoryFor,
-    serviceLabel,
-    sliding,
-    loading: bookings.isLoading,
-    onOpenBooking: (id: string) => setSelectedBookingId(id),
-    onOpenEvent: openEvent,
-  };
-
-  const grid =
-    view === "month" ? (
-      <SwipePager {...swipe}>
+  /**
+   * One period's grid, drawn from its own data so the same function serves the page
+   * in view and the neighbours the swipe slides in beside it.
+   */
+  const renderGrid = (p: PeriodData) => {
+    const gridProps = {
+      timezone,
+      todayIso,
+      bookings: p.filtered,
+      events: p.events,
+      holidays: p.holidayItems,
+      staff: staff.data ?? [],
+      soleStaff: Boolean(soleStaff),
+      paymentColours,
+      eventColour,
+      clientFor: (b: Booking) => {
+        const c = b.leadCustomerId ? p.customers.get(b.leadCustomerId) : undefined;
+        return c ? customerDisplayName(c) : null;
+      },
+      tagFor: (b: Booking) =>
+        b.linkedRecordId ? recordTag(p.linkedRecords.get(b.linkedRecordId)) : null,
+      categoryFor,
+      serviceLabel,
+      sliding,
+      loading: p.bookings.isLoading,
+      onOpenBooking: (id: string) => setSelectedBookingId(id),
+      onOpenEvent: openEvent,
+    };
+    const emptyTitle = emptyTitleFor(p);
+    if (view === "month") {
+      return (
         <MonthGrid
           {...gridProps}
-          days={days}
-          anchor={anchor}
+          days={p.days}
+          anchor={p.anchor}
           monthBar={monthBar}
           showTime={monthTime === "on"}
           phone={phone}
           onTapDay={tapDay}
           onOpenDay={openDay}
         />
-      </SwipePager>
-    ) : view === "list" ? (
-      <SwipePager {...swipe}>
+      );
+    }
+    if (view === "list") {
+      return (
         <ListView
           {...gridProps}
-          days={days}
+          days={p.days}
           bookingNoun={bookingNoun}
           emptyTitle={emptyTitle}
           emptyActions={emptyActions}
           onNext={() => shift(1)}
         />
-      </SwipePager>
-    ) : phone && view === "day" ? (
-      <SwipePager {...swipe}>
+      );
+    }
+    if (phone && view === "day") {
+      return (
         <TimeGrid
           {...gridProps}
           variant="phoneDay"
-          days={days}
-          opening={opening}
+          days={p.days}
+          opening={p.opening}
           fields={blockFields}
           emptyTitle={emptyTitle}
           emptyActions={emptyActions}
           onEmptySlot={openChooser}
           onOpenDay={openDay}
         />
-      </SwipePager>
-    ) : (
-      <SwipePager
-        {...swipe}
-        className={cn("surface-card overflow-hidden", phone ? "rounded-2xl" : "rounded-[18px]")}
-      >
-        <TimeGrid
-          {...gridProps}
-          variant={phone ? "phoneWeek" : "desktop"}
-          days={days}
-          opening={opening}
-          fields={blockFields}
-          bottomReserve={phone ? 64 : 76}
-          emptyTitle={emptyTitle}
-          emptyActions={emptyActions}
-          onEmptySlot={openChooser}
-          onOpenDay={openDay}
-        />
-      </SwipePager>
+      );
+    }
+    return (
+      <TimeGrid
+        {...gridProps}
+        variant={phone ? "phoneWeek" : "desktop"}
+        days={p.days}
+        opening={p.opening}
+        fields={blockFields}
+        bottomReserve={phone ? 64 : 76}
+        emptyTitle={emptyTitle}
+        emptyActions={emptyActions}
+        onEmptySlot={openChooser}
+        onOpenDay={openDay}
+      />
     );
+  };
+
+  // The pages either side are kept loaded and slide in beside the current one as
+  // the finger moves, so turning the page never shows a blank or loading grid.
+  const neighbour = (dir: SwipeDir, shown: boolean) => (
+    <NeighbourPeriod
+      anchor={anchor}
+      dir={dir}
+      inputs={periodInputs}
+      shown={shown}
+      render={renderGrid}
+    />
+  );
+  const cardClass =
+    view === "month" || view === "list" || (phone && view === "day")
+      ? undefined
+      : cn("surface-card overflow-hidden", phone ? "rounded-2xl" : "rounded-[18px]");
+
+  const grid = (
+    <SwipePager {...swipe} neighbour={neighbour} className={cardClass}>
+      {renderGrid(period)}
+    </SwipePager>
+  );
 
   const legend =
     view === "list" ? null : (
