@@ -642,7 +642,9 @@ export function TimeGrid({
                           ? "rounded-[5px] py-1 pr-1 pl-1.5"
                           : variant === "phoneDay"
                             ? "rounded-xl px-3 py-2"
-                            : "rounded-lg px-2 py-[5px]",
+                            : px < 28
+                              ? "rounded-lg px-2 py-px"
+                              : "rounded-lg px-2 py-[5px]",
                       )}
                       style={{ ...style, ...eventTintStyle(eventColour(ev.colour)) }}
                     >
@@ -711,7 +713,9 @@ export function TimeGrid({
                         ? "rounded-[5px] py-1 pr-1 pl-1.5"
                         : variant === "phoneDay"
                           ? "rounded-xl px-3 py-2"
-                          : "rounded-lg px-2 py-[5px]",
+                          : px < 28
+                            ? "rounded-lg px-2 py-px"
+                            : "rounded-lg px-2 py-[5px]",
                       payment.className,
                       cancelled && "opacity-50",
                     )}

@@ -1,15 +1,25 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Ban,
   BellRing,
   CarFront,
   Pencil,
+  Check,
   CheckCircle2,
   CloudOff,
   ChevronRight,
   CreditCard,
   Landmark,
+  Link2 as LinkIcon,
   Mail,
   MessageSquare,
   MessageSquareText,
@@ -62,6 +72,7 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusPill } from "@/components/BookingStatusPill";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
@@ -439,6 +450,11 @@ export function BookingPanel({
     const tb = new Date(historyTimestamp(b) ?? 0).getTime();
     return tb - ta;
   });
+  // Messages about this booking that never got there: the History tab says so and
+  // the state notice offers the resend.
+  const failedMessages = historyEntries.filter(
+    (e) => isMessageHistoryEntry(e) && e.status === "failed",
+  ).length;
   // Has the client ever heard about this booking? Drives the cancel dialog's default:
   // no point sending a cancellation for a job they were never told about. Until the
   // history loads, assume they were (the safer default).
@@ -744,6 +760,64 @@ export function BookingPanel({
     setConfirmCancel(true);
   };
 
+  /** "£18 due" on the Payments tab while money is owed on a live booking. */
+  const paymentsWarning =
+    booking &&
+    settlement &&
+    !isFinal &&
+    settlement.outstandingMinor > 0 &&
+    settlement.state !== "free" &&
+    settlement.state !== "credit"
+      ? `${formatMoney(settlement.outstandingMinor, booking.currency, { compact: true })} due`
+      : null;
+
+  /**
+   * Spec §5.2 state notice. One thing at a time, most pressing first: a hold about
+   * to lapse, a bank transfer to watch for, a message that bounced, then money owed.
+   */
+  const stateNotice: {
+    title: string;
+    body: string;
+    action?: { label: string; onClick: () => void };
+  } | null = (() => {
+    if (!booking || !settlement) return null;
+    const owed = formatMoney(settlement.outstandingMinor, booking.currency, { compact: true });
+    if (bankPending) {
+      return {
+        title: "Waiting for a bank transfer.",
+        body: `The booking is confirmed once ${owed} lands — mark it received below.`,
+      };
+    }
+    if (booking.status === "held" || booking.status === "awaiting_payment") {
+      return {
+        title: "Waiting for payment.",
+        body: booking.holdExpiresAt
+          ? `The slot is held until ${formatInTz(booking.holdExpiresAt, timezone, { hour: "2-digit", minute: "2-digit" })}, then released.`
+          : "The slot is held until the client pays.",
+      };
+    }
+    if (failedMessages > 0 && !isFinal) {
+      return {
+        title:
+          failedMessages === 1
+            ? "A message didn't send."
+            : `${failedMessages} messages didn't send.`,
+        body: "See History for why.",
+        action: { label: "Resend", onClick: () => setRemindersOpen(true) },
+      };
+    }
+    if (!isFinal && settlement.state === "unpaid") {
+      return { title: `${owed} due.`, body: "The client hasn't paid yet." };
+    }
+    if (!isFinal && (settlement.state === "deposit_paid" || settlement.state === "part_paid")) {
+      return {
+        title: `${owed} still ${balanceDueLabel(settlement)}.`,
+        body: settlement.state === "deposit_paid" ? "The deposit is in." : "Part of it is paid.",
+      };
+    }
+    return null;
+  })();
+
   const submitDelete = async () => {
     if (!booking) return;
     try {
@@ -802,19 +876,39 @@ export function BookingPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-[2px]" onClick={onClose} />
-      <aside className="pt-safe pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
+      <div className="fixed inset-0 z-50 bg-[rgba(8,10,14,0.28)]" onClick={onClose} />
+      <aside className="pt-safe pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l bg-card shadow-[-16px_0_40px_rgba(0,0,0,0.12)]">
+        {/* Spec §5.2: status pill and reference on the top row with the menu and close;
+            the service as the title; when and where under it. */}
         <header className="flex items-start justify-between gap-3 border-b p-5">
           {bookingQuery.isLoading || !booking ? (
             <div className="w-full">
               <TableGhost rows={3} />
             </div>
           ) : (
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
-              <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
-              <p className="text-sm text-muted-foreground">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill booking={booking} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(booking.reference)
+                      .then(() => toast.success("Reference copied"))
+                      .catch(() => toast.error("Couldn't copy the reference"));
+                  }}
+                  className="cursor-pointer text-[12.5px] text-muted-foreground tabular-nums underline-offset-2 hover:underline"
+                  title="Copy reference"
+                >
+                  {booking.reference}
+                </button>
+              </div>
+              <h2 className="mt-2 text-2xl leading-tight font-extrabold tracking-[-0.02em]">
+                {booking.serviceSnapshot.name}
+              </h2>
+              <p className="mt-1 text-[14.5px] text-muted-foreground">
                 {formatBookingWhen(booking, timezone)}
+                {location ? ` · ${location.name}` : ""}
               </p>
             </div>
           )}
@@ -908,11 +1002,61 @@ export function BookingPanel({
         ) : (
           <>
             <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5 pb-12 sm:pb-5">
-              <div className="flex flex-wrap gap-2">
-                <StatusBadge status={booking.status} />
+              {/* Spec §5.2 state notice: what is going on, in plain words, only when
+                  there is something to know. */}
+              {stateNotice ? (
+                <div className="rounded-xl bg-cal-deposit-bg px-3.5 py-3 text-[13.5px] text-cal-deposit-fg">
+                  <span className="font-bold">{stateNotice.title}</span> {stateNotice.body}
+                  {stateNotice.action ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={stateNotice.action.onClick}
+                        className="cursor-pointer font-bold underline underline-offset-2"
+                      >
+                        {stateNotice.action.label}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Quick actions: the four things staff reach for most, one tap each.
+                  Everything else stays in the ⋯ menu. */}
+              <div className="grid grid-cols-4 gap-2">
+                <QuickAction icon={<MessageSquare className="size-4" />} label="Message" asChild>
+                  <Link to="/messages" onClick={onClose} />
+                </QuickAction>
+                <QuickAction
+                  icon={<Repeat className="size-4" />}
+                  label="Move"
+                  disabled={isFinal}
+                  onClick={() => setRescheduleOpen(true)}
+                />
+                <QuickAction
+                  icon={<LinkIcon className="size-4" />}
+                  label="Copy link"
+                  onClick={() => {
+                    const url = new URL("/bookings", window.location.origin);
+                    url.searchParams.set("booking", booking.id);
+                    void navigator.clipboard
+                      .writeText(url.toString())
+                      .then(() => toast.success("Link to this booking copied"))
+                      .catch(() => toast.error("Couldn't copy the link"));
+                  }}
+                />
+                <QuickAction
+                  icon={<Ban className="size-4" />}
+                  label="Cancel"
+                  disabled={isFinal}
+                  onClick={openCancel}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2 empty:hidden">
                 {/* Only once marked: an "Unknown" pill before then just restates the
                     untouched attendance row in the footer. */}
-                {attendanceMarked ? <StatusBadge status={booking.attendanceStatus} /> : null}
                 {queuedChange ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground"
@@ -1033,15 +1177,26 @@ export function BookingPanel({
               ) : null}
 
               <Tabs value={tab} onValueChange={setTab}>
+                {/* Tabs carry a warning when something inside needs a look (spec §5.2). */}
                 <TabsList className="w-full">
                   <TabsTrigger value="details" className="flex-1">
                     Details
                   </TabsTrigger>
-                  <TabsTrigger value="history" className="flex-1">
-                    History
-                  </TabsTrigger>
-                  <TabsTrigger value="payments" className="flex-1">
+                  <TabsTrigger value="payments" className="flex-1 gap-1.5">
                     Payments
+                    {paymentsWarning ? (
+                      <span className="text-[11px] font-extrabold text-cal-deposit tabular-nums">
+                        {paymentsWarning}
+                      </span>
+                    ) : null}
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="flex-1 gap-1.5">
+                    History
+                    {failedMessages > 0 ? (
+                      <span className="text-[11px] font-extrabold text-cal-unpaid tabular-nums">
+                        {failedMessages} failed
+                      </span>
+                    ) : null}
                   </TabsTrigger>
                 </TabsList>
 
@@ -1595,53 +1750,54 @@ export function BookingPanel({
             {showAttendance || showConfirm || showRecordPayment ? (
               <footer className="flex min-w-0 flex-col gap-2 border-t p-4">
                 {showAttendance ? (
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
-                    <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      Attendance
+                  // Spec §5.2 footer: "Did they turn up?" with one button per answer.
+                  // The API only moves a confirmed booking forward and never back, so
+                  // once an answer is in the buttons give way to the choice.
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-[13px] font-bold text-muted-foreground">
+                      {attendanceMarked
+                        ? noShowOnly
+                          ? "Marked as a no-show."
+                          : booking.attendanceStatus === "attended"
+                            ? "They turned up."
+                            : "They didn't turn up."
+                        : noShowOnly
+                          ? "Didn't turn up?"
+                          : "Did they turn up?"}
                     </span>
-                    <div className="flex flex-1 items-center justify-end gap-4">
-                      {noShowOnly ? null : (
-                        <label
-                          className={cn(
-                            "flex items-center gap-2 text-sm",
-                            attendanceLocked ? "cursor-default" : "cursor-pointer",
+                    <div className="flex flex-1 items-center justify-end gap-2">
+                      {attendanceMarked ? (
+                        <span className="text-xs text-muted-foreground">
+                          {noShowOnly
+                            ? "A no-show is final once marked."
+                            : "Attendance is final once marked."}
+                        </span>
+                      ) : (
+                        <>
+                          {noShowOnly ? null : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 border-cal-paid/40 text-cal-paid-fg hover:bg-cal-paid-bg"
+                              disabled={attendanceLocked || attendanceAction.isPending}
+                              aria-label="Attended"
+                              onClick={() => void run(attendanceAction, { attended: true })}
+                            >
+                              <Check className="size-4" aria-hidden /> Attended
+                            </Button>
                           )}
-                        >
-                          <Checkbox
-                            checked={booking.attendanceStatus === "attended"}
+                          <Button
+                            size="sm"
+                            variant="outline"
                             disabled={attendanceLocked || attendanceAction.isPending}
-                            aria-label="Attended"
-                            onCheckedChange={(v) => {
-                              if (v === true) void run(attendanceAction, { attended: true });
-                            }}
-                          />
-                          Attended
-                        </label>
+                            aria-label="No-show"
+                            onClick={() => void run(attendanceAction, { attended: false })}
+                          >
+                            No-show
+                          </Button>
+                        </>
                       )}
-                      <label
-                        className={cn(
-                          "flex items-center gap-2 text-sm",
-                          attendanceLocked ? "cursor-default" : "cursor-pointer",
-                        )}
-                      >
-                        <Checkbox
-                          checked={booking.attendanceStatus === "no_show"}
-                          disabled={attendanceLocked || attendanceAction.isPending}
-                          aria-label="No-show"
-                          onCheckedChange={(v) => {
-                            if (v === true) void run(attendanceAction, { attended: false });
-                          }}
-                        />
-                        No-show
-                      </label>
                     </div>
-                    {attendanceMarked ? (
-                      <p className="basis-full text-xs text-muted-foreground">
-                        {noShowOnly
-                          ? "A no-show is final once marked."
-                          : "Attendance is final once marked."}
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
                 {bankPending ? (
@@ -1975,6 +2131,47 @@ function WhatsAppIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
     </svg>
+  );
+}
+
+/**
+ * One of the four quick actions under the drawer header (spec §5.2): icon over a
+ * short label, equal widths. `asChild` lets a router Link be the button.
+ */
+function QuickAction({
+  icon,
+  label,
+  onClick,
+  disabled,
+  asChild,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  asChild?: boolean;
+  children?: ReactNode;
+}) {
+  const className = cn(
+    "flex h-[58px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-card text-xs font-semibold transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-50",
+  );
+  if (asChild && isValidElement(children)) {
+    return cloneElement(children as ReactElement<{ className?: string; children?: ReactNode }>, {
+      className,
+      children: (
+        <>
+          {icon}
+          {label}
+        </>
+      ),
+    });
+  }
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={className}>
+      {icon}
+      {label}
+    </button>
   );
 }
 

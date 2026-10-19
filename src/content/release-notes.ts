@@ -6,6 +6,32 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-19",
+    title: "A calendar that uses the whole screen",
+    items: [
+      {
+        kind: "improved",
+        text: "The calendar fills the width of the page. Sessions are soft blocks tinted by payment — green paid, amber deposit, red unpaid — with the amount still owed on a small pill, and the day header and hour column stay put while you scroll. The week shows your opening hours (widened to fit anything booked outside them), today's column is tinted with a red line at the current time, and sessions at the same time sit side by side. The toolbar reads “19 to 25 October · 9 sessions · £486 expected”, the waitlist is an hourglass with an amber count, and Day, Week, Month and the new List view sit in one switcher. Options (···) gain Show cancelled and a choice of what week blocks say; colours and bank holidays now live in Settings → Calendar, one link away from the legend.",
+        where: "Calendar",
+      },
+      {
+        kind: "new",
+        text: "On a phone the calendar has its own header — the month, the value of what's on screen (“£54 today · 3 sessions”), waitlist and options buttons — with Day, Week, Month and List built for touch: a week strip for Day and List, a week card that scrolls both ways with its headers pinned, and a List grouped by day.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
+        text: "Bookings is grouped by day with time and client first (the reference sits under the name) and tabs for Upcoming, Needs action — held, unpaid within a week, or past and not marked — Past and All. The search box finds a client, service or reference; the date range is a button with presets (This week, Next 7 days, This month, Last 30 days, Custom); click anywhere on a row to open it; held rows are tinted amber; and Export downloads the current list as a spreadsheet. 25 to a page.",
+        where: "Bookings",
+      },
+      {
+        kind: "improved",
+        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and offers Message, Move, Copy link and Cancel as four quick buttons. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with Attended and No-show buttons.",
+        where: "Bookings",
+      },
+    ],
+  },
+  {
     date: "2026-10-18",
     title: "A way back in when a payment fails",
     items: [

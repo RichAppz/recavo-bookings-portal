@@ -466,15 +466,33 @@ function CalendarPage() {
       }));
   }, [publicHolidays.holidays, rangeStart, rangeEnd]);
 
-  // Days with anything on them, for the dots on the phone week strip.
+  // Days with anything on them, for the dots on the phone week strip. Day view
+  // only loads one day, so the strip borrows a week-wide query of its own.
+  const stripMonday = startOfWeek(anchor);
+  const stripBookings = useBookings({
+    from: stripMonday.toISOString(),
+    to: addDays(stripMonday, 7).toISOString(),
+    staffId: staffFilter !== "all" ? staffFilter : undefined,
+    limit: 200,
+    enabled: phone && view === "day",
+  });
   const busyDays = useMemo(() => {
     const set = new Set<string>();
-    for (const b of filtered) set.add(isoDateInTz(b.start, timezone));
+    const source =
+      view === "day"
+        ? (stripBookings.data?.bookings ?? []).filter((b) => !isCancelled(b))
+        : filtered;
+    for (const b of source) set.add(isoDateInTz(b.start, timezone));
     for (const e of events) set.add(isoDateInTz(e.start, timezone));
     return set;
-  }, [filtered, events, timezone]);
+  }, [view, stripBookings.data, filtered, events, timezone]);
 
-  const title = rangeTitle(view, days[0]!, days[days.length - 1]!);
+  // The month grid pads out to six weeks, so its title comes from the anchor, not
+  // the first cell (which is usually in the month before).
+  const title =
+    view === "month"
+      ? rangeTitle("month", anchor, anchor)
+      : rangeTitle(view, days[0]!, days[days.length - 1]!);
   const shortTitle =
     view === "month"
       ? title
