@@ -1,8 +1,9 @@
-import { useMemo, type CSSProperties } from "react";
-import { Landmark } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Landmark } from "lucide-react";
 
 import { Marquee } from "@/components/Marquee";
 import type { Booking, CalendarBlock } from "@/lib/api/types";
+import { firstName } from "@/lib/calendar-layout";
 import { formatInTz, isAllDayEvent, isoDate } from "@/lib/format";
 import type { PaymentColours } from "@/lib/payment-colours";
 import { cn } from "@/lib/utils";
@@ -11,21 +12,21 @@ import {
   blockPayment,
   coversDay,
   eventTintStyle,
+  firstDayOf,
   HOLIDAY_CHIP,
   isCancelled,
   isMultiDay,
   LiftTag,
-  placeItems,
+  minutesOf,
   type HolidayItem,
-  type LaneEntry,
   type Spanning,
 } from "./shared";
 
 /**
- * What a month bar says, left to right. The business picks which of these to show;
- * the order is fixed so bars stay scannable. `time` is the start time, or "All day";
- * `category` is the service's category ("Cleaning · Full valet"), so two services
- * with the same name in different groups do not read as the same job.
+ * What the second line of a month chip says, left to right. The business picks
+ * which of these to show; the order is fixed so chips stay scannable. The first
+ * line is always the start time ("All day", or ↳ when the job carries on from an
+ * earlier day). `time` is kept so older saved preferences still parse.
  */
 export const MONTH_BAR_FIELDS = [
   "time",
@@ -37,10 +38,10 @@ export const MONTH_BAR_FIELDS = [
 ] as const;
 export type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
 
-/** Height of one bar row in the month grid, px (matches the chip's text + padding). */
-const LANE_HEIGHT = 20;
-
-type Entry = LaneEntry<Booking, CalendarBlock>;
+type Chip =
+  | { kind: "holiday"; key: string; item: HolidayItem; order: number }
+  | { kind: "event"; key: string; item: CalendarBlock; continues: boolean; order: number }
+  | { kind: "booking"; key: string; item: Booking; continues: boolean; order: number };
 
 export function MonthGrid({
   days,
@@ -89,8 +90,6 @@ export function MonthGrid({
   onTapDay: (day: Date) => void;
   onOpenDay: (day: Date) => void;
 }) {
-  // A phone cell is taller (spec §4.3: 128px) so it holds a lane more.
-  const lanes = phone ? 4 : 3;
   const weeks = useMemo(
     () => Array.from({ length: 6 }, (_, i) => days.slice(i * 7, i * 7 + 7)),
     [days],
@@ -100,6 +99,153 @@ export function MonthGrid({
     formatInTz(iso, timezone, { hour: "2-digit", minute: "2-digit" });
   const endLabel = (b: Spanning) =>
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+
+  /** Everything on one day, bank holiday first, then all-day and carried-over jobs, then by time. */
+  const chipsFor = (iso: string): Chip[] => {
+    const out: Chip[] = [];
+    for (const h of holidays) {
+      if (h.date === iso) out.push({ kind: "holiday", key: h.id, item: h, order: -2 });
+    }
+    for (const b of bookings) {
+      if (!coversDay(b, iso, timezone)) continue;
+      const continues = firstDayOf(b, timezone) !== iso;
+      out.push({
+        kind: "booking",
+        key: b.id,
+        item: b,
+        continues,
+        order: continues || b.allDay ? -1 : minutesOf(b.start, timezone),
+      });
+    }
+    for (const ev of events) {
+      if (!coversDay(ev, iso, timezone)) continue;
+      const continues = firstDayOf(ev, timezone) !== iso;
+      out.push({
+        kind: "event",
+        key: ev.id,
+        item: ev,
+        continues,
+        order: continues || isAllDay(ev) ? -1 : minutesOf(ev.start, timezone),
+      });
+    }
+    return out.sort((a, b) => a.order - b.order);
+  };
+
+  const lineText = phone ? "text-[12px] leading-[15px]" : "text-[11px] leading-[14px]";
+
+  const renderChip = (chip: Chip) => {
+    if (chip.kind === "holiday") {
+      const h = chip.item;
+      return (
+        <div
+          key={chip.key}
+          role="note"
+          aria-label={`Bank holiday: ${h.title}`}
+          title={h.notes ? `${h.title} — ${h.notes}` : h.title}
+          className={cn(HOLIDAY_CHIP, "w-full")}
+        >
+          <Landmark className="size-3 shrink-0" aria-hidden />
+          <span className="truncate">{h.title}</span>
+        </div>
+      );
+    }
+    if (chip.kind === "event") {
+      const ev = chip.item;
+      const allDay = isAllDay(ev);
+      const multi = isMultiDay(ev, timezone);
+      return (
+        <button
+          key={chip.key}
+          type="button"
+          onClick={() => onOpenEvent(ev)}
+          style={eventTintStyle(eventColour(ev.colour))}
+          aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
+            multi ? `, until ${endLabel(ev)}` : ""
+          }`}
+          className={cn(
+            "flex w-full cursor-pointer flex-col items-stretch rounded-md px-1.5 py-1 text-left",
+            lineText,
+          )}
+        >
+          <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+            {chip.continues ? (
+              <span aria-label="Continues from earlier">↳</span>
+            ) : allDay ? (
+              "All day"
+            ) : (
+              timeLabel(ev.start)
+            )}
+            {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
+          </span>
+          <Marquee animate={sliding} className="w-full flex-none font-semibold">
+            <span>{ev.title}</span>
+          </Marquee>
+        </button>
+      );
+    }
+    const b = chip.item;
+    const cancelled = isCancelled(b);
+    const payment = blockPayment(b, paymentColours);
+    const tag = tagFor(b);
+    const client = clientFor(b);
+    const multi = isMultiDay(b, timezone);
+    const showClient = monthBar.has("client") && client;
+    const showTag = monthBar.has("record") && tag;
+    const category = categoryFor(b);
+    const showCategory = monthBar.has("category") && category;
+    const showLift = monthBar.has("lift") && Boolean(b.clientLift);
+    // "Category only" on a service that has none would leave the line blank, so
+    // the name steps in for that service.
+    const showService = monthBar.has("service") || (!showCategory && !showClient && !showTag);
+    return (
+      <button
+        key={chip.key}
+        type="button"
+        onClick={() => onOpenBooking(b.id)}
+        title={payment.label}
+        aria-label={`${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+          b,
+        )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}${cancelled ? ", cancelled" : ""}`}
+        style={payment.style}
+        className={cn(
+          "flex w-full cursor-pointer flex-col items-stretch rounded-md px-1.5 py-1 text-left",
+          lineText,
+          payment.className,
+          cancelled && "opacity-50",
+        )}
+      >
+        <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+          {showLift ? <LiftTag /> : null}
+          {chip.continues ? (
+            <span aria-label="Continues from earlier">↳</span>
+          ) : b.allDay ? (
+            "All day"
+          ) : (
+            timeLabel(b.start)
+          )}
+          {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
+        </span>
+        {/* The label slides if it is wider than the chip, so a narrow cell still
+            shows everything that was switched on. */}
+        <Marquee animate={sliding} className="w-full flex-none">
+          {showClient ? (
+            <span className={cn("font-semibold", cancelled && "line-through")}>
+              {phone ? firstName(client) : client}
+            </span>
+          ) : null}
+          {showTag ? <span className="font-semibold">{tag}</span> : null}
+          {showCategory ? (
+            <span className="opacity-75">{showService ? `${category} ·` : category}</span>
+          ) : null}
+          {showService ? (
+            <span className={cn("font-semibold", cancelled && "line-through")}>
+              {b.serviceSnapshot.name}
+            </span>
+          ) : null}
+        </Marquee>
+      </button>
+    );
+  };
 
   return (
     <div className="surface-card overflow-hidden rounded-2xl sm:rounded-[18px]">
@@ -114,239 +260,159 @@ export function MonthGrid({
         ))}
       </div>
 
-      {/* One row per week. Items are laid out per row so a job that runs over
-          several days is a single bar across them, not a chip in each cell that
-          reads as separate jobs. */}
-      {weeks.map((week, weekIdx) => {
-        const weekIsos = week.map(isoDate);
-        const placed = placeItems<Entry>(
-          weekIsos,
-          [
-            ...holidays.map((item) => ({ kind: "holiday" as const, item })),
-            ...bookings.map((item) => ({ kind: "booking" as const, item })),
-            ...events.map((item) => ({ kind: "event" as const, item })),
-          ],
-          timezone,
-        );
-        const hiddenOn = (iso: string) =>
-          placed.filter((p) => p.lane >= lanes && coversDay(p.entry.item, iso, timezone)).length;
-        const countOn = (iso: string) =>
-          placed.filter((p) => p.entry.kind !== "holiday" && coversDay(p.entry.item, iso, timezone))
-            .length;
-        return (
-          <div key={weekIsos[0]} className="relative grid grid-cols-7">
-            {week.map((day) => {
-              const iso = isoDate(day);
-              const outside = day.getMonth() !== anchor.getMonth();
-              const hidden = hiddenOn(iso);
-              const today = iso === todayIso;
-              const count = countOn(iso);
-              return (
-                <div
-                  key={iso}
-                  className={cn(
-                    // The card draws its own edge, so the grid drops the borders
-                    // that would otherwise double up along the right and bottom.
-                    "group relative border-r border-b p-1 [&:nth-child(7n)]:border-r-0 sm:p-1.5",
-                    phone ? "min-h-[128px]" : "min-h-[96px] sm:min-h-[116px]",
-                    weekIdx === weeks.length - 1 && "border-b-0",
-                    outside && "bg-muted/30",
-                    today && "bg-cal-today",
-                  )}
-                >
-                  {/* Sits behind the bars so the whole empty box is the hit area
-                      for adding to this day (double tap opens the day), while a
-                      bar still opens its own booking. Nesting the two as real
-                      buttons would be invalid markup. */}
-                  <button
-                    type="button"
-                    onClick={() => onTapDay(day)}
-                    className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
-                    aria-label={`${day.toLocaleDateString("en-GB", { dateStyle: "full" })}, ${count} ${count === 1 ? "item" : "items"}. Tap to add, double tap to open the day.`}
-                  />
+      {weeks.map((week, weekIdx) => (
+        <div key={isoDate(week[0]!)} className="grid grid-cols-7">
+          {week.map((day) => {
+            const iso = isoDate(day);
+            const chips = loading ? [] : chipsFor(iso);
+            return (
+              <DayCell
+                key={iso}
+                day={day}
+                outside={day.getMonth() !== anchor.getMonth()}
+                today={iso === todayIso}
+                lastRow={weekIdx === weeks.length - 1}
+                phone={phone}
+                loading={loading}
+                count={chips.filter((c) => c.kind !== "holiday").length}
+                onTapDay={onTapDay}
+                onOpenDay={onOpenDay}
+              >
+                {chips.map(renderChip)}
+              </DayCell>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-                  {/* The date itself is the one-tap way into the day, for anyone
-                      who doesn't know about the double tap (and for keyboards). */}
-                  <button
-                    type="button"
-                    onClick={() => onOpenDay(day)}
-                    className={cn(
-                      "relative inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-xs font-bold tabular-nums hover:ring-2 hover:ring-primary/40",
-                      phone && "mx-auto flex",
-                      outside ? "text-muted-foreground/60" : "text-foreground",
-                      today && "bg-primary text-primary-foreground",
-                    )}
-                    aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
-                  >
-                    {day.getDate()}
-                  </button>
+/**
+ * One day: the date on top and a list of chips beneath that scrolls inside the
+ * cell when there are more than fit (spec §4.3). While more is hidden below, the
+ * list fades out at the bottom and a chevron nudges it on; the whole thing can
+ * also be scrolled directly.
+ */
+function DayCell({
+  day,
+  outside,
+  today,
+  lastRow,
+  phone,
+  loading,
+  count,
+  onTapDay,
+  onOpenDay,
+  children,
+}: {
+  day: Date;
+  outside: boolean;
+  today: boolean;
+  lastRow: boolean;
+  phone: boolean;
+  loading: boolean;
+  count: number;
+  onTapDay: (day: Date) => void;
+  onOpenDay: (day: Date) => void;
+  children: ReactNode;
+}) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [more, setMore] = useState(false);
 
-                  {loading && !outside ? (
-                    <div aria-hidden className="relative mt-1 space-y-0.5">
-                      {Array.from({ length: (day.getDate() % 3) + 1 }, (_, i) => (
-                        <div key={i} className="h-[18px] animate-pulse rounded bg-secondary" />
-                      ))}
-                    </div>
-                  ) : null}
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", check);
+      ro.disconnect();
+    };
+  }, [children]);
 
-                  {hidden > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenDay(day)}
-                      className="absolute bottom-0.5 left-1 cursor-pointer px-1 text-left text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline sm:bottom-1 sm:left-1.5"
-                    >
-                      +{hidden} more
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
+  const nudge = () => {
+    const el = listRef.current;
+    if (!el) return;
+    // One chip and its gap at a time, so each tap reveals the next item.
+    const step = (el.firstElementChild?.getBoundingClientRect().height ?? 36) + 2;
+    el.scrollBy({ top: step, behavior: "smooth" });
+  };
 
-            {/* The bars: same seven columns as the cells beneath, so a span of
-                n columns lines up exactly with the days it covers. */}
-            <div
-              className="pointer-events-none absolute inset-x-0 top-7 grid grid-cols-7 gap-y-0.5 sm:top-8"
-              style={{ gridAutoRows: `${LANE_HEIGHT}px` }}
-            >
-              {placed
-                .filter((p) => p.lane < lanes)
-                .map((p) => {
-                  const { entry, startCol, endCol, lane, continuesBefore, continuesAfter } = p;
-                  const style: CSSProperties = {
-                    gridColumn: `${startCol + 1} / span ${endCol - startCol + 1}`,
-                    gridRow: lane + 1,
-                  };
-                  // A bar that carries on past the row edge runs right to it, unrounded,
-                  // so it visibly continues into the next (or previous) week.
-                  const edges = cn(
-                    continuesBefore ? "ml-0 rounded-l-none" : "ml-0.5 sm:ml-1.5",
-                    continuesAfter ? "mr-0 rounded-r-none" : "mr-0.5 sm:mr-1.5",
-                  );
-                  if (entry.kind === "holiday") {
-                    const h = entry.item;
-                    return (
-                      <div
-                        key={h.id}
-                        role="note"
-                        aria-label={`Bank holiday: ${h.title}`}
-                        title={h.notes ? `${h.title} — ${h.notes}` : h.title}
-                        style={style}
-                        className={cn(HOLIDAY_CHIP, "mx-0.5 sm:mx-1.5")}
-                      >
-                        <Landmark className="size-3 shrink-0" aria-hidden />
-                        <span className="truncate">{h.title}</span>
-                      </div>
-                    );
-                  }
-                  if (entry.kind === "event") {
-                    const ev = entry.item;
-                    const allDay = isAllDay(ev);
-                    return (
-                      <button
-                        key={`${ev.id}-${startCol}`}
-                        type="button"
-                        onClick={() => onOpenEvent(ev)}
-                        style={{ ...style, ...eventTintStyle(eventColour(ev.colour)) }}
-                        aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
-                          isMultiDay(ev, timezone) ? `, until ${endLabel(ev)}` : ""
-                        }`}
-                        className={cn(
-                          "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] leading-tight sm:px-1.5",
-                          edges,
-                        )}
-                      >
-                        <Marquee animate={sliding}>
-                          {continuesBefore ? (
-                            <span className="opacity-75" aria-label="Continues from earlier">
-                              ↳
-                            </span>
-                          ) : allDay ? null : (
-                            <span className="font-extrabold tabular-nums">
-                              {timeLabel(ev.start)}
-                            </span>
-                          )}
-                          <span className="font-semibold">{ev.title}</span>
-                        </Marquee>
-                        {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
-                      </button>
-                    );
-                  }
-                  const b = entry.item;
-                  const cancelled = isCancelled(b);
-                  const payment = blockPayment(b, paymentColours);
-                  const tag = tagFor(b);
-                  const client = clientFor(b);
-                  const multi = isMultiDay(b, timezone);
-                  const showTime = monthBar.has("time");
-                  const showClient = monthBar.has("client") && client;
-                  const showTag = monthBar.has("record") && tag;
-                  const category = categoryFor(b);
-                  const showCategory = monthBar.has("category") && category;
-                  const showLift = monthBar.has("lift") && Boolean(b.clientLift);
-                  // "Category only" on a service that has none would leave the
-                  // bar blank, so the name steps in for that service.
-                  const showService =
-                    monthBar.has("service") ||
-                    (!showCategory && !showTime && !showClient && !showTag);
-                  return (
-                    <button
-                      key={`${b.id}-${startCol}`}
-                      type="button"
-                      onClick={() => onOpenBooking(b.id)}
-                      title={payment.label}
-                      aria-label={`${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
-                        b,
-                      )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}${cancelled ? ", cancelled" : ""}`}
-                      style={{ ...style, ...payment.style }}
-                      className={cn(
-                        "pointer-events-auto flex min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] leading-tight sm:px-1.5",
-                        payment.className,
-                        edges,
-                        cancelled && "opacity-50",
-                      )}
-                    >
-                      {showLift ? <LiftTag /> : null}
-                      {/* The label slides if it is wider than the bar, so a one-day
-                          cell still shows everything that was switched on. */}
-                      <Marquee animate={sliding}>
-                        {continuesBefore ? (
-                          <span className="opacity-75" aria-label="Continues from earlier">
-                            ↳
-                          </span>
-                        ) : showTime ? (
-                          b.allDay ? (
-                            <span className="font-extrabold">All day</span>
-                          ) : (
-                            <span className="font-extrabold tabular-nums">
-                              {timeLabel(b.start)}
-                            </span>
-                          )
-                        ) : null}
-                        {showClient ? (
-                          <span className={cn("font-semibold", cancelled && "line-through")}>
-                            {client}
-                          </span>
-                        ) : null}
-                        {showTag ? <span className="font-semibold">{tag}</span> : null}
-                        {showCategory ? (
-                          <span className="opacity-75">
-                            {showService ? `${category} ·` : category}
-                          </span>
-                        ) : null}
-                        {showService ? (
-                          <span className={cn(cancelled && "line-through")}>
-                            {b.serviceSnapshot.name}
-                          </span>
-                        ) : null}
-                      </Marquee>
-                      {continuesAfter ? <span className="ml-auto opacity-75">→</span> : null}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        );
-      })}
+  return (
+    <div
+      className={cn(
+        // The card draws its own edge, so the grid drops the borders that would
+        // otherwise double up along the right and bottom.
+        "group relative flex flex-col border-r border-b p-1 [&:nth-child(7n)]:border-r-0 sm:p-1.5",
+        phone ? "h-[128px]" : "h-[112px] sm:h-[128px]",
+        lastRow && "border-b-0",
+        outside && "bg-muted/30",
+        today && "bg-cal-today",
+      )}
+    >
+      {/* Sits behind the chips so the empty box is the hit area for adding to this
+          day (double tap opens the day), while a chip still opens its own booking.
+          Nesting the two as real buttons would be invalid markup. */}
+      <button
+        type="button"
+        onClick={() => onTapDay(day)}
+        className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/50"
+        aria-label={`${day.toLocaleDateString("en-GB", { dateStyle: "full" })}, ${count} ${count === 1 ? "item" : "items"}. Tap to add, double tap to open the day.`}
+      />
+
+      {/* The date itself is the one-tap way into the day, for anyone who doesn't
+          know about the double tap (and for keyboards). */}
+      <button
+        type="button"
+        onClick={() => onOpenDay(day)}
+        className={cn(
+          "relative inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-xs font-bold tabular-nums hover:ring-2 hover:ring-primary/40",
+          phone && "mx-auto flex",
+          outside ? "text-muted-foreground/60" : "text-foreground",
+          today && "bg-primary text-primary-foreground",
+        )}
+        aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+      >
+        {day.getDate()}
+      </button>
+
+      {loading && !outside ? (
+        <div aria-hidden className="relative mt-1 space-y-0.5">
+          {Array.from({ length: (day.getDate() % 3) + 1 }, (_, i) => (
+            <div key={i} className="h-9 animate-pulse rounded-md bg-secondary" />
+          ))}
+        </div>
+      ) : null}
+
+      <div
+        ref={listRef}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onTapDay(day);
+        }}
+        className="no-scrollbar relative mt-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+        style={
+          more
+            ? { maskImage: "linear-gradient(to bottom, #000 calc(100% - 26px), transparent)" }
+            : undefined
+        }
+      >
+        {children}
+      </div>
+
+      {more ? (
+        <button
+          type="button"
+          onClick={nudge}
+          aria-label={`Show more on ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`}
+          className="absolute bottom-1 left-1/2 z-10 flex size-7 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+        >
+          <ChevronDown className="size-4" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

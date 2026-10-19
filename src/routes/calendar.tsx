@@ -622,14 +622,7 @@ function CalendarPage() {
         {view === "month" ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Show on month bars</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={monthBar.has("time")}
-              onCheckedChange={() => toggleMonthBar("time")}
-              onSelect={(e) => e.preventDefault()}
-            >
-              Time / All day
-            </DropdownMenuCheckboxItem>
+            <DropdownMenuLabel>Under the time on month chips</DropdownMenuLabel>
             <DropdownMenuCheckboxItem
               checked={monthBar.has("client")}
               onCheckedChange={() => toggleMonthBar("client")}
