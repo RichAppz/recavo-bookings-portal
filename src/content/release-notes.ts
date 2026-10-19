@@ -36,7 +36,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
-        text: "Month view: untick Show the time in the ⋯ menu and every chip becomes a single line — just the client, service or whatever you've chosen to show — so a busy day fits more before it scrolls. The ↳ and → marks for jobs that run over several days stay on the line.",
+        text: "Month view: untick Show the time in the ⋯ menu and every chip becomes a single line — just the client, service or whatever you've chosen to show — so a busy day fits more before it scrolls. The ↳ and → marks for jobs that run over several days stay on the line. The little arrow that scrolls a full day on now sits beside the date instead of over the last chip.",
         where: "Calendar",
       },
       {

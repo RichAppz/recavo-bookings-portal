@@ -314,8 +314,8 @@ export function MonthGrid({
 /**
  * One day: the date on top and a list of chips beneath that scrolls inside the
  * cell when there are more than fit (spec §4.3). While more is hidden below, the
- * list fades out at the bottom and a chevron nudges it on; the whole thing can
- * also be scrolled directly.
+ * list fades out at the bottom and a chevron beside the date nudges it on; the
+ * whole thing can also be scrolled directly.
  */
 function DayCell({
   day,
@@ -426,14 +426,21 @@ function DayCell({
         {children}
       </div>
 
+      {/* Sits on the date's row in the top-right corner (owner request), out of the
+          way of the chips; the fade at the foot of the list still shows where the
+          hidden items are. On a phone the date is centred, so the button is kept
+          small enough to sit beside it in a 50px cell. */}
       {more ? (
         <button
           type="button"
           onClick={nudge}
           aria-label={`Show more on ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`}
-          className="absolute bottom-1 left-1/2 z-10 flex size-7 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+          className={cn(
+            "absolute top-1 right-0.5 z-10 flex cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-[0_1px_4px_rgba(0,0,0,0.14)]",
+            phone ? "size-5" : "size-5 sm:top-1.5 sm:right-1.5 sm:size-6",
+          )}
         >
-          <ChevronDown className="size-4" aria-hidden />
+          <ChevronDown className={phone ? "size-3.5" : "size-3.5 sm:size-4"} aria-hidden />
         </button>
       ) : null}
     </div>
