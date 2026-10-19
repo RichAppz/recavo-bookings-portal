@@ -7,6 +7,7 @@ import {
   weekSpans,
   fitHourHeight,
   firstName,
+  laneDepthByColumn,
   layoutOverlaps,
   listDayHeading,
   periodDays,
@@ -341,5 +342,36 @@ describe("assignLanes", () => {
   });
   it("nothing in, nothing out", () => {
     assert.deepEqual(assignLanes([]), { placed: [], laneCount: 0 });
+  });
+});
+
+describe("laneDepthByColumn", () => {
+  it("days no bar crosses keep their chips under the date", () => {
+    const { placed } = assignLanes([{ startCol: 0, endCol: 3 }]);
+    assert.deepEqual(laneDepthByColumn(placed), [1, 1, 1, 1, 0, 0, 0]);
+  });
+  it("a day under only a lower lane still clears the lanes above it", () => {
+    const { placed } = assignLanes([
+      { startCol: 0, endCol: 1 },
+      { startCol: 1, endCol: 4 },
+      { startCol: 2, endCol: 2 },
+    ]);
+    // Lane 0: cols 0–1 then 2; lane 1: cols 1–4.
+    assert.deepEqual(laneDepthByColumn(placed), [1, 2, 2, 2, 2, 0, 0]);
+  });
+  it("the deepest lane over a column wins", () => {
+    const { placed } = assignLanes([
+      { startCol: 2, endCol: 4 },
+      { startCol: 2, endCol: 3 },
+      { startCol: 3, endCol: 3 },
+    ]);
+    assert.deepEqual(laneDepthByColumn(placed), [0, 0, 2, 3, 1, 0, 0]);
+  });
+  it("no bars, no depth; columns outside the row are ignored", () => {
+    assert.deepEqual(laneDepthByColumn([]), [0, 0, 0, 0, 0, 0, 0]);
+    assert.deepEqual(
+      laneDepthByColumn([{ startCol: 5, endCol: 9, lane: 0 }], 7),
+      [0, 0, 0, 0, 0, 1, 1],
+    );
   });
 });

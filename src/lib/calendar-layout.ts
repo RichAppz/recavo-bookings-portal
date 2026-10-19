@@ -381,6 +381,25 @@ export function assignLanes<T extends { startCol: number; endCol: number }>(
   return { placed, laneCount: laneFree.length };
 }
 
+/**
+ * How many lanes each column of a row has to clear before its own chips: one past
+ * the deepest lane with a bar over that column, so a day no bar crosses gets 0 and
+ * keeps its chips right under the date, while a day under only a lane-1 bar still
+ * leaves room for lane 0 above it.
+ */
+export function laneDepthByColumn(
+  placed: readonly { startCol: number; endCol: number; lane: number }[],
+  cols = 7,
+): number[] {
+  const depth = Array.from({ length: cols }, () => 0);
+  for (const bar of placed) {
+    for (let c = Math.max(0, bar.startCol); c <= Math.min(cols - 1, bar.endCol); c++) {
+      depth[c] = Math.max(depth[c] ?? 0, bar.lane + 1);
+    }
+  }
+  return depth;
+}
+
 /** First word of a name, for the dense phone chips. */
 export function firstName(name: string | null | undefined): string {
   if (!name) return "";

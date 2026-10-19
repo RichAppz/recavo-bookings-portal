@@ -3,7 +3,13 @@ import { ChevronDown, Landmark } from "lucide-react";
 
 import { Marquee } from "@/components/Marquee";
 import type { Booking, CalendarBlock } from "@/lib/api/types";
-import { assignLanes, firstName, weekSpans, type WeekSpan } from "@/lib/calendar-layout";
+import {
+  assignLanes,
+  firstName,
+  laneDepthByColumn,
+  weekSpans,
+  type WeekSpan,
+} from "@/lib/calendar-layout";
 import { formatInTz, isAllDayEvent, isoDate } from "@/lib/format";
 import type { PaymentColours } from "@/lib/payment-colours";
 import { cn } from "@/lib/utils";
@@ -355,23 +361,26 @@ export function MonthGrid({
       {weeks.map((week, weekIdx) => {
         const bars = placed.barsByWeek[weekIdx] ?? [];
         const laneCount = placed.laneCounts[weekIdx] ?? 0;
-        // The strip under the date row that the bars take up, so every cell in the
-        // row starts its own chips beneath them.
-        const laneBlock = laneCount * (barHeight + LANE_GAP);
+        // Each cell starts its own chips beneath the bars over that day only, so a
+        // day no bar crosses keeps them right under the date. The row grows for
+        // the deepest of those.
+        const depths = laneDepthByColumn(bars);
+        const laneBlockFor = (col: number) => (depths[col] ?? 0) * (barHeight + LANE_GAP);
+        const rowLaneBlock = Math.max(0, ...depths) * (barHeight + LANE_GAP);
         return (
           <div
             key={isoDate(week[0]!)}
             className="relative grid grid-cols-7"
             style={
               {
-                "--lane-block": `${laneBlock}px`,
+                "--lane-block": `${rowLaneBlock}px`,
                 // Keeps a cell tall enough for its date, the bars and at least one
                 // chip when a week stacks several bars; otherwise the fixed height.
                 "--cell-reserve": `${barHeight + 50}px`,
               } as CSSProperties
             }
           >
-            {week.map((day) => {
+            {week.map((day, col) => {
               const iso = isoDate(day);
               const chips = loading ? [] : chipsFor(iso);
               return (
@@ -383,7 +392,7 @@ export function MonthGrid({
                   lastRow={weekIdx === weeks.length - 1}
                   phone={phone}
                   loading={loading}
-                  laneBlock={laneBlock}
+                  laneBlock={laneBlockFor(col)}
                   count={placed.countByDay.get(iso) ?? 0}
                   onTapDay={onTapDay}
                   onOpenDay={onOpenDay}
@@ -416,8 +425,8 @@ export function MonthGrid({
  * One day: the date on top and a list of chips beneath that scrolls inside the
  * cell when there are more than fit (spec §4.3). While more is hidden below, the
  * list fades out at the bottom and a chevron beside the date nudges it on; the
- * whole thing can also be scrolled directly. When the week has bars running
- * across it, `laneBlock` is the room they take between the date and the list.
+ * whole thing can also be scrolled directly. When bars run across this day,
+ * `laneBlock` is the room they take between the date and the list.
  */
 function DayCell({
   day,
@@ -530,8 +539,8 @@ function DayCell({
         ) : null}
       </div>
 
-      {/* Room for the week's bars, which the row draws across all its cells; the
-          list's own top margin supplies the gap after the last bar. */}
+      {/* Room for the bars over this day, which the row draws across its cells;
+          the list's own top margin supplies the gap after the last bar. */}
       {laneBlock > 0 ? (
         <div aria-hidden className="mt-1 shrink-0" style={{ height: laneBlock - 4 }} />
       ) : null}
