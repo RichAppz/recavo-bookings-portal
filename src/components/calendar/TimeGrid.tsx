@@ -254,7 +254,9 @@ export function TimeGrid({
   const positioned = useRef<string | null>(null);
   useEffect(() => {
     const el = scrollerRef.current;
-    if (!el || !inner || loading) return;
+    // Wait for the card's height: before it is set the scroller is as tall as its
+    // content, so any scrollTop would clamp to 0 and the position would be lost.
+    if (!el || !inner || loading || !cardHeight) return;
     const key = `${variant}:${isoDays.join(",")}`;
     if (positioned.current === key) return;
     positioned.current = key;
@@ -293,7 +295,7 @@ export function TimeGrid({
     }
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inner, loading, variant, isoDays, hourHeight]);
+  }, [inner, loading, variant, isoDays, hourHeight, cardHeight]);
 
   const timeAtOffset = (offsetY: number) => {
     const minutes = rangeStartMin + Math.floor((offsetY / hourHeight) * 4) * 15;
