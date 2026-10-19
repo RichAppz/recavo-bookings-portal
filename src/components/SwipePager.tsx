@@ -2,10 +2,12 @@ import { useEffect, useRef, type ReactNode, type TouchEvent } from "react";
 import {
   flickDirection,
   followOffset,
+  releaseVelocity,
   scrollEdges,
   swipeAxis,
   swipeDirection,
   type SwipeDir,
+  type SwipeSample,
 } from "@/lib/swipe";
 import { cn } from "@/lib/utils";
 
@@ -140,9 +142,7 @@ export function SwipePager({
             ...sidewaysScroller(e.target, e.currentTarget),
             axis: null,
             offset,
-            lastX: t.clientX,
-            lastT: e.timeStamp,
-            velocity: 0,
+            samples: [],
           };
         }}
         onTouchMove={(e: TouchEvent) => {
@@ -155,11 +155,8 @@ export function SwipePager({
             g.axis = swipeAxis(dx, dy);
             if (g.axis !== "x") return;
           }
-          const dt = Math.max(1, e.timeStamp - g.lastT);
-          // Smoothed so one jittery sample at the end doesn't decide the flick.
-          g.velocity = g.velocity * 0.4 + ((t.clientX - g.lastX) / dt) * 0.6;
-          g.lastX = t.clientX;
-          g.lastT = e.timeStamp;
+          g.samples.push({ t: e.timeStamp, x: t.clientX });
+          if (g.samples.length > 12) g.samples.shift();
           place(followOffset({ dx: dx + g.offset, dy, atStart: g.atStart, atEnd: g.atEnd }));
         }}
         onTouchEnd={(e: TouchEvent) => {
@@ -174,7 +171,7 @@ export function SwipePager({
             g.axis === "y"
               ? null
               : (swipeDirection({ dx, dy, ...edges }) ??
-                flickDirection({ dx, dy, ...edges }, g.velocity));
+                flickDirection({ dx, dy, ...edges }, releaseVelocity(g.samples, e.timeStamp)));
           const from = currentX(inner.current);
           if (dir) turn(dir, from);
           else settle(from);
@@ -198,9 +195,8 @@ type Gesture = {
   axis: "x" | "y" | null;
   /** Where the page already was when the finger landed (0 unless mid-slide). */
   offset: number;
-  lastX: number;
-  lastT: number;
-  velocity: number;
+  /** Recent sideways positions, for the speed at release. */
+  samples: SwipeSample[];
 };
 
 function reducedMotion() {

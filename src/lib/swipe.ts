@@ -62,6 +62,23 @@ export function flickDirection(
   return swipeDirection(g, minDistance);
 }
 
+export type SwipeSample = { t: number; x: number };
+
+/**
+ * Sideways speed (px/ms, signed) over the last `window` ms of movement, judged at
+ * `endT` when the finger lifted. A finger that paused before lifting reads as zero,
+ * however fast it moved earlier, so a drag that stops and lets go eases back
+ * rather than paging. Needs two samples inside the window to say anything.
+ */
+export function releaseVelocity(samples: readonly SwipeSample[], endT: number, window = 100) {
+  const recent = samples.filter((s) => endT - s.t <= window);
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  if (!first || !last || first === last) return 0;
+  const dt = last.t - first.t;
+  return dt > 0 ? (last.x - first.x) / dt : 0;
+}
+
 /** Edge state of a sideways scroller, with a pixel of slack for sub-pixel widths. */
 export function scrollEdges(el: {
   scrollLeft: number;

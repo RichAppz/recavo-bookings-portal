@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { flickDirection, followOffset, scrollEdges, swipeAxis, swipeDirection } from "./swipe.ts";
+import {
+  flickDirection,
+  followOffset,
+  releaseVelocity,
+  scrollEdges,
+  swipeAxis,
+  swipeDirection,
+} from "./swipe.ts";
 
 const free = { atStart: true, atEnd: true };
 
@@ -30,6 +37,41 @@ describe("followOffset", () => {
     assert.equal(followOffset({ dx: 22, dy: 0, atStart: false, atEnd: true }), 0);
     assert.equal(followOffset({ dx: -37, dy: 0, atStart: false, atEnd: true }), -37);
     assert.equal(followOffset({ dx: 22, dy: 0, atStart: true, atEnd: false }), 22);
+  });
+});
+
+describe("releaseVelocity", () => {
+  it("measures the last stretch of movement before the finger lifted", () => {
+    const samples = [
+      { t: 0, x: 100 },
+      { t: 300, x: 110 },
+      { t: 330, x: 130 },
+      { t: 360, x: 150 },
+    ];
+    // Only the last 60ms count: 40px in 60ms, not 50px in 360ms.
+    assert.ok(Math.abs(releaseVelocity(samples, 370) - 40 / 60) < 1e-9);
+  });
+
+  it("reads zero when the finger paused before lifting, or barely moved", () => {
+    const fast = [
+      { t: 0, x: 100 },
+      { t: 20, x: 160 },
+    ];
+    assert.equal(releaseVelocity(fast, 400), 0);
+    assert.equal(releaseVelocity([{ t: 0, x: 100 }], 10), 0);
+    assert.equal(releaseVelocity([], 10), 0);
+  });
+
+  it("is signed like the movement", () => {
+    assert.ok(
+      releaseVelocity(
+        [
+          { t: 0, x: 200 },
+          { t: 40, x: 160 },
+        ],
+        50,
+      ) < 0,
+    );
   });
 });
 
