@@ -37,7 +37,13 @@ import {
   eventColourFor,
   publicHolidayRegionFrom,
 } from "@/lib/calendar-settings";
-import { periodWord, rangeSummary, rangeTitle, valueLine } from "@/lib/calendar-layout";
+import {
+  periodInPast,
+  periodWord,
+  rangeSummary,
+  rangeTitle,
+  valueLine,
+} from "@/lib/calendar-layout";
 import { summariseBookings } from "@/lib/calendar-stats";
 import { usePublicHolidays } from "@/lib/public-holidays";
 import { useSoleStaff } from "@/lib/sole";
@@ -512,7 +518,12 @@ function CalendarPage() {
       toast.error("Couldn't copy the link");
     }
   };
-  const emptyTitle = `Nothing booked ${view === "day" ? "today" : view === "month" ? "this month" : "this week"}`;
+  // A past period cannot be filled any more, so the "nothing booked" prompt
+  // (add / share) would only be noise there: the grid or list shows nothing.
+  const periodPast = periodInPast(view, anchor, days[days.length - 1]!, new Date());
+  const emptyTitle = periodPast
+    ? null
+    : `Nothing booked ${view === "day" ? "today" : view === "month" ? "this month" : "this week"}`;
   const emptyActions = (
     <>
       <Button size="sm" onClick={() => openAdd(view === "day" ? isoDate(anchor) : undefined)}>

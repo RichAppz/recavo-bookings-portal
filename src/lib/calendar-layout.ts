@@ -221,6 +221,27 @@ export function periodWord(
   return `w/c ${shortDate(first)}`;
 }
 
+/**
+ * True when every day of the visible period is before `today`. The "nothing
+ * booked" prompt (add a session, share the booking page) is only useful for
+ * periods you can still fill, so it is hidden for past ones.
+ */
+export function periodInPast(
+  view: "day" | "week" | "month" | "list",
+  anchor: Date,
+  last: Date,
+  today: Date,
+): boolean {
+  if (view === "day") return dayNumber(anchor) < dayNumber(today);
+  if (view === "month") {
+    return (
+      anchor.getFullYear() < today.getFullYear() ||
+      (anchor.getFullYear() === today.getFullYear() && anchor.getMonth() < today.getMonth())
+    );
+  }
+  return dayNumber(last) < dayNumber(today);
+}
+
 /** First word of a name, for the dense phone chips. */
 export function firstName(name: string | null | undefined): string {
   if (!name) return "";

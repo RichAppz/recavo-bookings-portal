@@ -115,7 +115,8 @@ export function TimeGrid({
   loading: boolean;
   /** Pixels kept free under the card (legend row + panel padding). */
   bottomReserve?: number;
-  emptyTitle: string;
+  /** `null` hides the "nothing booked" card (a period already in the past). */
+  emptyTitle: string | null;
   emptyActions?: ReactNode;
   onOpenBooking: (id: string) => void;
   onOpenEvent: (block: CalendarBlock) => void;
@@ -303,7 +304,7 @@ export function TimeGrid({
     return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
   };
 
-  const empty = !loading && bookings.length === 0 && events.length === 0;
+  const empty = emptyTitle !== null && !loading && bookings.length === 0 && events.length === 0;
 
   const gridColumns =
     variant === "phoneWeek"

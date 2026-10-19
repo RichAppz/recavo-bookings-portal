@@ -59,7 +59,8 @@ export function ListView({
   categoryFor: (b: Booking) => string | null;
   bookingNoun: string;
   loading: boolean;
-  emptyTitle: string;
+  /** `null` for a period already in the past: no prompt card, just a quiet note. */
+  emptyTitle: string | null;
   emptyActions?: ReactNode;
   onOpenBooking: (id: string) => void;
   onOpenEvent: (block: CalendarBlock) => void;
@@ -97,6 +98,13 @@ export function ListView({
     .filter((g) => g.dayBookings.length > 0 || g.dayEvents.length > 0 || g.holiday);
 
   if (groups.length === 0) {
+    if (emptyTitle === null) {
+      return (
+        <p className="mx-auto w-full max-w-[760px] px-1 py-6 text-center text-sm font-semibold text-muted-foreground">
+          No {bookingNoun}s
+        </p>
+      );
+    }
     return (
       <div className="mx-auto flex w-full max-w-[760px] flex-col items-center gap-3 rounded-2xl border bg-card px-6 py-10 text-center">
         <p className="text-[15px] font-bold">{emptyTitle}</p>

@@ -7,6 +7,7 @@ import {
   firstName,
   layoutOverlaps,
   listDayHeading,
+  periodInPast,
   periodWord,
   rangeSummary,
   rangeTitle,
@@ -132,6 +133,19 @@ describe("summaries", () => {
       periodWord("month", new Date(2027, 0, 1), d(28, 11), new Date(2027, 1, 7), today),
       "in January 2027",
     );
+  });
+  it("knows when the whole visible period is behind us", () => {
+    const today = new Date(2026, 9, 19, 13, 0); // Mon 19 Oct, 13:00
+    const d = (day: number, month = 9) => new Date(2026, month, day);
+    assert.equal(periodInPast("day", d(18), d(18), today), true);
+    assert.equal(periodInPast("day", d(19), d(19), today), false);
+    assert.equal(periodInPast("day", d(20), d(20), today), false);
+    assert.equal(periodInPast("week", d(14), d(18), today), true);
+    assert.equal(periodInPast("week", d(21), d(25), today), false);
+    assert.equal(periodInPast("list", d(26), d(1, 10), today), false);
+    assert.equal(periodInPast("month", d(1, 8), d(4, 9), today), true);
+    assert.equal(periodInPast("month", d(1), d(8, 10), today), false);
+    assert.equal(periodInPast("month", new Date(2025, 11, 1), d(4, 0), today), true);
   });
   it("labels a day's rows", () => {
     assert.equal(dayCountLabel(3, 0, "session"), "3 sessions");
