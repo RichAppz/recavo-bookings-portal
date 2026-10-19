@@ -7,6 +7,7 @@ import {
   firstName,
   layoutOverlaps,
   listDayHeading,
+  periodWord,
   rangeSummary,
   rangeTitle,
   shortDuration,
@@ -112,6 +113,25 @@ describe("summaries", () => {
     assert.equal(valueLine("week", 9, "session"), "this week · 9 sessions");
     assert.equal(valueLine("list", 9, "session"), "this week · 9 sessions");
     assert.equal(valueLine("month", 1, "session"), "this month · 1 session");
+    assert.equal(valueLine("day", 2, "session", "tomorrow"), "tomorrow · 2 sessions");
+  });
+  it("names the period relative to today once paged away", () => {
+    const today = new Date(2026, 9, 19); // Mon 19 Oct
+    const d = (day: number, month = 9) => new Date(2026, month, day);
+    assert.equal(periodWord("day", d(19), d(19), d(19), today), "today");
+    assert.equal(periodWord("day", d(20), d(20), d(20), today), "tomorrow");
+    assert.equal(periodWord("day", d(18), d(18), d(18), today), "yesterday");
+    assert.equal(periodWord("day", d(3, 10), d(3, 10), d(3, 10), today), "on Tue 3 Nov");
+    assert.equal(periodWord("week", d(21), d(19), d(25), today), "this week");
+    assert.equal(periodWord("week", d(26), d(26), d(1, 10), today), "next week");
+    assert.equal(periodWord("list", d(12), d(12), d(18), today), "last week");
+    assert.equal(periodWord("week", d(2, 10), d(2, 10), d(8, 10), today), "w/c Mon 2 Nov");
+    assert.equal(periodWord("month", d(1), d(28, 8), d(8, 10), today), "this month");
+    assert.equal(periodWord("month", d(1, 10), d(26), d(6, 11), today), "in November");
+    assert.equal(
+      periodWord("month", new Date(2027, 0, 1), d(28, 11), new Date(2027, 1, 7), today),
+      "in January 2027",
+    );
   });
   it("labels a day's rows", () => {
     assert.equal(dayCountLabel(3, 0, "session"), "3 sessions");

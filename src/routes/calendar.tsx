@@ -37,7 +37,7 @@ import {
   eventColourFor,
   publicHolidayRegionFrom,
 } from "@/lib/calendar-settings";
-import { rangeSummary, rangeTitle, valueLine } from "@/lib/calendar-layout";
+import { periodWord, rangeSummary, rangeTitle, valueLine } from "@/lib/calendar-layout";
 import { summariseBookings } from "@/lib/calendar-stats";
 import { usePublicHolidays } from "@/lib/public-holidays";
 import { useSoleStaff } from "@/lib/sole";
@@ -879,7 +879,12 @@ function CalendarPage() {
                   <>
                     <span className="font-extrabold">{money(stats.bookedMinor)}</span>{" "}
                     <span className="text-muted-foreground">
-                      {valueLine(view, stats.active, bookingNoun)}
+                      {valueLine(
+                        view,
+                        stats.active,
+                        bookingNoun,
+                        periodWord(view, anchor, days[0]!, days[days.length - 1]!, new Date()),
+                      )}
                     </span>
                   </>
                 ) : (

@@ -266,8 +266,16 @@ export function TimeGrid({
     }
     el.scrollTop = ((targetMin - rangeStartMin) / 60) * hourHeight;
     if (variant === "phoneWeek") {
-      el.scrollLeft = todayInView ? isoDays.indexOf(todayIso) * 74 : 0;
+      const left = todayInView ? isoDays.indexOf(todayIso) * 74 : 0;
+      el.scrollLeft = left;
+      // A swipe that turned the page can still be flinging the scroller when the new
+      // week renders; settle it once the fling has died down.
+      const settle = window.setTimeout(() => {
+        el.scrollLeft = left;
+      }, 240);
+      return () => window.clearTimeout(settle);
     }
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inner, loading, variant, isoDays, hourHeight]);
 

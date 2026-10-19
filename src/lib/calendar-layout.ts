@@ -169,14 +169,56 @@ export function rangeSummary(
   return `${label} · ${money(expectedMinor)} expected`;
 }
 
-/** Spec §3.2 phone value line: "£54 today · 3 sessions". */
+/**
+ * Spec §3.2 phone value line: "£54 today · 3 sessions". Once the person has paged
+ * away from today the period says where they are ("tomorrow", "next week", "on
+ * Tue 3 Nov", "in November") instead of claiming it is still today.
+ */
 export function valueLine(
   view: "day" | "week" | "month" | "list",
   sessions: number,
   noun: string,
+  period?: string,
 ): string {
-  const period = view === "day" ? "today" : view === "month" ? "this month" : "this week";
-  return `${period} · ${sessions} ${sessions === 1 ? noun : `${noun}s`}`;
+  const word = period ?? (view === "day" ? "today" : view === "month" ? "this month" : "this week");
+  return `${word} · ${sessions} ${sessions === 1 ? noun : `${noun}s`}`;
+}
+
+const dayNumber = (d: Date) =>
+  Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
+
+/** The period word for `valueLine`, relative to `today`. `first`/`last` bound the visible days. */
+export function periodWord(
+  view: "day" | "week" | "month" | "list",
+  anchor: Date,
+  first: Date,
+  last: Date,
+  today: Date,
+): string {
+  const shortDate = (d: Date) =>
+    `${d.toLocaleDateString("en-GB", { weekday: "short" })} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
+  if (view === "day") {
+    const diff = dayNumber(anchor) - dayNumber(today);
+    if (diff === 0) return "today";
+    if (diff === 1) return "tomorrow";
+    if (diff === -1) return "yesterday";
+    return `on ${shortDate(anchor)}`;
+  }
+  if (view === "month") {
+    const same =
+      anchor.getFullYear() === today.getFullYear() && anchor.getMonth() === today.getMonth();
+    if (same) return "this month";
+    return anchor.getFullYear() === today.getFullYear()
+      ? `in ${LONG_MONTHS[anchor.getMonth()]}`
+      : `in ${LONG_MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`;
+  }
+  const t = dayNumber(today);
+  const from = dayNumber(first);
+  const to = dayNumber(last);
+  if (t >= from && t <= to) return "this week";
+  if (from - t > 0 && from - t <= 7) return "next week";
+  if (t - to > 0 && t - to <= 7) return "last week";
+  return `w/c ${shortDate(first)}`;
 }
 
 /** First word of a name, for the dense phone chips. */
