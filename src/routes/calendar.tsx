@@ -195,9 +195,9 @@ function CalendarPage() {
     isCarDetailing ? DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE : DEFAULT_MONTH_BAR_FIELDS,
   );
   const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
-  // Long bar labels slide so nothing is lost on a narrow cell; some people would
-  // rather they sat still. Per device, like the other view preferences.
-  const [marquee, setMarquee] = useStoredState<"on" | "off">(prefKey("marquee"), "on", [
+  // Long labels can slide so nothing is lost on a narrow cell, but still text is
+  // easier to read at a glance, so it is opt-in. Per device, like the other view preferences.
+  const [marquee, setMarquee] = useStoredState<"on" | "off">(prefKey("marquee"), "off", [
     "on",
     "off",
   ]);
