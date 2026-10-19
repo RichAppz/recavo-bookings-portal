@@ -218,19 +218,21 @@ export function TimeGrid({
   const [cardHeight, setCardHeight] = useState<number | null>(null);
   const [cardWidth, setCardWidth] = useState(0);
   const [chromeHeight, setChromeHeight] = useState(0);
-  const inner = variant !== "phoneDay";
+  // Only the desktop card scrolls its own hours. On a phone the whole page scrolls
+  // (as Month does), so the Week grid is as tall as its hours and only pans sideways.
+  const inner = variant === "desktop";
 
   useLayoutEffect(() => {
-    if (!inner) return;
     const measure = () => {
       const el = scrollerRef.current;
       if (!el) return;
-      const top = el.getBoundingClientRect().top;
-      setCardHeight(Math.max(420, Math.floor(window.innerHeight - top - bottomReserve)));
       setCardWidth(el.clientWidth);
       setChromeHeight(
         (headerRef.current?.offsetHeight ?? 0) + (allDayRef.current?.offsetHeight ?? 0),
       );
+      if (!inner) return;
+      const top = el.getBoundingClientRect().top;
+      setCardHeight(Math.max(420, Math.floor(window.innerHeight - top - bottomReserve)));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -257,19 +259,21 @@ export function TimeGrid({
     const el = scrollerRef.current;
     // Wait for the card's height: before it is set the scroller is as tall as its
     // content, so any scrollTop would clamp to 0 and the position would be lost.
-    if (!el || !inner || loading || !cardHeight) return;
+    if (!el || loading || variant === "phoneDay" || (inner && !cardHeight)) return;
     const key = `${variant}:${isoDays.join(",")}`;
     if (positioned.current === key) return;
     positioned.current = key;
-    let targetMin = rangeStartMin;
-    if (todayInView) targetMin = Math.max(rangeStartMin, nowMin - 60);
-    else {
-      const first = Math.min(
-        ...[...timedByDay.values()].flatMap((items) => items.map((i) => i.topMin ?? Infinity)),
-      );
-      if (Number.isFinite(first)) targetMin = Math.max(rangeStartMin, first - 30);
+    if (inner) {
+      let targetMin = rangeStartMin;
+      if (todayInView) targetMin = Math.max(rangeStartMin, nowMin - 60);
+      else {
+        const first = Math.min(
+          ...[...timedByDay.values()].flatMap((items) => items.map((i) => i.topMin ?? Infinity)),
+        );
+        if (Number.isFinite(first)) targetMin = Math.max(rangeStartMin, first - 30);
+      }
+      el.scrollTop = ((targetMin - rangeStartMin) / 60) * hourHeight;
     }
-    el.scrollTop = ((targetMin - rangeStartMin) / 60) * hourHeight;
     if (variant === "phoneWeek") {
       const left = todayInView ? isoDays.indexOf(todayIso) * 74 : 0;
       // A swipe that turned the page is usually still flinging the scroller (on the
@@ -327,21 +331,24 @@ export function TimeGrid({
       ref={scrollerRef}
       className={cn(
         "relative",
-        inner && "no-scrollbar overflow-auto",
-        variant === "desktop" && "overscroll-contain",
+        inner && "no-scrollbar overflow-auto overscroll-contain",
+        variant === "phoneWeek" && "no-scrollbar overflow-x-auto overflow-y-hidden",
       )}
       style={inner && cardHeight ? { height: cardHeight } : undefined}
     >
-      {/* The grid scrolls itself to the current hour on load, so the empty card is
-          anchored to the visible part of the scroller rather than the top of the day:
-          a zero-size sticky box that follows the viewport, with the card hung off it. */}
-      {empty && inner && cardHeight ? (
+      {/* The desktop grid scrolls itself to the current hour on load, so the empty card
+          is anchored to the visible part of the scroller rather than the top of the day:
+          a zero-size sticky box that follows the viewport, with the card hung off it.
+          The phone Week grid only pans sideways; the same anchor keeps the card put. */}
+      {empty && (inner ? cardHeight : variant === "phoneWeek") ? (
         <div className="pointer-events-none sticky top-0 left-0 z-30 h-0 w-0 overflow-visible">
           <div
             className="absolute left-0 flex justify-center"
             style={{
               width: cardWidth,
-              top: chromeHeight + Math.max(16, (cardHeight - chromeHeight) * 0.18),
+              top:
+                chromeHeight +
+                (inner && cardHeight ? Math.max(16, (cardHeight - chromeHeight) * 0.18) : 72),
             }}
           >
             {emptyCard}
@@ -609,12 +616,12 @@ export function TimeGrid({
             const inset = variant === "phoneWeek" ? 2 : variant === "phoneDay" ? 0 : 4;
             const gap = cols > 1 ? 2 : 0;
             const edges = inset * 2 + gap * (cols - 1);
+            // The block sits centred between its two gridlines, with the same
+            // breathing space above and below rather than all of it underneath.
+            const vGap = variant === "phoneWeek" ? 2 : 4;
             return {
-              top: topOf(startMin),
-              height: Math.max(
-                12,
-                (heightMin / 60) * hourHeight - (variant === "phoneWeek" ? 2 : 4),
-              ),
+              top: topOf(startMin) + vGap / 2,
+              height: Math.max(12, (heightMin / 60) * hourHeight - vGap),
               left:
                 variant === "phoneDay" && cols === 1
                   ? 6
@@ -693,7 +700,7 @@ export function TimeGrid({
                         variant === "phoneWeek"
                           ? "rounded-[5px] py-1 pr-1 pl-1.5"
                           : variant === "phoneDay"
-                            ? "rounded-xl px-3 py-2"
+                            ? cn("rounded-xl px-3 leading-tight", px < 40 ? "py-0.5" : "py-1.5")
                             : px < 28
                               ? "rounded-lg px-2 py-px"
                               : "rounded-lg px-2 py-[5px]",
@@ -711,9 +718,11 @@ export function TimeGrid({
                       ) : variant === "phoneDay" ? (
                         <>
                           <p className="truncate text-[14.5px] font-bold">{ev.title}</p>
-                          <p className="truncate text-[13px] opacity-85">
-                            {timeLabel(ev.start)} to {timeLabel(ev.end)} · {owner ?? "Event"}
-                          </p>
+                          {px >= 40 ? (
+                            <p className="mt-0.5 truncate text-[13px] opacity-85">
+                              {timeLabel(ev.start)} to {timeLabel(ev.end)} · {owner ?? "Event"}
+                            </p>
+                          ) : null}
                         </>
                       ) : (
                         <>
@@ -764,7 +773,7 @@ export function TimeGrid({
                       variant === "phoneWeek"
                         ? "rounded-[5px] py-1 pr-1 pl-1.5"
                         : variant === "phoneDay"
-                          ? "rounded-xl px-3 py-2"
+                          ? cn("rounded-xl px-3 leading-tight", px < 40 ? "py-0.5" : "py-1.5")
                           : px < 28
                             ? "rounded-lg px-2 py-px"
                             : "rounded-lg px-2 py-[5px]",
@@ -830,13 +839,21 @@ export function TimeGrid({
                               ) : null}
                             </span>
                           </p>
-                          {!cancelled ? <DuePill booking={b} colours={paymentColours} /> : null}
+                          {!cancelled ? (
+                            <DuePill
+                              booking={b}
+                              colours={paymentColours}
+                              className={cn(px < 40 && "h-4 px-1.5 text-[10px]")}
+                            />
+                          ) : null}
                         </div>
-                        <p className="truncate text-[13px] opacity-85">
-                          {item.startsToday ? timeLabel(b.start) : "↳"} to{" "}
-                          {item.endsToday ? timeLabel(b.end) : endLabel(b)}
-                          {secondLine ? ` · ${secondLine}` : ""}
-                        </p>
+                        {px >= 40 ? (
+                          <p className="mt-0.5 truncate text-[13px] opacity-85">
+                            {item.startsToday ? timeLabel(b.start) : "↳"} to{" "}
+                            {item.endsToday ? timeLabel(b.end) : endLabel(b)}
+                            {secondLine ? ` · ${secondLine}` : ""}
+                          </p>
+                        ) : null}
                       </>
                     ) : (
                       <>
@@ -894,7 +911,7 @@ export function TimeGrid({
         })}
       </div>
 
-      {empty && !(inner && cardHeight) ? (
+      {empty && variant === "phoneDay" ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center pt-[18%]">
           {emptyCard}
         </div>
