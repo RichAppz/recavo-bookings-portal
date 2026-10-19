@@ -133,7 +133,15 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /** Only pills that call for a look get shown on phone cards (spec §5.3). */
-const ATTENTION_LABELS = new Set(["Held", "Unpaid", "Cancelled", "No-show", "Expired", "Draft"]);
+const ATTENTION_LABELS = new Set([
+  "Held",
+  "Unpaid",
+  "Not marked done",
+  "Cancelled",
+  "No-show",
+  "Expired",
+  "Draft",
+]);
 
 function BookingsPage() {
   const search = Route.useSearch();

@@ -184,6 +184,7 @@ import {
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { describeClientLift } from "@/lib/client-lift";
 import { bookingNotes, bookingNotesLabel, hasBookingNotes } from "@/lib/booking-notes";
+import { unmarkedPast } from "@/lib/bookings-list";
 import { cn } from "@/lib/utils";
 
 const NOTES_SECTION_ID = "booking-panel-notes";
@@ -771,7 +772,7 @@ export function BookingPanel({
    */
   const stateNotice: {
     /** What the notice is about, so the pill row below doesn't say it again. */
-    topic: "bank" | "hold" | "messages" | "money";
+    topic: "bank" | "hold" | "messages" | "done" | "money";
     title: string;
     body: string;
     action?: { label: string; onClick: () => void };
@@ -803,6 +804,27 @@ export function BookingPanel({
             : `${failedMessages} messages didn't send.`,
         body: "See History for why.",
         action: { label: "Resend", onClick: () => setRemindersOpen(true) },
+      };
+    }
+    // A detailer's job is marked done by taking the money as the keys go back; one paid
+    // up front has nothing left to take, so once it has finished it would sit under
+    // Needs action for ever with nothing to press (owner: "can't work out what they
+    // need attention for"). Say so, and offer the one click. Trainers get the footer's
+    // "Did they turn up?" row instead, so this would only repeat it for them.
+    if (noShowOnly && unmarkedPast(booking, new Date())) {
+      return {
+        topic: "done",
+        title: "Finished, but not marked done.",
+        body:
+          settlement.state === "unpaid" ||
+          settlement.state === "part_paid" ||
+          settlement.state === "deposit_paid"
+            ? "Recording the payment marks it done, or mark it done now."
+            : "Marking it done counts the job and starts its reminders.",
+        action: {
+          label: "Mark as done",
+          onClick: () => void run(attendanceAction, { attended: true }),
+        },
       };
     }
     if (!isFinal && settlement.state === "unpaid") {

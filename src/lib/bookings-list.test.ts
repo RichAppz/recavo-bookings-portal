@@ -158,15 +158,42 @@ describe("statusPill / amountNote", () => {
   const money = (minor: number, currency: string) => `${currency} ${(minor / 100).toFixed(0)}`;
   const time = () => "20:10";
   it("reads attendance over status and keeps the specific wording as detail", () => {
-    assert.deepEqual(statusPill(booking({ attendanceStatus: "attended" })), {
+    assert.deepEqual(statusPill(booking({ attendanceStatus: "attended" }), NOW), {
       label: "Attended",
       tone: "green",
       tick: true,
     });
-    assert.equal(statusPill(booking({ status: "late_cancelled" })).detail, "Late cancellation");
-    assert.equal(statusPill(booking({ status: "awaiting_payment" })).label, "Held");
-    assert.equal(statusPill(booking({ paidMinor: 0 })).label, "Unpaid");
-    assert.equal(statusPill(booking({})).label, "Confirmed");
+    assert.equal(
+      statusPill(booking({ status: "late_cancelled" }), NOW).detail,
+      "Late cancellation",
+    );
+    assert.equal(statusPill(booking({ status: "awaiting_payment" }), NOW).label, "Held");
+    assert.equal(statusPill(booking({ paidMinor: 0 }), NOW).label, "Unpaid");
+    assert.equal(statusPill(booking({}), NOW).label, "Confirmed");
+  });
+  it("says a finished job is not marked done, paid or not, until someone marks it", () => {
+    const past = { start: "2026-10-05T09:00:00Z", end: "2026-10-05T10:00:00Z" };
+    assert.equal(statusPill(booking(past), NOW).label, "Not marked done");
+    assert.equal(statusPill(booking(past), NOW).tone, "amber");
+    assert.equal(statusPill(booking({ ...past, paidMinor: 0 }), NOW).label, "Not marked done");
+    assert.equal(
+      statusPill(booking({ ...past, attendanceStatus: "attended" }), NOW).label,
+      "Attended",
+    );
+    assert.equal(statusPill(booking({ ...past, status: "no_show" }), NOW).label, "No-show");
+    assert.equal(statusPill(booking({ ...past, status: "completed" }), NOW).label, "Completed");
+    assert.equal(
+      statusPill(booking({ ...past, status: "cancelled_by_business" }), NOW).label,
+      "Cancelled",
+    );
+    // Still running (or not started): nothing to mark yet.
+    assert.equal(
+      statusPill(booking({ start: "2026-10-19T11:00:00Z", end: "2026-10-19T13:00:00Z" }), NOW)
+        .label,
+      "Confirmed",
+    );
+    // Every such row is one Needs action shows, so the tab and the pill agree.
+    assert.equal(needsAction(booking(past), NOW), true);
   });
   it("notes the hold or the balance under the amount", () => {
     assert.equal(

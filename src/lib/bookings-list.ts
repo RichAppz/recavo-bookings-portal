@@ -202,12 +202,26 @@ export function dayGroupHeading(day: string, todayIso: string): string {
 
 export type PillTone = "green" | "amber" | "red" | "grey";
 
+/** A live booking that has finished without anyone saying whether it happened. */
+export function unmarkedPast(b: Booking, now: Date): boolean {
+  return (
+    b.status === "confirmed" &&
+    b.attendanceStatus === "unknown" &&
+    new Date(b.end).getTime() < now.getTime()
+  );
+}
+
 /**
  * Spec §5.1 status pill: Confirmed, Held, Unpaid, Cancelled, No-show, Attended.
  * `detail` keeps the more specific wording ("Cancelled by client") for a tooltip,
- * so nothing the old badge said is lost.
+ * so nothing the old badge said is lost. A finished job nobody has marked reads
+ * "Not marked done" — it is why the row sits under Needs action, and "Confirmed"
+ * said nothing about it (owner: "can't work out what they need attention for").
  */
-export function statusPill(b: Booking): {
+export function statusPill(
+  b: Booking,
+  now: Date = new Date(),
+): {
   label: string;
   tone: PillTone;
   detail?: string;
@@ -216,6 +230,13 @@ export function statusPill(b: Booking): {
   if (b.attendanceStatus === "attended") return { label: "Attended", tone: "green", tick: true };
   if (b.status === "no_show" || b.attendanceStatus === "no_show") {
     return { label: "No-show", tone: "grey" };
+  }
+  if (unmarkedPast(b, now)) {
+    return {
+      label: "Not marked done",
+      tone: "amber",
+      detail: "The job has finished but nobody has marked it done or a no-show",
+    };
   }
   switch (b.status) {
     case "cancelled_by_customer":
