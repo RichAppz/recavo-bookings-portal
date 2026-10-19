@@ -57,6 +57,21 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* Calendar payment tints (calendar spec §1.2): soft fill + readable text per state. */
+  --color-cal-paid: var(--cal-paid);
+  --color-cal-paid-bg: var(--cal-paid-bg);
+  --color-cal-paid-fg: var(--cal-paid-fg);
+  --color-cal-deposit: var(--cal-deposit);
+  --color-cal-deposit-bg: var(--cal-deposit-bg);
+  --color-cal-deposit-fg: var(--cal-deposit-fg);
+  --color-cal-unpaid: var(--cal-unpaid);
+  --color-cal-unpaid-bg: var(--cal-unpaid-bg);
+  --color-cal-unpaid-fg: var(--cal-unpaid-fg);
+  --color-cal-event: var(--cal-event);
+  --color-cal-event-bg: var(--cal-event-bg);
+  --color-cal-event-fg: var(--cal-event-fg);
+  --color-cal-today: var(--cal-today);
+  --color-cal-held: var(--cal-held);
   /* Headers on pages that have no sidebar (public booking, client portal). */
   --color-nav: var(--nav);
   --color-nav-foreground: var(--nav-foreground);
@@ -128,6 +143,20 @@
   --chart-3: oklch(0.735 0.145 62);
   --chart-4: oklch(0.6 0.09 285);
   --chart-5: oklch(0.66 0.13 145);
+  --cal-paid: #349d62;
+  --cal-paid-bg: #e6f3eb;
+  --cal-paid-fg: #1d5c38;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #fcefdf;
+  --cal-deposit-fg: #7a4a10;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #fdeaea;
+  --cal-unpaid-fg: #8c1d22;
+  --cal-event: #64748b;
+  --cal-event-bg: #eef0f3;
+  --cal-event-fg: #3c4757;
+  --cal-today: #fbfaf7;
+  --cal-held: #fffaf3;
   --nav: oklch(0.238 0.014 258);
   --nav-foreground: oklch(0.96 0.004 250);
   --nav-accent: oklch(0.295 0.016 258);
@@ -183,6 +212,20 @@
   --sidebar-ring: #2ee6a6;
   --panel: #ffffff;
   --panel-border: #e4e0d8;
+  --cal-paid: #349d62;
+  --cal-paid-bg: #e6f3eb;
+  --cal-paid-fg: #1d5c38;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #fcefdf;
+  --cal-deposit-fg: #7a4a10;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #fdeaea;
+  --cal-unpaid-fg: #8c1d22;
+  --cal-event: #64748b;
+  --cal-event-bg: #eef0f3;
+  --cal-event-fg: #3c4757;
+  --cal-today: #fbfaf7;
+  --cal-held: #fffaf3;
   --panel-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
 }
 
@@ -222,6 +265,20 @@
   --sidebar-ring: #2ee6a6;
   --panel: #161a22;
   --panel-border: #232833;
+  --cal-paid: #349d62;
+  --cal-paid-bg: #1b3127;
+  --cal-paid-fg: #b5e5c8;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #382a1c;
+  --cal-deposit-fg: #f5c896;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #381e21;
+  --cal-unpaid-fg: #f5b3b5;
+  --cal-event: #64748b;
+  --cal-event-bg: #232934;
+  --cal-event-fg: #c4cbd6;
+  --cal-today: rgba(110, 231, 176, 0.04);
+  --cal-held: rgba(233, 146, 57, 0.05);
   --panel-shadow: 0 0 #0000;
 }
 
@@ -251,6 +308,20 @@
   --destructive-soft: oklch(0.33 0.07 22);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
+  --cal-paid: #349d62;
+  --cal-paid-bg: #1b3127;
+  --cal-paid-fg: #b5e5c8;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #382a1c;
+  --cal-deposit-fg: #f5c896;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #381e21;
+  --cal-unpaid-fg: #f5b3b5;
+  --cal-event: #64748b;
+  --cal-event-bg: #232934;
+  --cal-event-fg: #c4cbd6;
+  --cal-today: rgba(110, 231, 176, 0.04);
+  --cal-held: rgba(233, 146, 57, 0.05);
   --ring: oklch(0.7 0.12 178);
 }
 

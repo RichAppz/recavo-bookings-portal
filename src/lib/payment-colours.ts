@@ -75,6 +75,53 @@ export function paymentBarStyle(
   return { className: DEFAULT_CLASSES[key].bar, style: undefined };
 }
 
+const TINT_CLASSES: Record<PaymentColourKey, string> = {
+  paid: "bg-cal-paid-bg text-cal-paid-fg",
+  partial: "bg-cal-deposit-bg text-cal-deposit-fg",
+  unpaid: "bg-cal-unpaid-bg text-cal-unpaid-fg",
+};
+
+/**
+ * Calendar redesign (spec §1.2): a block is a soft tint of its status colour with
+ * dark text, not a solid bar. Defaults are theme tokens so they follow light/dark;
+ * a business override derives both from the chosen hex — fill at ~16% over the
+ * card and text mixed towards the theme's foreground so it stays readable in both
+ * modes.
+ */
+export function paymentTintStyle(
+  tone: PaymentTone,
+  colours: PaymentColours,
+): { className: string; style: CSSProperties | undefined } {
+  const key = toneToColourKey(tone);
+  const custom = colours[key];
+  if (custom && HEX_COLOUR.test(custom)) {
+    return {
+      className: "",
+      style: {
+        backgroundColor: `color-mix(in oklab, ${custom} 16%, var(--card))`,
+        color: `color-mix(in oklab, ${custom} 55%, var(--foreground))`,
+      },
+    };
+  }
+  return { className: TINT_CLASSES[key], style: undefined };
+}
+
+/** Solid swatch for a "£18 due" pill (spec §1.2): status colour behind white text. */
+export function duePillStyle(
+  tone: PaymentTone,
+  colours: PaymentColours,
+): { className: string; style: CSSProperties | undefined } {
+  const key = toneToColourKey(tone);
+  const custom = colours[key];
+  if (custom && HEX_COLOUR.test(custom)) {
+    return { className: "text-white", style: { backgroundColor: custom } };
+  }
+  return {
+    className: key === "unpaid" ? "bg-cal-unpaid text-white" : "bg-cal-deposit text-white",
+    style: undefined,
+  };
+}
+
 /** Class + inline style for a legend dot in `tone`. */
 export function paymentDotStyle(
   tone: PaymentTone,
