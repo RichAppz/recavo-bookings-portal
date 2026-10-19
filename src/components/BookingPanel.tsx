@@ -795,22 +795,12 @@ export function BookingPanel({
           : "The slot is held until the client pays.",
       };
     }
-    if (failedMessages > 0 && !isFinal) {
-      return {
-        topic: "messages",
-        title:
-          failedMessages === 1
-            ? "A message didn't send."
-            : `${failedMessages} messages didn't send.`,
-        body: "See History for why.",
-        action: { label: "Resend", onClick: () => setRemindersOpen(true) },
-      };
-    }
     // A detailer's job is marked done by taking the money as the keys go back; one paid
     // up front has nothing left to take, so once it has finished it would sit under
     // Needs action for ever with nothing to press (owner: "can't work out what they
     // need attention for"). Say so, and offer the one click. Trainers get the footer's
-    // "Did they turn up?" row instead, so this would only repeat it for them.
+    // "Did they turn up?" row instead, so this would only repeat it for them. It
+    // outranks a bounced message: a reminder about a job that is over is moot.
     if (noShowOnly && unmarkedPast(booking, new Date())) {
       return {
         topic: "done",
@@ -825,6 +815,17 @@ export function BookingPanel({
           label: "Mark as done",
           onClick: () => void run(attendanceAction, { attended: true }),
         },
+      };
+    }
+    if (failedMessages > 0 && !isFinal) {
+      return {
+        topic: "messages",
+        title:
+          failedMessages === 1
+            ? "A message didn't send."
+            : `${failedMessages} messages didn't send.`,
+        body: "See History for why.",
+        action: { label: "Resend", onClick: () => setRemindersOpen(true) },
       };
     }
     if (!isFinal && settlement.state === "unpaid") {
