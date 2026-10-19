@@ -195,6 +195,12 @@ function CalendarPage() {
     isCarDetailing ? DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE : DEFAULT_MONTH_BAR_FIELDS,
   );
   const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
+  // The time on its own line above the details, or a single line per chip so a busy
+  // month shows more at once. Per device, like the fields.
+  const [monthTime, setMonthTime] = useStoredState<"on" | "off">(prefKey("monthTime"), "on", [
+    "on",
+    "off",
+  ]);
   // Long labels can slide so nothing is lost on a narrow cell, but still text is
   // easier to read at a glance, so it is opt-in. Per device, like the other view preferences.
   const [marquee, setMarquee] = useStoredState<"on" | "off">(prefKey("marquee"), "off", [
@@ -623,7 +629,16 @@ function CalendarPage() {
         {view === "month" ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Under the time on month chips</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={monthTime === "on"}
+              onCheckedChange={(on) => setMonthTime(on ? "on" : "off")}
+              onSelect={(e) => e.preventDefault()}
+            >
+              Show the time
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuLabel>
+              {monthTime === "on" ? "Under the time on month chips" : "On month chips"}
+            </DropdownMenuLabel>
             <DropdownMenuCheckboxItem
               checked={monthBar.has("client")}
               onCheckedChange={() => toggleMonthBar("client")}
@@ -775,6 +790,7 @@ function CalendarPage() {
           days={days}
           anchor={anchor}
           monthBar={monthBar}
+          showTime={monthTime === "on"}
           phone={phone}
           onTapDay={tapDay}
           onOpenDay={openDay}

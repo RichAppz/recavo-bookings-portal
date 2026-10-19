@@ -25,8 +25,10 @@ import {
 /**
  * What the second line of a month chip says, left to right. The business picks
  * which of these to show; the order is fixed so chips stay scannable. The first
- * line is always the start time ("All day", or ↳ when the job carries on from an
- * earlier day). `time` is kept so older saved preferences still parse.
+ * line is the start time ("All day", or ↳ when the job carries on from an earlier
+ * day) unless `showTime` is off, when the chip is that one detail line. `time` is
+ * kept in the list so older saved preferences still parse; the time itself is a
+ * separate switch.
  */
 export const MONTH_BAR_FIELDS = [
   "time",
@@ -54,6 +56,7 @@ export function MonthGrid({
   paymentColours,
   eventColour,
   monthBar,
+  showTime,
   clientFor,
   tagFor,
   categoryFor,
@@ -77,6 +80,8 @@ export function MonthGrid({
   paymentColours: PaymentColours;
   eventColour: (colour: string) => string;
   monthBar: ReadonlySet<MonthBarField>;
+  /** Time on its own line above the details; off makes every chip a single line. */
+  showTime: boolean;
   clientFor: (b: Booking) => string | null;
   tagFor: (b: Booking) => string | null;
   categoryFor: (b: Booking) => string | null;
@@ -167,18 +172,26 @@ export function MonthGrid({
             lineText,
           )}
         >
-          <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
-            {chip.continues ? (
-              <span aria-label="Continues from earlier">↳</span>
-            ) : allDay ? (
-              "All day"
-            ) : (
-              timeLabel(ev.start)
-            )}
-            {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
-          </span>
+          {showTime ? (
+            <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+              {chip.continues ? (
+                <span aria-label="Continues from earlier">↳</span>
+              ) : allDay ? (
+                "All day"
+              ) : (
+                timeLabel(ev.start)
+              )}
+              {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
+            </span>
+          ) : null}
           <Marquee animate={sliding} className="w-full flex-none font-semibold">
+            {!showTime && chip.continues ? (
+              <span aria-label="Continues from earlier" className="font-extrabold">
+                ↳
+              </span>
+            ) : null}
             <span>{ev.title}</span>
+            {!showTime && multi && !chip.continues ? <span className="opacity-75">→</span> : null}
           </Marquee>
         </button>
       );
@@ -214,20 +227,29 @@ export function MonthGrid({
           cancelled && "opacity-50",
         )}
       >
-        <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
-          {showLift ? <LiftTag /> : null}
-          {chip.continues ? (
-            <span aria-label="Continues from earlier">↳</span>
-          ) : b.allDay ? (
-            "All day"
-          ) : (
-            timeLabel(b.start)
-          )}
-          {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
-        </span>
+        {showTime ? (
+          <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+            {showLift ? <LiftTag /> : null}
+            {chip.continues ? (
+              <span aria-label="Continues from earlier">↳</span>
+            ) : b.allDay ? (
+              "All day"
+            ) : (
+              timeLabel(b.start)
+            )}
+            {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
+          </span>
+        ) : null}
         {/* The label slides if it is wider than the chip, so a narrow cell still
-            shows everything that was switched on. */}
+            shows everything that was switched on. With the time line off, the lift
+            marker and the continuation cues move onto this one line. */}
         <Marquee animate={sliding} className="w-full flex-none">
+          {!showTime && showLift ? <LiftTag /> : null}
+          {!showTime && chip.continues ? (
+            <span aria-label="Continues from earlier" className="font-extrabold">
+              ↳
+            </span>
+          ) : null}
           {showClient ? (
             <span className={cn("font-semibold", cancelled && "line-through")}>
               {phone ? firstName(client) : client}
@@ -242,6 +264,7 @@ export function MonthGrid({
               {b.serviceSnapshot.name}
             </span>
           ) : null}
+          {!showTime && multi && !chip.continues ? <span className="opacity-75">→</span> : null}
         </Marquee>
       </button>
     );

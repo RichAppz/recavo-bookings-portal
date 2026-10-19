@@ -36,6 +36,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "Month view: untick Show the time in the ⋯ menu and every chip becomes a single line — just the client, service or whatever you've chosen to show — so a busy day fits more before it scrolls. The ↳ and → marks for jobs that run over several days stay on the line.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
         text: "A booking marked as attended can still be edited to correct the record — what was actually done, the price, who did it, a note or the date — and stays attended. It can't be moved or cancelled, and the client only hears about the change if you choose to tell them.",
         where: "Bookings",
       },
