@@ -387,21 +387,43 @@ function DayCell({
         aria-label={`${day.toLocaleDateString("en-GB", { dateStyle: "full" })}, ${count} ${count === 1 ? "item" : "items"}. Tap to add, double tap to open the day.`}
       />
 
-      {/* The date itself is the one-tap way into the day, for anyone who doesn't
-          know about the double tap (and for keyboards). */}
-      <button
-        type="button"
-        onClick={() => onOpenDay(day)}
+      {/* The date row: the date itself is the one-tap way into the day, for anyone
+          who doesn't know about the double tap (and for keyboards), and while more
+          chips are hidden below, the arrow that scrolls them on sits beside it
+          (owner request) rather than over the last chip. A phone cell is ~50px, so
+          the pair is centred together; on desktop the arrow takes the right end. */}
+      <div
         className={cn(
-          "relative inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-xs font-bold tabular-nums hover:ring-2 hover:ring-primary/40",
-          phone && "mx-auto flex",
-          outside ? "text-muted-foreground/60" : "text-foreground",
-          today && "bg-primary text-primary-foreground",
+          "relative flex h-6 shrink-0 items-center",
+          phone ? "justify-center gap-1" : "justify-between",
         )}
-        aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
       >
-        {day.getDate()}
-      </button>
+        <button
+          type="button"
+          onClick={() => onOpenDay(day)}
+          className={cn(
+            "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-xs font-bold tabular-nums hover:ring-2 hover:ring-primary/40",
+            outside ? "text-muted-foreground/60" : "text-foreground",
+            today && "bg-primary text-primary-foreground",
+          )}
+          aria-label={`Open ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
+        >
+          {day.getDate()}
+        </button>
+        {more ? (
+          <button
+            type="button"
+            onClick={nudge}
+            aria-label={`Show more on ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`}
+            className={cn(
+              "flex shrink-0 cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-[0_1px_4px_rgba(0,0,0,0.14)]",
+              phone ? "size-5" : "size-6",
+            )}
+          >
+            <ChevronDown className={phone ? "size-3.5" : "size-4"} aria-hidden />
+          </button>
+        ) : null}
+      </div>
 
       {loading && !outside ? (
         <div aria-hidden className="relative mt-1 space-y-0.5">
@@ -425,24 +447,6 @@ function DayCell({
       >
         {children}
       </div>
-
-      {/* Sits on the date's row in the top-right corner (owner request), out of the
-          way of the chips; the fade at the foot of the list still shows where the
-          hidden items are. On a phone the date is centred, so the button is kept
-          small enough to sit beside it in a 50px cell. */}
-      {more ? (
-        <button
-          type="button"
-          onClick={nudge}
-          aria-label={`Show more on ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`}
-          className={cn(
-            "absolute top-1 right-0.5 z-10 flex cursor-pointer items-center justify-center rounded-full border bg-card text-foreground shadow-[0_1px_4px_rgba(0,0,0,0.14)]",
-            phone ? "size-5" : "size-5 sm:top-1.5 sm:right-1.5 sm:size-6",
-          )}
-        >
-          <ChevronDown className={phone ? "size-3.5" : "size-3.5 sm:size-4"} aria-hidden />
-        </button>
-      ) : null}
     </div>
   );
 }
