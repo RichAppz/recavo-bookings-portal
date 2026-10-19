@@ -2325,7 +2325,7 @@ function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; ti
 const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
   { value: "bank_transfer", label: "Bank transfer" },
-  { value: "card", label: "Card (taken elsewhere)" },
+  { value: "card", label: "Card" },
   { value: "other", label: "Other" },
 ];
 

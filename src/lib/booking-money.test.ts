@@ -110,7 +110,7 @@ describe("labels", () => {
   it("names each method the way the record-payment dialog does", () => {
     assert.equal(settlementMethodLabel("cash"), "Cash");
     assert.equal(settlementMethodLabel("bank_transfer"), "Bank transfer");
-    assert.equal(settlementMethodLabel("card_manual"), "Card (taken elsewhere)");
+    assert.equal(settlementMethodLabel("card_manual"), "Card");
     assert.equal(settlementMethodLabel("card_online"), "Card");
     assert.equal(settlementMethodLabel("other"), "Other");
   });

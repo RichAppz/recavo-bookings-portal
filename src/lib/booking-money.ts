@@ -84,7 +84,8 @@ export function ledgerBehind(
 
 const METHOD_LABELS: Record<BookingSettlementLine["method"], string> = {
   card_online: "Card",
-  card_manual: "Card (taken elsewhere)",
+  // The Recorded badge on the line already says it was the business's own machine.
+  card_manual: "Card",
   cash: "Cash",
   bank_transfer: "Bank transfer",
   other: "Other",
