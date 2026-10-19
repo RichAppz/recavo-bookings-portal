@@ -272,6 +272,8 @@ export function BookingPanel({
   const trainer = staffList.data?.find((s) => s.id === booking?.staffId);
   const location = locations.data?.find((l) => l.id === booking?.locationId);
   const isFinal = booking ? FINAL_BOOKING_STATUSES.has(booking.status) : false;
+  // Attended jobs are still corrected as a record; Move and Cancel stay off for them.
+  const editLocked = isFinal && booking?.status !== "completed";
   // Pay-by-bank bookings sit in awaiting_payment with no expiry until staff either
   // mark the money received or cancel (RECA-522).
   const bankPending =
@@ -915,9 +917,11 @@ export function BookingPanel({
                 <DropdownMenuContent align="end" className="w-64">
                   {/* Edit covers what (services, price, who, where, vehicle, notes)
                       and, via its "Reschedule" hand-off, when — so it's the single
-                      entry point. Final bookings are a record, so it locks. */}
+                      entry point. An attended job stays editable as a record (what was
+                      actually done, the price, a note); cancelled, no-show and expired
+                      bookings lock. */}
                   <DropdownMenuItem
-                    disabled={isFinal}
+                    disabled={editLocked}
                     onSelect={() => {
                       setEditAddServiceIds([]);
                       setEditOpen(true);
@@ -1127,7 +1131,7 @@ export function BookingPanel({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      disabled={isFinal}
+                      disabled={editLocked}
                       onClick={() => {
                         setEditAddServiceIds(upsellOffer.data!.requested.map((r) => r.serviceId));
                         setEditOpen(true);
@@ -2182,11 +2186,14 @@ function closedReminderReason(status: string): string {
   }
 }
 
-/** Why "Edit booking" is off: the booking has reached a final state and is now a record. */
+/**
+ * Why the booking can't be changed: it has reached a final state and is now a record.
+ * An attended job keeps Edit (to correct the record) but can't be moved or cancelled.
+ */
 function editLockedReason(status: string): string {
   switch (status) {
     case "completed":
-      return "Marked as attended — it can't be edited now.";
+      return "Marked as attended — edit it to correct the record, but it can't be moved.";
     case "no_show":
       return "Marked as a no-show — it can't be edited now.";
     case "expired":
