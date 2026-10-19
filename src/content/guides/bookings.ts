@@ -273,13 +273,13 @@ export const BOOKING_GUIDES: readonly Guide[] = [
         heading: "Attended or no-show",
         body: {
           personal_training:
-            "Once a session has started, the bottom of its panel shows **Attended** and **No-show**. Marking it keeps your attendance rate honest in Reports, and a package credit is only used up when a session is attended (or no-showed outside the cancellation window). Anything outstanding can be recorded from the same footer.",
+            "Once a session has started, the bottom of its panel asks **Did they turn up?** with an **Attended** button; if they didn't, pick **Mark as no-show** from the ⋯ menu. Marking it keeps your attendance rate honest in Reports, and a package credit is only used up when a session is attended (or no-showed outside the cancellation window). Anything outstanding can be recorded from the same footer.",
           car_detailing:
-            "Once a job has started, the bottom of its panel shows **Attended** and **No-show**. Marking it done is what triggers automatic invoicing and follow-ups, and keeps your attendance rate honest in Reports. Anything outstanding can be recorded from the same footer.",
+            "Recording the job as paid in full once it has started marks it done, which is what triggers automatic invoicing and follow-ups. If the car never arrived, pick **Mark as no-show** from the ⋯ menu so your attendance rate in Reports stays honest. Anything outstanding can be recorded from the footer.",
         },
         image: {
           name: "attendance",
-          alt: "A booking panel for a session earlier today with the Attended and No-show controls and Record payment at the bottom.",
+          alt: "A booking panel for a session earlier today with the Attended button and Record payment at the bottom.",
         },
       },
       {

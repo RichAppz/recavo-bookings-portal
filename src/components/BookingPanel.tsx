@@ -22,6 +22,7 @@ import {
   Sparkles,
   StickyNote,
   Trash2,
+  UserX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -600,11 +601,10 @@ export function BookingPanel({
   const attendanceMarked =
     booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
   // Detailers don't tick people in — the car either turned up or it didn't — so
-  // their row is just "No-show", and it goes once the job is marked attended.
+  // they get no attendance row at all; a no-show is marked from the ⋯ menu (as it
+  // is for everyone). Once an answer is in, the status pill carries it.
   const noShowOnly = tenant.business?.industryTemplateKey === "car_detailing";
-  const showAttendance =
-    (booking?.status === "confirmed" || attendanceMarked) &&
-    !(noShowOnly && booking?.attendanceStatus === "attended");
+  const showAttendance = booking?.status === "confirmed" && !attendanceMarked && !noShowOnly;
   const attendanceLocked = attendanceMarked || booking?.status !== "confirmed";
   // Footer actions: a pending bank transfer is "confirmed" by marking the money
   // received; anything else not yet live gets a plain Confirm.
@@ -975,6 +975,18 @@ export function BookingPanel({
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  {/* No-show is the exception, not the everyday answer, so it sits here
+                      with the other rare actions rather than in the footer (owner
+                      request). Only offered while the job is live and unmarked — the
+                      API never moves a booking back. */}
+                  {booking.status === "confirmed" && !attendanceMarked ? (
+                    <DropdownMenuItem
+                      disabled={attendanceAction.isPending}
+                      onSelect={() => void run(attendanceAction, { attended: false })}
+                    >
+                      <UserX className="size-4" /> Mark as no-show
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem disabled={isFinal} onSelect={openCancel}>
                     <Ban className="size-4" /> Cancel booking
                   </DropdownMenuItem>
@@ -1743,53 +1755,24 @@ export function BookingPanel({
             {showAttendance || showConfirm || showRecordPayment ? (
               <footer className="flex min-w-0 flex-col gap-2 border-t p-4">
                 {showAttendance ? (
-                  // Spec §5.2 footer: "Did they turn up?" with one button per answer.
-                  // The API only moves a confirmed booking forward and never back, so
-                  // once an answer is in the buttons give way to the choice.
+                  // Spec §5.2 footer: "Did they turn up?" — the everyday answer is one
+                  // button; a no-show is the exception and lives in the ⋯ menu. The API
+                  // only moves a confirmed booking forward, so the row goes once answered.
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="text-[13px] font-bold text-muted-foreground">
-                      {attendanceMarked
-                        ? noShowOnly
-                          ? "Marked as a no-show."
-                          : booking.attendanceStatus === "attended"
-                            ? "They turned up."
-                            : "They didn't turn up."
-                        : noShowOnly
-                          ? "Didn't turn up?"
-                          : "Did they turn up?"}
+                      Did they turn up?
                     </span>
                     <div className="flex flex-1 items-center justify-end gap-2">
-                      {attendanceMarked ? (
-                        <span className="text-xs text-muted-foreground">
-                          {noShowOnly
-                            ? "A no-show is final once marked."
-                            : "Attendance is final once marked."}
-                        </span>
-                      ) : (
-                        <>
-                          {noShowOnly ? null : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5 border-cal-paid/40 text-cal-paid-fg hover:bg-cal-paid-bg"
-                              disabled={attendanceLocked || attendanceAction.isPending}
-                              aria-label="Attended"
-                              onClick={() => void run(attendanceAction, { attended: true })}
-                            >
-                              <Check className="size-4" aria-hidden /> Attended
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={attendanceLocked || attendanceAction.isPending}
-                            aria-label="No-show"
-                            onClick={() => void run(attendanceAction, { attended: false })}
-                          >
-                            No-show
-                          </Button>
-                        </>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 border-cal-paid/40 text-cal-paid-fg hover:bg-cal-paid-bg"
+                        disabled={attendanceLocked || attendanceAction.isPending}
+                        aria-label="Attended"
+                        onClick={() => void run(attendanceAction, { attended: true })}
+                      >
+                        <Check className="size-4" aria-hidden /> Attended
+                      </Button>
                     </div>
                   </div>
                 ) : null}

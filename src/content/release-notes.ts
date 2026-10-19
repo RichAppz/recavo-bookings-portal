@@ -26,7 +26,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
-        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and keeps Message, Move, Copy link and Cancel together in the ⋯ menu. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with Attended and No-show buttons. Money is mentioned once: when the notice says what's owed, the Deposit paid / Payment due / bank-transfer pill under it is left off. Record payment's choices are simply Cash, Bank transfer, Card and Other.",
+        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and keeps Message, Move, Copy link and Cancel together in the ⋯ menu. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with one Attended button; No-show has moved into the ⋯ menu as “Mark as no-show”, since it's the exception rather than the everyday answer (detailers, who don't tick people in, get no footer row at all). Money is mentioned once: when the notice says what's owed, the Deposit paid / Payment due / bank-transfer pill under it is left off. Record payment's choices are simply Cash, Bank transfer, Card and Other.",
         where: "Bookings",
       },
       {
