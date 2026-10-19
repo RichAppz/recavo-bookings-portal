@@ -49,6 +49,21 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "On a phone, opening a dropdown part-way down a page — like a client's Preferred channel — no longer throws you back to the top of the page with the list out of sight. The list opens where you tapped and your choice sticks.",
         where: "Clients",
       },
+      {
+        kind: "fixed",
+        text: "Removing a reminder now stops the reminders it had already scheduled. Before, customers it had already been set for would still have been reminded. The confirm step tells you who first — “This also stops 2 reminders already scheduled (Dermetree, David Dbx)” — and if any can't be stopped you're told which, with Try again.",
+        where: "Reminders",
+      },
+      {
+        kind: "fixed",
+        text: "Reminders left behind by one you removed earlier are marked “Reminder removed” under Who is due, and a note above the list lets you stop them all with one button.",
+        where: "Reminders",
+      },
+      {
+        kind: "improved",
+        text: "Reminders you set for one client with Remind a client are now listed in the Your reminders card too, under Set for one client — who it's for, how often (“Full valet every 2 months”) and when it's due. Tap one to jump to its row. When nothing is showing, the page explains that a reminder closes by itself once that client is booked in again, and where to find it: Closed, marked Booked again.",
+        where: "Reminders",
+      },
     ],
   },
   {

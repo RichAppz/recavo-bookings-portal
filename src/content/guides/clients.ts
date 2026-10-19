@@ -178,7 +178,7 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       "Every job is booked against a vehicle, so you can see a car's history at a glance — and reminders tell you and the customer when a wash, coating or treatment is due again.",
     category: "clients",
     verticals: ["car_detailing"],
-    minutes: 4,
+    minutes: 5,
     keywords: [
       "car",
       "registration",
@@ -192,6 +192,9 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       "reminder",
       "coating due",
       "retention",
+      "remind a client",
+      "remove reminder",
+      "booked again",
     ],
     steps: [
       {
@@ -223,6 +226,16 @@ export const CLIENT_GUIDES: readonly Guide[] = [
           name: "follow-ups",
           alt: "The Reminders page with an upcoming coating top-up showing the vehicle, due date, reminder date and a Book button.",
         },
+        link: { to: "/follow-ups", label: "Open Reminders" },
+      },
+      {
+        heading: "A reminder for one client",
+        body: "**Remind a client** sets a reminder for one customer without a finished job behind it — a valet every 2 months for a regular, say. These don't appear among your reminders above the list, because they aren't set on a service: they're under **Set for one client** at the bottom of the **Your reminders** card, with who it's for, how often and when it's due. Tap one to jump to its row under **Who is due**. When that customer is booked in for the same service, the reminder closes by itself and moves to **Closed**, marked **Booked again**.",
+        link: { to: "/follow-ups", label: "Open Reminders" },
+      },
+      {
+        heading: "Removing a reminder",
+        body: "Open a reminder under **Your reminders** and choose **Remove**. Before you confirm, RECAVO tells you how many customers it has already scheduled — *This also stops 2 reminders already scheduled (Dermetree, David Dbx)* — and removing it dismisses those too, so nobody is reminded about something you've stopped offering. If any can't be stopped, the dialog lists them with **Try again**. A reminder removed before this change may have left some behind: they show a **Reminder removed** tag under **Who is due**, and a note above the list lets you **Stop them** in one go.",
         link: { to: "/follow-ups", label: "Open Reminders" },
       },
     ],
