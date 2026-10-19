@@ -770,6 +770,8 @@ export function BookingPanel({
    * to lapse, a bank transfer to watch for, a message that bounced, then money owed.
    */
   const stateNotice: {
+    /** What the notice is about, so the pill row below doesn't say it again. */
+    topic: "bank" | "hold" | "messages" | "money";
     title: string;
     body: string;
     action?: { label: string; onClick: () => void };
@@ -778,12 +780,14 @@ export function BookingPanel({
     const owed = formatMoney(settlement.outstandingMinor, booking.currency, { compact: true });
     if (bankPending) {
       return {
+        topic: "bank",
         title: "Waiting for a bank transfer.",
         body: `The booking is confirmed once ${owed} lands — mark it received below.`,
       };
     }
     if (booking.status === "held" || booking.status === "awaiting_payment") {
       return {
+        topic: "hold",
         title: "Waiting for payment.",
         body: booking.holdExpiresAt
           ? `The slot is held until ${formatInTz(booking.holdExpiresAt, timezone, { hour: "2-digit", minute: "2-digit" })}, then released.`
@@ -792,6 +796,7 @@ export function BookingPanel({
     }
     if (failedMessages > 0 && !isFinal) {
       return {
+        topic: "messages",
         title:
           failedMessages === 1
             ? "A message didn't send."
@@ -801,16 +806,24 @@ export function BookingPanel({
       };
     }
     if (!isFinal && settlement.state === "unpaid") {
-      return { title: `${owed} due.`, body: "The client hasn't paid yet." };
+      return { topic: "money", title: `${owed} due.`, body: "The client hasn't paid yet." };
     }
     if (!isFinal && (settlement.state === "deposit_paid" || settlement.state === "part_paid")) {
       return {
+        topic: "money",
         title: `${owed} still ${balanceDueLabel(settlement)}.`,
         body: settlement.state === "deposit_paid" ? "The deposit is in." : "Part of it is paid.",
       };
     }
     return null;
   })();
+  // The money pills restate the notice when it is about money (or a hold / bank
+  // transfer, which are money too), so they only show when the notice is about
+  // something else or there is no notice — one message per thing (owner request).
+  const noticeCoversMoney =
+    stateNotice?.topic === "money" ||
+    stateNotice?.topic === "hold" ||
+    stateNotice?.topic === "bank";
 
   const submitDelete = async () => {
     if (!booking) return;
@@ -1090,20 +1103,21 @@ export function BookingPanel({
                     {bookingNotesLabel(notes)}
                   </button>
                 ) : null}
-                {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
+                {settlement?.state === "paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
+                    Paid in full
+                  </span>
+                ) : noticeCoversMoney ? null : settlement?.state === "deposit_paid" ||
+                  settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
                     {formatMoney(settlement.outstandingMinor, booking.currency)}{" "}
                     {balanceDueLabel(settlement)}
                   </span>
-                ) : settlement?.state === "paid" ? (
-                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
-                    Paid in full
-                  </span>
                 ) : bookingNeedsPayment(booking, payments.data ?? []) && !bankPending ? (
                   <StatusBadge status="payment_due" />
                 ) : null}
-                {bankPending ? (
+                {bankPending && !noticeCoversMoney ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     <Landmark className="size-3" />
                     Waiting for bank transfer
