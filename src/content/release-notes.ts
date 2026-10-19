@@ -44,6 +44,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "A booking marked as attended can still be edited to correct the record — what was actually done, the price, who did it, a note or the date — and stays attended. It can't be moved or cancelled, and the client only hears about the change if you choose to tell them.",
         where: "Bookings",
       },
+      {
+        kind: "fixed",
+        text: "On a phone, opening a dropdown part-way down a page — like a client's Preferred channel — no longer throws you back to the top of the page with the list out of sight. The list opens where you tapped and your choice sticks.",
+        where: "Clients",
+      },
     ],
   },
   {
