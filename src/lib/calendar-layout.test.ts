@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  assignLanes,
   dayCountLabel,
+  weekSpans,
   fitHourHeight,
   firstName,
   layoutOverlaps,
@@ -222,5 +224,122 @@ describe("periodDays / shiftAnchor (the page beside the current one)", () => {
         assert.equal(there[0]!.getTime(), expected.getTime());
       }
     }
+  });
+});
+
+/** Six Monday-first weeks from Mon 28 Sept 2026, as the October month grid draws. */
+const octoberGrid = Array.from({ length: 42 }, (_, i) => {
+  const d = new Date(Date.UTC(2026, 8, 28 + i));
+  return d.toISOString().slice(0, 10);
+});
+const run = (from: string, days: number) =>
+  Array.from({ length: days }, (_, i) => {
+    const d = new Date(`${from}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+
+describe("weekSpans", () => {
+  it("a job inside one week is one bar, rounded at both ends", () => {
+    // Mon 5 – Wed 7 Oct: row 1, columns 0–2.
+    assert.deepEqual(weekSpans(run("2026-10-05", 3), octoberGrid), [
+      { week: 1, startCol: 0, endCol: 2, roundStart: true, roundEnd: true },
+    ]);
+  });
+  it("a job over the weekend boundary is a bar per row, square where they meet", () => {
+    // Fri 9 – Tue 13 Oct.
+    assert.deepEqual(weekSpans(run("2026-10-09", 5), octoberGrid), [
+      { week: 1, startCol: 4, endCol: 6, roundStart: true, roundEnd: false },
+      { week: 2, startCol: 0, endCol: 1, roundStart: false, roundEnd: true },
+    ]);
+  });
+  it("a long job cuts both ends of the rows it passes straight through", () => {
+    // Sat 3 – Tue 20 Oct: rows 0, 1, 2, 3.
+    const spans = weekSpans(run("2026-10-03", 18), octoberGrid);
+    assert.deepEqual(
+      spans.map((s) => [s.week, s.startCol, s.endCol, s.roundStart, s.roundEnd]),
+      [
+        [0, 5, 6, true, false],
+        [1, 0, 6, false, false],
+        [2, 0, 6, false, false],
+        [3, 0, 1, false, true],
+      ],
+    );
+  });
+  it("a job that skips days becomes separate rounded bars", () => {
+    // Working days Thu 8, Fri 9, then Mon 12 Oct: the weekend is not worked.
+    assert.deepEqual(weekSpans(["2026-10-08", "2026-10-09", "2026-10-12"], octoberGrid), [
+      { week: 1, startCol: 3, endCol: 4, roundStart: true, roundEnd: true },
+      { week: 2, startCol: 0, endCol: 0, roundStart: true, roundEnd: true },
+    ]);
+  });
+  it("days outside the grid are dropped but still cut the visible end", () => {
+    // Started Fri 25 Sept, runs to Tue 29 Sept: only Mon 28 – Tue 29 are on the grid.
+    assert.deepEqual(weekSpans(run("2026-09-25", 5), octoberGrid), [
+      { week: 0, startCol: 0, endCol: 1, roundStart: false, roundEnd: true },
+    ]);
+    assert.deepEqual(weekSpans(run("2026-11-10", 3), octoberGrid), []);
+  });
+  it("unsorted or repeated days are tolerated", () => {
+    assert.deepEqual(
+      weekSpans(["2026-10-07", "2026-10-05", "2026-10-06", "2026-10-06"], octoberGrid),
+      [{ week: 1, startCol: 0, endCol: 2, roundStart: true, roundEnd: true }],
+    );
+  });
+});
+
+describe("assignLanes", () => {
+  it("bars that do not overlap share the top lane", () => {
+    const { placed, laneCount } = assignLanes([
+      { id: "a", startCol: 0, endCol: 1 },
+      { id: "b", startCol: 2, endCol: 4 },
+      { id: "c", startCol: 5, endCol: 6 },
+    ]);
+    assert.equal(laneCount, 1);
+    assert.deepEqual(
+      placed.map((p) => [p.id, p.lane]),
+      [
+        ["a", 0],
+        ["b", 0],
+        ["c", 0],
+      ],
+    );
+  });
+  it("overlapping bars stack, longer first when they start together", () => {
+    const { placed, laneCount } = assignLanes([
+      { id: "short", startCol: 1, endCol: 2 },
+      { id: "long", startCol: 1, endCol: 5 },
+      { id: "late", startCol: 2, endCol: 6 },
+    ]);
+    assert.equal(laneCount, 3);
+    const lane = Object.fromEntries(placed.map((p) => [p.id, p.lane]));
+    assert.deepEqual(lane, { long: 0, short: 1, late: 2 });
+  });
+  it("a freed lane is reused by the next bar that fits", () => {
+    const { placed, laneCount } = assignLanes([
+      { id: "a", startCol: 0, endCol: 3 },
+      { id: "b", startCol: 0, endCol: 1 },
+      { id: "c", startCol: 2, endCol: 2 },
+      { id: "d", startCol: 4, endCol: 6 },
+    ]);
+    assert.equal(laneCount, 2);
+    const lane = Object.fromEntries(placed.map((p) => [p.id, p.lane]));
+    assert.deepEqual(lane, { a: 0, b: 1, c: 1, d: 0 });
+  });
+  it("ties keep the order given", () => {
+    const { placed } = assignLanes([
+      { id: "first", startCol: 0, endCol: 2 },
+      { id: "second", startCol: 0, endCol: 2 },
+    ]);
+    assert.deepEqual(
+      placed.map((p) => [p.id, p.lane]),
+      [
+        ["first", 0],
+        ["second", 1],
+      ],
+    );
+  });
+  it("nothing in, nothing out", () => {
+    assert.deepEqual(assignLanes([]), { placed: [], laneCount: 0 });
   });
 });

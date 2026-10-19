@@ -1,21 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, Landmark } from "lucide-react";
 
 import { Marquee } from "@/components/Marquee";
 import type { Booking, CalendarBlock } from "@/lib/api/types";
-import { firstName } from "@/lib/calendar-layout";
+import { assignLanes, firstName, weekSpans, type WeekSpan } from "@/lib/calendar-layout";
 import { formatInTz, isAllDayEvent, isoDate } from "@/lib/format";
 import type { PaymentColours } from "@/lib/payment-colours";
 import { cn } from "@/lib/utils";
 
 import {
   blockPayment,
-  coversDay,
+  daysOf,
   eventTintStyle,
-  firstDayOf,
   HOLIDAY_CHIP,
   isCancelled,
-  isMultiDay,
   LiftTag,
   minutesOf,
   type HolidayItem,
@@ -25,10 +23,9 @@ import {
 /**
  * What the second line of a month chip says, left to right. The business picks
  * which of these to show; the order is fixed so chips stay scannable. The first
- * line is the start time ("All day", or ↳ when the job carries on from an earlier
- * day) unless `showTime` is off, when the chip is that one detail line. `time` is
- * kept in the list so older saved preferences still parse; the time itself is a
- * separate switch.
+ * line is the start time (or "All day") unless `showTime` is off, when the chip is
+ * that one detail line. `time` is kept in the list so older saved preferences still
+ * parse; the time itself is a separate switch.
  */
 export const MONTH_BAR_FIELDS = [
   "time",
@@ -40,10 +37,28 @@ export const MONTH_BAR_FIELDS = [
 ] as const;
 export type MonthBarField = (typeof MONTH_BAR_FIELDS)[number];
 
+/** Gap between stacked bars, and between the last bar and the cell's own chips (px). */
+const LANE_GAP = 2;
+
 type Chip =
   | { kind: "holiday"; key: string; item: HolidayItem; order: number }
-  | { kind: "event"; key: string; item: CalendarBlock; continues: boolean; order: number }
-  | { kind: "booking"; key: string; item: Booking; continues: boolean; order: number };
+  | { kind: "event"; key: string; item: CalendarBlock; order: number }
+  | { kind: "booking"; key: string; item: Booking; order: number };
+
+type Entry = { kind: "event"; item: CalendarBlock } | { kind: "booking"; item: Booking };
+
+/** One week-row piece of a multi-day item, with the lane it stacks in. */
+type Bar = Entry & WeekSpan & { lane: number };
+
+/** The pieces every chip or bar shares: the words, the colours and what it does. */
+type Body = {
+  ariaLabel: string;
+  title?: string;
+  style: CSSProperties | undefined;
+  className: string | false | undefined;
+  onClick: () => void;
+  children: ReactNode;
+};
 
 export function MonthGrid({
   days,
@@ -105,38 +120,156 @@ export function MonthGrid({
   const endLabel = (b: Spanning) =>
     formatInTz(b.end, timezone, { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
-  /** Everything on one day, bank holiday first, then all-day and carried-over jobs, then by time. */
+  /**
+   * Each item with the days it shows on. Anything over more than one day is drawn
+   * as a bar across those days (owner request: one job, one shape — not a chip in
+   * every cell with arrows between them); a one-day item is a chip in its cell.
+   */
+  const placed = useMemo(() => {
+    const gridIsos = days.map(isoDate);
+    const single: (Entry & { day: string })[] = [];
+    const spanning: (Entry & { days: string[] })[] = [];
+    const countByDay = new Map<string, number>();
+    const add = (entry: Entry) => {
+      const itemDays = daysOf(entry.item, timezone);
+      for (const d of itemDays) countByDay.set(d, (countByDay.get(d) ?? 0) + 1);
+      if (itemDays.length > 1) spanning.push({ ...entry, days: itemDays });
+      else if (itemDays[0]) single.push({ ...entry, day: itemDays[0] });
+    };
+    if (!loading) {
+      for (const item of bookings) add({ kind: "booking", item });
+      for (const item of events) add({ kind: "event", item });
+    }
+    spanning.sort((a, b) => a.item.start.localeCompare(b.item.start));
+    const rows: (Entry & WeekSpan)[][] = Array.from({ length: 6 }, () => []);
+    for (const { days: itemDays, ...entry } of spanning) {
+      for (const span of weekSpans(itemDays, gridIsos)) {
+        rows[span.week]?.push({ ...entry, ...span });
+      }
+    }
+    const barsByWeek: Bar[][] = [];
+    const laneCounts: number[] = [];
+    for (const row of rows) {
+      const result = assignLanes(row);
+      barsByWeek.push(result.placed);
+      laneCounts.push(result.laneCount);
+    }
+    return { single, barsByWeek, laneCounts, countByDay };
+  }, [bookings, events, days, timezone, loading]);
+
+  /** Everything in one cell: bank holiday first, then all-day, then by time. */
   const chipsFor = (iso: string): Chip[] => {
     const out: Chip[] = [];
     for (const h of holidays) {
       if (h.date === iso) out.push({ kind: "holiday", key: h.id, item: h, order: -2 });
     }
-    for (const b of bookings) {
-      if (!coversDay(b, iso, timezone)) continue;
-      const continues = firstDayOf(b, timezone) !== iso;
-      out.push({
-        kind: "booking",
-        key: b.id,
-        item: b,
-        continues,
-        order: continues || b.allDay ? -1 : minutesOf(b.start, timezone),
-      });
-    }
-    for (const ev of events) {
-      if (!coversDay(ev, iso, timezone)) continue;
-      const continues = firstDayOf(ev, timezone) !== iso;
-      out.push({
-        kind: "event",
-        key: ev.id,
-        item: ev,
-        continues,
-        order: continues || isAllDay(ev) ? -1 : minutesOf(ev.start, timezone),
-      });
+    for (const s of placed.single) {
+      if (s.day !== iso) continue;
+      if (s.kind === "booking") {
+        const b = s.item;
+        out.push({
+          kind: "booking",
+          key: b.id,
+          item: b,
+          order: b.allDay ? -1 : minutesOf(b.start, timezone),
+        });
+      } else {
+        const ev = s.item;
+        out.push({
+          kind: "event",
+          key: ev.id,
+          item: ev,
+          order: isAllDay(ev) ? -1 : minutesOf(ev.start, timezone),
+        });
+      }
     }
     return out.sort((a, b) => a.order - b.order);
   };
 
   const lineText = phone ? "text-[12px] leading-[15px]" : "text-[11px] leading-[14px]";
+  // Chips and bars are the same height so the lanes above a cell line up with
+  // the chips below: padding plus one or two text lines.
+  const lineHeight = phone ? 15 : 14;
+  const barHeight = 8 + lineHeight * (showTime ? 2 : 1);
+  const itemBase = "flex min-w-0 cursor-pointer flex-col items-stretch px-1.5 py-1 text-left";
+
+  const eventBody = (ev: CalendarBlock, multi: boolean): Body => {
+    const allDay = isAllDay(ev);
+    return {
+      ariaLabel: `${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
+        multi ? `, until ${endLabel(ev)}` : ""
+      }`,
+      style: eventTintStyle(eventColour(ev.colour)),
+      className: undefined,
+      onClick: () => onOpenEvent(ev),
+      children: (
+        <>
+          {showTime ? (
+            <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+              {allDay ? "All day" : timeLabel(ev.start)}
+            </span>
+          ) : null}
+          <Marquee animate={sliding} className="w-full flex-none font-semibold">
+            <span>{ev.title}</span>
+          </Marquee>
+        </>
+      ),
+    };
+  };
+
+  const bookingBody = (b: Booking, multi: boolean): Body => {
+    const cancelled = isCancelled(b);
+    const payment = blockPayment(b, paymentColours);
+    const tag = tagFor(b);
+    const client = clientFor(b);
+    const showClient = monthBar.has("client") && client;
+    const showTag = monthBar.has("record") && tag;
+    const category = categoryFor(b);
+    const showCategory = monthBar.has("category") && category;
+    const showLift = monthBar.has("lift") && Boolean(b.clientLift);
+    // "Category only" on a service that has none would leave the line blank, so
+    // the name steps in for that service.
+    const showService = monthBar.has("service") || (!showCategory && !showClient && !showTag);
+    return {
+      ariaLabel: `${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
+        b,
+      )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}${cancelled ? ", cancelled" : ""}`,
+      title: payment.label,
+      style: payment.style,
+      className: cn(payment.className, cancelled && "opacity-50"),
+      onClick: () => onOpenBooking(b.id),
+      children: (
+        <>
+          {showTime ? (
+            <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
+              {showLift ? <LiftTag /> : null}
+              {b.allDay ? "All day" : timeLabel(b.start)}
+            </span>
+          ) : null}
+          {/* The label slides if it is wider than the chip, so a narrow cell still
+              shows everything that was switched on. With the time line off, the
+              lift marker moves onto this one line. */}
+          <Marquee animate={sliding} className="w-full flex-none">
+            {!showTime && showLift ? <LiftTag /> : null}
+            {showClient ? (
+              <span className={cn("font-semibold", cancelled && "line-through")}>
+                {phone ? firstName(client) : client}
+              </span>
+            ) : null}
+            {showTag ? <span className="font-semibold">{tag}</span> : null}
+            {showCategory ? (
+              <span className="opacity-75">{showService ? `${category} ·` : category}</span>
+            ) : null}
+            {showService ? (
+              <span className={cn("font-semibold", cancelled && "line-through")}>
+                {b.serviceSnapshot.name}
+              </span>
+            ) : null}
+          </Marquee>
+        </>
+      ),
+    };
+  };
 
   const renderChip = (chip: Chip) => {
     if (chip.kind === "holiday") {
@@ -154,118 +287,54 @@ export function MonthGrid({
         </div>
       );
     }
-    if (chip.kind === "event") {
-      const ev = chip.item;
-      const allDay = isAllDay(ev);
-      const multi = isMultiDay(ev, timezone);
-      return (
-        <button
-          key={chip.key}
-          type="button"
-          onClick={() => onOpenEvent(ev)}
-          style={eventTintStyle(eventColour(ev.colour))}
-          aria-label={`${allDay ? "All day: " : `${timeLabel(ev.start)}, `}${ev.title}${
-            multi ? `, until ${endLabel(ev)}` : ""
-          }`}
-          className={cn(
-            "flex w-full cursor-pointer flex-col items-stretch rounded-md px-1.5 py-1 text-left",
-            lineText,
-          )}
-        >
-          {showTime ? (
-            <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
-              {chip.continues ? (
-                <span aria-label="Continues from earlier">↳</span>
-              ) : allDay ? (
-                "All day"
-              ) : (
-                timeLabel(ev.start)
-              )}
-              {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
-            </span>
-          ) : null}
-          <Marquee animate={sliding} className="w-full flex-none font-semibold">
-            {!showTime && chip.continues ? (
-              <span aria-label="Continues from earlier" className="font-extrabold">
-                ↳
-              </span>
-            ) : null}
-            <span>{ev.title}</span>
-            {!showTime && multi && !chip.continues ? <span className="opacity-75">→</span> : null}
-          </Marquee>
-        </button>
-      );
-    }
-    const b = chip.item;
-    const cancelled = isCancelled(b);
-    const payment = blockPayment(b, paymentColours);
-    const tag = tagFor(b);
-    const client = clientFor(b);
-    const multi = isMultiDay(b, timezone);
-    const showClient = monthBar.has("client") && client;
-    const showTag = monthBar.has("record") && tag;
-    const category = categoryFor(b);
-    const showCategory = monthBar.has("category") && category;
-    const showLift = monthBar.has("lift") && Boolean(b.clientLift);
-    // "Category only" on a service that has none would leave the line blank, so
-    // the name steps in for that service.
-    const showService = monthBar.has("service") || (!showCategory && !showClient && !showTag);
+    const body =
+      chip.kind === "event" ? eventBody(chip.item, false) : bookingBody(chip.item, false);
     return (
       <button
         key={chip.key}
         type="button"
-        onClick={() => onOpenBooking(b.id)}
-        title={payment.label}
-        aria-label={`${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${client ? `${client}, ` : ""}${serviceLabel(
-          b,
-        )}${multi ? `, until ${endLabel(b)}` : ""} — ${payment.label}${cancelled ? ", cancelled" : ""}`}
-        style={payment.style}
+        onClick={body.onClick}
+        title={body.title}
+        aria-label={body.ariaLabel}
+        style={body.style}
+        className={cn(itemBase, "w-full shrink-0 rounded-md", lineText, body.className)}
+      >
+        {body.children}
+      </button>
+    );
+  };
+
+  /**
+   * One piece of a multi-day item: a bar across the columns it covers in this
+   * week, inset from the cell edges like a chip where the job really starts or
+   * ends, and run square to the row edge where it carries on into the week before
+   * or after, so the eye reads it as one shape continuing.
+   */
+  const renderBar = (bar: Bar) => {
+    const body = bar.kind === "event" ? eventBody(bar.item, true) : bookingBody(bar.item, true);
+    return (
+      <button
+        key={`${bar.item.id}-${bar.startCol}`}
+        type="button"
+        data-span={bar.endCol - bar.startCol + 1}
+        onClick={body.onClick}
+        title={body.title}
+        aria-label={body.ariaLabel}
+        style={{
+          ...body.style,
+          gridColumn: `${bar.startCol + 1} / span ${bar.endCol - bar.startCol + 1}`,
+          gridRow: bar.lane + 1,
+        }}
         className={cn(
-          "flex w-full cursor-pointer flex-col items-stretch rounded-md px-1.5 py-1 text-left",
+          itemBase,
+          "pointer-events-auto",
           lineText,
-          payment.className,
-          cancelled && "opacity-50",
+          bar.roundStart ? "ml-1 rounded-l-md sm:ml-1.5" : "ml-0",
+          bar.roundEnd ? "mr-1 rounded-r-md sm:mr-1.5" : "mr-0",
+          body.className,
         )}
       >
-        {showTime ? (
-          <span className="flex items-center gap-1 truncate font-extrabold tabular-nums">
-            {showLift ? <LiftTag /> : null}
-            {chip.continues ? (
-              <span aria-label="Continues from earlier">↳</span>
-            ) : b.allDay ? (
-              "All day"
-            ) : (
-              timeLabel(b.start)
-            )}
-            {multi && !chip.continues ? <span className="ml-auto opacity-75">→</span> : null}
-          </span>
-        ) : null}
-        {/* The label slides if it is wider than the chip, so a narrow cell still
-            shows everything that was switched on. With the time line off, the lift
-            marker and the continuation cues move onto this one line. */}
-        <Marquee animate={sliding} className="w-full flex-none">
-          {!showTime && showLift ? <LiftTag /> : null}
-          {!showTime && chip.continues ? (
-            <span aria-label="Continues from earlier" className="font-extrabold">
-              ↳
-            </span>
-          ) : null}
-          {showClient ? (
-            <span className={cn("font-semibold", cancelled && "line-through")}>
-              {phone ? firstName(client) : client}
-            </span>
-          ) : null}
-          {showTag ? <span className="font-semibold">{tag}</span> : null}
-          {showCategory ? (
-            <span className="opacity-75">{showService ? `${category} ·` : category}</span>
-          ) : null}
-          {showService ? (
-            <span className={cn("font-semibold", cancelled && "line-through")}>
-              {b.serviceSnapshot.name}
-            </span>
-          ) : null}
-          {!showTime && multi && !chip.continues ? <span className="opacity-75">→</span> : null}
-        </Marquee>
+        {body.children}
       </button>
     );
   };
@@ -283,30 +352,62 @@ export function MonthGrid({
         ))}
       </div>
 
-      {weeks.map((week, weekIdx) => (
-        <div key={isoDate(week[0]!)} className="grid grid-cols-7">
-          {week.map((day) => {
-            const iso = isoDate(day);
-            const chips = loading ? [] : chipsFor(iso);
-            return (
-              <DayCell
-                key={iso}
-                day={day}
-                outside={day.getMonth() !== anchor.getMonth()}
-                today={iso === todayIso}
-                lastRow={weekIdx === weeks.length - 1}
-                phone={phone}
-                loading={loading}
-                count={chips.filter((c) => c.kind !== "holiday").length}
-                onTapDay={onTapDay}
-                onOpenDay={onOpenDay}
+      {weeks.map((week, weekIdx) => {
+        const bars = placed.barsByWeek[weekIdx] ?? [];
+        const laneCount = placed.laneCounts[weekIdx] ?? 0;
+        // The strip under the date row that the bars take up, so every cell in the
+        // row starts its own chips beneath them.
+        const laneBlock = laneCount * (barHeight + LANE_GAP);
+        return (
+          <div
+            key={isoDate(week[0]!)}
+            className="relative grid grid-cols-7"
+            style={
+              {
+                "--lane-block": `${laneBlock}px`,
+                // Keeps a cell tall enough for its date, the bars and at least one
+                // chip when a week stacks several bars; otherwise the fixed height.
+                "--cell-reserve": `${barHeight + 50}px`,
+              } as CSSProperties
+            }
+          >
+            {week.map((day) => {
+              const iso = isoDate(day);
+              const chips = loading ? [] : chipsFor(iso);
+              return (
+                <DayCell
+                  key={iso}
+                  day={day}
+                  outside={day.getMonth() !== anchor.getMonth()}
+                  today={iso === todayIso}
+                  lastRow={weekIdx === weeks.length - 1}
+                  phone={phone}
+                  loading={loading}
+                  laneBlock={laneBlock}
+                  count={placed.countByDay.get(iso) ?? 0}
+                  onTapDay={onTapDay}
+                  onOpenDay={onOpenDay}
+                >
+                  {chips.map(renderChip)}
+                </DayCell>
+              );
+            })}
+
+            {/* The bars: the same seven columns as the cells beneath, so a span of n
+                columns lines up exactly with the days it covers. Sits just under
+                the date row (cell padding + the 24px row + its gap). */}
+            {bars.length > 0 ? (
+              <div
+                data-lanes={laneCount}
+                className="pointer-events-none absolute inset-x-0 top-8 grid grid-cols-7 sm:top-[34px]"
+                style={{ gridAutoRows: `${barHeight}px`, rowGap: LANE_GAP }}
               >
-                {chips.map(renderChip)}
-              </DayCell>
-            );
-          })}
-        </div>
-      ))}
+                {bars.map(renderBar)}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -315,7 +416,8 @@ export function MonthGrid({
  * One day: the date on top and a list of chips beneath that scrolls inside the
  * cell when there are more than fit (spec §4.3). While more is hidden below, the
  * list fades out at the bottom and a chevron beside the date nudges it on; the
- * whole thing can also be scrolled directly.
+ * whole thing can also be scrolled directly. When the week has bars running
+ * across it, `laneBlock` is the room they take between the date and the list.
  */
 function DayCell({
   day,
@@ -324,6 +426,7 @@ function DayCell({
   lastRow,
   phone,
   loading,
+  laneBlock,
   count,
   onTapDay,
   onOpenDay,
@@ -335,6 +438,7 @@ function DayCell({
   lastRow: boolean;
   phone: boolean;
   loading: boolean;
+  laneBlock: number;
   count: number;
   onTapDay: (day: Date) => void;
   onOpenDay: (day: Date) => void;
@@ -355,7 +459,7 @@ function DayCell({
       el.removeEventListener("scroll", check);
       ro.disconnect();
     };
-  }, [children]);
+  }, [children, laneBlock]);
 
   const nudge = () => {
     const el = listRef.current;
@@ -372,6 +476,7 @@ function DayCell({
         // otherwise double up along the right and bottom.
         "group relative flex flex-col border-r border-b p-1 [&:nth-child(7n)]:border-r-0 sm:p-1.5",
         phone ? "h-[128px]" : "h-[112px] sm:h-[128px]",
+        "min-h-[calc(var(--lane-block)_+_var(--cell-reserve))]",
         lastRow && "border-b-0",
         outside && "bg-muted/30",
         today && "bg-cal-today",
@@ -424,6 +529,12 @@ function DayCell({
           </button>
         ) : null}
       </div>
+
+      {/* Room for the week's bars, which the row draws across all its cells; the
+          list's own top margin supplies the gap after the last bar. */}
+      {laneBlock > 0 ? (
+        <div aria-hidden className="mt-1 shrink-0" style={{ height: laneBlock - 4 }} />
+      ) : null}
 
       {loading && !outside ? (
         <div aria-hidden className="relative mt-1 space-y-0.5">

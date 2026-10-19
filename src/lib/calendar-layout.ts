@@ -287,6 +287,100 @@ export function shiftAnchor(
   return addLocalDays(anchor, view === "day" ? dir : dir * 7);
 }
 
+/**
+ * One piece of a multi-day item as drawn in a month grid: the columns it covers
+ * within one week row, and whether each end is a real start/end of the job (drawn
+ * rounded) or a cut where it carries on into the neighbouring row (drawn square).
+ */
+export type WeekSpan = {
+  /** Row index into the grid (0-based, rows of `cols` days). */
+  week: number;
+  /** First and last column (0-based) covered within that row. */
+  startCol: number;
+  endCol: number;
+  /** False when the day before `startCol` is also occupied, i.e. the bar is cut at the row edge. */
+  roundStart: boolean;
+  /** False when the day after `endCol` is also occupied. */
+  roundEnd: boolean;
+};
+
+const shiftIso = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Split the days an item occupies into the bars a month grid draws for it: one per
+ * run of consecutive days within a week row. A job that spans the weekend boundary
+ * becomes a bar on each row, square where they meet; a job that *skips* days (Thu,
+ * Fri, then Mon) becomes separate rounded bars, since each really does start and
+ * end there. Days outside `gridDays` are ignored but still decide the rounding, so
+ * a job that began before the visible month arrives already cut.
+ */
+export function weekSpans(
+  occupiedDays: readonly string[],
+  gridDays: readonly string[],
+  cols = 7,
+): WeekSpan[] {
+  const index = new Map(gridDays.map((iso, i) => [iso, i] as const));
+  const occupied = new Set(occupiedDays);
+  const sorted = [...occupied].sort();
+  const spans: (WeekSpan & { lastIso: string })[] = [];
+  for (const iso of sorted) {
+    const i = index.get(iso);
+    if (i === undefined) continue;
+    const week = Math.floor(i / cols);
+    const col = i % cols;
+    const current = spans[spans.length - 1];
+    if (current && current.week === week && current.endCol === col - 1) {
+      current.endCol = col;
+      current.lastIso = iso;
+    } else {
+      spans.push({
+        week,
+        startCol: col,
+        endCol: col,
+        roundStart: !occupied.has(shiftIso(iso, -1)),
+        roundEnd: true,
+        lastIso: iso,
+      });
+    }
+  }
+  return spans.map(({ lastIso, ...span }) => ({
+    ...span,
+    roundEnd: !occupied.has(shiftIso(lastIso, 1)),
+  }));
+}
+
+/**
+ * Stack one row's bars so none overlap: bars are taken left to right (longer first
+ * when they start together, then in the order given) and each drops into the
+ * topmost lane that is free across every column it covers. Returns the bars with
+ * their lane; `laneCount` says how tall the row's bar area needs to be.
+ */
+export function assignLanes<T extends { startCol: number; endCol: number }>(
+  spans: readonly T[],
+): { placed: (T & { lane: number })[]; laneCount: number } {
+  const order = spans
+    .map((span, i) => ({ span, i }))
+    .sort(
+      (a, b) =>
+        a.span.startCol - b.span.startCol ||
+        b.span.endCol - b.span.startCol - (a.span.endCol - a.span.startCol) ||
+        a.i - b.i,
+    );
+  // laneFree[lane] = first column still free in that lane.
+  const laneFree: number[] = [];
+  const placed = order.map(({ span }) => {
+    let lane = laneFree.findIndex((free) => free <= span.startCol);
+    if (lane === -1) lane = laneFree.length;
+    laneFree[lane] = span.endCol + 1;
+    return { ...span, lane };
+  });
+  return { placed, laneCount: laneFree.length };
+}
+
 /** First word of a name, for the dense phone chips. */
 export function firstName(name: string | null | undefined): string {
   if (!name) return "";
