@@ -215,6 +215,7 @@ export function TimeGrid({
   const headerRef = useRef<HTMLDivElement | null>(null);
   const allDayRef = useRef<HTMLDivElement | null>(null);
   const [cardHeight, setCardHeight] = useState<number | null>(null);
+  const [cardWidth, setCardWidth] = useState(0);
   const [chromeHeight, setChromeHeight] = useState(0);
   const inner = variant !== "phoneDay";
 
@@ -225,6 +226,7 @@ export function TimeGrid({
       if (!el) return;
       const top = el.getBoundingClientRect().top;
       setCardHeight(Math.max(420, Math.floor(window.innerHeight - top - bottomReserve)));
+      setCardWidth(el.clientWidth);
       setChromeHeight(
         (headerRef.current?.offsetHeight ?? 0) + (allDayRef.current?.offsetHeight ?? 0),
       );
@@ -308,6 +310,15 @@ export function TimeGrid({
 
   const topOf = (min: number) => ((min - rangeStartMin) / 60) * hourHeight;
 
+  const emptyCard = (
+    <div className="pointer-events-auto flex max-w-xs flex-col items-center gap-3 rounded-2xl border bg-card px-6 py-5 text-center shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+      <p className="text-[15px] font-bold">{emptyTitle}</p>
+      {emptyActions ? (
+        <div className="flex flex-wrap justify-center gap-2">{emptyActions}</div>
+      ) : null}
+    </div>
+  );
+
   return (
     <div
       ref={scrollerRef}
@@ -318,6 +329,22 @@ export function TimeGrid({
       )}
       style={inner && cardHeight ? { height: cardHeight } : undefined}
     >
+      {/* The grid scrolls itself to the current hour on load, so the empty card is
+          anchored to the visible part of the scroller rather than the top of the day:
+          a zero-size sticky box that follows the viewport, with the card hung off it. */}
+      {empty && inner && cardHeight ? (
+        <div className="pointer-events-none sticky top-0 left-0 z-30 h-0 w-0 overflow-visible">
+          <div
+            className="absolute flex -translate-x-1/2 justify-center"
+            style={{
+              left: cardWidth / 2,
+              top: chromeHeight + Math.max(16, (cardHeight - chromeHeight) * 0.18),
+            }}
+          >
+            {emptyCard}
+          </div>
+        </div>
+      ) : null}
       <div className="grid" style={{ gridTemplateColumns: gridColumns }}>
         {/* Day header (not on the phone Day view: the week strip above does that job). */}
         {variant !== "phoneDay" ? (
@@ -864,14 +891,9 @@ export function TimeGrid({
         })}
       </div>
 
-      {empty ? (
+      {empty && !(inner && cardHeight) ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center pt-[18%]">
-          <div className="pointer-events-auto flex max-w-xs flex-col items-center gap-3 rounded-2xl border bg-card px-6 py-5 text-center shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
-            <p className="text-[15px] font-bold">{emptyTitle}</p>
-            {emptyActions ? (
-              <div className="flex flex-wrap justify-center gap-2">{emptyActions}</div>
-            ) : null}
-          </div>
+          {emptyCard}
         </div>
       ) : null}
     </div>
