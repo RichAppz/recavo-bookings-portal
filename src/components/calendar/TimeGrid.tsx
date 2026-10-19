@@ -265,8 +265,8 @@ export function TimeGrid({
       if (Number.isFinite(first)) targetMin = Math.max(rangeStartMin, first - 30);
     }
     el.scrollTop = ((targetMin - rangeStartMin) / 60) * hourHeight;
-    if (variant === "phoneWeek" && todayInView) {
-      el.scrollLeft = isoDays.indexOf(todayIso) * 74;
+    if (variant === "phoneWeek") {
+      el.scrollLeft = todayInView ? isoDays.indexOf(todayIso) * 74 : 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inner, loading, variant, isoDays, hourHeight]);

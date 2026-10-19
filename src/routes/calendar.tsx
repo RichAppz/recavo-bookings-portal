@@ -532,8 +532,9 @@ function CalendarPage() {
       ? `All ${staffNoun.toLowerCase()}s`
       : (staff.data?.find((s) => s.id === staffFilter)?.displayName ?? staffNoun);
 
-  const monthSwipe = useSwipe((dir) => shift(dir));
-  const daySwipe = useSwipe((dir) => shift(dir));
+  // A sideways swipe on any view turns the page (day, week or month). On the phone
+  // Week grid, which pans through its seven columns, it only fires at either end.
+  const swipe = useSwipe((dir) => shift(dir));
 
   const waitlistButton = (
     <Button
@@ -763,7 +764,7 @@ function CalendarPage() {
 
   const grid =
     view === "month" ? (
-      <div {...(phone ? monthSwipe : {})}>
+      <div {...swipe}>
         <MonthGrid
           {...gridProps}
           days={days}
@@ -775,16 +776,18 @@ function CalendarPage() {
         />
       </div>
     ) : view === "list" ? (
-      <ListView
-        {...gridProps}
-        days={days}
-        bookingNoun={bookingNoun}
-        emptyTitle={emptyTitle}
-        emptyActions={emptyActions}
-        onNext={() => shift(1)}
-      />
+      <div {...swipe}>
+        <ListView
+          {...gridProps}
+          days={days}
+          bookingNoun={bookingNoun}
+          emptyTitle={emptyTitle}
+          emptyActions={emptyActions}
+          onNext={() => shift(1)}
+        />
+      </div>
     ) : phone && view === "day" ? (
-      <div {...daySwipe}>
+      <div {...swipe}>
         <TimeGrid
           {...gridProps}
           variant="phoneDay"
@@ -798,7 +801,10 @@ function CalendarPage() {
         />
       </div>
     ) : (
-      <div className={cn("surface-card overflow-hidden", phone ? "rounded-2xl" : "rounded-[18px]")}>
+      <div
+        {...swipe}
+        className={cn("surface-card overflow-hidden", phone ? "rounded-2xl" : "rounded-[18px]")}
+      >
         <TimeGrid
           {...gridProps}
           variant={phone ? "phoneWeek" : "desktop"}
