@@ -3,6 +3,7 @@ import type { paths } from "./schema";
 import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/message-templates";
 import { useLiveConnected } from "@/lib/live/live-status";
 import { ledgerBehind } from "@/lib/booking-money";
+import { dismissEach } from "@/lib/follow-ups";
 import { toast } from "sonner";
 import {
   keepPreviousData,
@@ -1305,6 +1306,65 @@ export function useFollowUpAction() {
       void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+const ALL_OPEN_FOLLOW_UPS = { status: "scheduled,sent", all: true } as const;
+
+/**
+ * Every open follow-up (scheduled or sent), all pages, whatever the Reminders page
+ * list is filtered to: what a removed rule left behind and the reminders set for one
+ * client are judged against the whole set, not the page on screen.
+ */
+export function useAllOpenFollowUps(opts: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, ALL_OPEN_FOLLOW_UPS),
+    enabled: Boolean(businessId) && opts.enabled !== false,
+    queryFn: async () => {
+      const out: ServiceFollowUp[] = [];
+      let cursor: string | null = null;
+      // Bounded so a runaway cursor can't loop forever; 25 pages is 5,000 open rows.
+      for (let page = 0; page < 25; page += 1) {
+        const res: { data: { followUps: ServiceFollowUp[]; nextCursor?: string | null } } =
+          await api.get(`/api/v1/businesses/${businessId}/follow-ups`, {
+            query: {
+              status: ALL_OPEN_FOLLOW_UPS.status,
+              limit: 200,
+              ...(cursor ? { cursor } : {}),
+            },
+          });
+        out.push(...res.data.followUps);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return out;
+    },
+  });
+}
+
+/**
+ * Dismiss a batch of follow-ups one by one (stopping what a removed reminder
+ * scheduled). Never throws and never toasts: the caller gets which stopped and which
+ * failed, so a partial failure can be shown with a retry. A 409 means the row was
+ * already closed, which counts as stopped.
+ */
+export function useDismissFollowUps() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (followUps: readonly ServiceFollowUp[]) =>
+      dismissEach(
+        followUps,
+        (f) =>
+          api.patch(`/api/v1/businesses/${businessId}/follow-ups/${f.id}`, {
+            action: "dismiss",
+          }),
+        (err) => err instanceof ApiError && err.isConflict,
+      ),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
+    },
   });
 }
 

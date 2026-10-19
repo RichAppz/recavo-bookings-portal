@@ -1,6 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BellRing, Pencil, Plus, Repeat, UserRoundPlus } from "lucide-react";
+import {
+  BellRing,
+  CalendarClock,
+  Pencil,
+  Plus,
+  Repeat,
+  TriangleAlert,
+  UserRoundPlus,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { ClientReminderDialog } from "@/components/ClientReminderDialog";
@@ -17,15 +25,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useFollowUps, useServices } from "@/lib/api/hooks";
+import {
+  useAllOpenFollowUps,
+  useDismissFollowUps,
+  useFollowUps,
+  useServices,
+} from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api";
 import type { ServiceFollowUp, ServiceFollowUpStatus } from "@/lib/api/types";
 import {
   FOLLOW_UP_BUCKET_LABELS,
   FOLLOW_UP_STATUS_LABELS,
+  clientReminderSummary,
   followUpBucket,
+  followUpNames,
   followUpRuleSummary,
   leadDaysLabel,
+  openClientReminders,
+  orphanedFollowUps,
   relativeDueLabel,
   reminderRuleRows,
   type FollowUpBucket,
@@ -34,6 +51,7 @@ import { formatInTz } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/follow-ups")({
   head: () => ({
@@ -64,6 +82,8 @@ const EMPTY_WITH_RULES =
   "Nobody is due yet. Reminders are scheduled from each finished job, so the first ones appear here once a job with a reminder on it is marked done.";
 const EMPTY_NO_RULES =
   "Add a reminder — a maintenance wash every 2 months, a ceramic top-up every 2 years — and after each finished job the client is due back here, reminded for you.";
+const CLOSED_HINT =
+  "A reminder closes by itself once that client is booked in for it again — those are under Closed (“Booked again”).";
 
 type View = "open" | "sent" | "closed" | "all";
 
@@ -111,6 +131,67 @@ function FollowUpsPage() {
   // A one-off reminder for one client, with no finished job behind it.
   const [clientReminderOpen, setClientReminderOpen] = useState(false);
 
+  // Every open follow-up, whatever the list below is filtered to: the reminders set for
+  // one client are listed in the card above, and anything a removed reminder left
+  // behind is flagged (it would otherwise still go out).
+  const openAll = useAllOpenFollowUps({ enabled: !tenant.isLoading });
+  const clientReminders = useMemo(() => openClientReminders(openAll.data), [openAll.data]);
+  const orphans = useMemo(
+    () => orphanedFollowUps(openAll.data, services.data),
+    [openAll.data, services.data],
+  );
+  const orphanIds = useMemo(
+    () =>
+      new Set([...orphans, ...orphanedFollowUps(followUps.items, services.data)].map((f) => f.id)),
+    [orphans, followUps.items, services.data],
+  );
+  const dismiss = useDismissFollowUps();
+  const [stopFailed, setStopFailed] = useState<ServiceFollowUp[]>([]);
+  const stopOrphans = async () => {
+    const targets = orphans;
+    if (targets.length === 0) return;
+    const { stopped, failed } = await dismiss.mutateAsync(targets);
+    setStopFailed(failed.map((f) => f.item));
+    if (failed.length > 0) {
+      toast.error(
+        `Stopped ${stopped.length} of ${targets.length}. ${followUpNames(failed.map((f) => f.item))} couldn't be stopped — try again.`,
+      );
+    } else {
+      toast.success(
+        `Stopped ${targets.length} ${targets.length === 1 ? "reminder" : "reminders"} from a removed reminder`,
+      );
+    }
+  };
+
+  // Tapping a reminder set for one client finds its row below: switch to a view that
+  // holds it, load pages until it is there, then scroll to it and flash it.
+  const [highlight, setHighlight] = useState<{ id: string; found: boolean } | null>(null);
+  const showRow = (f: ServiceFollowUp) => {
+    const statuses = VIEW_STATUSES[view];
+    if (statuses && !statuses.includes(f.status)) setView("open");
+    setHighlight({ id: f.id, found: false });
+  };
+  useEffect(() => {
+    if (!highlight || highlight.found || followUps.isLoading) return;
+    if (followUps.items.some((f) => f.id === highlight.id)) {
+      const el = document.getElementById(`follow-up-${highlight.id}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlight({ id: highlight.id, found: true });
+      return;
+    }
+    if (followUps.hasNextPage) {
+      if (!followUps.isFetchingNextPage) void followUps.fetchNextPage();
+    } else if (!followUps.isFetching) {
+      setHighlight(null);
+    }
+  }, [highlight, followUps]);
+  useEffect(() => {
+    if (!highlight?.found) return;
+    const timer = window.setTimeout(() => setHighlight(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [highlight]);
+
   // Group by how urgent each one is; the API already orders by due date within.
   const groups = useMemo(() => {
     const now = new Date();
@@ -157,6 +238,7 @@ function FollowUpsPage() {
               {rules.length === 0
                 ? `Nothing set up yet. A ${serviceNoun} can carry up to five — a wash every 2 months and a top-up every 2 years, say.`
                 : `${rules.length} ${rules.length === 1 ? "reminder" : "reminders"} across your ${serviceNoun}s. Tap one to change it.`}
+              {clientReminders.length > 0 ? ` ${clientReminders.length} set for one client.` : ""}
             </p>
           </div>
         </div>
@@ -220,6 +302,40 @@ function FollowUpsPage() {
             })}
           </ul>
         )}
+        {clientReminders.length > 0 ? (
+          <div className="border-t" data-testid="client-reminders">
+            <h3 className="px-4 pt-3 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Set for one client
+              <span className="ml-2 font-normal tabular-nums normal-case">
+                {clientReminders.length}
+              </span>
+            </h3>
+            <ul className="divide-y">
+              {clientReminders.map((f) => (
+                <li key={f.id} className="flex items-center gap-2 pr-3">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-secondary/40"
+                    onClick={() => showRow(f)}
+                    aria-label={`Show ${customerName(f)}'s reminder under Who is due`}
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+                      <CalendarClock className="size-4" />
+                    </span>
+                    <span className="grid min-w-0 flex-1 gap-0.5">
+                      <span className="truncate font-medium">{customerName(f)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {clientReminderSummary(f)} · due{" "}
+                        {formatInTz(f.dueAt, timezone, { dateStyle: "medium" })}
+                      </span>
+                    </span>
+                  </button>
+                  {canBook ? <FollowUpActions followUp={f} compact /> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
           Reminders about an upcoming {tenant.terminology.booking.toLowerCase()} (the day before,
           say) are under{" "}
@@ -256,6 +372,40 @@ function FollowUpsPage() {
           </Select>
         </div>
 
+        {canBook && orphans.length > 0 && ruleTarget === null ? (
+          <div
+            role="status"
+            className="flex flex-col gap-2 border-b bg-warning-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="orphaned-reminders"
+          >
+            <div className="flex min-w-0 items-start gap-2 text-sm">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
+              <div className="grid gap-0.5">
+                <p>
+                  {orphans.length} {orphans.length === 1 ? "reminder is" : "reminders are"} from a
+                  reminder you&rsquo;ve since removed, and will still go out (
+                  {followUpNames(orphans)}).
+                </p>
+                {stopFailed.some((f) => orphanIds.has(f.id)) ? (
+                  <p className="text-xs text-destructive">
+                    Couldn&rsquo;t stop{" "}
+                    {followUpNames(stopFailed.filter((f) => orphanIds.has(f.id)))} — try again.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 self-start sm:self-auto"
+              disabled={dismiss.isPending}
+              onClick={() => void stopOrphans()}
+            >
+              {dismiss.isPending ? "Stopping…" : stopFailed.length > 0 ? "Try again" : "Stop them"}
+            </Button>
+          </div>
+        ) : null}
+
         {followUps.isLoading || tenant.isLoading ? (
           <TableGhost rows={4} />
         ) : followUps.isError ? (
@@ -276,11 +426,11 @@ function FollowUpsPage() {
               icon={<BellRing className="size-6" />}
               title={view === "open" ? "Nobody is due yet" : "Nothing here"}
               description={
-                view !== "open"
-                  ? "Nothing matches this view. Switch to “Open” to see what is due."
-                  : rules.length > 0
-                    ? EMPTY_WITH_RULES
-                    : EMPTY_NO_RULES
+                view === "closed"
+                  ? "Nothing closed yet. Reminders you dismiss, and ones closed by a new booking (“Booked again”), land here."
+                  : view !== "open"
+                    ? `Nothing matches this view. Switch to “Open” to see what is due. ${CLOSED_HINT}`
+                    : `${rules.length > 0 ? EMPTY_WITH_RULES : EMPTY_NO_RULES} ${CLOSED_HINT}`
               }
               action={
                 view === "open" && (canBook || (rules.length === 0 && canEditRules)) ? (
@@ -321,7 +471,11 @@ function FollowUpsPage() {
                   {group.items.map((f) => (
                     <li
                       key={f.id}
-                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-3"
+                      id={`follow-up-${f.id}`}
+                      className={cn(
+                        "flex scroll-mt-24 flex-col gap-2 px-4 py-3 transition-colors duration-700 sm:flex-row sm:items-start sm:gap-3",
+                        highlight?.id === f.id && highlight.found && "bg-primary-soft",
+                      )}
                     >
                       <div className="grid min-w-0 flex-1 gap-0.5">
                         <div className="flex flex-wrap items-center gap-2">
@@ -347,6 +501,14 @@ function FollowUpsPage() {
                               f.status === "scheduled" && "bg-secondary text-secondary-foreground",
                             )}
                           />
+                          {orphanIds.has(f.id) ? (
+                            <span
+                              className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning-foreground"
+                              title="The reminder that scheduled this has been removed"
+                            >
+                              Reminder removed
+                            </span>
+                          ) : null}
                         </div>
                         <p className="text-sm">
                           {f.title}
@@ -425,6 +587,7 @@ function FollowUpsPage() {
         }}
         services={services.data ?? []}
         serviceNoun={serviceNoun}
+        canStopScheduled={canBook}
       />
     </>
   );

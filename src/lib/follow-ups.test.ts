@@ -4,15 +4,22 @@ import type { ServiceFollowUp } from "./api/types.ts";
 import {
   FOLLOW_UP_INTERVAL_PRESETS,
   clientReminderFromDraft,
+  clientReminderSummary,
+  dismissEach,
   draftsFromRules,
   existingOpenReminder,
   followUpBucket,
   followUpIntervalLabel,
+  followUpIntervalMonths,
+  followUpNames,
   followUpRuleSummary,
   followUpRulesSummary,
   leadDaysLabel,
   newFollowUpDraft,
   oneMonthFrom,
+  openClientReminders,
+  orphanedFollowUps,
+  followUpsForRule,
   relativeDueLabel,
   reminderRuleRows,
   rulesFromDrafts,
@@ -367,5 +374,184 @@ describe("existingOpenReminder", () => {
     assert.equal(existingOpenReminder([b], "svc", "car_2")?.id, "b");
     // One side unspecified: still counts as the same thing.
     assert.equal(existingOpenReminder([a], "svc", "car_1")?.id, "a");
+  });
+});
+
+describe("followUpsForRule", () => {
+  const mine = followUp({ id: "a", serviceId: "valet", ruleId: "r_valet" });
+  const sent = followUp({ id: "b", serviceId: "valet", ruleId: "r_valet", status: "sent" });
+  const closed = followUp({ id: "c", serviceId: "valet", ruleId: "r_valet", status: "dismissed" });
+  const otherRule = followUp({ id: "d", serviceId: "valet", ruleId: "r_other" });
+  const manual = followUp({ id: "e", serviceId: "valet", ruleId: null, source: "manual" });
+
+  it("returns the open follow-ups that rule scheduled, scheduled or sent", () => {
+    const ids = followUpsForRule([mine, sent, closed, otherRule, manual], "valet", "r_valet");
+    assert.deepEqual(
+      ids.map((f) => f.id),
+      ["a", "b"],
+    );
+    assert.deepEqual(followUpsForRule(undefined, "valet", "r_valet"), []);
+  });
+});
+
+describe("orphanedFollowUps", () => {
+  const services = [
+    { id: "valet", followUps: [] },
+    {
+      id: "coating",
+      followUps: [{ id: "r_ceramic", intervalMonths: 24, leadDays: 14, label: "Ceramic" }],
+    },
+  ];
+
+  it("flags open rule follow-ups whose rule is no longer on their service", () => {
+    const removed = followUp({ id: "a", serviceId: "valet", ruleId: "r_valet" });
+    const kept = followUp({ id: "b", serviceId: "coating", ruleId: "r_ceramic" });
+    assert.deepEqual(
+      orphanedFollowUps([removed, kept], services).map((f) => f.id),
+      ["a"],
+    );
+  });
+
+  it("leaves hand-set, closed and unknown-service follow-ups alone", () => {
+    const manual = followUp({ id: "m", serviceId: "valet", ruleId: null, source: "manual" });
+    const closed = followUp({
+      id: "c",
+      serviceId: "valet",
+      ruleId: "r_valet",
+      status: "dismissed",
+    });
+    const done = followUp({ id: "d", serviceId: "valet", ruleId: "r_valet", status: "completed" });
+    // A service not in the list (another location's, or not loaded): can't tell.
+    const elsewhere = followUp({ id: "x", serviceId: "unloaded", ruleId: "r_gone" });
+    assert.deepEqual(orphanedFollowUps([manual, closed, done, elsewhere], services), []);
+  });
+
+  it("says nothing until both lists are loaded", () => {
+    const removed = followUp({ serviceId: "valet", ruleId: "r_valet" });
+    assert.deepEqual(orphanedFollowUps([removed], undefined), []);
+    assert.deepEqual(orphanedFollowUps([removed], []), []);
+    assert.deepEqual(orphanedFollowUps(undefined, services), []);
+  });
+
+  it("still judges an archived service by its rules", () => {
+    const archived = [{ id: "valet", active: false, followUps: [] }];
+    const removed = followUp({ serviceId: "valet", ruleId: "r_valet", status: "sent" });
+    assert.equal(orphanedFollowUps([removed], archived).length, 1);
+  });
+});
+
+describe("followUpNames", () => {
+  const who = (firstName: string, lastName: string | null = null) =>
+    followUp({
+      customer: { id: firstName, firstName, lastName, email: null, phone: null },
+    });
+
+  it("lists each client once, with an 'and N more' tail", () => {
+    assert.equal(followUpNames([who("Dermetree")]), "Dermetree");
+    assert.equal(followUpNames([who("Dermetree"), who("David", "Dbx")]), "Dermetree and David Dbx");
+    assert.equal(
+      followUpNames([who("A"), who("B"), who("A"), who("C"), who("D"), who("E")]),
+      "A, B, C and 2 more",
+    );
+    assert.equal(followUpNames([followUp({ customer: null })]), "Client");
+    assert.equal(followUpNames([]), "");
+  });
+});
+
+describe("dismissEach", () => {
+  it("reports which stopped and which failed, counting already-closed as stopped", async () => {
+    const out = await dismissEach(
+      ["a", "b", "c"],
+      async (id) => {
+        if (id === "b") throw new Error("network");
+        if (id === "c") throw new Error("409");
+      },
+      (err) => err instanceof Error && err.message === "409",
+    );
+    assert.deepEqual(out.stopped, ["a", "c"]);
+    assert.deepEqual(
+      out.failed.map((f) => f.item),
+      ["b"],
+    );
+  });
+
+  it("does nothing for an empty list", async () => {
+    const out = await dismissEach([], async () => {
+      throw new Error("never");
+    });
+    assert.deepEqual(out, { stopped: [], failed: [] });
+  });
+});
+
+describe("followUpIntervalMonths / clientReminderSummary", () => {
+  it("reads the interval back from last done and due", () => {
+    const valet = followUp({
+      title: "Full valet",
+      lastDoneAt: "2026-09-16T12:00:00.000Z",
+      dueAt: "2026-11-16T12:00:00.000Z",
+    });
+    assert.equal(followUpIntervalMonths(valet), 2);
+    assert.equal(clientReminderSummary(valet), "Full valet every 2 months");
+    assert.equal(
+      clientReminderSummary(
+        followUp({
+          title: "Top-up",
+          lastDoneAt: "2024-09-13T12:00:00.000Z",
+          dueAt: "2026-09-13T12:00:00.000Z",
+        }),
+      ),
+      "Top-up every 2 years",
+    );
+  });
+
+  it("follows the month-end clamp the API uses", () => {
+    assert.equal(
+      followUpIntervalMonths({
+        lastDoneAt: "2026-08-31T12:00:00.000Z",
+        dueAt: "2026-10-31T12:00:00.000Z",
+      }),
+      2,
+    );
+    assert.equal(
+      followUpIntervalMonths({
+        lastDoneAt: "2026-12-31T12:00:00.000Z",
+        dueAt: "2027-02-28T12:00:00.000Z",
+      }),
+      2,
+    );
+  });
+
+  it("falls back to the title when the dates are not whole months apart", () => {
+    const odd = followUp({
+      title: "Full valet",
+      lastDoneAt: "2026-09-16T12:00:00.000Z",
+      dueAt: "2026-11-20T12:00:00.000Z",
+    });
+    assert.equal(followUpIntervalMonths(odd), null);
+    assert.equal(clientReminderSummary(odd), "Full valet");
+  });
+});
+
+describe("openClientReminders", () => {
+  it("keeps open hand-set reminders, soonest due first", () => {
+    const later = followUp({
+      id: "l",
+      source: "manual",
+      ruleId: null,
+      dueAt: "2027-03-01T00:00:00.000Z",
+    });
+    const sooner = followUp({
+      id: "s",
+      source: "manual",
+      ruleId: null,
+      status: "sent",
+      dueAt: "2026-12-01T00:00:00.000Z",
+    });
+    const booked = followUp({ id: "b", source: "manual", ruleId: null, status: "completed" });
+    const rule = followUp({ id: "r" });
+    assert.deepEqual(
+      openClientReminders([later, rule, booked, sooner]).map((f) => f.id),
+      ["s", "l"],
+    );
   });
 });

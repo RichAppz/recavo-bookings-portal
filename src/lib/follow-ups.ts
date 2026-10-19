@@ -312,6 +312,130 @@ export function isOpenFollowUp(followUp: Pick<ServiceFollowUp, "status">): boole
   return followUp.status === "scheduled" || followUp.status === "sent";
 }
 
+/* ---------------- Reminders whose rule has gone ---------------- */
+
+type RuleLink = Pick<ServiceFollowUp, "status" | "source" | "serviceId" | "ruleId">;
+
+/**
+ * The open follow-ups one rule scheduled — what removing that rule should stop.
+ * Hand-set ones (no rule) never match.
+ */
+export function followUpsForRule<T extends RuleLink>(
+  followUps: readonly T[] | undefined,
+  serviceId: string,
+  ruleId: string,
+): T[] {
+  return (followUps ?? []).filter(
+    (f) => isOpenFollowUp(f) && f.serviceId === serviceId && f.ruleId === ruleId,
+  );
+}
+
+/**
+ * Open follow-ups scheduled by a rule that is no longer on its service — left behind
+ * when the reminder was removed, and still due to go out. Only judged when the
+ * service itself is in `services`: one missing from the list (another location's,
+ * not loaded yet) says nothing about its rules, so it is never called orphaned.
+ */
+export function orphanedFollowUps<T extends RuleLink>(
+  followUps: readonly T[] | undefined,
+  services: readonly Pick<CatalogueService, "id" | "followUps">[] | undefined,
+): T[] {
+  if (!followUps?.length || !services?.length) return [];
+  const rulesByService = new Map(
+    services.map((s) => [s.id, new Set(s.followUps.map((r) => r.id))]),
+  );
+  return followUps.filter((f) => {
+    if (!isOpenFollowUp(f) || f.source !== "rule" || !f.ruleId) return false;
+    const rules = rulesByService.get(f.serviceId);
+    return rules !== undefined && !rules.has(f.ruleId);
+  });
+}
+
+/** "Dermetree, David Dbx and 1 more" — who a batch of follow-ups is for, each name once. */
+export function followUpNames(
+  followUps: readonly Pick<ServiceFollowUp, "customer">[],
+  max = 3,
+): string {
+  const names: string[] = [];
+  for (const f of followUps) {
+    const c = f.customer;
+    const name = c ? [c.firstName, c.lastName].filter(Boolean).join(" ") || "Client" : "Client";
+    if (!names.includes(name)) names.push(name);
+  }
+  if (names.length <= max) {
+    return names.length <= 1
+      ? (names[0] ?? "")
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  }
+  return `${names.slice(0, max).join(", ")} and ${names.length - max} more`;
+}
+
+export type DismissOutcome<T> = { stopped: T[]; failed: { item: T; error: unknown }[] };
+
+/**
+ * Dismisses each follow-up in turn and reports which stopped and which did not, so a
+ * partial failure can be shown and retried rather than reported as done. One that
+ * is already closed (`alreadyClosed`, the API's 409) counts as stopped — it will not
+ * go out either way.
+ */
+export async function dismissEach<T>(
+  items: readonly T[],
+  dismiss: (item: T) => Promise<unknown>,
+  alreadyClosed: (error: unknown) => boolean = () => false,
+): Promise<DismissOutcome<T>> {
+  const out: DismissOutcome<T> = { stopped: [], failed: [] };
+  for (const item of items) {
+    try {
+      await dismiss(item);
+      out.stopped.push(item);
+    } catch (error) {
+      if (alreadyClosed(error)) out.stopped.push(item);
+      else out.failed.push({ item, error });
+    }
+  }
+  return out;
+}
+
+/* ---------------- Reminders set for one client ---------------- */
+
+/**
+ * The interval a follow-up was set with, read back from its last-done and due dates
+ * (the API does not return it): calendar months in UTC, the same arithmetic that
+ * produced `dueAt`. Null when the dates do not line up with a whole number of months.
+ */
+export function followUpIntervalMonths(
+  followUp: Pick<ServiceFollowUp, "lastDoneAt" | "dueAt">,
+): number | null {
+  const done = new Date(followUp.lastDoneAt);
+  const due = new Date(followUp.dueAt);
+  if (Number.isNaN(done.getTime()) || Number.isNaN(due.getTime())) return null;
+  const guess =
+    (due.getUTCFullYear() - done.getUTCFullYear()) * 12 + (due.getUTCMonth() - done.getUTCMonth());
+  const dueDay = due.toISOString().slice(0, 10);
+  for (const months of [guess, guess - 1, guess + 1]) {
+    if (months < FOLLOW_UP_MIN_INTERVAL_MONTHS || months > FOLLOW_UP_MAX_INTERVAL_MONTHS) continue;
+    if (addCalendarMonths(done, months).toISOString().slice(0, 10) === dueDay) return months;
+  }
+  return null;
+}
+
+/** "Full valet every 2 months" — or just the title when the interval can't be read back. */
+export function clientReminderSummary(
+  followUp: Pick<ServiceFollowUp, "title" | "lastDoneAt" | "dueAt">,
+): string {
+  const months = followUpIntervalMonths(followUp);
+  return months ? `${followUp.title} ${followUpIntervalLabel(months)}` : followUp.title;
+}
+
+/** Open reminders set by hand for one client, soonest due first. */
+export function openClientReminders<T extends Pick<ServiceFollowUp, "status" | "source" | "dueAt">>(
+  followUps: readonly T[] | undefined,
+): T[] {
+  return (followUps ?? [])
+    .filter((f) => isOpenFollowUp(f) && f.source === "manual")
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+}
+
 /** "in 3 weeks", "in 2 years", "3 days ago" — coarse, for list rows. */
 export function relativeDueLabel(dueAt: string, now: Date = new Date()): string {
   const diff = new Date(dueAt).getTime() - now.getTime();
