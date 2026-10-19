@@ -337,9 +337,9 @@ export function TimeGrid({
       {empty && inner && cardHeight ? (
         <div className="pointer-events-none sticky top-0 left-0 z-30 h-0 w-0 overflow-visible">
           <div
-            className="absolute flex -translate-x-1/2 justify-center"
+            className="absolute left-0 flex justify-center"
             style={{
-              left: cardWidth / 2,
+              width: cardWidth,
               top: chromeHeight + Math.max(16, (cardHeight - chromeHeight) * 0.18),
             }}
           >
