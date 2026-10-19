@@ -26,7 +26,7 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
-        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and offers Message, Move, Copy link and Cancel as four quick buttons. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with Attended and No-show buttons.",
+        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and keeps Message, Move, Copy link and Cancel together in the ⋯ menu. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with Attended and No-show buttons.",
         where: "Bookings",
       },
     ],
