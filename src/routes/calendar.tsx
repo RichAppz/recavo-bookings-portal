@@ -48,7 +48,7 @@ import { summariseBookings } from "@/lib/calendar-stats";
 import { usePublicHolidays } from "@/lib/public-holidays";
 import { useSoleStaff } from "@/lib/sole";
 import { useIsPhone } from "@/hooks/use-media-query";
-import { useSwipe } from "@/hooks/use-swipe";
+import { SwipePager } from "@/components/SwipePager";
 import { EventModal } from "@/components/EventModal";
 import { ServiceFilterMenuItems } from "@/components/ServiceFilterSelect";
 import { PageHeader } from "@/components/ui-bits";
@@ -543,9 +543,10 @@ function CalendarPage() {
       ? `All ${staffNoun.toLowerCase()}s`
       : (staff.data?.find((s) => s.id === staffFilter)?.displayName ?? staffNoun);
 
-  // A sideways swipe on any view turns the page (day, week or month). On the phone
-  // Week grid, which pans through its seven columns, it only fires at either end.
-  const swipe = useSwipe((dir) => shift(dir));
+  // A sideways swipe on any view turns the page (day, week or month), the content
+  // following the finger and sliding across. On the phone Week grid, which pans
+  // through its seven columns, it only takes over at either end.
+  const swipe = { onPage: shift };
 
   const waitlistButton = (
     <Button
@@ -768,7 +769,7 @@ function CalendarPage() {
 
   const grid =
     view === "month" ? (
-      <div {...swipe}>
+      <SwipePager {...swipe}>
         <MonthGrid
           {...gridProps}
           days={days}
@@ -778,9 +779,9 @@ function CalendarPage() {
           onTapDay={tapDay}
           onOpenDay={openDay}
         />
-      </div>
+      </SwipePager>
     ) : view === "list" ? (
-      <div {...swipe}>
+      <SwipePager {...swipe}>
         <ListView
           {...gridProps}
           days={days}
@@ -789,9 +790,9 @@ function CalendarPage() {
           emptyActions={emptyActions}
           onNext={() => shift(1)}
         />
-      </div>
+      </SwipePager>
     ) : phone && view === "day" ? (
-      <div {...swipe}>
+      <SwipePager {...swipe}>
         <TimeGrid
           {...gridProps}
           variant="phoneDay"
@@ -803,9 +804,9 @@ function CalendarPage() {
           onEmptySlot={openChooser}
           onOpenDay={openDay}
         />
-      </div>
+      </SwipePager>
     ) : (
-      <div
+      <SwipePager
         {...swipe}
         className={cn("surface-card overflow-hidden", phone ? "rounded-2xl" : "rounded-[18px]")}
       >
@@ -821,7 +822,7 @@ function CalendarPage() {
           onEmptySlot={openChooser}
           onOpenDay={openDay}
         />
-      </div>
+      </SwipePager>
     );
 
   const legend =

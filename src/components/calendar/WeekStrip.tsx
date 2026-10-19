@@ -1,4 +1,4 @@
-import { useSwipe } from "@/hooks/use-swipe";
+import { SwipePager } from "@/components/SwipePager";
 import { addDays, isoDate, startOfWeek } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -22,52 +22,52 @@ export function WeekStrip({
   const monday = startOfWeek(selected);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
   const selectedIso = isoDate(selected);
-  const swipe = useSwipe(onShiftWeek);
   return (
-    <div
-      role="group"
-      aria-label="Pick a day"
-      className="grid grid-cols-7 gap-1 px-0.5 pt-1 pb-2.5 select-none"
-      {...swipe}
-    >
-      {days.map((day) => {
-        const iso = isoDate(day);
-        const active = iso === selectedIso;
-        const today = iso === todayIso;
-        const busy = busyDays.has(iso);
-        return (
-          <button
-            key={iso}
-            type="button"
-            onClick={() => onSelect(day)}
-            aria-pressed={active}
-            aria-label={`${day.toLocaleDateString("en-GB", { dateStyle: "full" })}${busy ? ", has sessions" : ""}`}
-            className={cn(
-              "flex min-h-[58px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-[14px] py-1.5",
-              active ? "bg-primary text-primary-foreground" : "hover:bg-secondary/60",
-            )}
-          >
-            <span className={cn("text-[11px] font-bold uppercase", !active && "opacity-75")}>
-              {day.toLocaleDateString("en-GB", { weekday: "short" })}
-            </span>
-            <span
+    <SwipePager onPage={onShiftWeek}>
+      <div
+        role="group"
+        aria-label="Pick a day"
+        className="grid grid-cols-7 gap-1 px-0.5 pt-1 pb-2.5 select-none"
+      >
+        {days.map((day) => {
+          const iso = isoDate(day);
+          const active = iso === selectedIso;
+          const today = iso === todayIso;
+          const busy = busyDays.has(iso);
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onSelect(day)}
+              aria-pressed={active}
+              aria-label={`${day.toLocaleDateString("en-GB", { dateStyle: "full" })}${busy ? ", has sessions" : ""}`}
               className={cn(
-                "text-[17px] leading-5 font-extrabold tabular-nums",
-                today && !active && "text-primary",
+                "flex min-h-[58px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-[14px] py-1.5",
+                active ? "bg-primary text-primary-foreground" : "hover:bg-secondary/60",
               )}
             >
-              {day.getDate()}
-            </span>
-            <span
-              aria-hidden
-              className={cn(
-                "size-[5px] rounded-full",
-                busy ? (active ? "bg-primary-foreground" : "bg-primary") : "bg-transparent",
-              )}
-            />
-          </button>
-        );
-      })}
-    </div>
+              <span className={cn("text-[11px] font-bold uppercase", !active && "opacity-75")}>
+                {day.toLocaleDateString("en-GB", { weekday: "short" })}
+              </span>
+              <span
+                className={cn(
+                  "text-[17px] leading-5 font-extrabold tabular-nums",
+                  today && !active && "text-primary",
+                )}
+              >
+                {day.getDate()}
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  "size-[5px] rounded-full",
+                  busy ? (active ? "bg-primary-foreground" : "bg-primary") : "bg-transparent",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </SwipePager>
   );
 }

@@ -1,8 +1,56 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { scrollEdges, swipeDirection } from "./swipe.ts";
+import { flickDirection, followOffset, scrollEdges, swipeAxis, swipeDirection } from "./swipe.ts";
 
 const free = { atStart: true, atEnd: true };
+
+describe("swipeAxis", () => {
+  it("waits for the finger to move past the slop", () => {
+    assert.equal(swipeAxis(0, 0), null);
+    assert.equal(swipeAxis(5, -6), null);
+  });
+
+  it("locks sideways only when the drag is clearly sideways", () => {
+    assert.equal(swipeAxis(12, 2), "x");
+    assert.equal(swipeAxis(-9, 0), "x");
+    assert.equal(swipeAxis(10, 8), "y");
+    assert.equal(swipeAxis(0, 14), "y");
+  });
+});
+
+describe("followOffset", () => {
+  it("follows the finger when nothing underneath is panning", () => {
+    assert.equal(followOffset({ dx: -37, dy: 0, ...free }), -37);
+    assert.equal(followOffset({ dx: 22, dy: 0, ...free }), 22);
+    assert.equal(followOffset({ dx: 0, dy: 0, ...free }), 0);
+  });
+
+  it("stays put while the scroller underneath still has room that way", () => {
+    assert.equal(followOffset({ dx: -37, dy: 0, atStart: true, atEnd: false }), 0);
+    assert.equal(followOffset({ dx: 22, dy: 0, atStart: false, atEnd: true }), 0);
+    assert.equal(followOffset({ dx: -37, dy: 0, atStart: false, atEnd: true }), -37);
+    assert.equal(followOffset({ dx: 22, dy: 0, atStart: true, atEnd: false }), 22);
+  });
+});
+
+describe("flickDirection", () => {
+  it("pages on a short, fast flick in the same direction", () => {
+    assert.equal(flickDirection({ dx: -24, dy: 2, ...free }, -0.8), 1);
+    assert.equal(flickDirection({ dx: 30, dy: 0, ...free }, 0.5), -1);
+  });
+
+  it("ignores slow, tiny, reversed or vertical flicks", () => {
+    assert.equal(flickDirection({ dx: -24, dy: 2, ...free }, -0.2), null);
+    assert.equal(flickDirection({ dx: -10, dy: 0, ...free }, -1), null);
+    assert.equal(flickDirection({ dx: -24, dy: 0, ...free }, 0.9), null);
+    assert.equal(flickDirection({ dx: -24, dy: 30, ...free }, -0.9), null);
+  });
+
+  it("keeps the edge rule of a normal swipe", () => {
+    assert.equal(flickDirection({ dx: -24, dy: 0, atStart: true, atEnd: false }, -1), null);
+    assert.equal(flickDirection({ dx: -24, dy: 0, atStart: false, atEnd: true }, -1), 1);
+  });
+});
 
 describe("swipeDirection", () => {
   it("pages forward on a swipe to the left and back on a swipe to the right", () => {

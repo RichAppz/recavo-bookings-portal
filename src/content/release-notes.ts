@@ -31,6 +31,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "improved",
+        text: "Swiping between days, weeks and months on the calendar now moves with your finger and slides across, the way it does on your phone's own calendar, instead of switching in place. A quick flick turns the page too; let go early and it eases back.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
         text: "A booking marked as attended can still be edited to correct the record — what was actually done, the price, who did it, a note or the date — and stays attended. It can't be moved or cancelled, and the client only hears about the change if you choose to tell them.",
         where: "Bookings",
       },

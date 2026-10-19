@@ -22,6 +22,46 @@ export function swipeDirection(g: SwipeGesture, threshold = 48): SwipeDir | null
   return g.atStart ? -1 : null;
 }
 
+/**
+ * Which way a touch is heading once it has moved past `slop` px: `"x"` for a
+ * sideways drag the page should follow, `"y"` for a scroll the browser owns. Decided
+ * once per gesture and then kept, so a swipe that drifts up a little keeps sliding
+ * and a scroll that drifts sideways keeps scrolling. Same 1.5:1 rule as
+ * `swipeDirection`, so what follows the finger is what will page on release.
+ */
+export function swipeAxis(dx: number, dy: number, slop = 8): "x" | "y" | null {
+  if (Math.abs(dx) < slop && Math.abs(dy) < slop) return null;
+  return Math.abs(dx) > Math.abs(dy) * 1.5 ? "x" : "y";
+}
+
+/**
+ * How far the page should follow the finger mid-gesture. Zero when the thing under
+ * the finger is still panning that way itself (the phone Week grid mid-week): the
+ * browser is already moving it, and sliding the whole page too would double up.
+ */
+export function followOffset(g: SwipeGesture): number {
+  if (g.dx < 0) return g.atEnd ? g.dx : 0;
+  if (g.dx > 0) return g.atStart ? g.dx : 0;
+  return 0;
+}
+
+/**
+ * A short, quick flick turns the page too, the way it does in iOS, even when the
+ * finger never travelled `threshold` px. `velocity` is px/ms over the last few
+ * samples, signed like `dx`; the flick must be going the same way the page has
+ * been dragged, and still past the same edge checks.
+ */
+export function flickDirection(
+  g: SwipeGesture,
+  velocity: number,
+  minVelocity = 0.45,
+  minDistance = 16,
+): SwipeDir | null {
+  if (Math.abs(velocity) < minVelocity) return null;
+  if (Math.sign(velocity) !== Math.sign(g.dx)) return null;
+  return swipeDirection(g, minDistance);
+}
+
 /** Edge state of a sideways scroller, with a pixel of slack for sub-pixel widths. */
 export function scrollEdges(el: {
   scrollLeft: number;
