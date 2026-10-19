@@ -382,17 +382,28 @@ export async function dismissEach<T>(
   items: readonly T[],
   dismiss: (item: T) => Promise<unknown>,
   alreadyClosed: (error: unknown) => boolean = () => false,
+  concurrency = 4,
 ): Promise<DismissOutcome<T>> {
-  const out: DismissOutcome<T> = { stopped: [], failed: [] };
-  for (const item of items) {
-    try {
-      await dismiss(item);
-      out.stopped.push(item);
-    } catch (error) {
-      if (alreadyClosed(error)) out.stopped.push(item);
-      else out.failed.push({ item, error });
+  const settled: ({ ok: true } | { ok: false; error: unknown })[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        await dismiss(items[index]!);
+        settled[index] = { ok: true };
+      } catch (error) {
+        settled[index] = alreadyClosed(error) ? { ok: true } : { ok: false, error };
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  const out: DismissOutcome<T> = { stopped: [], failed: [] };
+  items.forEach((item, i) => {
+    const s = settled[i]!;
+    if (s.ok) out.stopped.push(item);
+    else out.failed.push({ item, error: s.error });
+  });
   return out;
 }
 

@@ -475,6 +475,30 @@ describe("dismissEach", () => {
     );
   });
 
+  it("runs a few at a time and still reports every item once, in order", async () => {
+    let running = 0;
+    let peak = 0;
+    const ids = ["a", "b", "c", "d", "e", "f", "g"];
+    const out = await dismissEach(
+      ids,
+      async (id) => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((r) => setTimeout(r, id === "a" ? 15 : 2));
+        running -= 1;
+        if (id === "e") throw new Error("down");
+      },
+      undefined,
+      3,
+    );
+    assert.equal(peak, 3);
+    assert.deepEqual(out.stopped, ["a", "b", "c", "d", "f", "g"]);
+    assert.deepEqual(
+      out.failed.map((f) => f.item),
+      ["e"],
+    );
+  });
+
   it("does nothing for an empty list", async () => {
     const out = await dismissEach([], async () => {
       throw new Error("never");
