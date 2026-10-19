@@ -267,21 +267,25 @@ export function TimeGrid({
     el.scrollTop = ((targetMin - rangeStartMin) / 60) * hourHeight;
     if (variant === "phoneWeek") {
       const left = todayInView ? isoDays.indexOf(todayIso) * 74 : 0;
-      // A swipe that turned the page can still be flinging the scroller when the new
-      // week renders. Taking scrolling away for a frame cancels the fling; the
-      // timeout catches anything that survives it.
-      el.style.overflow = "hidden";
+      // A swipe that turned the page is usually still flinging the scroller (on the
+      // compositor, so nothing on the main thread cancels it) when the new week
+      // renders. Hold the position for a moment, letting go as soon as a new finger
+      // lands so a deliberate pan is never fought.
       el.scrollLeft = left;
-      const frame = window.requestAnimationFrame(() => {
-        el.style.overflow = "";
-        el.scrollLeft = left;
-      });
-      const settle = window.setTimeout(() => {
-        el.scrollLeft = left;
-      }, 240);
+      let pinned = true;
+      const release = () => {
+        pinned = false;
+      };
+      const onScroll = () => {
+        if (pinned && el.scrollLeft !== left) el.scrollLeft = left;
+      };
+      el.addEventListener("scroll", onScroll, { passive: true });
+      el.addEventListener("touchstart", release, { passive: true });
+      const settle = window.setTimeout(release, 1000);
       return () => {
-        window.cancelAnimationFrame(frame);
-        el.style.overflow = "";
+        release();
+        el.removeEventListener("scroll", onScroll);
+        el.removeEventListener("touchstart", release);
         window.clearTimeout(settle);
       };
     }
