@@ -98,6 +98,7 @@ import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import { adjustmentLabel, formatAdjustment, linePriceMinor } from "@/lib/booking-price";
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
+import { spendableUnits } from "@/lib/portal-credits";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -294,7 +295,7 @@ export function AddBookingModal({
   const noCredit =
     Boolean(customerId) &&
     customerCredits.isSuccess &&
-    !customerCredits.data.some((c) => c.balance.available > 0);
+    !customerCredits.data.some((c) => spendableUnits(c) > 0);
   const creditOffered = !noPackages && !noCredit;
   // Never leave the form on a hidden option: fall back to the remembered up-front /
   // after-the-job choice, which is always available.

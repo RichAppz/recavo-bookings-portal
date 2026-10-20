@@ -155,6 +155,7 @@ import {
 import { customerLifetimeSpendMinor } from "@/lib/booking-payment";
 import { PERMISSIONS } from "@/lib/permissions";
 import { formatInTz, formatMoney, isoDate, ukDate } from "@/lib/format";
+import { entitlementExpired, spendableUnits } from "@/lib/portal-credits";
 import { suggestedBookingDate } from "@/lib/waitlist";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -258,7 +259,7 @@ function ClientProfile() {
     )
     .sort((a, b) => a.start.localeCompare(b.start));
 
-  const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + e.balance.available, 0);
+  const totalCredits = (credits.data ?? []).reduce((sum, e) => sum + spendableUnits(e), 0);
   const lifetimeSpendMinor = customerLifetimeSpendMinor(
     bookings.data ?? [],
     payments.payments ?? [],
@@ -1662,6 +1663,7 @@ function EntitlementRow({
   const [showLedger, setShowLedger] = useState(false);
   const ledger = useEntitlementLedger(showLedger ? view.entitlement.id : undefined);
   const adjust = useAdjustEntitlement();
+  const expired = entitlementExpired(view.entitlement);
 
   return (
     <div className="px-4 py-3 sm:px-5">
@@ -1669,18 +1671,31 @@ function EntitlementRow({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{packageName}</p>
           <p className="text-xs text-muted-foreground">
-            Expires {ukDate(view.entitlement.expiresAt.slice(0, 10))} · issued{" "}
-            {view.entitlement.unitsIssued}
+            {expired ? "Expired" : "Expires"} {ukDate(view.entitlement.expiresAt.slice(0, 10))} ·
+            issued {view.entitlement.unitsIssued}
           </p>
         </div>
-        <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-semibold text-primary tabular-nums">
-          {view.balance.available} available
-        </span>
-        <StatusBadge status={view.entitlement.status} />
+        {expired ? (
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground tabular-nums">
+            {view.balance.available > 0
+              ? `${view.balance.available} unused, can't be booked`
+              : "Used up"}
+          </span>
+        ) : (
+          <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-semibold text-primary tabular-nums">
+            {view.balance.available} available
+          </span>
+        )}
+        <StatusBadge status={expired ? "expired" : view.entitlement.status} />
         <Button
           variant="outline"
           size="sm"
-          disabled={disabled || adjust.isPending}
+          title={
+            expired
+              ? "This package has expired. Add credits to a current package instead."
+              : undefined
+          }
+          disabled={disabled || adjust.isPending || expired}
           onClick={() =>
             adjust.mutate({
               entitlementId: view.entitlement.id,

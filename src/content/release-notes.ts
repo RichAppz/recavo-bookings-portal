@@ -51,6 +51,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "fixed",
+        text: "Credits left on a package after its expiry date no longer count. A client's page shows only the credits they can still book with, an expired package reads “Expired” with its leftover credits marked as unusable, and you can't add credits to it by mistake. New bookings no longer offer “Use package credit” when the only credits left have expired, and clients booking online aren't offered an expired credit that would then be refused.",
+        where: "Clients",
+      },
+      {
+        kind: "fixed",
         text: "Opening book.recavo.app while you're signed in there with an account that also runs a business now keeps you on book.recavo.app and opens your client account. Before, it could open the business console there, and if the plan needed attention it carried you over to bookings.recavo.app's billing page.",
         where: "book.recavo.app",
       },

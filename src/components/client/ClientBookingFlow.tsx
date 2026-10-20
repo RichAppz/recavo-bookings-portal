@@ -94,6 +94,7 @@ import {
   type BookingPageContent,
 } from "@/lib/client-theme";
 import { formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
+import { creditsCovering } from "@/lib/portal-credits";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
 import { hasExtraTimesForService } from "@/lib/offer-extra-times";
 
@@ -491,13 +492,7 @@ export function ClientBookingFlow({
 
   const eligibleCredit = useMemo(() => {
     if (!hasAccountHere || !serviceId) return null;
-    return (
-      (credits.data ?? []).find(
-        (c) =>
-          c.available > 0 &&
-          (c.eligibleServiceIds.length === 0 || c.eligibleServiceIds.includes(serviceId)),
-      ) ?? null
-    );
+    return creditsCovering(credits.data, serviceId)[0] ?? null;
   }, [hasAccountHere, credits.data, serviceId]);
 
   const look = useMemo<CheckoutLook>(() => {
