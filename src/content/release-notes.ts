@@ -6,6 +6,37 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-20",
+    title: "An Overview that starts with today",
+    items: [
+      {
+        kind: "improved",
+        text: "The Overview now answers “what's happening now?” before “how's the month going?”, and uses the whole width of the page. It greets you by name for the time of day, and an Up next card shows your next session, how long until it starts (“In 42 min”, “On now · ends 12:00”, “Tomorrow 08:00”), who it's with and whether it's paid, with Message and Open — or Send payment link when money is due. Trainers see their own next session.",
+        where: "Overview",
+      },
+      {
+        kind: "improved",
+        text: "Today lists every session with one status each — Upcoming, Unpaid, Mark attendance, Attended or No-show — instead of two badges side by side. Finished sessions fade, a red line marks the current time, and Mark attendance is a button: tap it and choose Attended or No-show without opening the booking. Events stay in the list in time order.",
+        where: "Overview",
+      },
+      {
+        kind: "new",
+        text: "Needs your attention counts the things that actually need doing and opens straight to them: payments to collect this week or overdue, sessions to mark, package requests, add-on requests, clients on the waitlist, low text credits and any set-up steps left. When there's nothing, it says you're all caught up. On a phone it's one amber row that opens the full list.",
+        where: "Overview",
+      },
+      {
+        kind: "improved",
+        text: "“How October is going” shows Money taken, Sessions, Attended and Places filled with the change on the same days last month and a small trend, for this Week, Month or Year (Last 7 days, Last 30 days and All time are under More). Money in and Attendance are now simple bars with a labelled row for each payment method or outcome, plus Still to collect, Package credits used and your Busiest day.",
+        where: "Overview",
+      },
+      {
+        kind: "new",
+        text: "Hide amounts (the eye button) swaps every £ on the page for £••• — handy with a client looking over your shoulder — and Customise lets you hide, show and reorder the cards and quick actions. Both are remembered for you on that device; any cards you'd hidden before stay hidden.",
+        where: "Overview",
+      },
+    ],
+  },
+  {
     date: "2026-10-19",
     title: "A calendar that uses the whole screen",
     items: [
