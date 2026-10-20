@@ -58,6 +58,7 @@ import {
 } from "@/lib/api/types";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { ukDate } from "@/lib/format";
+import { SUMMARY_SKIPPED_FIELD_KEYS } from "@/lib/linked-record-summary";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
@@ -88,7 +89,9 @@ export const Route = createFileRoute("/vehicles")({
 
 /** Short "values" preview: first few scalar field values, e.g. reg · make · model. */
 function valuesSummary(values: LinkedRecord["values"]): string {
-  return Object.values((values ?? {}) as Record<string, unknown>)
+  return Object.entries((values ?? {}) as Record<string, unknown>)
+    .filter(([key]) => !SUMMARY_SKIPPED_FIELD_KEYS.has(key))
+    .map(([, v]) => v)
     .filter((v): v is string | number => typeof v === "string" || typeof v === "number")
     .slice(0, 3)
     .map(String)

@@ -44,6 +44,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "Month view chips give each detail you tick in the ⋯ menu its own line — the time, then the client, the vehicle, and the service (with its category) — so a chip showing a client and a vehicle is two lines rather than one squeezed line that has to slide.",
         where: "Calendar",
       },
+      {
+        kind: "improved",
+        text: "Texts you reword can go out without the link at the end. Under the text, switch off “Add the Book link at the end” (or Pay, Details — whichever link that message carries) and the preview shows exactly what the client gets; handy when your text already says “call 07… to book”. Put {{link}} in your wording to place the link somewhere else instead.",
+        where: "Settings → Client messages",
+      },
     ],
   },
   {

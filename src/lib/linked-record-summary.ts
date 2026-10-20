@@ -15,6 +15,20 @@ const SUMMARY_DATA_TYPES: ReadonlySet<string> = new Set([
 
 const SUMMARY_MAX_PARTS = 3;
 
+/**
+ * Fields that describe a visit rather than the thing itself: mileage changes every
+ * time a car comes in, and a bare "45210" beside the plate reads as anything. Kept
+ * in step with the API's list.
+ */
+export const SUMMARY_SKIPPED_FIELD_KEYS: ReadonlySet<string> = new Set(["mileage"]);
+
+/** "45,210 miles"; null when the value isn't a whole, non-negative number. */
+export function mileageLabel(value: unknown): string | null {
+  const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) return null;
+  return `${n.toLocaleString("en-GB")} ${n === 1 ? "mile" : "miles"}`;
+}
+
 export type SummaryField = {
   fieldKey: string;
   dataType: string;
@@ -61,7 +75,13 @@ export function summariseLinkedRecord(
   fields: ReadonlyArray<SummaryField>,
 ): string {
   const ordered = fields
-    .filter((f) => f.status === "active" && f.staffVisible && SUMMARY_DATA_TYPES.has(f.dataType))
+    .filter(
+      (f) =>
+        f.status === "active" &&
+        f.staffVisible &&
+        SUMMARY_DATA_TYPES.has(f.dataType) &&
+        !SUMMARY_SKIPPED_FIELD_KEYS.has(f.fieldKey),
+    )
     .sort((a, b) => a.displayOrder - b.displayOrder);
   const values = record.values ?? {};
   const parts: string[] = [];
