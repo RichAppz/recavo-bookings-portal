@@ -29,7 +29,7 @@ import {
   useCustomers,
   useLinkedRecordDefinition,
 } from "@/lib/api/hooks";
-import type { CatalogueService } from "@/lib/api/types";
+import type { CatalogueService, ServiceFollowUp } from "@/lib/api/types";
 import {
   FOLLOW_UP_DEFAULT_LEAD_DAYS,
   FOLLOW_UP_INTERVAL_PRESETS,
@@ -78,6 +78,7 @@ export function ClientReminderDialog({
   services,
   serviceNoun,
   defaults,
+  onShowExisting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -86,6 +87,8 @@ export function ClientReminderDialog({
   serviceNoun: string;
   /** Pre-filled from the client's page or a follow-up row. */
   defaults?: ClientReminderDefaults;
+  /** Closes the dialog and points at the open reminder the duplicate warning names. */
+  onShowExisting?: (followUp: ServiceFollowUp) => void;
 }) {
   const tenant = useTenant();
   const timezone = tenant.business?.defaultTimezone || "Europe/London";
@@ -413,16 +416,32 @@ export function ClientReminderDialog({
           </div>
 
           {duplicate ? (
-            <p
-              className="rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning-foreground"
+            <div
+              className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning-foreground sm:flex-row sm:items-center"
               data-testid="client-reminder-duplicate"
             >
-              {customerName} already has an open reminder for{" "}
-              {service?.name ?? `this ${serviceNoun}`}
-              {duplicate.linkedRecord ? ` on ${duplicate.linkedRecord.label}` : ""}, due{" "}
-              {formatInTz(duplicate.dueAt, timezone, { dateStyle: "medium" })}. Saving adds a second
-              one; dismiss the other from “Who is due” if it is no longer wanted.
-            </p>
+              <p className="min-w-0 flex-1">
+                {customerName} already has an open reminder for{" "}
+                {service?.name ?? `this ${serviceNoun}`}
+                {duplicate.linkedRecord ? ` on ${duplicate.linkedRecord.label}` : ""}, due{" "}
+                {formatInTz(duplicate.dueAt, timezone, { dateStyle: "medium" })}. Saving adds a
+                second one.
+              </p>
+              {onShowExisting ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 self-start sm:self-center"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onShowExisting(duplicate);
+                  }}
+                >
+                  Show it
+                </Button>
+              ) : null}
+            </div>
           ) : null}
 
           <DialogFooter className="gap-2">

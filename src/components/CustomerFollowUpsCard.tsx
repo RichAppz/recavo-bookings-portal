@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { BellRing, Plus } from "lucide-react";
 import { FollowUpActions } from "@/components/FollowUpActions";
@@ -27,8 +28,11 @@ export function CustomerFollowUpsCard({
   customerId,
   onBook,
   onRemind,
+  highlight,
 }: {
   customerId: string;
+  /** Scrolls to and flashes this reminder; a new object each time it is asked for. */
+  highlight?: { id: string } | null;
   /** Opens the booking form prefilled for this follow-up. */
   onBook?: (followUp: ServiceFollowUp) => void;
   /** Opens "Remind a client" prefilled for this client. */
@@ -40,6 +44,22 @@ export function CustomerFollowUpsCard({
   const followUps = useCustomerFollowUps(customerId);
   const rows = followUps.data ?? [];
   const canRemind = Boolean(onRemind) && canAct;
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!highlight) return;
+    // Waits a frame so the dialog that asked has let go of focus and scroll.
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(`client-follow-up-${highlight.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashId(highlight.id);
+    });
+    const timer = window.setTimeout(() => setFlashId(null), 2500);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [highlight]);
   if (followUps.isLoading || (rows.length === 0 && !canRemind)) return null;
 
   const open = rows.filter(isOpenFollowUp);
@@ -73,7 +93,14 @@ export function CustomerFollowUpsCard({
         {[...open, ...closed].map((f) => {
           const bucket = followUpBucket(f);
           return (
-            <li key={f.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start">
+            <li
+              key={f.id}
+              id={`client-follow-up-${f.id}`}
+              className={cn(
+                "flex scroll-mt-20 flex-col gap-2 px-5 py-3 transition-colors duration-700 sm:flex-row sm:items-start",
+                flashId === f.id && "bg-primary-soft",
+              )}
+            >
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium">

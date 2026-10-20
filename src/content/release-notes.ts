@@ -34,6 +34,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "Hide amounts (the eye button) swaps every £ on the page for £••• — handy with a client looking over your shoulder — and Customise lets you hide, show and reorder the cards and quick actions. Both are remembered for you on that device; any cards you'd hidden before stay hidden.",
         where: "Overview",
       },
+      {
+        kind: "improved",
+        text: "When Remind a client warns that the client already has an open reminder for that service, Show it closes the form and takes you straight to the one they have: on a client's page it scrolls to it under Reminders, and on the Reminders page it finds its row under Who is due.",
+        where: "Reminders",
+      },
     ],
   },
   {

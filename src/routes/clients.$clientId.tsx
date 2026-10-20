@@ -201,6 +201,8 @@ function ClientProfile() {
   // "Book" from a follow-up row: the service and vehicle come along with the client.
   const [bookingFollowUp, setBookingFollowUp] = useState<ServiceFollowUp | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
+  // A fresh object each time so "Show it" on the same reminder twice still scrolls.
+  const [shownFollowUp, setShownFollowUp] = useState<{ id: string } | null>(null);
   const servicesForReminder = useServices();
   // "Book" from a waitlist row: service, vehicle, place and person come along too, and
   // the entry closes itself once the booking exists.
@@ -385,6 +387,7 @@ function ClientProfile() {
                   }
             }
             onRemind={anonymised ? undefined : () => setReminderOpen(true)}
+            highlight={shownFollowUp}
           />
           <CustomerWaitlistCard
             customerId={client.id}
@@ -708,6 +711,7 @@ function ClientProfile() {
           tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
         ).toLowerCase()}
         defaults={{ customerId: client.id }}
+        onShowExisting={(f) => setShownFollowUp({ id: f.id })}
       />
 
       <AddBookingModal

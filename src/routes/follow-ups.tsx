@@ -578,6 +578,7 @@ function FollowUpsPage() {
         onOpenChange={setClientReminderOpen}
         services={services.data ?? []}
         serviceNoun={serviceNoun}
+        onShowExisting={showRow}
       />
 
       <ReminderRuleDialog
