@@ -179,7 +179,8 @@ export function ClientReview({
     confirming ||
     cardSubmitting ||
     expired ||
-    !agreed ||
+    // A credit booking shows its cancellation terms as a line, with no box to tick.
+    (!agreed && !isCredit) ||
     promo.pending ||
     (paying && (!payment || !cardReady));
 

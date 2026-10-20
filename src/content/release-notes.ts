@@ -81,6 +81,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Clients",
       },
       {
+        kind: "fixed",
+        text: "Booking with a session credit works again on your booking page. Choosing “Use a session credit” left Confirm booking greyed out, because it waited for a policy box that isn't shown when you pay with a credit (the cancellation terms are spelled out instead), so clients could only finish by paying.",
+        where: "Booking page",
+      },
+      {
         kind: "improved",
         text: "Your account no longer puts a “1 credit” tag on bookings paid with a credit. Nothing is owed on them, and the Credits card beside Next up already shows how many you have left.",
         where: "Your account",
