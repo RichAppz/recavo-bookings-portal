@@ -51,6 +51,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
       },
       {
         kind: "fixed",
+        text: "Opening book.recavo.app while you're signed in there with an account that also runs a business now keeps you on book.recavo.app and opens your client account. Before, it could open the business console there, and if the plan needed attention it carried you over to bookings.recavo.app's billing page.",
+        where: "book.recavo.app",
+      },
+      {
+        kind: "fixed",
         text: "Removing a reminder now stops the reminders it had already scheduled. Before, customers it had already been set for would still have been reminded. The confirm step tells you who first — “This also stops 2 reminders already scheduled (Dermetree, David Dbx)” — and if any can't be stopped you're told which, with Try again.",
         where: "Reminders",
       },
