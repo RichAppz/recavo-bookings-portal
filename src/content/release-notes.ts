@@ -39,6 +39,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "When Remind a client warns that the client already has an open reminder for that service, Show it closes the form and takes you straight to the one they have: on a client's page it scrolls to it under Reminders, and on the Reminders page it finds its row under Who is due.",
         where: "Reminders",
       },
+      {
+        kind: "improved",
+        text: "Month view chips give each detail you tick in the ⋯ menu its own line — the time, then the client, the vehicle, and the service (with its category) — so a chip showing a client and a vehicle is two lines rather than one squeezed line that has to slide.",
+        where: "Calendar",
+      },
     ],
   },
   {

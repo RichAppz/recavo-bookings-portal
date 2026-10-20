@@ -349,8 +349,8 @@ function CalendarPage() {
     isCarDetailing ? DEFAULT_MONTH_BAR_FIELDS_AUTOMOTIVE : DEFAULT_MONTH_BAR_FIELDS,
   );
   const monthBar = useMemo(() => parseMonthBarFields(monthBarRaw), [monthBarRaw]);
-  // The time on its own line above the details, or a single line per chip so a busy
-  // month shows more at once. Per device, like the fields.
+  // The time on its own line above the details, or left off so a busy month shows
+  // more at once. Per device, like the fields.
   const [monthTime, setMonthTime] = useStoredState<"on" | "off">(prefKey("monthTime"), "on", [
     "on",
     "off",

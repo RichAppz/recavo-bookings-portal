@@ -10,6 +10,7 @@ import {
   laneDepthByColumn,
   layoutOverlaps,
   listDayHeading,
+  monthChipLineCount,
   periodDays,
   periodInPast,
   periodWord,
@@ -373,5 +374,18 @@ describe("laneDepthByColumn", () => {
       laneDepthByColumn([{ startCol: 5, endCol: 9, lane: 0 }], 7),
       [0, 0, 0, 0, 0, 1, 1],
     );
+  });
+});
+
+describe("monthChipLineCount", () => {
+  it("gives the time and each chosen detail a line, category and service sharing one", () => {
+    assert.equal(monthChipLineCount(new Set(["client", "record"]), false), 2);
+    assert.equal(monthChipLineCount(new Set(["client", "record"]), true), 3);
+    assert.equal(monthChipLineCount(new Set(["record", "category", "service"]), true), 3);
+    assert.equal(monthChipLineCount(new Set(["client", "record", "service", "lift"]), true), 4);
+  });
+  it("keeps one line when nothing is chosen, for the service name", () => {
+    assert.equal(monthChipLineCount(new Set(), false), 1);
+    assert.equal(monthChipLineCount(new Set(["time", "lift"]), true), 2);
   });
 });

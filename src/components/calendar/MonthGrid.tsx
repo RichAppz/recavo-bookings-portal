@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { ChevronDown, Landmark } from "lucide-react";
 
 import { Marquee } from "@/components/Marquee";
@@ -7,6 +15,7 @@ import {
   assignLanes,
   firstName,
   laneDepthByColumn,
+  monthChipLineCount,
   weekSpans,
   type WeekSpan,
 } from "@/lib/calendar-layout";
@@ -27,10 +36,10 @@ import {
 } from "./shared";
 
 /**
- * What the second line of a month chip says, left to right. The business picks
- * which of these to show; the order is fixed so chips stay scannable. The first
- * line is the start time (or "All day") unless `showTime` is off, when the chip is
- * that one detail line. `time` is kept in the list so older saved preferences still
+ * What a month chip says under its time, a line each in this order (category and
+ * service share one, "Ceramic · 5 year coating"). The business picks which to show;
+ * the order is fixed so chips stay scannable. The first line is the start time (or
+ * "All day") unless `showTime` is off. `time` is kept in the list so older saved preferences still
  * parse; the time itself is a separate switch.
  */
 export const MONTH_BAR_FIELDS = [
@@ -101,7 +110,7 @@ export function MonthGrid({
   paymentColours: PaymentColours;
   eventColour: (colour: string) => string;
   monthBar: ReadonlySet<MonthBarField>;
-  /** Time on its own line above the details; off makes every chip a single line. */
+  /** Time on its own line above the details, which take a line each. */
   showTime: boolean;
   clientFor: (b: Booking) => string | null;
   tagFor: (b: Booking) => string | null;
@@ -196,7 +205,7 @@ export function MonthGrid({
   // Chips and bars are the same height so the lanes above a cell line up with
   // the chips below: padding plus one or two text lines.
   const lineHeight = phone ? 15 : 14;
-  const barHeight = 8 + lineHeight * (showTime ? 2 : 1);
+  const barHeight = 8 + lineHeight * monthChipLineCount(monthBar, showTime);
   const itemBase = "flex min-w-0 cursor-pointer flex-col items-stretch px-1.5 py-1 text-left";
 
   const eventBody = (ev: CalendarBlock, multi: boolean): Body => {
@@ -252,26 +261,39 @@ export function MonthGrid({
               {b.allDay ? "All day" : timeLabel(b.start)}
             </span>
           ) : null}
-          {/* The label slides if it is wider than the chip, so a narrow cell still
-              shows everything that was switched on. With the time line off, the
-              lift marker moves onto this one line. */}
-          <Marquee animate={sliding} className="w-full flex-none">
-            {!showTime && showLift ? <LiftTag /> : null}
-            {showClient ? (
-              <span className={cn("font-semibold", cancelled && "line-through")}>
+          {/* One line per detail switched on; each slides if it is wider than the
+              chip. With the time line off, the lift marker leads the first line. */}
+          {[
+            showClient ? (
+              <span key="client" className={cn("font-semibold", cancelled && "line-through")}>
                 {phone ? firstName(client) : client}
               </span>
-            ) : null}
-            {showTag ? <span className="font-semibold">{tag}</span> : null}
-            {showCategory ? (
-              <span className="opacity-75">{showService ? `${category} ·` : category}</span>
-            ) : null}
-            {showService ? (
-              <span className={cn("font-semibold", cancelled && "line-through")}>
-                {b.serviceSnapshot.name}
+            ) : null,
+            showTag ? (
+              <span key="tag" className="font-semibold">
+                {tag}
               </span>
-            ) : null}
-          </Marquee>
+            ) : null,
+            showCategory || showService ? (
+              <Fragment key="service">
+                {showCategory ? (
+                  <span className="opacity-75">{showService ? `${category} ·` : category}</span>
+                ) : null}
+                {showService ? (
+                  <span className={cn("font-semibold", cancelled && "line-through")}>
+                    {b.serviceSnapshot.name}
+                  </span>
+                ) : null}
+              </Fragment>
+            ) : null,
+          ]
+            .filter(Boolean)
+            .map((line, i) => (
+              <Marquee key={i} animate={sliding} className="w-full flex-none">
+                {i === 0 && !showTime && showLift ? <LiftTag /> : null}
+                {line}
+              </Marquee>
+            ))}
         </>
       ),
     };

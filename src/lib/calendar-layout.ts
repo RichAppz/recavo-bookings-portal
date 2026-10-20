@@ -439,3 +439,16 @@ export function dayCountLabel(sessions: number, events: number, noun: string): s
   if (events > 0) parts.push(`${events} ${events === 1 ? "event" : "events"}`);
   return parts.join(", ");
 }
+
+/**
+ * Text lines a month chip is sized for: the time, then one each for the client and
+ * the vehicle (or other record), and one shared by category and service. With no
+ * detail chosen the service name stands in, so there is always at least one.
+ */
+export function monthChipLineCount(fields: ReadonlySet<string>, showTime: boolean): number {
+  const details =
+    (fields.has("client") ? 1 : 0) +
+    (fields.has("record") ? 1 : 0) +
+    (fields.has("category") || fields.has("service") ? 1 : 0);
+  return (showTime ? 1 : 0) + Math.max(1, details);
+}
