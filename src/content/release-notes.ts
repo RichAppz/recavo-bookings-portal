@@ -49,6 +49,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "Texts you reword can go out without the link at the end. Under the text, switch off “Add the Book link at the end” (or Pay, Details — whichever link that message carries) and the preview shows exactly what the client gets; handy when your text already says “call 07… to book”. Put {{link}} in your wording to place the link somewhere else instead.",
         where: "Settings → Client messages",
       },
+      {
+        kind: "new",
+        text: "Vehicles have a Mileage box, straight after Year, on every vehicle — including the ones you've already added. Update it when the car comes in; the client's page shows it as “Mileage: 45,210 miles”. It isn't used to describe the car on invoices or in pickers, which still read “EO76 ZWZ · Audi · RS5”.",
+        where: "Vehicles",
+      },
     ],
   },
   {
