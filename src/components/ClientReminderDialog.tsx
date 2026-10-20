@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
@@ -99,6 +99,7 @@ export function ClientReminderDialog({
   const [draft, setDraft] = useState<ClientReminderDraft>(() => blankDraft(defaults));
   const [error, setError] = useState<{ field: ClientReminderField; message: string } | null>(null);
   const [addClientOpen, setAddClientOpen] = useState(false);
+  const showingExisting = useRef(false);
 
   const chosen = useCustomer(draft.customerId || undefined);
   const records = useCustomerLinkedRecords(draft.customerId || undefined);
@@ -192,7 +193,15 @@ export function ClientReminderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(e) => {
+          // Handing focus back to the opening button would scroll away from the reminder.
+          if (!showingExisting.current) return;
+          showingExisting.current = false;
+          e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Remind a client</DialogTitle>
           <DialogDescription>
@@ -434,6 +443,7 @@ export function ClientReminderDialog({
                   size="sm"
                   className="shrink-0 self-start sm:self-center"
                   onClick={() => {
+                    showingExisting.current = true;
                     onOpenChange(false);
                     onShowExisting(duplicate);
                   }}
