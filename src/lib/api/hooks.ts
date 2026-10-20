@@ -3865,22 +3865,32 @@ export function useNotificationTemplatePreview(input: {
   key: string;
   channel: TemplateChannel;
   body: string | null;
+  /** Texts only: false previews with the added link left off. */
+  appendLink?: boolean;
 }) {
   const businessId = useBusinessId();
   return useQuery({
-    queryKey: queryKeys.notificationTemplatePreview(
-      businessId,
-      input.key,
-      input.channel,
-      input.body ?? "",
-    ),
+    queryKey: [
+      ...queryKeys.notificationTemplatePreview(
+        businessId,
+        input.key,
+        input.channel,
+        input.body ?? "",
+      ),
+      input.appendLink ?? true,
+    ],
     enabled: Boolean(businessId) && input.body !== null,
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<TemplatePreview> => {
       const res = await api.post<TemplatePreview>(
         `/api/v1/businesses/${businessId}/notification-templates/preview`,
-        { key: input.key, channel: input.channel, body: input.body ?? "" },
+        {
+          key: input.key,
+          channel: input.channel,
+          body: input.body ?? "",
+          ...(input.appendLink === undefined ? {} : { appendLink: input.appendLink }),
+        },
       );
       return res.data;
     },
@@ -3892,7 +3902,13 @@ export function useUpdateNotificationTemplate() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { key: string; bodyRegion: string; channel: TemplateChannel }) => {
+    mutationFn: async (body: {
+      key: string;
+      bodyRegion: string;
+      channel: TemplateChannel;
+      /** Texts only: whether the message's link is added after the wording. */
+      appendLink?: boolean;
+    }) => {
       await api.put(`/api/v1/businesses/${businessId}/notification-templates`, body);
       return body;
     },

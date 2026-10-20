@@ -5,6 +5,7 @@ import { CustomisedDot, StatusPill } from "@/components/settings/primitives";
 import { useSettingsDraft } from "@/components/settings/save-bar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -17,6 +18,7 @@ import {
   SMS_TEMPLATE_MAX_LENGTH,
   SMS_WARN_LENGTH,
   unknownPlaceholders,
+  wordingPlacesLink,
   type MessageTemplate,
   type TemplateChannel,
   type TemplatePlaceholder,
@@ -57,6 +59,8 @@ export function TemplateEditor({
   const [channel, setChannel] = useState<TemplateChannel>("email");
   const [email, setEmail] = useState<ChannelDraft>({ text: template.bodyRegion, dirty: false });
   const [sms, setSms] = useState<ChannelDraft>({ text: template.smsBody, dirty: false });
+  // Whether the text's link is added after the wording; saved with the text.
+  const [smsLink, setSmsLink] = useState({ on: template.smsAppendLink, dirty: false });
 
   // Adopt fresh server text (after a save/reset elsewhere) unless mid-edit.
   useEffect(() => {
@@ -65,11 +69,16 @@ export function TemplateEditor({
   useEffect(() => {
     setSms((d) => (d.dirty ? d : { text: template.smsBody, dirty: false }));
   }, [template.smsBody]);
+  useEffect(() => {
+    setSmsLink((d) => (d.dirty ? d : { on: template.smsAppendLink, dirty: false }));
+  }, [template.smsAppendLink]);
 
   const emailTrim = email.text.trim();
   const smsTrim = sms.text.trim();
   const emailChanged = email.dirty && emailTrim !== template.bodyRegion.trim();
-  const smsChanged = sms.dirty && smsTrim !== template.smsBody.trim();
+  const smsChanged =
+    (sms.dirty && smsTrim !== template.smsBody.trim()) ||
+    (smsLink.dirty && smsLink.on !== template.smsAppendLink);
   const dirty = emailChanged || smsChanged;
   const smsTooLong = smsTrim.length > SMS_TEMPLATE_MAX_LENGTH;
   const valid =
@@ -90,13 +99,20 @@ export function TemplateEditor({
     const defaultText = which === "email" ? template.defaultBodyRegion : template.defaultSmsBody;
     const customised = which === "email" ? template.customised : template.smsCustomised;
     const trimmed = draft.text.trim();
+    const linkOff = which === "sms" && !smsLink.on;
     // Saving text identical to the default is the same as having no custom wording.
-    if (trimmed === defaultText.trim()) {
+    if (trimmed === defaultText.trim() && !linkOff) {
       if (customised) await reset.mutateAsync({ key: template.key, channel: which });
     } else {
-      await update.mutateAsync({ key: template.key, bodyRegion: trimmed, channel: which });
+      await update.mutateAsync({
+        key: template.key,
+        bodyRegion: trimmed,
+        channel: which,
+        ...(which === "sms" ? { appendLink: smsLink.on } : {}),
+      });
     }
     (which === "email" ? setEmail : setSms)({ text: trimmed, dirty: false });
+    if (which === "sms") setSmsLink((d) => ({ ...d, dirty: false }));
   };
 
   const saveAll = async () => {
@@ -108,6 +124,7 @@ export function TemplateEditor({
   const discardAll = () => {
     setEmail({ text: template.bodyRegion, dirty: false });
     setSms({ text: template.smsBody, dirty: false });
+    setSmsLink({ on: template.smsAppendLink, dirty: false });
   };
 
   const bar = useSettingsDraft({
@@ -128,6 +145,7 @@ export function TemplateEditor({
       );
     }
     (which === "email" ? setEmail : setSms)({ text: defaultText, dirty: false });
+    if (which === "sms") setSmsLink({ on: true, dirty: false });
   };
 
   return (
@@ -177,6 +195,8 @@ export function TemplateEditor({
             canEdit={canEdit}
             busy={busy}
             managed={bar.managed}
+            appendLink={smsLink.on}
+            onAppendLinkChange={(on) => setSmsLink({ on, dirty: true })}
             onChange={(text) => setSms({ text, dirty: true })}
             onReset={() => void resetChannel("sms")}
             onSave={() => void saveChannel("sms").then(() => toast.success("Text saved"))}
@@ -197,6 +217,8 @@ function ChannelPane({
   canEdit,
   busy,
   managed,
+  appendLink = true,
+  onAppendLinkChange,
   onChange,
   onReset,
   onSave,
@@ -211,6 +233,9 @@ function ChannelPane({
   busy: boolean;
   /** True when the page's save bar owns Save; the pane then only offers Reset. */
   managed: boolean;
+  /** Texts: whether the message's link is added after the wording (drafted, not saved). */
+  appendLink?: boolean;
+  onAppendLinkChange?: (on: boolean) => void;
   onChange: (text: string) => void;
   onReset: () => void;
   onSave: () => void;
@@ -218,8 +243,10 @@ function ChannelPane({
   const isSms = channel === "sms";
   const trimmed = draft.text.trim();
   const saved = isSms ? template.smsBody : template.bodyRegion;
-  const isDefault = trimmed === defaultText.trim();
-  const edited = trimmed.length > 0 && trimmed !== saved.trim();
+  const linkChanged = isSms && appendLink !== template.smsAppendLink;
+  const isDefault = trimmed === defaultText.trim() && !(isSms && !appendLink);
+  const edited = trimmed.length > 0 && (trimmed !== saved.trim() || linkChanged);
+  const placesLink = isSms && wordingPlacesLink(draft.text);
   const unknown = unknownPlaceholders(draft.text, template.placeholders);
   const tooLong = isSms && trimmed.length > SMS_TEMPLATE_MAX_LENGTH;
   const canReset = canEdit && (customised || !isDefault) && !busy;
@@ -228,7 +255,12 @@ function ChannelPane({
   // The list already carries a preview for the saved wording; only edited wording
   // asks the API, a moment after typing stops.
   const debounced = useDebouncedValue(edited ? trimmed : null, 350);
-  const live = useNotificationTemplatePreview({ key: template.key, channel, body: debounced });
+  const live = useNotificationTemplatePreview({
+    key: template.key,
+    channel,
+    body: debounced,
+    ...(isSms ? { appendLink } : {}),
+  });
   const preview = edited ? live.data?.preview : serverPreview;
   const previewStale = edited && (live.isFetching || debounced !== trimmed);
   const previewLength = preview?.length ?? 0;
@@ -352,21 +384,39 @@ function ChannelPane({
               : ""}
           </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
-          {isSms ? (
-            template.smsLinkLabel ? (
-              <>
-                A <span className="font-medium text-foreground">{template.smsLinkLabel}</span> link
-                is added at the end unless you place{" "}
-                <code className="rounded bg-secondary px-1">{"{{link}}"}</code> yourself.
-              </>
-            ) : (
-              "This message has no link."
-            )
-          ) : (
-            "The details table and buttons are added under your wording."
-          )}
-        </p>
+        {isSms && template.smsLinkLabel && !placesLink ? (
+          <div className="flex items-start gap-2.5" data-testid="sms-append-link">
+            <Switch
+              id={`${id}-link`}
+              checked={appendLink}
+              disabled={!canEdit || busy}
+              onCheckedChange={(on) => onAppendLinkChange?.(on)}
+            />
+            <Label htmlFor={`${id}-link`} className="grid gap-0.5 text-xs font-normal">
+              <span className="font-medium text-foreground">
+                Add the {template.smsLinkLabel} link at the end
+              </span>
+              <span className="text-muted-foreground">
+                {appendLink ? (
+                  <>
+                    Or place <code className="rounded bg-secondary px-1">{"{{link}}"}</code> in your
+                    text to put it somewhere else.
+                  </>
+                ) : (
+                  "Off — this text goes out with no link."
+                )}
+              </span>
+            </Label>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {isSms
+              ? template.smsLinkLabel
+                ? `Your text places the ${template.smsLinkLabel} link where {{link}} is.`
+                : "This message has no link."
+              : "The details table and buttons are added under your wording."}
+          </p>
+        )}
       </div>
     </div>
   );
