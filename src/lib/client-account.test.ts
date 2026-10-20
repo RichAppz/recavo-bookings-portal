@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cancelOutcome, relativeWhen } from "./client-account.ts";
+import { cancelOutcome, paymentChip, relativeWhen } from "./client-account.ts";
+import type { Booking } from "./api/types.ts";
 
 const TZ = "Europe/London";
 
@@ -86,5 +87,11 @@ describe("cancelOutcome — the exact money consequence", () => {
     );
     assert.equal(o.tone, "ok");
     assert.match(sentence(o), /^Free to cancel: there's nothing to pay\./);
+  });
+});
+
+describe("paymentChip", () => {
+  it("shows no chip on a booking paid with a credit", () => {
+    assert.equal(paymentChip(booking({ paymentMethod: "credit" }) as Booking, []), null);
   });
 });

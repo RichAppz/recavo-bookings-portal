@@ -194,7 +194,7 @@ export function AccountOverview({
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <Chip label={chip.label} tone={chip.tone} />
+                        {chip ? <Chip label={chip.label} tone={chip.tone} /> : null}
                         <ClientBookingActions
                           booking={b}
                           businessId={b.studio.id}
@@ -446,7 +446,9 @@ function NextUpCard({
     <div className="rounded-3xl bg-[#111214] p-5 text-white sm:p-6 dark:bg-[#1c1f25]">
       <div className="flex items-center justify-between gap-3">
         <p className="truncate text-[14px] text-white/70">Next up · {booking.studio.tradingName}</p>
-        <Chip label={chip.label} tone={chip.tone === "neutral" ? "ok" : chip.tone} dark />
+        {chip ? (
+          <Chip label={chip.label} tone={chip.tone === "neutral" ? "ok" : chip.tone} dark />
+        ) : null}
       </div>
       <p className="mt-3 text-[30px] font-bold leading-tight tracking-tight sm:text-[34px]">
         {relativeWhen(booking.start, booking.timezone)}

@@ -81,6 +81,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Clients",
       },
       {
+        kind: "improved",
+        text: "Your account no longer puts a “1 credit” tag on bookings paid with a credit. Nothing is owed on them, and the Credits card beside Next up already shows how many you have left.",
+        where: "Your account",
+      },
+      {
         kind: "fixed",
         text: "Credits left on a package after its expiry date no longer count. A client's page shows only the credits they can still book with, an expired package reads “Expired” with its leftover credits marked as unusable, and you can't add credits to it by mistake. New bookings no longer offer “Use package credit” when the only credits left have expired, and clients booking online aren't offered an expired credit that would then be refused.",
         where: "Clients",

@@ -20,14 +20,17 @@ export function relativeWhen(start: string, timezone: string, now = new Date()):
 
 export type ChipTone = "ok" | "warn" | "neutral";
 
-/** "Confirmed · Paid", "Deposit due", "1 credit", "Pay on the day". */
+/**
+ * "Confirmed · Paid", "Deposit due", "Pay on the day". Null for a booking paid
+ * with a credit: nothing is owed and the Credits card already shows the balance.
+ */
 export function paymentChip(
   booking: Booking,
   payments: readonly Payment[],
-): { label: string; tone: ChipTone } {
+): { label: string; tone: ChipTone } | null {
   const s = bookingSettlement(booking);
   const needsPay = bookingNeedsPayment(booking, payments);
-  if (s.state === "credit") return { label: "1 credit", tone: "ok" };
+  if (s.state === "credit") return null;
   if (s.state === "free") return { label: "Confirmed", tone: "ok" };
   if (booking.status === "awaiting_payment" && booking.paymentMethod === "bank_transfer") {
     return { label: "Awaiting transfer", tone: "warn" };
