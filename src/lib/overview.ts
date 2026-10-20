@@ -223,21 +223,26 @@ export function nowLineIndex(starts: readonly string[], now: Date): number {
 
 /**
  * The phone's short Today list (spec §3.5): the last finished row, then the next
- * three. Returns the slice bounds into the full list.
+ * three that haven't finished. A row still running (an all-day job) counts as one
+ * of the three even when it started before the last finished one. Returns indexes
+ * into the full list, in order.
  */
 export function phoneTodayWindow(
   rows: readonly { start: string; end: string }[],
   now: Date,
   ahead = 3,
-): { from: number; to: number } {
+): number[] {
   const t = now.getTime();
+  const finished = (i: number) => new Date(rows[i]!.end).getTime() <= t;
   let lastDone = -1;
-  rows.forEach((r, i) => {
-    if (new Date(r.end).getTime() <= t) lastDone = i;
+  rows.forEach((_, i) => {
+    if (finished(i)) lastDone = i;
   });
-  const from = Math.max(0, lastDone);
-  const firstAhead = lastDone + 1;
-  return { from, to: Math.min(rows.length, firstAhead + ahead) };
+  const open = rows
+    .map((_, i) => i)
+    .filter((i) => !finished(i))
+    .slice(0, ahead);
+  return [...(lastDone >= 0 ? [lastDone] : []), ...open].sort((a, b) => a - b);
 }
 
 /* ---------------- Needs your attention ---------------- */

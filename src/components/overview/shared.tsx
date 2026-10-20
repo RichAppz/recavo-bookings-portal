@@ -297,9 +297,11 @@ export function FactTile({
 }) {
   return (
     <div className="min-w-0 rounded-xl border border-border bg-secondary px-3 py-2.5">
-      <p className="truncate text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className="text-xs leading-tight font-semibold text-muted-foreground">{label}</p>
       <p className="mt-0.5 truncate text-[15px] font-extrabold tabular-nums">{value}</p>
-      {sub ? <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{sub}</p> : null}
+      {sub ? (
+        <p className="mt-0.5 text-[11.5px] leading-tight text-muted-foreground">{sub}</p>
+      ) : null}
     </div>
   );
 }

@@ -71,7 +71,7 @@ export function QuickActionsCard({
             key={key}
             type="button"
             onClick={() => onAction(key)}
-            className="flex h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-secondary px-2.5 text-left text-[13.5px] font-bold transition-colors hover:bg-secondary/70"
+            className="flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-secondary px-2.5 py-1.5 text-left text-[13.5px] leading-tight font-bold transition-colors hover:bg-secondary/70"
           >
             <span
               aria-hidden
@@ -79,7 +79,7 @@ export function QuickActionsCard({
             >
               <Icon className="size-3.5" />
             </span>
-            <span className="truncate">{quickActionLabel(key, bookingNoun)}</span>
+            <span className="min-w-0">{quickActionLabel(key, bookingNoun)}</span>
           </button>
         );
       })}

@@ -91,14 +91,12 @@ export function TodayCard({
     .filter(Boolean)
     .join(" · ");
 
-  let from = 0;
-  let to = entries.length;
-  if (variant === "phone") {
-    ({ from, to } = phoneTodayWindow(entries, now));
-  } else if (!showAll) {
-    to = Math.min(entries.length, DESKTOP_MAX);
-  }
-  const shown = entries.slice(from, to);
+  const picks =
+    variant === "phone"
+      ? phoneTodayWindow(entries, now)
+      : entries.map((_, i) => i).slice(0, showAll ? entries.length : DESKTOP_MAX);
+  const shown = picks.map((i) => entries[i]!);
+  const moreAfter = (picks.at(-1) ?? -1) < entries.length - 1;
   const nowAt = nowLineIndex(
     shown.map((e) => e.start),
     now,
@@ -156,7 +154,7 @@ export function TodayCard({
             onOpenEvent={onOpenEvent}
           />
         ))}
-        {nowAt === shown.length && nowAt > 0 && nowAt < entries.length - from ? (
+        {nowAt === shown.length && nowAt > 0 && moreAfter ? (
           <NowLine label={hm(now.toISOString(), timeZone)} />
         ) : null}
       </ul>

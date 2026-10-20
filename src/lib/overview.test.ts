@@ -233,8 +233,16 @@ describe("now line", () => {
       { start: "2026-10-19T12:00:00Z", end: "2026-10-19T13:00:00Z" },
       { start: "2026-10-19T13:00:00Z", end: "2026-10-19T14:00:00Z" },
     ];
-    assert.deepEqual(phoneTodayWindow(rows, NOW), { from: 1, to: 5 });
-    assert.deepEqual(phoneTodayWindow(rows, new Date("2026-10-19T05:00:00Z")), { from: 0, to: 3 });
+    assert.deepEqual(phoneTodayWindow(rows, NOW), [1, 2, 3, 4]);
+    assert.deepEqual(phoneTodayWindow(rows, new Date("2026-10-19T05:00:00Z")), [0, 1, 2]);
+  });
+
+  it("phone keeps a row still running that started before the last finished one", () => {
+    const rows = [
+      { start: "2026-10-18T23:00:00Z", end: "2026-10-19T23:00:00Z" },
+      { start: "2026-10-19T08:30:00Z", end: "2026-10-19T09:00:00Z" },
+    ];
+    assert.deepEqual(phoneTodayWindow(rows, NOW), [0, 1]);
   });
 });
 

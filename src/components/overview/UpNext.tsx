@@ -69,7 +69,7 @@ export function UpNextEmpty({
           <Share2 className="size-4" /> Share booking page
         </Button>
         {firstBooking ? (
-          <Button className={OUTLINE_BUTTON} variant="outline" onClick={onAdd}>
+          <Button className={OUTLINE_BUTTON} variant="ghost" onClick={onAdd}>
             <CalendarPlus className="size-4" /> Add {bookingNoun.toLowerCase()}
           </Button>
         ) : null}
@@ -114,7 +114,7 @@ export function UpNextCard({
     payment,
   ].filter(Boolean);
   const time = booking.allDay
-    ? "All day"
+    ? null
     : formatInTz(booking.start, zone, { hour: "2-digit", minute: "2-digit" });
 
   const sendLink = async () => {
@@ -144,14 +144,15 @@ export function UpNextCard({
           onClick={onOpen}
           className="mt-2 block max-w-full cursor-pointer truncate text-left text-[21px] leading-tight font-extrabold tracking-[-0.02em] md:text-[26px]"
         >
-          {time} {booking.serviceSnapshot.name}
+          {time ? `${time} ` : ""}
+          {booking.serviceSnapshot.name}
         </button>
         <p className="mt-1.5 truncate text-[13.5px] text-[#aab2c0] md:text-[14.5px]">
           {line.join(" · ")}
         </p>
       </div>
       <div className="grid shrink-0 grid-cols-2 gap-2 md:flex">
-        <Button asChild variant="outline" className={OUTLINE_BUTTON}>
+        <Button asChild variant="ghost" className={OUTLINE_BUTTON}>
           <Link to="/messages">Message</Link>
         </Button>
         {due ? (
