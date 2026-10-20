@@ -650,12 +650,18 @@ export function AttendanceCard({
   );
 }
 
-export function Footnote({ current }: { current: Dashboard | undefined }) {
+export function Footnote({
+  current,
+  bookingNoun,
+}: {
+  current: Dashboard | undefined;
+  bookingNoun: string;
+}) {
   if (!current) return null;
   return (
     <p className="text-xs text-muted-foreground">
-      Money counted by {current.basis.dateBasis.replace("_", " ")}, sessions by the day they were
-      booked or marked · {current.basis.timezone}
+      Money counted by {current.basis.dateBasis.replace("_", " ")}, {nounFor(bookingNoun, 2)} by the
+      day they were booked or marked · {current.basis.timezone}
     </p>
   );
 }

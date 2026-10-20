@@ -666,7 +666,7 @@ function Overview({
                   ))}
               </div>
             ) : null}
-            <Footnote current={current} />
+            <Footnote current={current} bookingNoun={bookingNoun} />
           </>
         )}
       </section>
@@ -697,7 +697,9 @@ function Overview({
           </div>
         );
       })}
-      {firstPerf >= 0 && !performanceGate ? <Footnote current={current} /> : null}
+      {firstPerf >= 0 && !performanceGate ? (
+        <Footnote current={current} bookingNoun={bookingNoun} />
+      ) : null}
     </div>
   );
 
