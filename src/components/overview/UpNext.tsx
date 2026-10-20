@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { CalendarPlus, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
 import { customerDisplayName, type Booking } from "@/lib/api/types";
+import { deliveryFailure } from "@/lib/delivery-errors";
 import { formatInTz } from "@/lib/format";
 import { countdownLabel, moneyDue, paymentPhrase } from "@/lib/overview";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
@@ -96,6 +97,7 @@ export function UpNextCard({
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
   const reminder = useSendPaymentReminder();
+  const navigate = useNavigate();
   const trainer = staff.data?.find((s) => s.id === booking.staffId);
   const location = locations.data?.find((l) => l.id === booking.locationId);
   const zone = booking.timezone || timeZone;
@@ -125,7 +127,25 @@ export function UpNextCard({
       });
     } catch (err) {
       if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
-        toast.error("Payment link not sent", { description: err.detail });
+        const failed = deliveryFailure(
+          err.detail,
+          customer.data ? customerDisplayName(customer.data) : null,
+        );
+        toast.error("Payment link not sent", {
+          description: failed?.message ?? err.detail,
+          ...(failed?.checkProfile
+            ? {
+                action: {
+                  label: "Open client",
+                  onClick: () =>
+                    void navigate({
+                      to: "/clients/$clientId",
+                      params: { clientId: booking.leadCustomerId },
+                    }),
+                },
+              }
+            : {}),
+        });
         return;
       }
       toastApiError(err);

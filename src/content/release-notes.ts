@@ -81,6 +81,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         where: "Clients",
       },
       {
+        kind: "improved",
+        text: "When a payment link or reminder can't be delivered you're told why in plain words, not the email service's error. For example: “Emails to Jordan Lee are blocked because an earlier one bounced or was marked as spam. Check their email address, or add a mobile number so it can go by text.” An Open client button takes you to their details to fix it.",
+        where: "Overview",
+      },
+      {
         kind: "fixed",
         text: "Booking with a session credit works again on your booking page. Choosing “Use a session credit” left Confirm booking greyed out, because it waited for a policy box that isn't shown when you pay with a credit (the cancellation terms are spelled out instead), so clients could only finish by paying.",
         where: "Booking page",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Ban,
   BellRing,
@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { deliveryFailure } from "@/lib/delivery-errors";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -256,6 +257,7 @@ export function BookingPanel({
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
+  const navigate = useNavigate();
   // The vehicle (or other linked record) on the job — resolves even after archive (RECA-90).
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
@@ -380,6 +382,28 @@ export function BookingPanel({
             ? closedReminderReason(booking.status)
             : reminderRoute.blocked;
 
+  const refusalToast = (title: string, detail: string) => {
+    const failed = deliveryFailure(
+      detail,
+      customer.data ? customerDisplayName(customer.data) : null,
+    );
+    const clientId = booking?.leadCustomerId;
+    toast.error(title, {
+      description: failed?.message ?? detail,
+      ...(failed?.checkProfile && clientId
+        ? {
+            action: {
+              label: "Open client",
+              onClick: () => {
+                onClose();
+                void navigate({ to: "/clients/$clientId", params: { clientId } });
+              },
+            },
+          }
+        : {}),
+    });
+  };
+
   const remindBooking = async () => {
     if (!booking) return;
     try {
@@ -391,7 +415,7 @@ export function BookingPanel({
     } catch (err) {
       // 409 = not live / already started / sent minutes ago; 422 = no email / send failed.
       if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
-        toast.error("Booking reminder not sent", { description: err.detail });
+        refusalToast("Booking reminder not sent", err.detail);
         return;
       }
       toastApiError(err);
@@ -434,7 +458,7 @@ export function BookingPanel({
       // 409 = sent a few minutes ago; 422 = nothing outstanding / no email / send failed.
       // Both carry a plain-English detail from the API, so show that as the headline.
       if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
-        toast.error("Payment reminder not sent", { description: err.detail });
+        refusalToast("Payment reminder not sent", err.detail);
         return;
       }
       toastApiError(err);
