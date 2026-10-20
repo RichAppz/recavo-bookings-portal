@@ -86,7 +86,23 @@ is booked − attended − no-show − cancelled, and includes finished sessions
   lines, Up next and the Today summary.
 - Set-up steps shown in Needs your attention (and still in the menu).
 
-## 5. Needs API work
+## 5. Where the build differs from the spec
+
+- Up next **Message** opens Messages (there is no link to one client's conversation).
+- Several payments to collect, or several sessions to mark, open Bookings; the Needs action
+  tab and its money / past filters have no URL yet. One of either opens that booking here.
+- Customise reorders by drag or by the up/down buttons beside each card (keyboard and touch).
+- Phone "Show all" opens the Calendar on its default view.
+- Delta pills are hidden until the previous period has a session or a payment in it.
+
+## 6. Needs designing
+
+- Today event rows (staff events) between sessions: kept with an "Event" pill.
+- Attention items the spec does not list: add-on requests, clients on the waitlist.
+- Group session in Quick actions (kept after Add session for non-detailers).
+- Last 7 days / Last 30 days / All time in a "More" menu beside Week / Month / Year.
+
+## 7. Needs API work
 
 - Unread client messages (conversations carry no unread state).
 - Failed confirmations/reminders across the business (only per-booking history has them).
