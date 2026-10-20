@@ -29,6 +29,7 @@
     "desktop:build": "tauri build",
     "desktop:build:production": "tauri build --config src-tauri/tauri.production.conf.json",
     "desktop:test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "desktop:release": "bash scripts/desktop-release.sh",
     "guides:seed": "node --experimental-strip-types scripts/guides/seed.mts",
     "guides:shots": "node --experimental-strip-types scripts/guides/capture.mts"
   },
