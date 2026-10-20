@@ -90,7 +90,7 @@ import {
   subscriptionAccessState,
 } from "@/lib/billing/access";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import { bookingUrlFor, isCustomerHost } from "@/lib/hosts";
+import { bookingUrlFor, consoleAllowedOn } from "@/lib/hosts";
 import type { MenuBadge } from "@/lib/menu";
 import { billingSurface, isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
 import { PERMISSIONS, roleLabels } from "@/lib/permissions";
@@ -232,6 +232,43 @@ function useMediaQuery(query: string): boolean {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // Only mounted behind RequireAuth, which never resolves on the server, so the
+  // hostname is readable here without a hydration mismatch.
+  const onCustomerHost =
+    typeof window !== "undefined" && !consoleAllowedOn(window.location.hostname, isNativeApp());
+  if (onCustomerHost) return <CustomerHostLanding />;
+  return <ConsoleShell>{children}</ConsoleShell>;
+}
+
+/**
+ * A console page opened on the customer host. Nothing from the staff side runs
+ * (no tenant, subscription or plan-chooser redirect): a client account goes to
+ * /account — every studio, not whichever came first — and an account with no
+ * customer link gets the notice that points at the staff host.
+ */
+function CustomerHostLanding() {
+  const portalLink = usePortalLink(true);
+  const portalBusinesses = usePortalBusinesses(portalLink.isFetched);
+
+  if (!portalLink.isFetched || portalBusinesses.isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="pt-safe px-safe-4 sm:px-safe-6 sticky top-0 z-30 flex min-h-16 items-center bg-background/85 backdrop-blur sm:border-b">
+          <Wordmark />
+        </header>
+        <main className="px-safe-4 sm:px-safe-8 mx-auto w-full max-w-5xl pt-4 pb-safe-12 sm:p-8">
+          <PageGhost />
+        </main>
+      </div>
+    );
+  }
+  if ((portalBusinesses.data ?? []).length > 0) {
+    return <Navigate to="/account" replace />;
+  }
+  return <NoCustomerAccount />;
+}
+
+function ConsoleShell({ children }: { children: ReactNode }) {
   const tenant = useTenant();
   const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -480,31 +517,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       );
     }
     const isCustomer = (portalBusinesses.data ?? []).length > 0;
-    // No membership, so the address they came in on is the evidence of intent.
-    // Customer links all point at the customer host; the business host (and the
-    // app, which is the business console only) is reached by choosing it, so
-    // whoever signs in there is here to run a business — even if the same
-    // address also books sessions somewhere as a client. They get the setup
-    // form, with a pointer to where their own bookings live.
-    const onCustomerHost =
-      !isNativeApp() && typeof window !== "undefined" && isCustomerHost(window.location.hostname);
-    if (!onCustomerHost) {
-      // Without a way to buy a plan the setup form would dead-end, so those
-      // surfaces get a plain notice instead (saasPurchasesAllowedInApp).
-      if (!canStartBusinessHere) {
-        return <NoBusinessInApp />;
-      }
-      return <CreateFirstBusiness customerElsewhere={isCustomer} />;
+    // The customer host never reaches here (see AppShell). The business host
+    // (and the app, which is the business console only) is reached by choosing
+    // it, so whoever signs in there is here to run a business — even if the
+    // same address also books sessions somewhere as a client. They get the
+    // setup form, with a pointer to where their own bookings live. Without a
+    // way to buy a plan the setup form would dead-end, so those surfaces get a
+    // plain notice instead (saasPurchasesAllowedInApp).
+    if (!canStartBusinessHere) {
+      return <NoBusinessInApp />;
     }
-    // On the customer host a customer record means their own account. /account
-    // rather than one studio's page: which studio came first is an accident of
-    // history, and picking it for them hides the others.
-    if (isCustomer) {
-      return <Navigate to="/account" replace />;
-    }
-    // Nothing to go on at all, and on the customer host "set up your studio" is
-    // the wrong question — they are mid-claim, or their link has yet to redeem.
-    return <NoCustomerAccount />;
+    return <CreateFirstBusiness customerElsewhere={isCustomer} />;
   }
 
   if (!accessPending && billingLocked && !onBilling && !onPlatform) {
