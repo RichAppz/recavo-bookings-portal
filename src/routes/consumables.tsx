@@ -827,12 +827,12 @@ function ConsumablesPage() {
   );
 }
 
-/** "3 services and 12 past jobs", "1 service", "4 past jobs". */
+/** "3 services and 12 jobs", "1 service", "4 jobs". The count includes booked jobs still to come. */
 function referencesPhrase(c: Consumable): string {
   const parts: string[] = [];
   const s = c.serviceIds.length;
   if (s > 0) parts.push(`${s} ${s === 1 ? "service" : "services"}`);
-  if (c.jobCount > 0) parts.push(`${c.jobCount} past ${c.jobCount === 1 ? "job" : "jobs"}`);
+  if (c.jobCount > 0) parts.push(`${c.jobCount} ${c.jobCount === 1 ? "job" : "jobs"}`);
   return parts.join(" and ");
 }
 
