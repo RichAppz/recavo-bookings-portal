@@ -71,7 +71,8 @@ export function ClientDateTime({
   onSelect: (slot: AvailabilitySlot) => void;
   onBack: () => void;
   onContinue: () => void;
-  onWaitlist: () => void;
+  /** Absent when the business has turned the waitlist off. */
+  onWaitlist?: () => void;
   nextAvailableDate: string | null;
   priceMinor: number;
   currency: string;
@@ -268,8 +269,10 @@ export function ClientDateTime({
                     </button>
                     .
                   </>
+                ) : onWaitlist ? (
+                  "Try another day, or join the waitlist and we'll be in touch if a time opens."
                 ) : (
-                  "Try another day, or join the waitlist and we'll let you know when a time opens."
+                  "Try another day."
                 )}
               </p>
             </div>
@@ -312,13 +315,15 @@ export function ClientDateTime({
               ))}
             </div>
           )}
-          <button
-            type="button"
-            onClick={onWaitlist}
-            className="mt-5 text-[15px] font-semibold underline underline-offset-4"
-          >
-            None of these work? Join the waitlist
-          </button>
+          {onWaitlist && !(loading && visible.length === 0) ? (
+            <button
+              type="button"
+              onClick={onWaitlist}
+              className="mt-5 text-[15px] font-semibold underline underline-offset-4"
+            >
+              {visible.length === 0 ? "Join the waitlist" : "None of these work? Join the waitlist"}
+            </button>
+          ) : null}
         </div>
       </ClientColumn>
 

@@ -208,6 +208,7 @@ export function ClientBookingFlow({
   const [bankInstructions, setBankInstructions] = useState<BankTransferInstructions | null>(null);
   const [restoredContact, setRestoredContact] = useState<BookingContact | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const waitlistOn = business.waitlistEnabled !== false;
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInThen, setSignInThen] = useState<"stay" | "account">("stay");
   const [signInStep, setSignInStep] = useState<EmailCodeStep>("email");
@@ -1189,7 +1190,7 @@ export function ClientBookingFlow({
           }
           onPickPackage(id);
         }}
-        onWaitlist={() => setWaitlistOpen(true)}
+        onWaitlist={waitlistOn ? () => setWaitlistOpen(true) : undefined}
         priceMinor={previewPrice}
         currency={selectedSlot?.currency ?? service?.currency ?? business.currency}
         cancellationWindowHours={cancellationHours}
@@ -1284,7 +1285,7 @@ export function ClientBookingFlow({
               setStep("details");
               window.scrollTo({ top: 0 });
             }}
-            onWaitlist={() => setWaitlistOpen(true)}
+            onWaitlist={waitlistOn ? () => setWaitlistOpen(true) : undefined}
             nextAvailableDate={nextAvailableDate}
             priceMinor={previewPrice}
             currency={selectedSlot?.currency ?? service.currency}

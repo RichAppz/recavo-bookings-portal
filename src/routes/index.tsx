@@ -44,6 +44,7 @@ import {
   useCustomersById,
   usePackageRequests,
   useStaffList,
+  useWaitlistSlotEvents,
   useWaitlistSummary,
 } from "@/lib/api/hooks";
 import { useUpsellOffersSummary } from "@/lib/api/upsells";
@@ -250,6 +251,7 @@ function Overview({
   const packageRequests = usePackageRequests("pending", { enabled: canPackages });
   const requests = packageRequests.data ?? [];
   const waitlist = useWaitlistSummary({ enabled: canReadAll });
+  const slotEvents = useWaitlistSlotEvents({ enabled: canReadAll });
   const upsells = useUpsellOffersSummary({ enabled: canReadAll });
   const sms = useSmsCreditsSummary();
   const onboarding = useBusinessOnboarding();
@@ -300,7 +302,10 @@ function Overview({
         .map((r) => `${nameOf(r.customerId)} · ${r.packageName} ${money.format(r.priceMinor)}`),
     },
     addOns: { count: upsells.data?.requested ?? 0 },
-    waitlist: { count: waitlist.data?.waiting ?? 0 },
+    waitlist: {
+      count: waitlist.data?.waiting ?? 0,
+      couldTakeFreed: (slotEvents.data ?? []).reduce((s, e) => s + e.fitCount, 0),
+    },
     sms:
       tenant.can(PERMISSIONS.BUSINESS_UPDATE) && (sms.level === "low" || sms.level === "empty")
         ? { balance: sms.credits?.balance ?? 0, low: true }
@@ -722,7 +727,7 @@ function Overview({
         onOpenChange={setBookingOpen}
         onNoAvailability={(picked) => {
           setBookingOpen(false);
-          setWaitlistDefaults({ ...picked, from: picked.date });
+          setWaitlistDefaults({ ...picked, from: picked.date, copiedFromBooking: true });
         }}
       />
       <AddWaitlistDialog

@@ -92,8 +92,12 @@ import type {
   PublicServiceUpsell,
   PublicWaitlistReceipt,
   WaitlistAction,
+  WaitlistCounts,
   WaitlistEntry,
-  WaitlistStatus,
+  WaitlistFigures,
+  WaitlistFreeTimes,
+  WaitlistSlotEvent,
+  WaitlistTab,
   SaasInterval,
   SaasPlanCode,
   Staff,
@@ -1504,27 +1508,194 @@ export function useCreateFollowUp() {
 
 /* ---------------- Waitlist ---------------- */
 
-export type WaitlistListFilters = {
-  /** One or more statuses; the API defaults to `waiting`. */
-  status?: WaitlistStatus[];
+export type WaitlistPageFilters = {
+  tab: WaitlistTab;
+  /** 1-based; 25 entries a page. */
+  page: number;
+  /** Client name, phone or email. */
+  q?: string;
   serviceId?: string;
   locationId?: string;
   customerId?: string;
-  /** Calendar dates (`YYYY-MM-DD`) the entry's preferred window must overlap. */
+  /** `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`: only waiting entries that could take that day/time. */
+  fits?: string;
+  /** A slot-freed event: only waiting entries that fit the freed time. */
+  slot?: string;
+  /** Only the entries the Fit this week figure counted. */
+  fitWeek?: boolean;
+  /** Old window filter (`?from=&to=` links): entries whose window overlaps. */
   from?: string;
   to?: string;
   enabled?: boolean;
 };
 
-function waitlistQuery(filters: WaitlistListFilters) {
-  return {
-    ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
+export type WaitlistPage = {
+  entries: WaitlistEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+  counts: WaitlistCounts;
+};
+
+/**
+ * One page of the Waitlist page: a tab (Waiting, Booked in, Removed), 25 a page, with
+ * the tab counts. Waiting is fits-first, then high priority, then window start.
+ */
+export function useWaitlistPage(filters: WaitlistPageFilters) {
+  const businessId = useBusinessId();
+  const query: Record<string, string> = {
+    tab: filters.tab,
+    page: String(filters.page),
+    ...(filters.q ? { q: filters.q } : {}),
     ...(filters.serviceId ? { serviceId: filters.serviceId } : {}),
     ...(filters.locationId ? { locationId: filters.locationId } : {}),
     ...(filters.customerId ? { customerId: filters.customerId } : {}),
+    ...(filters.fits ? { fits: filters.fits } : {}),
+    ...(filters.slot ? { slot: filters.slot } : {}),
+    ...(filters.fitWeek ? { fitWeek: "1" } : {}),
     ...(filters.from ? { from: filters.from } : {}),
     ...(filters.to ? { to: filters.to } : {}),
   };
+  return useQuery({
+    queryKey: queryKeys.waitlist(businessId, query),
+    enabled: Boolean(businessId) && filters.enabled !== false,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<WaitlistPage> => {
+      const res = await api.get<{
+        entries: WaitlistEntry[];
+        page?: number;
+        pageSize?: number;
+        total?: number;
+        counts?: WaitlistCounts;
+      }>(`/api/v1/businesses/${businessId}/waitlist`, { query });
+      const d = res.data;
+      return {
+        entries: d.entries,
+        page: d.page ?? filters.page,
+        pageSize: d.pageSize ?? 25,
+        total: d.total ?? d.entries.length,
+        counts: d.counts ?? { waiting: 0, booked: 0, removed: 0 },
+      };
+    },
+  });
+}
+
+/** One entry with its history (the detail panel). */
+export function useWaitlistEntry(entryId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistEntry(businessId, entryId ?? ""),
+    enabled: Boolean(businessId && entryId),
+    queryFn: async () => {
+      const res = await api.get<{ entry: WaitlistEntry }>(
+        `/api/v1/businesses/${businessId}/waitlist/${entryId}`,
+      );
+      return res.data.entry;
+    },
+  });
+}
+
+/** The entry a booking was made from, if any ("From the waitlist" on the booking panel). */
+export function useWaitlistEntryForBooking(bookingId: string | undefined, enabled = true) {
+  const businessId = useBusinessId();
+  const query = { tab: "booked", page: "1", bookingId: bookingId ?? "" };
+  return useQuery({
+    queryKey: queryKeys.waitlist(businessId, query),
+    enabled: Boolean(businessId && bookingId) && enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const res = await api.get<{ entries: WaitlistEntry[] }>(
+        `/api/v1/businesses/${businessId}/waitlist`,
+        { query },
+      );
+      return res.data.entries[0] ?? null;
+    },
+  });
+}
+
+/** How many clients are waiting, and whether a slot-freed banner is up (nav badge, calendar). */
+export function useWaitlistSummary(options: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistSummary(businessId),
+    enabled: Boolean(businessId) && options.enabled !== false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const res = await api.get<{ waiting: number; slotFreed?: boolean }>(
+        `/api/v1/businesses/${businessId}/waitlist/summary`,
+      );
+      return { waiting: res.data.waiting, slotFreed: res.data.slotFreed === true };
+    },
+  });
+}
+
+/** The four figure tiles. */
+export function useWaitlistFigures(options: { locationId?: string; enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistFigures(businessId, options.locationId),
+    enabled: Boolean(businessId) && options.enabled !== false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const res = await api.get<WaitlistFigures>(
+        `/api/v1/businesses/${businessId}/waitlist/figures`,
+        { query: options.locationId ? { locationId: options.locationId } : {} },
+      );
+      return res.data;
+    },
+  });
+}
+
+/** Recent cancellations that freed time someone waiting could take (the banner). */
+export function useWaitlistSlotEvents(options: { locationId?: string; enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistSlotEvents(businessId, options.locationId),
+    enabled: Boolean(businessId) && options.enabled !== false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const res = await api.get<{ events: WaitlistSlotEvent[] }>(
+        `/api/v1/businesses/${businessId}/waitlist/slot-events`,
+        { query: options.locationId ? { locationId: options.locationId } : {} },
+      );
+      return res.data.events;
+    },
+  });
+}
+
+/** Hide a slot-freed banner for everyone in the business. */
+export function useDismissWaitlistSlotEvent() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      await api.post(
+        `/api/v1/businesses/${businessId}/waitlist/slot-events/${eventId}/dismiss`,
+        {},
+      );
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.waitlistSlotEvents(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.waitlistSummary(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Up to three free times that suit a waiting entry (detail panel). */
+export function useWaitlistFreeTimes(entryId: string | undefined, enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.waitlistFreeTimes(businessId, entryId ?? ""),
+    enabled: Boolean(businessId && entryId) && enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const res = await api.get<WaitlistFreeTimes>(
+        `/api/v1/businesses/${businessId}/waitlist/${entryId}/free-times`,
+      );
+      return res.data;
+    },
+  });
 }
 
 /** Preferences as the API accepts them on create/update. */
@@ -1545,41 +1716,9 @@ export type WaitlistEntryInput = {
   preferences?: WaitlistPreferencesInput;
   notes?: string | null;
   priority?: "normal" | "high";
+  /** Send the client the "you're on the list" message (staff-added entries only). */
+  notifyClient?: boolean;
 };
-
-/**
- * Clients waiting for a slot, soonest preferred start first (no date first), cursor-paged.
- * Open entries unless `status` says otherwise.
- */
-export function useWaitlist(filters: WaitlistListFilters = {}) {
-  const businessId = useBusinessId();
-  const query = waitlistQuery(filters);
-  const q = usePaginatedQuery<WaitlistEntry, "entries">({
-    queryKey: queryKeys.waitlist(businessId, query),
-    path: `/api/v1/businesses/${businessId}/waitlist`,
-    listKey: "entries",
-    query,
-    limit: 50,
-    enabled: Boolean(businessId) && filters.enabled !== false,
-  });
-  return { ...q, items: flattenPages(q.data, "entries") };
-}
-
-/** How many clients are waiting — the nav badge and calendar pill. */
-export function useWaitlistSummary(options: { enabled?: boolean } = {}) {
-  const businessId = useBusinessId();
-  return useQuery({
-    queryKey: queryKeys.waitlistSummary(businessId),
-    enabled: Boolean(businessId) && options.enabled !== false,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const res = await api.get<{ waiting: number }>(
-        `/api/v1/businesses/${businessId}/waitlist/summary`,
-      );
-      return res.data;
-    },
-  });
-}
 
 /** A client's open waitlist entries (client profile). */
 export function useCustomerWaitlist(customerId: string | undefined) {
@@ -1630,7 +1769,7 @@ export function useUpdateWaitlistEntry() {
   return useMutation({
     mutationFn: async (vars: {
       entryId: string;
-      patch: Omit<WaitlistEntryInput, "customerId" | "serviceId">;
+      patch: Omit<WaitlistEntryInput, "customerId" | "serviceId" | "notifyClient">;
     }) => {
       const res = await api.patch<{ entry: WaitlistEntry }>(
         `/api/v1/businesses/${businessId}/waitlist/${vars.entryId}`,
@@ -5682,6 +5821,8 @@ export interface PublicBusinessProfile {
   paymentMethods?: { card: boolean; bankTransfer: boolean; onTheDay: boolean };
   /** Hours before the start a customer can still move or cancel without losing money. */
   cancellationWindowHours?: number;
+  /** "Join the waitlist" on the booking page; absent from older API builds, which means on. */
+  waitlistEnabled?: boolean;
   /** The business's legal address as one line, when it has one. */
   address?: string | null;
   /**

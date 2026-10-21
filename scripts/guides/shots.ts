@@ -512,8 +512,34 @@ const BOOKINGS: Shot[] = [
     step: "add-to-waitlist",
     route: "/waitlist",
     prepare: async (ctx) => {
-      await openDialog(ctx, /Add to waitlist/i);
-      await pickClient(ctx, NAMES[ctx.vertical].secondClient);
+      await openDialog(ctx, /^Add to waitlist$/i);
+      await ctx.page
+        .getByRole("dialog")
+        .getByRole("combobox")
+        .filter({ hasText: /Search for a client/i })
+        .first()
+        .click();
+      const name = NAMES[ctx.vertical].secondClient;
+      await ctx.page.getByPlaceholder(/Search clients by name/i).fill(name.split(" ")[0]!);
+      await ctx.page
+        .getByRole("option", { name: new RegExp(name) })
+        .first()
+        .click();
+      await ctx.settle(600);
+    },
+  },
+  {
+    guide: "waitlist",
+    step: "entry",
+    route: "/waitlist",
+    prepare: async (ctx) => {
+      // A table row on desktop, a card button on phone.
+      const name = /^[A-Z][a-z]+ [A-Z][a-z]+, high priority, /;
+      const row = ctx.page.locator("main").getByRole("row", { name });
+      const card = ctx.page.locator("main").getByRole("button", { name });
+      await row.or(card).first().click();
+      await ctx.page.getByRole("dialog").first().waitFor({ timeout: 10_000 });
+      await ctx.settle(1200);
     },
   },
   {

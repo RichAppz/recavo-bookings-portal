@@ -10,6 +10,7 @@ import {
   CloudOff,
   ChevronRight,
   CreditCard,
+  Hourglass,
   Landmark,
   Link2 as LinkIcon,
   Mail,
@@ -76,6 +77,7 @@ import { BookingConsumablesSection } from "@/components/BookingConsumables";
 import { BookingFollowUpDetail } from "@/components/BookingFollowUpDetail";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { useBookingUpsellOffer, useDeclineUpsellOffer } from "@/lib/api/upsells";
+import { useWaitlistEntryForBooking } from "@/lib/api/hooks";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
 import { useBookingInvoices, type Invoice } from "@/lib/api/invoices";
 import { invoiceForMessage } from "@/lib/invoice-history";
@@ -242,6 +244,10 @@ export function BookingPanel({
   // The add-on offer emailed after this (staff-made) booking, if any (upsells).
   const upsellOffer = useBookingUpsellOffer(bookingId ?? undefined);
   const declineUpsell = useDeclineUpsellOffer();
+  const fromWaitlist = useWaitlistEntryForBooking(
+    bookingId ?? undefined,
+    tenant.can(PERMISSIONS.BOOKING_READ_ALL),
+  );
   const staffList = useStaffList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
@@ -1198,6 +1204,18 @@ export function BookingPanel({
                   </span>
                 ) : null}
               </div>
+
+              {fromWaitlist.data ? (
+                <Link
+                  to="/waitlist"
+                  search={{ tab: "booked", entry: fromWaitlist.data.id }}
+                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  <Hourglass className="size-4" aria-hidden />
+                  From the waitlist
+                  <ChevronRight className="size-4" aria-hidden />
+                </Link>
+              ) : null}
 
               {upsellOffer.data?.status === "requested" && upsellOffer.data.requested.length > 0 ? (
                 <div className="rounded-xl border border-primary/40 bg-primary-soft p-3 text-sm">

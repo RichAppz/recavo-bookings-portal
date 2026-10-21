@@ -6,6 +6,37 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-21",
+    title: "A waitlist that tells you who fits",
+    items: [
+      {
+        kind: "improved",
+        text: "The Waitlist page has Waiting, Booked in and Removed tabs with counts, and figures across the top: who's waiting, how many are high priority, how many have a free day that suits this week, and how many you've booked in (and what they brought in) over 90 days. Search by name, phone or email, filter by service or location, and use Fits a day to see only the people who could take a given date and time.",
+        where: "Waitlist",
+      },
+      {
+        kind: "new",
+        text: "When a cancellation frees time that suits someone waiting, a banner says so on the Waitlist page and the calendar, the sidebar shows a dot, and Needs your attention on the Overview says how many could take it. Show them lists exactly who fits. Nothing is booked or sent automatically.",
+        where: "Waitlist",
+      },
+      {
+        kind: "new",
+        text: "Click anyone on the list to open their entry: Call, Text or Email, up to three free times that fit (each with Book this), what they want and when, their notes and a history of every change. Booked entries link to the booking, and the booking shows “From the waitlist”.",
+        where: "Waitlist",
+      },
+      {
+        kind: "improved",
+        text: "Adding someone is a side drawer with From and Until dates, the days that suit, a time of day and High priority. It warns if the client is already waiting for that service, tells you exactly what's missing, and can let the client know they're on the list. Remove has an Undo, and Put back returns a removed entry to the list.",
+        where: "Waitlist",
+      },
+      {
+        kind: "improved",
+        text: "Clients joining from your booking page get a tidier form (mobile or email, days and time of day as buttons) and a clear “You're on the list” with what they asked for. Their account shows each waitlist entry with Leave. You can turn joining from the booking page off in Settings › Booking rules.",
+        where: "Booking page",
+      },
+    ],
+  },
+  {
     date: "2026-10-20",
     title: "An Overview that starts with today",
     items: [

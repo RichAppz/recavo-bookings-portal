@@ -302,32 +302,52 @@ export const BOOKING_GUIDES: readonly Guide[] = [
     slug: "waitlist",
     title: "Use the waitlist",
     summary:
-      "Couldn't find them a slot? Note who wants what and roughly when. When a cancellation frees matching time you're nudged, and you book them from there.",
+      "Couldn't find them a time? Note who wants what and roughly when. When a cancellation frees time that suits someone, you're told, and you book them from there.",
     category: "bookings",
     verticals: BOTH,
-    minutes: 2,
-    keywords: ["waiting list", "cancellation list", "standby", "fully booked", "nudge", "priority"],
+    minutes: 3,
+    keywords: [
+      "waiting list",
+      "cancellation list",
+      "standby",
+      "fully booked",
+      "slot freed",
+      "priority",
+      "fits",
+    ],
     steps: [
       {
         heading: "Add someone",
-        body: "Open **Waitlist** in the sidebar and click **Add to waitlist** (it's on the top bar's **New booking** menu too). Pick the client and the {service} they want, and optionally a {staff}. **Roughly when** and **Days they can do** narrow the match; leave them blank for *as soon as possible*. **High priority** puts them first when a slot frees.",
+        body: "Open **Waitlist** in the sidebar and click **Add to waitlist** (it's on the top bar's **New booking** menu too, and under *Can't find a time?* in the Add booking form). Pick the client and the {service} they want. **When** takes a From and Until date, the **days that suit** and a **time of day**; leave them blank for *as soon as possible*. **High priority** puts them at the top. Tick **Let the client know** to send them a confirmation.",
         image: {
           name: "add-to-waitlist",
-          alt: "The Add to waitlist form with client, service, staff, date range, days they can do, time of day and priority.",
+          alt: "The Add to waitlist drawer with sections for who, what, where, when, priority and notes.",
         },
         link: { to: "/waitlist", label: "Open Waitlist" },
       },
       {
-        heading: "When a slot frees",
-        body: "Cancelling or moving a {booking} checks the list. If someone fits the freed time, the waitlist badge in the sidebar lights up and the calendar's **Waitlist** button shows a count. Open the list and click **Book** on the entry — the Add booking form opens with the client, {service} and time already filled.",
+        heading: "Find who fits a time",
+        body: "The page opens on **Waiting**, highest priority first, with the figures across the top: who's waiting, how many are high priority, and how many fit a free time this week. Search by name, phone or email, filter by {service} or location, or use **Fits** to pick a date and time and see only the people who could take it.",
         image: {
           name: "waitlist",
-          alt: "The Waitlist page showing a waiting client with the service, dates and notes they gave.",
+          alt: "The Waitlist page with figures, the Waiting, Booked and Removed tabs, filters and the list of waiting clients.",
+        },
+      },
+      {
+        heading: "When a slot frees",
+        body: "Cancelling a {booking} checks the list. If someone fits the freed time, a banner appears on the Waitlist page and the calendar, and the sidebar shows a dot. **Show them** filters the list to the people who fit. Nothing is booked or sent automatically: you choose who to offer it to.",
+      },
+      {
+        heading: "Book them in",
+        body: "Click a row to open the entry: call, text or email the client, see up to three **free times that fit**, and read what they asked for. **Book** opens the Add booking form with the client, {service} and time filled in. Once booked, the entry moves to *Booked* with a link to the {booking}.",
+        image: {
+          name: "entry",
+          alt: "A waitlist entry open beside the list, with contact buttons, free times that fit, what they want and the history.",
         },
       },
       {
         heading: "Keeping it tidy",
-        body: 'Entries you\'ve booked move to *Booked*; use the status filter to see them or to remove someone who no longer needs a slot. Notes such as "prefers a text" sit on the entry so whoever picks it up knows.',
+        body: "Use **···** on a row to edit or remove an entry (there's an Undo). Removed entries, and anyone who leaves from their own account, sit under *Removed*, where **Put back** returns them to the list. If you'd rather clients didn't join from your booking page, turn it off in **Settings › Booking rules**.",
       },
     ],
     related: ["cancel-no-show-and-refunds", "add-a-booking"],

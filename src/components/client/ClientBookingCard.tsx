@@ -68,7 +68,8 @@ export function ClientBookingCard({
   onSelect: (slot: AvailabilitySlot) => void;
   onContinue: () => void;
   onBuyPackage: (packageId: string) => void;
-  onWaitlist: () => void;
+  /** Absent when the business has turned the waitlist off. */
+  onWaitlist?: () => void;
   priceMinor: number;
   currency: string;
   cancellationWindowHours: number;
@@ -233,13 +234,20 @@ export function ClientBookingCard({
                 </div>
               </>
             ) : null}
-            <button
-              type="button"
-              onClick={onWaitlist}
-              className="mt-3 text-[14px] font-semibold underline underline-offset-4"
-            >
-              Join the waitlist
-            </button>
+            <p className="mt-3 text-[14px] text-muted-foreground">
+              {onWaitlist
+                ? "Try another day, or join the waitlist and we'll be in touch if a time opens."
+                : "Try another day."}
+            </p>
+            {onWaitlist ? (
+              <button
+                type="button"
+                onClick={onWaitlist}
+                className="mt-2 text-[14px] font-semibold underline underline-offset-4"
+              >
+                Join the waitlist
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className={cn("mt-3 grid grid-cols-3 gap-2", loading && "opacity-60")}>
@@ -271,6 +279,15 @@ export function ClientBookingCard({
             })}
           </div>
         )}
+        {service && onWaitlist && visible.length > 0 ? (
+          <button
+            type="button"
+            onClick={onWaitlist}
+            className="mt-3 text-[14px] font-semibold underline underline-offset-4"
+          >
+            None of these work? Join the waitlist
+          </button>
+        ) : null}
       </div>
 
       <PrimaryButton full className="mt-4" onClick={onContinue} disabled={!selected || !service}>

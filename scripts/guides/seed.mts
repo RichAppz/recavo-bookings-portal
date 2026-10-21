@@ -156,6 +156,17 @@ type Plan = {
   customers: CustomerPlan[];
   bookings: BookingPlan[];
   waitlist?: { customer: number; service: string; notes: string };
+  /** More waiting entries so the Waitlist page has priority, days and a spread of windows. */
+  waitlistMore?: {
+    customer: number;
+    service: string;
+    notes: string | null;
+    fromDay: number | null;
+    toDay: number | null;
+    days: number[] | null;
+    timeOfDay: "any" | "morning" | "afternoon" | "evening";
+    priority: "normal" | "high";
+  }[];
   event?: { staff: number; title: string; day: number; from: string; to: string };
   invoiceFor?: number;
   /**
@@ -491,6 +502,28 @@ const PT: Plan = {
     service: "Personal training session",
     notes: "Any weekday morning before work",
   },
+  waitlistMore: [
+    {
+      customer: 2,
+      service: "Personal training session",
+      notes: "Back from holiday, keen to restart",
+      fromDay: 2,
+      toDay: 14,
+      days: [6, 7],
+      timeOfDay: "morning",
+      priority: "high",
+    },
+    {
+      customer: 4,
+      service: "Nutrition consultation",
+      notes: null,
+      fromDay: null,
+      toDay: null,
+      days: null,
+      timeOfDay: "evening",
+      priority: "normal",
+    },
+  ],
   event: { staff: 0, title: "Level 3 CPD workshop", day: 5, from: "09:00", to: "13:00" },
   invoiceFor: 3,
   referrals: [
@@ -904,6 +937,28 @@ const AUTO: Plan = {
     },
   ],
   waitlist: { customer: 6, service: "Ceramic coating", notes: "Any Saturday in the next month" },
+  waitlistMore: [
+    {
+      customer: 2,
+      service: "Full valet",
+      notes: "Selling the car, needs it done before the viewing",
+      fromDay: 1,
+      toDay: 10,
+      days: [1, 2, 3, 4, 5],
+      timeOfDay: "any",
+      priority: "high",
+    },
+    {
+      customer: 4,
+      service: "Paint correction",
+      notes: null,
+      fromDay: 7,
+      toDay: null,
+      days: [6, 7],
+      timeOfDay: "morning",
+      priority: "normal",
+    },
+  ],
   event: { staff: 1, title: "Van MOT", day: 5, from: "08:00", to: "10:00" },
   reminders: {
     rules: [
@@ -1439,6 +1494,29 @@ async function seed(plan: Plan): Promise<void> {
         priority: "normal",
       });
       log("waitlist", "1 entry");
+    }
+    for (const extra of plan.waitlistMore ?? []) {
+      const customer = customers[extra.customer]!;
+      const serviceId = services.get(extra.service)!.id;
+      const theirs = await api.get<{ entries: { serviceId: string; status: string }[] }>(
+        `${B}/waitlist`,
+        { customerId: customer.id, status: "waiting" },
+      );
+      if (theirs.entries.some((e) => e.serviceId === serviceId)) continue;
+      await api.post(`${B}/waitlist`, {
+        customerId: customer.id,
+        serviceId,
+        locationId: null,
+        preferences: {
+          from: extra.fromDay === null ? null : addDays(today, extra.fromDay),
+          to: extra.toDay === null ? null : addDays(today, extra.toDay),
+          days: extra.days,
+          timeOfDay: extra.timeOfDay,
+        },
+        notes: extra.notes,
+        priority: extra.priority,
+      });
+      log("waitlist", `${extra.service} for client ${extra.customer}`);
     }
   }
 

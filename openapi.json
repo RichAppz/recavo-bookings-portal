@@ -4005,6 +4005,7 @@
           "bookingId",
           "expiresAt",
           "createdByUserId",
+          "clientNotifiedAt",
           "customer",
           "service",
           "variant",
@@ -4012,6 +4013,7 @@
           "staff",
           "linkedRecord",
           "booking",
+          "createdBy",
           "createdAt",
           "updatedAt"
         ],
@@ -4321,6 +4323,44 @@
               }
             }
           },
+          "clientNotifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the client was sent “you’re on the list”; null if never."
+          },
+          "createdBy": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The staff member who added it; null for booking-page joins.",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "history": {
+            "type": "array",
+            "description": "Oldest first. Only on the single-entry read.",
+            "items": {
+              "$ref": "#/components/schemas/WaitlistHistoryItem"
+            }
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4406,6 +4446,18 @@
           "alreadyOnList": {
             "type": "boolean",
             "description": "True when this person was already waiting for this service; the existing entry is returned (200) and no second confirmation is sent."
+          },
+          "notifiedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "sms",
+              "email",
+              null
+            ],
+            "description": "How the confirmation went out (a text when both were sent); null when nothing was sent, including for a repeat join."
           }
         }
       },
@@ -5038,6 +5090,10 @@
                 ]
               }
             }
+          },
+          "waitlistEnabled": {
+            "type": "boolean",
+            "description": "Whether to offer \"Join the waitlist\" when no time suits."
           }
         }
       },
@@ -6634,6 +6690,10 @@
               },
               "requireOnlinePayment": {
                 "type": "boolean"
+              },
+              "waitlistEnabled": {
+                "type": "boolean",
+                "description": "\"Join the waitlist\" on the public booking page. Default true."
               }
             }
           },
@@ -10705,6 +10765,297 @@
                 "description": "`count` is net revenue in minor units for that week."
               }
             }
+          }
+        }
+      },
+      "WaitlistHistoryItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "actor",
+          "changes",
+          "bookingId",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "added",
+              "joined",
+              "edited",
+              "notified",
+              "booked",
+              "removed",
+              "left",
+              "reopened"
+            ]
+          },
+          "actor": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The staff user behind it; null for the client or the system.",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For `edited`: variant, linkedRecord, location, staff, window, days, timeOfDay, priority, notes. For `notified`: sms, email."
+          },
+          "bookingId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WaitlistCounts": {
+        "type": "object",
+        "required": [
+          "waiting",
+          "booked",
+          "removed"
+        ],
+        "properties": {
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "booked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "removed": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Cancelled and expired."
+          }
+        }
+      },
+      "WaitlistFigures": {
+        "type": "object",
+        "required": [
+          "waiting",
+          "highPriority",
+          "fitThisWeek",
+          "bookedIn90",
+          "broughtInMinor",
+          "currency"
+        ],
+        "properties": {
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "highPriority": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fitThisWeek": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Waiting entries with a suitable free time in the next 7 days; null when it could not be worked out."
+          },
+          "bookedIn90": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Closed as booked, last 90 days."
+          },
+          "broughtInMinor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "What those bookings are worth (cancelled ones excluded), in minor units; null without `payment.read`."
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WaitlistFreeTimes": {
+        "type": "object",
+        "required": [
+          "applicable",
+          "times"
+        ],
+        "properties": {
+          "applicable": {
+            "type": "boolean",
+            "description": "False when the entry is closed or its window is beyond the next 60 days."
+          },
+          "times": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": [
+                "start",
+                "end",
+                "timezone",
+                "locationId",
+                "staff",
+                "freedByCancellation"
+              ],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "timezone": {
+                  "type": "string"
+                },
+                "locationId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "staff": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "required": [
+                    "id",
+                    "displayName"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "freedByCancellation": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WaitlistSlotEvent": {
+        "type": "object",
+        "description": "A cancellation that freed time someone waiting could take. Shown as a banner until dismissed (for everyone in the business), its start passes, or nobody fits any more.",
+        "required": [
+          "id",
+          "bookingId",
+          "start",
+          "end",
+          "timezone",
+          "allDay",
+          "location",
+          "serviceName",
+          "staffId",
+          "fitCount",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "allDay": {
+            "type": "boolean"
+          },
+          "location": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "serviceName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the freed booking had one service."
+          },
+          "staffId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "fitCount": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Waiting entries that fit it now."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }
@@ -15574,6 +15925,10 @@
                               ]
                             }
                           }
+                        },
+                        "waitlistEnabled": {
+                          "type": "boolean",
+                          "description": "Whether to offer \"Join the waitlist\" when no time suits."
                         }
                       }
                     }
@@ -15817,6 +16172,10 @@
                               ]
                             }
                           }
+                        },
+                        "waitlistEnabled": {
+                          "type": "boolean",
+                          "description": "Whether to offer \"Join the waitlist\" when no time suits."
                         }
                       }
                     }
@@ -18865,7 +19224,7 @@
     "/api/v1/public/businesses/{businessId}/waitlist": {
       "post": {
         "summary": "Join the waitlist from the public booking page",
-        "description": "\"Can’t find a time? Join the waitlist.\" Identifies the visitor the way a public booking does (name + email and/or phone; an existing customer with matching contact details is reused). No slot is reserved and nothing is promised: staff are shown the entry and book people in by hand. The visitor receives a \"you’re on the list\" message by email/text. A repeat join for the same service returns the existing entry with `alreadyOnList: true` (200). Rate-limited like booking holds.",
+        "description": "\"Can’t find a time? Join the waitlist.\" Identifies the visitor the way a public booking does (name + email and/or phone; an existing customer with matching contact details is reused). No slot is reserved and nothing is promised: staff are shown the entry and book people in by hand. The visitor receives a \"you’re on the list\" message by email/text. A repeat join for the same service returns the existing entry with `alreadyOnList: true` (200). 422 when the business has turned \"Join the waitlist\" off. Rate-limited like booking holds.",
         "parameters": [
           {
             "name": "businessId",
@@ -26958,6 +27317,10 @@
                       },
                       "requireOnlinePayment": {
                         "type": "boolean"
+                      },
+                      "waitlistEnabled": {
+                        "type": "boolean",
+                        "description": "\"Join the waitlist\" on the public booking page. Default true."
                       }
                     }
                   },
@@ -88738,7 +89101,7 @@
     "/api/v1/businesses/{businessId}/waitlist": {
       "get": {
         "summary": "List waitlist entries",
-        "description": "Customers waiting for a slot, soonest preferred start first (entries with no preferred start come first). Open (`waiting`) entries by default; pass `status` (comma-separated or repeated) for others. `from`/`to` are calendar dates the entry’s preferred window must overlap. Requires `booking.read_all`.",
+        "description": "Two modes. With `tab` or `page`: the console list, 25 a page with `total` and per-tab `counts` (Waiting: high priority first, then window start, then oldest; Booked in and Removed: newest change first). Without: the older keyset list, soonest preferred start first, open entries by default (pass `status` for others). Both take `q` (client name, phone or email), `serviceId`, `locationId` (that location plus anywhere), `bookingId`, `fits` (only waiting entries that could take that day, or that day and time) or `slot` (a slot event: its day, time, services, option, staff and place), and `from`/`to` (calendar dates the preferred window must overlap). Requires `booking.read_all`.",
         "security": [
           {
             "bearerAuth": []
@@ -88753,6 +89116,82 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "tab",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting",
+                "booked",
+                "removed"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "1-based page in tab mode."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Client name, phone or email."
+          },
+          {
+            "name": "fits",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "2026-10-25T09:00"
+            },
+            "description": "`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`, local to the business."
+          },
+          {
+            "name": "slot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "A slot event id; lists who fits that freed booking."
+          },
+          {
+            "name": "fitWeek",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            },
+            "description": "Waiting tab only: the entries counted by the Fit this week figure (a suitable free time in the next 7 days)."
+          },
+          {
+            "name": "bookingId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The entry a booking was made from."
           },
           {
             "name": "status",
@@ -88780,7 +89219,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "This location plus entries that said anywhere."
           },
           {
             "name": "customerId",
@@ -88838,6 +89278,29 @@
                     },
                     "nextCursor": {
                       "$ref": "#/components/schemas/NextCursor"
+                    },
+                    "tab": {
+                      "type": "string",
+                      "enum": [
+                        "waiting",
+                        "booked",
+                        "removed"
+                      ]
+                    },
+                    "page": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "counts": {
+                      "$ref": "#/components/schemas/WaitlistCounts"
                     }
                   }
                 }
@@ -89004,7 +89467,7 @@
       },
       "post": {
         "summary": "Add a customer to the waitlist",
-        "description": "One open entry per customer + service: adding the same pair again returns the existing entry. `linkedRecordId` must belong to the customer. Requires `booking.create` and an `Idempotency-Key`.",
+        "description": "One open entry per customer + service: adding the same pair again returns the existing entry. `linkedRecordId` must belong to the customer. `notifyClient` sends the client “you’re on the list” (new entries only). Requires `booking.create` and an `Idempotency-Key`.",
         "security": [
           {
             "bearerAuth": []
@@ -89135,6 +89598,9 @@
                       "normal",
                       "high"
                     ]
+                  },
+                  "notifyClient": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -89353,6 +89819,10 @@
                     "waiting": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "slotFreed": {
+                      "type": "boolean",
+                      "description": "Present (true) while a slot-freed banner is showing."
                     }
                   }
                 }
@@ -89521,6 +89991,7 @@
     "/api/v1/businesses/{businessId}/waitlist/{entryId}": {
       "get": {
         "summary": "Get a waitlist entry",
+        "description": "The entry with its `history`, oldest first.",
         "security": [
           {
             "bearerAuth": []
@@ -94581,6 +95052,808 @@
                       }
                     }
                   }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/waitlist/figures": {
+      "get": {
+        "summary": "Waitlist figures",
+        "description": "The four tiles above the list: waiting (and high priority), fit this week, booked in and brought in over the last 90 days. Requires `booking.read_all`; brought in also needs `payment.read`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "This location plus entries that said anywhere."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Figures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistFigures"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/waitlist/slot-events": {
+      "get": {
+        "summary": "Slots freed this week",
+        "description": "Cancellations in the last 7 days whose time is still ahead, not dismissed, and that someone waiting fits (counted now). Newest first. Requires `booking.read_all`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "This location plus entries that said anywhere."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slot events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "events"
+                  ],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WaitlistSlotEvent"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/waitlist/slot-events/{eventId}/dismiss": {
+      "post": {
+        "summary": "Dismiss a slot-freed banner",
+        "description": "Hides it for everyone in the business. Repeating is a no-op.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "Dismissed",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/waitlist/{entryId}/free-times": {
+      "get": {
+        "summary": "Free times that fit an entry",
+        "description": "Up to three free times in the entry’s window (next 60 days) that suit its days, time of day, staff and location, earliest first. Requires `booking.read_all`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Free times",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistFreeTimes"
                 }
               }
             },

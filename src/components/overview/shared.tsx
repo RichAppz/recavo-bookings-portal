@@ -210,6 +210,7 @@ export const ATTENTION_TILE: Record<AttentionTone, string> = {
   red: "bg-[#fdeaea] text-[#c0262d] dark:bg-[rgba(229,72,77,0.18)] dark:text-[#f5b3b5]",
   amber: "bg-[#fdf0dc] text-[#8a5300] dark:bg-[rgba(233,146,57,0.18)] dark:text-[#f3b878]",
   blue: "bg-[#e8edfd] text-[#3651b8] dark:bg-[rgba(99,135,255,0.18)] dark:text-[#b4c4ff]",
+  mint: "bg-[#e3f5ec] text-[#1f6b41] dark:bg-[rgba(110,231,176,0.14)] dark:text-[#9fe3bf]",
   grey: "bg-[#f1efea] text-[#4b525c] dark:bg-[#2a303a] dark:text-[#a8afba]",
 };
 

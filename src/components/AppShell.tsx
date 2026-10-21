@@ -349,11 +349,13 @@ function ConsoleShell({ children }: { children: ReactNode }) {
     label: navLabel(item.to, item.label, tenant.terminology),
     icon: item.icon,
     badge:
-      item.to === "/waitlist" && waiting > 0
-        ? { tone: "grey", text: String(waiting) }
-        : item.to === "/booking-page"
-          ? { tone: "mint", text: "New" }
-          : null,
+      item.to === "/waitlist" && waitlistSummary.data?.slotFreed
+        ? { tone: "mint", text: "A slot freed", dot: true }
+        : item.to === "/waitlist" && waiting > 0
+          ? { tone: "grey", text: String(waiting) }
+          : item.to === "/booking-page"
+            ? { tone: "mint", text: "New" }
+            : null,
   }));
 
   // The More group: setup, credits, billing, updates and help, with a badge
@@ -838,7 +840,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
         onOpenChange={setBookingOpen}
         onNoAvailability={(picked) => {
           setBookingOpen(false);
-          setWaitlistDefaults({ ...picked, from: picked.date });
+          setWaitlistDefaults({ ...picked, from: picked.date, copiedFromBooking: true });
         }}
       />
       <EventModal open={eventOpen} onOpenChange={setEventOpen} />

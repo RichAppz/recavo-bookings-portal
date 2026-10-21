@@ -148,7 +148,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       {
         key: "booking-rules",
         label: "Booking rules",
-        hint: "Holds, cancellation window, paying online, words.",
+        hint: "Holds, cancellation window, paying online, waitlist, words.",
         description: "How bookings behave and what things are called.",
         keywords: [
           "hold",

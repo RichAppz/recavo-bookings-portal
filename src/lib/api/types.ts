@@ -30,6 +30,14 @@ export type WaitlistPreferences = schemas["WaitlistPreferences"];
 export type WaitlistTimeOfDay = WaitlistPreferences["timeOfDay"];
 export type WaitlistAction = "cancel" | "reopen";
 export type PublicWaitlistReceipt = schemas["PublicWaitlistReceipt"];
+export type WaitlistHistoryItem = schemas["WaitlistHistoryItem"];
+export type WaitlistCounts = schemas["WaitlistCounts"];
+export type WaitlistFigures = schemas["WaitlistFigures"];
+export type WaitlistFreeTimes = schemas["WaitlistFreeTimes"];
+export type WaitlistFreeTime = WaitlistFreeTimes["times"][number];
+/** A cancellation that freed time someone waiting could take (the slot-freed banner). */
+export type WaitlistSlotEvent = schemas["WaitlistSlotEvent"];
+export type WaitlistTab = "waiting" | "booked" | "removed";
 /** Upsells: add-ons paired with a service, and the post-booking offer loop. */
 export type ServiceUpsell = schemas["ServiceUpsell"];
 export type PublicServiceUpsell = schemas["PublicServiceUpsell"];

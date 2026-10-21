@@ -725,7 +725,7 @@ function ClientProfile() {
         waitlistEntryId={bookingWaitlist?.id}
         onNoAvailability={(picked) => {
           setBookingOpen(false);
-          setWaitlistDefaults({ ...picked, from: picked.date });
+          setWaitlistDefaults({ ...picked, from: picked.date, copiedFromBooking: true });
         }}
       />
       <AddWaitlistDialog

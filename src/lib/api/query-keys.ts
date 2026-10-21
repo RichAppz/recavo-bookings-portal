@@ -84,6 +84,14 @@ export const queryKeys = {
       ? (["biz", businessId, "waitlist", filter] as const)
       : (["biz", businessId, "waitlist"] as const),
   waitlistSummary: (businessId: string) => ["biz", businessId, "waitlist", "summary"] as const,
+  waitlistEntry: (businessId: string, entryId: string) =>
+    ["biz", businessId, "waitlist", "entry", entryId] as const,
+  waitlistFigures: (businessId: string, locationId?: string) =>
+    ["biz", businessId, "waitlist", "figures", locationId ?? null] as const,
+  waitlistSlotEvents: (businessId: string, locationId?: string) =>
+    ["biz", businessId, "waitlist", "slot-events", locationId ?? null] as const,
+  waitlistFreeTimes: (businessId: string, entryId: string) =>
+    ["biz", businessId, "waitlist", "free-times", entryId] as const,
 
   /** Upsells: a service's add-on pairings, and the offers/requests on staff-made bookings. */
   serviceUpsells: (businessId: string, serviceId: string) =>

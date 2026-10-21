@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, CalendarPlus, Navigation, Ticket } from "lucide-react";
+import { useState } from "react";
+import { CalendarDays, CalendarPlus, Hourglass, Navigation, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { ClientBookingActions } from "@/components/ClientBookingActions";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
 import { formatInTz, formatMoney } from "@/lib/format";
 import { initials } from "@/lib/client-theme";
 import { cn } from "@/lib/utils";
+import { describeForClient } from "@/lib/waitlist";
 
 function Chip({
   label,
@@ -497,42 +499,37 @@ function NextUpCard({
   );
 }
 
-function describeWaitlistWindow(entry: PortalWaitlistEntry): string {
-  const p = entry.preferences;
-  const tod =
-    p.timeOfDay === "any"
-      ? "any time"
-      : p.timeOfDay === "morning"
-        ? "mornings"
-        : p.timeOfDay === "afternoon"
-          ? "afternoons"
-          : "evenings";
-  const day = p.from
-    ? formatInTz(`${p.from}T12:00:00Z`, "UTC", { weekday: "short", day: "numeric", month: "short" })
-    : "As soon as possible";
-  const span =
-    p.from && p.to && p.to !== p.from
-      ? `${day} to ${formatInTz(`${p.to}T12:00:00Z`, "UTC", { weekday: "short", day: "numeric", month: "short" })}`
-      : day;
-  return `${span}, ${tod}`;
-}
-
 function WaitlistCard({ studio, solo }: { studio: PortalBusinessSummary; solo: boolean }) {
   const waitlist = usePortalWaitlist(studio.id);
   const leave = useLeavePortalWaitlist(studio.id);
+  // Rows fade out on Leave; the refetch then drops them for good.
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
   const entries = (waitlist.data ?? []).filter((e) => e.status === "waiting");
   if (entries.length === 0) return null;
   return (
     <div className="rounded-3xl border-2 border-dashed border-border bg-card p-4 sm:p-5">
-      <ul className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+          <Hourglass className="size-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[16px] font-semibold">On the waitlist</p>
+          {solo ? null : <p className="text-[13px] text-muted-foreground">{studio.tradingName}</p>}
+        </div>
+      </div>
+      <ul className="mt-3 space-y-3">
         {entries.map((entry) => (
-          <li key={entry.id} className="flex items-center justify-between gap-3">
+          <li
+            key={entry.id}
+            className={cn(
+              "flex items-center justify-between gap-3 transition-opacity duration-300",
+              leaving.has(entry.id) && "pointer-events-none opacity-0",
+            )}
+          >
             <div className="min-w-0">
-              <p className="text-[16px] font-semibold">On the waitlist</p>
+              <p className="text-[15px] font-semibold">{entry.service?.name ?? "Any service"}</p>
               <p className="text-[14px] text-muted-foreground">
-                {solo ? "" : `${studio.tradingName} · `}
-                {entry.service ? `${entry.service.name} · ` : ""}
-                {describeWaitlistWindow(entry)} · We'll text you if a space opens
+                {describeForClient(entry.preferences)}
               </p>
             </div>
             <Button
@@ -542,7 +539,16 @@ function WaitlistCard({ studio, solo }: { studio: PortalBusinessSummary; solo: b
               onClick={() =>
                 leave.mutate(
                   { entryId: entry.id },
-                  { onSuccess: () => toast.success("You've left the waitlist") },
+                  {
+                    onSuccess: () => {
+                      setLeaving((s) => new Set(s).add(entry.id));
+                      toast.success(
+                        entry.service
+                          ? `You've left the waitlist for ${entry.service.name}`
+                          : "You've left the waitlist",
+                      );
+                    },
+                  },
                 )
               }
             >
@@ -551,6 +557,10 @@ function WaitlistCard({ studio, solo }: { studio: PortalBusinessSummary; solo: b
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-[13px] text-muted-foreground">
+        {studio.tradingName} will be in touch if a time opens up. Nothing is booked until they
+        confirm with you.
+      </p>
     </div>
   );
 }

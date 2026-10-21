@@ -250,7 +250,7 @@ export function phoneTodayWindow(
 export type AttentionKind =
   "payments" | "attendance" | "package_requests" | "add_ons" | "waitlist" | "sms_low" | "setup";
 
-export type AttentionTone = "red" | "amber" | "blue" | "grey";
+export type AttentionTone = "red" | "amber" | "blue" | "mint" | "grey";
 
 export type AttentionItem = {
   kind: AttentionKind;
@@ -268,7 +268,8 @@ export type AttentionInput = {
   attendance?: { count: number; single: string | null };
   packageRequests?: { count: number; who: string[] };
   addOns?: { count: number };
-  waitlist?: { count: number };
+  /** `couldTakeFreed`: how many waiting could take a freed slot, while a banner is up. */
+  waitlist?: { count: number; couldTakeFreed?: number };
   sms?: { balance: number; low: boolean };
   setup?: { left: number; next: string | null };
 };
@@ -320,12 +321,21 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       tone: "blue",
     });
   }
-  if (waitlist && waitlist.count > 0) {
+  if (waitlist && (waitlist.couldTakeFreed ?? 0) > 0) {
+    const n = waitlist.couldTakeFreed!;
+    out.push({
+      kind: "waitlist",
+      count: n,
+      title: `${n} waiting could take a freed slot`,
+      detail: "A cancellation freed time",
+      tone: "mint",
+    });
+  } else if (waitlist && waitlist.count > 0) {
     out.push({
       kind: "waitlist",
       count: waitlist.count,
-      title: `${waitlist.count} ${plural(waitlist.count, "client")} waiting for a slot`,
-      detail: "On the waitlist",
+      title: `${waitlist.count} ${plural(waitlist.count, "client")} on the waitlist`,
+      detail: "Waiting for a slot",
       tone: "blue",
     });
   }

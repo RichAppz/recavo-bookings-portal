@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   CalendarPlus,
   ChevronLeft,
@@ -14,6 +14,9 @@ import { AppShell } from "@/components/AppShell";
 import { SavedCopyNotice } from "@/components/SavedCopyNotice";
 import { AddBookingModal } from "@/components/AddBookingModal";
 import { AddWaitlistDialog, type WaitlistDialogDefaults } from "@/components/AddWaitlistDialog";
+import { SlotFreedBanner } from "@/components/waitlist/parts";
+import { slotFits } from "@/lib/waitlist";
+import { PERMISSIONS } from "@/lib/permissions";
 import { AddToCalendarChooser } from "@/components/AddToCalendarChooser";
 import { BookingPanel } from "@/components/BookingPanel";
 import { PendingPackageRequestsBanner } from "@/components/PendingPackageRequestsBanner";
@@ -83,6 +86,8 @@ import {
   useServices,
   useStaffList,
   useWaitlistSummary,
+  useWaitlistSlotEvents,
+  useDismissWaitlistSlotEvent,
 } from "@/lib/api/hooks";
 import { addDays, formatMoney, isoDate, isoDateInTz, startOfWeek } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
@@ -406,6 +411,11 @@ function CalendarPage() {
   // "Add to waitlist instead" from the booking form when the day has no availability.
   const [waitlistDefaults, setWaitlistDefaults] = useState<WaitlistDialogDefaults | null>(null);
   const waitlistSummary = useWaitlistSummary();
+  const slotEvents = useWaitlistSlotEvents({
+    enabled: tenant.can(PERMISSIONS.BOOKING_READ_ALL),
+  });
+  const dismissSlotEvent = useDismissWaitlistSlotEvent();
+  const navigate = useNavigate();
   const waiting = waitlistSummary.data?.waiting ?? 0;
   const [addTime, setAddTime] = useState<string | undefined>(undefined);
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -658,7 +668,7 @@ function CalendarPage() {
     >
       <Link
         to="/waitlist"
-        search={{ from: isoDate(rangeStart), to: isoDate(addDays(rangeEnd, -1)) }}
+        search={{ fits: isoDate(rangeStart) }}
         aria-label={waiting > 0 ? `Waitlist, ${waiting} waiting` : "Waitlist"}
       >
         <Hourglass className="size-4" />
@@ -1175,6 +1185,17 @@ function CalendarPage() {
         </>
       )}
 
+      {slotEvents.data && slotEvents.data.length > 0 ? (
+        <SlotFreedBanner
+          compact
+          events={slotEvents.data}
+          onShow={(e) =>
+            void navigate({ to: "/waitlist", search: { slot: e.id, fits: slotFits(e) } })
+          }
+          onDismiss={(e) => dismissSlotEvent.mutate(e.id)}
+        />
+      ) : null}
+
       {bookings.data?.nextCursor ? (
         <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
           This range has more {bookingNoun}s than we can show at once. Narrow it with the filters,
@@ -1225,7 +1246,7 @@ function CalendarPage() {
         assumeDropIn={addFromDay}
         onNoAvailability={(picked) => {
           setAddOpen(false);
-          setWaitlistDefaults({ ...picked, from: picked.date });
+          setWaitlistDefaults({ ...picked, from: picked.date, copiedFromBooking: true });
         }}
       />
       <AddWaitlistDialog

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ReadOnlyNotice, SettingsPage, SettingsSection } from "@/components/settings/primitives";
 import { useSettingsDraft } from "@/components/settings/save-bar";
 import { TakePaymentOnlineSetting } from "@/components/TakePaymentOnlineSetting";
+import { WaitlistPageSetting } from "@/components/waitlist/WaitlistPageSetting";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUpdateConfiguration } from "@/lib/api/hooks";
@@ -163,6 +164,14 @@ export function BookingRulesPage() {
         help="Whether priced sessions must be paid before they're confirmed. Saves straight away."
       >
         <TakePaymentOnlineSetting variant="row" />
+      </SettingsSection>
+
+      <SettingsSection
+        id="rules-waitlist"
+        title="Waitlist"
+        help="Whether clients can ask to be added from your booking page when no time suits. Saves straight away."
+      >
+        <WaitlistPageSetting />
       </SettingsSection>
 
       <SettingsSection

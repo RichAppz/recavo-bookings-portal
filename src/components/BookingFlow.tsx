@@ -392,8 +392,9 @@ export function BookingFlow({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
-  // "Can't find a time? Join the waitlist" — the sheet for the expanded service.
+  // "None of these work? Join the waitlist": the sheet for the expanded service.
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const waitlistOn = studio?.waitlistEnabled !== false;
   const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
@@ -1251,10 +1252,15 @@ export function BookingFlow({
                                     <p className="text-sm text-muted-foreground">
                                       {loadingTimes
                                         ? "Checking this date…"
-                                        : "No availability on this date. Try another day."}
+                                        : waitlistOn
+                                          ? "Try another day, or join the waitlist and we'll be in touch if a time opens."
+                                          : "No availability on this date. Try another day."}
                                     </p>
-                                    {loadingTimes ? null : (
-                                      <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    {loadingTimes || !waitlistOn ? null : (
+                                      <WaitlistPrompt
+                                        lead={null}
+                                        onClick={() => setWaitlistOpen(true)}
+                                      />
                                     )}
                                   </div>
                                 ) : (
@@ -1291,7 +1297,12 @@ export function BookingFlow({
                                     <p className="text-xs text-muted-foreground">
                                       Times shown in {slots[0]?.displayTimezone}.
                                     </p>
-                                    <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    {waitlistOn ? (
+                                      <WaitlistPrompt
+                                        lead="None of these work?"
+                                        onClick={() => setWaitlistOpen(true)}
+                                      />
+                                    ) : null}
                                   </>
                                 )}
                               </div>
@@ -1846,10 +1857,10 @@ export function BookingFlow({
 }
 
 /** The one line under the times: the diary can't help, but the studio can. */
-function WaitlistPrompt({ onClick }: { onClick: () => void }) {
+function WaitlistPrompt({ lead, onClick }: { lead: string | null; onClick: () => void }) {
   return (
     <p className="text-sm text-muted-foreground">
-      Can't find a time that works?{" "}
+      {lead ? `${lead} ` : null}
       <button
         type="button"
         onClick={onClick}

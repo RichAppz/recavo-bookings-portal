@@ -633,6 +633,13 @@ const BADGE_TONE: Record<MenuBadge["tone"], string> = {
 };
 
 function Badge({ badge }: { badge: MenuBadge }) {
+  if (badge.dot) {
+    return (
+      <span className={cn("size-2.5 rounded-full", BADGE_TONE[badge.tone])}>
+        <span className="sr-only">{badge.text}</span>
+      </span>
+    );
+  }
   return (
     <span
       className={cn(
@@ -647,6 +654,14 @@ function Badge({ badge }: { badge: MenuBadge }) {
 
 /** In the strip a badge is a small count pinned to the icon's corner. */
 function StripBadge({ badge }: { badge: MenuBadge }) {
+  if (badge.dot) {
+    return (
+      <span
+        aria-hidden
+        className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full", BADGE_TONE[badge.tone])}
+      />
+    );
+  }
   const short = /^\d+$/.test(badge.text) ? badge.text : "•";
   return (
     <span

@@ -323,6 +323,22 @@ describe("attention", () => {
     assert.equal(detailer!.detail, "3 jobs");
   });
 
+  it("says when people waiting could take a freed slot", () => {
+    const [freed] = attentionItems({
+      detailer: false,
+      bookingNoun: "Session",
+      waitlist: { count: 5, couldTakeFreed: 2 },
+    });
+    assert.equal(freed!.title, "2 waiting could take a freed slot");
+    assert.equal(freed!.tone, "mint");
+    const [waiting] = attentionItems({
+      detailer: false,
+      bookingNoun: "Session",
+      waitlist: { count: 1, couldTakeFreed: 0 },
+    });
+    assert.equal(waiting!.title, "1 client on the waitlist");
+  });
+
   it("is empty when everything is caught up", () => {
     assert.deepEqual(attentionItems({ detailer: false, bookingNoun: "Session" }), []);
   });

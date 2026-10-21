@@ -112,6 +112,8 @@ export type BadgeTone = "amber" | "mint" | "grey";
 export interface MenuBadge {
   tone: BadgeTone;
   text: string;
+  /** Draw a small dot instead of the text; `text` is still read out. */
+  dot?: boolean;
 }
 
 /**

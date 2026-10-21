@@ -150,6 +150,7 @@ export function AddBookingModal({
   defaultStaffId,
   defaultServiceId,
   defaultLinkedRecordId,
+  defaultStart,
   waitlistEntryId,
   onNoAvailability,
   assumeDropIn,
@@ -165,6 +166,8 @@ export function AddBookingModal({
   defaultDate?: string;
   /** Pre-select a staff member — e.g. the calendar's current staff filter. */
   defaultStaffId?: string;
+  /** ISO instant: pick this slot once availability loads ("Book this" on a free time). */
+  defaultStart?: string;
   /**
    * "Book" from the waitlist: sent with the create call so the API closes the entry
    * once the booking exists. Nothing else about the form changes.
@@ -199,6 +202,7 @@ export function AddBookingModal({
   const [locationId, setLocationId] = useState("");
   const [date, setDate] = useState(defaultDate ?? isoDateInTz(new Date().toISOString(), timezone));
   const [slotKey, setSlotKey] = useState<string | null>(null);
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
   // Staff either pick from the availability quote ("slot") or set the window
   // themselves ("custom") — start/end, or whole days (RECA-532).
   const [scheduling, setScheduling] = useState<"slot" | "custom">("slot");
@@ -238,6 +242,7 @@ export function AddBookingModal({
     setEndTouched(false);
     setStaffId(defaultStaffId ?? "all");
     setSlotKey(null);
+    setPendingStart(defaultStart ?? null);
     setDropIn(false);
     // Opened from a follow-up: the client, the service and the vehicle are known.
     if (defaultCustomerId) setCustomerId(defaultCustomerId);
@@ -253,6 +258,7 @@ export function AddBookingModal({
     defaultCustomerId,
     defaultServiceId,
     defaultLinkedRecordId,
+    defaultStart,
     timezone,
   ]);
   const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
@@ -572,6 +578,15 @@ export function AddBookingModal({
   const diaryEvents = useMemo(() => diaryBlocks.data ?? [], [diaryBlocks.data]);
 
   const selectedSlot = slots.find((s) => `${s.start}:${s.staffId}` === slotKey) ?? null;
+
+  useEffect(() => {
+    if (!pendingStart || slots.length === 0) return;
+    const at = new Date(pendingStart).getTime();
+    const same = slots.filter((s) => new Date(s.start).getTime() === at);
+    const match = same.find((s) => staffId === "all" || s.staffId === staffId) ?? same[0];
+    if (match) setSlotKey(`${match.start}:${match.staffId}`);
+    setPendingStart(null);
+  }, [pendingStart, slots, staffId]);
 
   const pairingPrices = useMemo(
     () =>
