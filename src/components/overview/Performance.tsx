@@ -32,6 +32,7 @@ import {
   type PeriodWindow,
 } from "@/lib/overview";
 import { cn } from "@/lib/utils";
+import { useConsumablesOn } from "@/components/consumables/use-consumables-on";
 import {
   CardError,
   CardTitle,
@@ -242,11 +243,22 @@ type Tile = {
   trend: number[] | null;
 };
 
-function HeadlineTile({ tile, variant }: { tile: Tile; variant: "desktop" | "phone" }) {
+function HeadlineTile({
+  tile,
+  variant,
+  className,
+}: {
+  tile: Tile;
+  variant: "desktop" | "phone";
+  className?: string;
+}) {
   return (
     <Link
       to="/reports"
-      className="block min-w-0 rounded-2xl border border-border bg-card px-[18px] py-4 transition-colors hover:bg-secondary/40"
+      className={cn(
+        "block min-w-0 rounded-2xl border border-border bg-card px-[18px] py-4 transition-colors hover:bg-secondary/40",
+        className,
+      )}
     >
       <p className="truncate text-[12.5px] font-semibold text-muted-foreground md:text-[13px]">
         {tile.label}
@@ -294,6 +306,7 @@ export function HeadlineNumbers({
   variant: "desktop" | "phone";
 }) {
   const money = useMoney();
+  const consumablesOn = useConsumablesOn();
   const detailer = !usesOccupancy(industry);
   if (loading) return <TilesGhost count={money.allowed ? 4 : 3} />;
   if (error || !current) {
@@ -324,6 +337,28 @@ export function HeadlineNumbers({
         .join(" · "),
       trend: trend?.map((d) => d.revenue.netMinor) ?? null,
     });
+    if (consumablesOn && current.materials) {
+      const takeHome = (d: Dashboard) => d.revenue.netMinor - (d.materials?.costMinor ?? 0);
+      const { costMinor, uncostedJobs } = current.materials;
+      tiles.push({
+        key: "take-home",
+        label: "Take home",
+        value: money.format(takeHome(current)),
+        delta:
+          compare && previous?.materials
+            ? percentDelta(takeHome(current), takeHome(previous), compare)
+            : null,
+        sub: [
+          `after ${money.format(costMinor ?? 0)} materials`,
+          uncostedJobs > 0
+            ? `${uncostedJobs} ${nounFor(bookingNoun, uncostedJobs)} without costs`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        trend: trend?.map(takeHome) ?? null,
+      });
+    }
   }
   tiles.push({
     key: "sessions",
@@ -383,15 +418,34 @@ export function HeadlineNumbers({
       t.trend = null;
     }
   }
+  // Five tiles: the two money tiles share the top row until there is room for all five.
+  const five = tiles.length === 5;
   return (
     <div
       className={cn(
         "grid grid-cols-2 gap-3",
-        tiles.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3",
+        five
+          ? "lg:grid-cols-6 xl:grid-cols-5"
+          : tiles.length === 4
+            ? "lg:grid-cols-4"
+            : "lg:grid-cols-3",
       )}
     >
-      {tiles.map((t) => (
-        <HeadlineTile key={t.key} tile={t} variant={variant} />
+      {tiles.map((t, i) => (
+        <HeadlineTile
+          key={t.key}
+          tile={t}
+          variant={variant}
+          className={
+            five
+              ? cn(
+                  i < 2 ? "lg:col-span-3" : "lg:col-span-2",
+                  i === 4 && "col-span-2",
+                  "xl:col-span-1",
+                )
+              : undefined
+          }
+        />
       ))}
     </div>
   );

@@ -60540,6 +60540,15 @@ export interface components {
         /** @description Opaque cursor for the next page, or null when the list is exhausted. Pass as `cursor` on the subsequent request. */
         NextCursor: string | null;
         Dashboard: {
+            /** @description What the period’s jobs used up (car detailing consumables), by job start date rather than payment date, at the cost each line was recorded with. Counts jobs that are awaiting payment, confirmed or completed, filtered by the same locations. Staff records only; never charged. All zero for other trades. */
+            materials: {
+                /** @description Total materials cost; null when no line in the period has a cost. */
+                costMinor: number | null;
+                /** @description Jobs that recorded any materials. */
+                jobs: number;
+                /** @description Jobs with a line that has no cost, so costMinor is lower than real. */
+                uncostedJobs: number;
+            };
             basis: {
                 /** @example Europe/London */
                 timezone: string;

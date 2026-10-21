@@ -228,6 +228,7 @@
         "required": [
           "basis",
           "revenue",
+          "materials",
           "bookings",
           "attendance",
           "occupancy",
@@ -235,6 +236,32 @@
           "credits"
         ],
         "properties": {
+          "materials": {
+            "type": "object",
+            "description": "What the period’s jobs used up (car detailing consumables), by job start date rather than payment date, at the cost each line was recorded with. Counts jobs that are awaiting payment, confirmed or completed, filtered by the same locations. Staff records only; never charged. All zero for other trades.",
+            "required": [
+              "costMinor",
+              "jobs",
+              "uncostedJobs"
+            ],
+            "properties": {
+              "costMinor": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Total materials cost; null when no line in the period has a cost."
+              },
+              "jobs": {
+                "type": "integer",
+                "description": "Jobs that recorded any materials."
+              },
+              "uncostedJobs": {
+                "type": "integer",
+                "description": "Jobs with a line that has no cost, so costMinor is lower than real."
+              }
+            }
+          },
           "basis": {
             "type": "object",
             "required": [
