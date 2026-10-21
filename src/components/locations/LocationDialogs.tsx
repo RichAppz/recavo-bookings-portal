@@ -189,7 +189,7 @@ export function ArchiveLocationDialog({
           <DialogDescription>
             {only
               ? "This is your only location. Add another before archiving it."
-              : "Nobody will be able to book here, and it frees a place on your plan. Past jobs keep their records. You can restore it later."}
+              : `Nobody will be able to book here, and it frees a place on your plan. Past ${noun}s keep their records. You can restore it later.`}
           </DialogDescription>
         </DialogHeader>
 
