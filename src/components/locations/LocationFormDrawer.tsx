@@ -188,7 +188,8 @@ export function LocationFormDrawer({
     shown.area ? "your area" : null,
   ].filter(Boolean) as string[];
 
-  const findPostcode = async (which: "address" | "area"): Promise<Coords | null> => {
+  /** "missing" means the postcode doesn't exist; null means the lookup couldn't run. */
+  const findPostcode = async (which: "address" | "area"): Promise<Coords | "missing" | null> => {
     const raw = which === "address" ? postcode : basePostcode;
     const tidy = tidyPostcode(raw);
     if (which === "address") setPostcode(tidy);
@@ -203,7 +204,7 @@ export function LocationFormDrawer({
           ...e,
           [field]: "We couldn't find that postcode. Check it and try again.",
         }));
-        return null;
+        return "missing";
       }
       setErrors((e) => ({ ...e, [field]: undefined }));
       if (which === "address") {
@@ -236,9 +237,15 @@ export function LocationFormDrawer({
     }
     let pin = coords;
     let areaPin = areaCoords;
-    if (premises && hasAddress && pin.lat === null) pin = (await findPostcode("address")) ?? pin;
+    if (premises && hasAddress && pin.lat === null) {
+      const hit = await findPostcode("address");
+      if (hit === "missing") return;
+      pin = hit ?? pin;
+    }
     if (!premises && basePostcode.trim() && areaPin.lat === null) {
-      areaPin = (await findPostcode("area")) ?? areaPin;
+      const hit = await findPostcode("area");
+      if (hit === "missing") return;
+      areaPin = hit ?? areaPin;
     }
     const details = premises
       ? {
