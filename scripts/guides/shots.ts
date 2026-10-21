@@ -644,13 +644,78 @@ const CLIENTS: Shot[] = [
       await ctx.settle(800);
     },
   },
-  { guide: "vehicles-and-follow-ups", step: "follow-ups", route: "/follow-ups", verticals: [AUTO] },
+  { guide: "reminders", step: "follow-ups", route: "/follow-ups", verticals: [AUTO] },
   {
-    guide: "vehicles-and-follow-ups",
+    guide: "reminders",
+    step: "reminder-menu",
+    route: "/follow-ups",
+    verticals: [AUTO],
+    prepare: async (ctx) => {
+      // On the phone the menu sits in the reminder's detail sheet.
+      if (ctx.isMobile) {
+        await ctx.page.locator("main").getByText("Noah Brennan").first().click();
+        await ctx.page.getByRole("dialog").first().waitFor({ timeout: 10_000 });
+        await ctx.settle(400);
+      }
+      await ctx.page
+        .getByRole(ctx.isMobile ? "dialog" : "main")
+        .getByRole("button", { name: /^More actions for Noah's Interior refresh/ })
+        .first()
+        .click();
+      await ctx.page.getByRole("menu").first().waitFor({ timeout: 10_000 });
+      await ctx.settle(400);
+    },
+  },
+  {
+    guide: "reminders",
     step: "reminder-drawer",
     route: "/follow-ups",
     verticals: [AUTO],
     prepare: (ctx) => openDialog(ctx, /Add reminder/i),
+  },
+  {
+    guide: "reminders",
+    step: "reminder-one-client",
+    route: "/follow-ups",
+    verticals: [AUTO],
+    prepare: async (ctx) => {
+      await openDialog(ctx, /Add reminder/i);
+      await ctx.page.getByRole("dialog").getByText("One client", { exact: true }).first().click();
+      await ctx.settle(400);
+    },
+  },
+  {
+    guide: "reminders",
+    step: "reminders-booked-again",
+    route: "/follow-ups?tab=booked",
+    verticals: [AUTO],
+  },
+  {
+    guide: "reminders",
+    step: "reminder-rule",
+    route: "/follow-ups",
+    verticals: [AUTO],
+    prepare: async (ctx) => {
+      // The rules live in a sheet on the phone.
+      if (ctx.isMobile) {
+        await ctx.page
+          .locator("main")
+          .getByRole("button", { name: /^Repeat reminders/ })
+          .click();
+        await ctx.page.getByRole("dialog").first().waitFor({ timeout: 10_000 });
+        await ctx.settle(400);
+      }
+      await ctx.page
+        .getByRole("button", { name: /^Edit .* reminder on Full valet$/ })
+        .first()
+        .click();
+      await ctx.page
+        .getByRole("dialog")
+        .getByRole("button", { name: /^Delete/ })
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await ctx.settle(500);
+    },
   },
   {
     guide: "client-lifts",
@@ -839,6 +904,29 @@ const ACCOUNT: Shot[] = [
     prepare: (ctx) => openDialog(ctx, /New request/i),
   },
   { guide: "whats-new-and-support", step: "guides", route: "/support/guides" },
+  { guide: "referrals", step: "referrals", route: "/referrals" },
+  {
+    guide: "referrals",
+    step: "referral-terms",
+    route: "/referrals",
+    prepare: async (ctx) => {
+      if (ctx.isMobile) {
+        await ctx.page.getByRole("button", { name: /^How it works/ }).click();
+        await ctx.settle(300);
+      }
+      await openDialog(ctx, /^Terms$/i);
+    },
+  },
+  {
+    guide: "referrals",
+    step: "referrals-list",
+    route: "/referrals",
+    clip: (ctx) =>
+      ctx.page
+        .locator("main section")
+        .filter({ has: ctx.page.locator("h2", { hasText: /^Businesses you've referred$/ }) })
+        .last(),
+  },
 ];
 
 export const SHOTS: Shot[] = [...SETUP, ...BOOKINGS, ...CLIENTS, ...MONEY, ...MESSAGES, ...ACCOUNT];
