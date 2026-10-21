@@ -92,7 +92,16 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/consumables")({
-  validateSearch: (raw: Record<string, unknown>): ConsumablesSearch => parseConsumablesSearch(raw),
+  // Every key is set, even to undefined: the root route keeps the raw query, and a key
+  // left out here would let a hand-typed ?period=bogus through to the API.
+  validateSearch: (raw: Record<string, unknown>): ConsumablesSearch => ({
+    tab: undefined,
+    q: undefined,
+    sort: undefined,
+    period: undefined,
+    item: undefined,
+    ...parseConsumablesSearch(raw),
+  }),
   head: () => ({
     meta: [
       { title: "Consumables — RECAVO" },
