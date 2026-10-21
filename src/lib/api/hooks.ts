@@ -44,6 +44,7 @@ import type {
   ConnectAccount,
   ConsentRecord,
   Consumable,
+  ConsumablePack,
   ConsumableActivity,
   ConsumableFigures,
   ConsumableUsagePeriod,
@@ -1165,6 +1166,7 @@ export function useCreateConsumable() {
       name: string;
       unit: string;
       unitCostMinor?: number | null;
+      pack?: ConsumablePack | null;
       sku?: string | null;
       notes?: string | null;
     }) => {
@@ -1197,6 +1199,7 @@ export function useUpdateConsumable() {
         name?: string;
         unit?: string;
         unitCostMinor?: number | null;
+        pack?: ConsumablePack | null;
         sku?: string | null;
         notes?: string | null;
         status?: "active" | "archived";

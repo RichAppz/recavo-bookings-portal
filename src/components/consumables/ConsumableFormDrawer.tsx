@@ -27,21 +27,43 @@ import {
   costFieldLabel,
   costInput,
   currencySymbol,
+  formatQuantity,
+  formatUnitCost,
   normaliseUnit,
+  packUnitsFor,
   parseCost,
+  parseQuantity,
   unitCode,
+  unitCostFromPack,
+  unitCostLabel,
+  unitFor,
 } from "@/lib/consumables";
-import { formatMoney } from "@/lib/format";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
-type Field = "name" | "unit" | "unitCostMinor" | "sku" | "notes";
+type Field = "name" | "unit" | "unitCostMinor" | "packSize" | "packCost" | "sku" | "notes";
 
-const MESSAGES: Record<"name" | "unit" | "unitCostMinor", string> = {
+const MESSAGES: Record<"name" | "unit" | "unitCostMinor" | "packSize" | "packCost", string> = {
   name: "Give it a name.",
   unit: "Pick how you count it, e.g. bottle or pad.",
   unitCostMinor: "Enter a cost like 12.50, or leave it blank.",
+  packSize: "Enter how much you buy, e.g. 5.",
+  packCost: "Enter what you paid, like 40.00.",
 };
+
+/** API field → form field; a pack in the wrong unit shows under the size. */
+const API_FIELDS: Record<string, Field> = {
+  name: "name",
+  unit: "unit",
+  unitCostMinor: "unitCostMinor",
+  "pack.size": "packSize",
+  "pack.unit": "packSize",
+  "pack.costMinor": "packCost",
+  sku: "sku",
+  notes: "notes",
+};
+
+type CostMode = "paid" | "unit";
 
 export type ConsumablePrefill = { name: string; unit: string };
 
@@ -83,6 +105,10 @@ export function ConsumableFormDrawer({
   const [unitChoice, setUnitChoice] = useState<string>("");
   const [otherUnit, setOtherUnit] = useState("");
   const [cost, setCost] = useState("");
+  const [costMode, setCostMode] = useState<CostMode>("paid");
+  const [packSize, setPackSize] = useState("");
+  const [packUnit, setPackUnit] = useState("");
+  const [packCost, setPackCost] = useState("");
   const [sku, setSku] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
@@ -97,7 +123,11 @@ export function ConsumableFormDrawer({
     setName(c?.name ?? prefill?.name ?? "");
     setUnitChoice(code ?? (unit ? "other" : ""));
     setOtherUnit(code ? "" : unit);
-    setCost(costInput(c?.unitCostMinor));
+    setCost(c?.pack ? "" : costInput(c?.unitCostMinor));
+    setCostMode(c?.pack || c?.unitCostMinor == null ? "paid" : "unit");
+    setPackSize(c?.pack ? formatQuantity(c.pack.size).replace(/,/g, "") : "");
+    setPackUnit(c?.pack?.unit ?? "");
+    setPackCost(c?.pack ? costInput(c.pack.costMinor) : "");
     setSku(c?.sku ?? "");
     setNotes(c?.notes ?? "");
     setErrors({});
@@ -111,14 +141,42 @@ export function ConsumableFormDrawer({
   }, [open, consumable?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const unit = unitChoice === "other" ? otherUnit.trim() : unitChoice;
-  const parsedCost = parseCost(cost);
+  const parsedCost = parseCost(cost, { decimals: 6 });
+  const packUnits = packUnitsFor(unit);
+  const packUnitShown = packUnits.includes(packUnit) ? packUnit : unit;
+  const packBlank = !packSize.trim() && !packCost.trim();
+  const parsedPackSize = packSize.trim() ? parseQuantity(packSize) : null;
+  const parsedPackCost = parseCost(packCost);
+  const packCostFrom =
+    parsedPackSize !== null && typeof parsedPackCost === "number"
+      ? unitCostFromPack(
+          { size: parsedPackSize, unit: packUnitShown, costMinor: parsedPackCost },
+          unit,
+        )
+      : null;
+  /** The cost per unit this save would record; "invalid" while the cost fields don't add up. */
+  const nextUnitCost: number | null | "invalid" =
+    costMode === "unit"
+      ? parsedCost
+      : packBlank
+        ? null
+        : packCostFrom === null && unit
+          ? "invalid"
+          : packCostFrom;
   const submitting = createConsumable.isPending || updateConsumable.isPending;
 
   const validate = () => {
     const next: Partial<Record<Field, string>> = {};
     if (!name.trim()) next.name = MESSAGES.name;
     if (!unit) next.unit = MESSAGES.unit;
-    if (parsedCost === "invalid") next.unitCostMinor = MESSAGES.unitCostMinor;
+    if (costMode === "unit") {
+      if (parsedCost === "invalid") next.unitCostMinor = MESSAGES.unitCostMinor;
+    } else if (!packBlank) {
+      if (parsedPackSize === null) next.packSize = MESSAGES.packSize;
+      if (parsedPackCost === null || parsedPackCost === "invalid") {
+        next.packCost = MESSAGES.packCost;
+      }
+    }
     return next;
   };
   const live = tried ? validate() : {};
@@ -126,7 +184,7 @@ export function ConsumableFormDrawer({
   const missing = [
     !name.trim() ? "a name" : null,
     !unit ? "how you count it" : null,
-    parsedCost === "invalid" ? "a valid cost" : null,
+    nextUnitCost === "invalid" ? "a valid cost" : null,
   ].filter(Boolean) as string[];
 
   const serviceNames = useMemo(() => {
@@ -137,8 +195,8 @@ export function ConsumableFormDrawer({
 
   const costChanged =
     current !== null &&
-    parsedCost !== "invalid" &&
-    parsedCost !== current.unitCostMinor &&
+    nextUnitCost !== "invalid" &&
+    nextUnitCost !== current.unitCostMinor &&
     current.jobCount > 0;
 
   const submit = async () => {
@@ -150,10 +208,20 @@ export function ConsumableFormDrawer({
       if (found.name) nameRef.current?.focus();
       return;
     }
+    const cost =
+      costMode === "paid" &&
+      !packBlank &&
+      parsedPackSize !== null &&
+      typeof parsedPackCost === "number"
+        ? { pack: { size: parsedPackSize, unit: packUnitShown, costMinor: parsedPackCost } }
+        : {
+            unitCostMinor: costMode === "unit" && parsedCost !== "invalid" ? parsedCost : null,
+            pack: null,
+          };
     const body = {
       name: name.trim(),
       unit,
-      unitCostMinor: parsedCost === "invalid" ? null : parsedCost,
+      ...cost,
       sku: sku.trim() || null,
       notes: notes.trim() || null,
     };
@@ -183,10 +251,10 @@ export function ConsumableFormDrawer({
       if (err instanceof ApiError && err.fieldErrors.length > 0) {
         const mapped: Partial<Record<Field, string>> = {};
         for (const fe of err.fieldErrors) {
-          const key = fe.field?.split(".").pop() as Field | undefined;
-          if (key && ["name", "unit", "unitCostMinor", "sku", "notes"].includes(key)) {
-            mapped[key] = fe.message || "Check this field.";
-          }
+          const key = fe.field
+            ? (API_FIELDS[fe.field] ?? API_FIELDS[fe.field.split(".").pop() ?? ""])
+            : undefined;
+          if (key) mapped[key] = fe.message || "Check this field.";
         }
         if (Object.keys(mapped).length > 0) {
           setErrors(mapped);
@@ -349,44 +417,206 @@ export function ConsumableFormDrawer({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="cf-cost">{costFieldLabel(unit)}</Label>
-            <div className="relative">
-              <span
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
-              >
-                {currencySymbol(currency)}
-              </span>
-              <Input
-                id="cf-cost"
-                inputMode="decimal"
-                className="pl-8"
-                value={cost}
-                onChange={(e) => {
-                  setCost(e.target.value);
-                  setErrors((x) => ({ ...x, unitCostMinor: undefined }));
-                }}
-                placeholder="0.00"
-                aria-invalid={Boolean(shown.unitCostMinor)}
-                aria-describedby={["cf-cost-help", errorId("unitCostMinor")]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
+            <span id="cf-cost-label" className="text-sm leading-none font-medium">
+              What it costs you
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="cf-cost-label"
+              className="grid h-10 grid-cols-2 rounded-[10px] bg-secondary p-[3px] max-sm:h-11"
+            >
+              {(
+                [
+                  ["paid", "What you paid"],
+                  ["unit", costFieldLabel(unit)],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={costMode === value}
+                  onClick={() => {
+                    if (value === "unit" && !cost.trim() && typeof nextUnitCost === "number") {
+                      setCost(costInput(nextUnitCost));
+                    }
+                    setCostMode(value);
+                    setErrors((x) => ({
+                      ...x,
+                      unitCostMinor: undefined,
+                      packSize: undefined,
+                      packCost: undefined,
+                    }));
+                  }}
+                  className={cn(
+                    "cursor-pointer truncate rounded-lg px-2 text-[13px] font-bold text-muted-foreground transition-colors",
+                    costMode === value && "bg-card text-foreground shadow-sm",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <p id="cf-cost-help" className="text-xs text-muted-foreground">
-              Optional. What it costs you.
-            </p>
-            {shown.unitCostMinor ? (
-              <p id="cf-unitCostMinor-error" className="text-xs text-destructive">
-                {shown.unitCostMinor}
-              </p>
-            ) : null}
+
+            {costMode === "paid" ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="cf-pack-size" className="text-xs text-muted-foreground">
+                      You buy
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="cf-pack-size"
+                        inputMode="decimal"
+                        className="min-w-0 flex-1"
+                        value={packSize}
+                        onChange={(e) => {
+                          setPackSize(e.target.value);
+                          setErrors((x) => ({ ...x, packSize: undefined }));
+                        }}
+                        placeholder={
+                          packUnitShown === "ml" ? "500" : packUnitShown === "litre" ? "5" : "1"
+                        }
+                        aria-invalid={Boolean(shown.packSize)}
+                        aria-describedby={["cf-pack-help", errorId("packSize")]
+                          .filter(Boolean)
+                          .join(" ")}
+                      />
+                      {packUnits.length > 1 ? (
+                        <div
+                          role="radiogroup"
+                          aria-label="Size in"
+                          className="flex h-10 shrink-0 rounded-[10px] bg-secondary p-[3px] max-sm:h-11"
+                        >
+                          {packUnits.map((u) => (
+                            <button
+                              key={u}
+                              type="button"
+                              role="radio"
+                              aria-checked={packUnitShown === u}
+                              onClick={() => {
+                                setPackUnit(u);
+                                setErrors((x) => ({ ...x, packSize: undefined }));
+                              }}
+                              className={cn(
+                                "cursor-pointer rounded-lg px-2.5 text-[13px] font-bold text-muted-foreground transition-colors",
+                                packUnitShown === u && "bg-card text-foreground shadow-sm",
+                              )}
+                            >
+                              {unitFor(u, 2)}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          {unit ? unitFor(unit, parsedPackSize ?? 2) : "units"}
+                        </span>
+                      )}
+                    </div>
+                    {shown.packSize ? (
+                      <p id="cf-packSize-error" className="text-xs text-destructive">
+                        {shown.packSize}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="cf-pack-cost" className="text-xs text-muted-foreground">
+                      For
+                    </Label>
+                    <div className="relative">
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+                      >
+                        {currencySymbol(currency)}
+                      </span>
+                      <Input
+                        id="cf-pack-cost"
+                        inputMode="decimal"
+                        className="pl-8"
+                        value={packCost}
+                        onChange={(e) => {
+                          setPackCost(e.target.value);
+                          setErrors((x) => ({ ...x, packCost: undefined }));
+                        }}
+                        placeholder="0.00"
+                        aria-invalid={Boolean(shown.packCost)}
+                        aria-describedby={["cf-pack-help", errorId("packCost")]
+                          .filter(Boolean)
+                          .join(" ")}
+                      />
+                    </div>
+                    {shown.packCost ? (
+                      <p id="cf-packCost-error" className="text-xs text-destructive">
+                        {shown.packCost}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                {typeof nextUnitCost === "number" && unit ? (
+                  <p
+                    id="cf-pack-help"
+                    role="status"
+                    className="rounded-xl bg-secondary/60 px-3 py-2 text-[13px]"
+                  >
+                    That&rsquo;s{" "}
+                    <span className="font-bold">{unitCostLabel(nextUnitCost, unit, currency)}</span>
+                    . Jobs work out what they used from this.
+                  </p>
+                ) : (
+                  <p id="cf-pack-help" className="text-xs text-muted-foreground">
+                    Optional. E.g. a{" "}
+                    {unitCode(unit) === "ml" || unitCode(unit) === "litre"
+                      ? "5 litre bottle"
+                      : `pack of 10 ${unit ? unitFor(unit, 10) : "units"}`}{" "}
+                    for {currencySymbol(currency)}40. We work out the cost per{" "}
+                    {unit ? unitFor(unit, 1) : "unit"}.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="relative">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+                  >
+                    {currencySymbol(currency)}
+                  </span>
+                  <Input
+                    id="cf-cost"
+                    aria-label={costFieldLabel(unit)}
+                    inputMode="decimal"
+                    className="pl-8"
+                    value={cost}
+                    onChange={(e) => {
+                      setCost(e.target.value);
+                      setErrors((x) => ({ ...x, unitCostMinor: undefined }));
+                    }}
+                    placeholder="0.00"
+                    aria-invalid={Boolean(shown.unitCostMinor)}
+                    aria-describedby={["cf-cost-help", errorId("unitCostMinor")]
+                      .filter(Boolean)
+                      .join(" ")}
+                  />
+                </div>
+                <p id="cf-cost-help" className="text-xs text-muted-foreground">
+                  Optional. What one {unit ? unitFor(unit, 1) : "unit"} costs you.
+                </p>
+                {shown.unitCostMinor ? (
+                  <p id="cf-unitCostMinor-error" className="text-xs text-destructive">
+                    {shown.unitCostMinor}
+                  </p>
+                ) : null}
+              </>
+            )}
             {costChanged && current ? (
               <p className={cn("text-xs font-semibold", AMBER_TEXT)} role="status">
                 New cost applies to jobs recorded from now on. The {current.jobCount}{" "}
                 {current.jobCount === 1 ? "job" : "jobs"} already recorded keep{" "}
                 {current.unitCostMinor != null
-                  ? formatMoney(current.unitCostMinor, currency)
+                  ? formatUnitCost(current.unitCostMinor, currency)
                   : "no cost"}
                 .
               </p>

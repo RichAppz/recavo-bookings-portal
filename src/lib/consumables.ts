@@ -169,15 +169,66 @@ function joinAnd(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-/** "£12.50 per bottle", "£12.00 each", or "No cost". */
+/**
+ * A unit cost, which can be a fraction of a penny: "£12.50", "0.8p", "£0.0125". Whole
+ * minor amounts read as normal money.
+ */
+export function formatUnitCost(unitCostMinor: number, currency = "GBP"): string {
+  const minor = roundUnitCost(unitCostMinor);
+  if (Number.isInteger(minor)) return formatMoney(minor, currency);
+  if (currency === "GBP" && minor < 100) {
+    return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: 4 }).format(minor)}p`;
+  }
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6,
+    }).format(minor / 100);
+  } catch {
+    return formatMoney(Math.round(minor), currency);
+  }
+}
+
+/** "£12.50 per bottle", "£12.00 each", "0.8p per ml", or "No cost". */
 export function unitCostLabel(
   unitCostMinor: number | null | undefined,
   unit: string,
   currency = "GBP",
 ): string {
   if (unitCostMinor == null) return "No cost";
-  const money = formatMoney(unitCostMinor, currency);
+  const money = formatUnitCost(unitCostMinor, currency);
   return unitCode(unit) === "each" ? `${money} each` : `${money} per ${unit}`;
+}
+
+/** Unit costs are kept to four decimals of a minor unit, like the API. */
+export function roundUnitCost(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+const MILLILITRES: Readonly<Record<string, number>> = { ml: 1, litre: 1000 };
+
+/** The units a purchase can be sized in: ml and litre convert, anything else is itself. */
+export function packUnitsFor(unit: string): string[] {
+  const code = unitCode(unit);
+  return code === "ml" || code === "litre" ? ["ml", "litre"] : unit ? [unit] : [];
+}
+
+/** "5 litres for £40" counted in ml is 0.8 (pence per ml); null when it can't be worked out. */
+export function unitCostFromPack(
+  pack: { size: number; unit: string; costMinor: number },
+  unit: string,
+): number | null {
+  if (!(pack.size > 0)) return null;
+  const per =
+    pack.unit === unit
+      ? 1
+      : MILLILITRES[pack.unit] !== undefined && MILLILITRES[unit] !== undefined
+        ? MILLILITRES[pack.unit]! / MILLILITRES[unit]!
+        : null;
+  if (per === null) return null;
+  return roundUnitCost(pack.costMinor / (pack.size * per));
 }
 
 /** The cost field's label follows the unit: "Cost per bottle", "Cost each". */
@@ -207,23 +258,30 @@ export function currencySymbol(currency: string): string {
 
 /**
  * A typed cost: blank is "no cost" (null), "12.50" is 1250, anything else (negative,
- * three decimals, letters) is "invalid".
+ * three decimals, letters) is "invalid". `decimals: 6` takes a cost per ml like
+ * "0.008" (0.8p).
  */
-export function parseCost(input: string): number | null | "invalid" {
+export function parseCost(
+  input: string,
+  { decimals = 2 }: { decimals?: 2 | 6 } = {},
+): number | null | "invalid" {
   const trimmed = input
     .trim()
     .replace(/^[£$€]/, "")
     .replace(",", ".");
   if (!trimmed) return null;
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return "invalid";
+  if (!new RegExp(`^\\d+(\\.\\d{1,${decimals}})?$`).test(trimmed)) return "invalid";
   const [whole, frac = ""] = trimmed.split(".");
-  return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  if (decimals === 2) return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  return roundUnitCost(Number(whole) * 100 + Number(frac.padEnd(6, "0")) / 10_000);
 }
 
-/** The minor amount back into the field's text: 1250 → "12.50". */
+/** The minor amount back into the field's text: 1250 → "12.50", 0.8 → "0.008". */
 export function costInput(minor: number | null | undefined): string {
   if (minor == null) return "";
-  return (minor / 100).toFixed(2);
+  const rounded = roundUnitCost(minor);
+  if (Number.isInteger(rounded)) return (rounded / 100).toFixed(2);
+  return String(Number((rounded / 100).toFixed(6)));
 }
 
 /* ---------------- Costs ---------------- */

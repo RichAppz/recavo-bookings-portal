@@ -53154,7 +53154,14 @@ export interface paths {
                     "application/json": {
                         name: string;
                         unit: string;
+                        /** @description Per unit, minor units, up to four decimals (0.8 = 0.8p). */
                         unitCostMinor?: number | null;
+                        /** @description What was paid for what was bought ("5 litres for £40"); sets `unitCostMinor`. Send this or `unitCostMinor`, not both. `unit` defaults to the consumable’s and must match it, except ml and litre, which convert. Null drops it. */
+                        pack?: {
+                            size: number;
+                            unit?: string;
+                            costMinor: number;
+                        } | null;
                         currency?: string;
                         sku?: string | null;
                         notes?: string | null;
@@ -53774,7 +53781,14 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         unit?: string;
+                        /** @description Per unit, minor units, up to four decimals. Replaces any `pack`. Omit both to keep them; a changed `unit` re-works the cost from the pack. */
                         unitCostMinor?: number | null;
+                        /** @description What was paid for what was bought ("5 litres for £40"); sets `unitCostMinor`. Send this or `unitCostMinor`, not both. `unit` defaults to the consumable’s and must match it, except ml and litre, which convert. Null drops it. */
+                        pack?: {
+                            size: number;
+                            unit?: string;
+                            costMinor: number;
+                        } | null;
                         sku?: string | null;
                         notes?: string | null;
                         /** @enum {string} */
@@ -61398,8 +61412,17 @@ export interface components {
                 spendMinor: number | null;
                 jobs: number;
             };
-            /** @description Cost to the business per unit, minor units; null = not recorded. */
+            /** @description Cost to the business per unit, minor units to four decimals (0.8 = 0.8p per ml); null = not recorded. Worked out from `pack` when there is one. */
             unitCostMinor: number | null;
+            /** @description What the business pays for what it buys; null when the cost was typed per unit. */
+            pack: {
+                /** @example 5 */
+                size: number;
+                /** @example litre */
+                unit: string;
+                /** @example 4000 */
+                costMinor: number;
+            } | null;
             currency: string;
             sku: string | null;
             notes: string | null;

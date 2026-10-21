@@ -51,6 +51,8 @@ export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
  * Staff-only bookkeeping: never priced into a booking, never shown to a client.
  */
 export type Consumable = schemas["Consumable"];
+/** What was paid for what was bought ("5 litres for £40"). */
+export type ConsumablePack = NonNullable<Consumable["pack"]>;
 /** One consumable on a service (default usage) or a booking (actual usage). */
 export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
 /** A booking's usage plus the staff-only estimated materials cost. */

@@ -28,6 +28,9 @@ import {
   uncostedLabel,
   unitCode,
   unitCostLabel,
+  formatUnitCost,
+  packUnitsFor,
+  unitCostFromPack,
   usageLabel,
 } from "./consumables.ts";
 
@@ -251,6 +254,38 @@ describe("unitCostLabel", () => {
   it("formats in the currency per unit, or says none is recorded", () => {
     assert.equal(unitCostLabel(1250, "bottle"), "£12.50 per bottle");
     assert.equal(unitCostLabel(null, "pad"), "No cost");
+  });
+
+  it("shows fractions of a penny", () => {
+    assert.equal(unitCostLabel(0.8, "ml"), "0.8p per ml");
+    assert.equal(formatUnitCost(333.3333), "£3.333333");
+    assert.equal(formatUnitCost(0.8, "EUR"), "€0.008");
+    assert.equal(formatUnitCost(800), "£8.00");
+  });
+});
+
+describe("pack price", () => {
+  it("works out the cost per unit, converting ml and litres", () => {
+    assert.equal(unitCostFromPack({ size: 5, unit: "litre", costMinor: 4000 }, "ml"), 0.8);
+    assert.equal(unitCostFromPack({ size: 500, unit: "ml", costMinor: 1200 }, "litre"), 2400);
+    assert.equal(unitCostFromPack({ size: 3, unit: "pad", costMinor: 1000 }, "pad"), 333.3333);
+    assert.equal(unitCostFromPack({ size: 2, unit: "pad", costMinor: 100 }, "ml"), null);
+    assert.equal(unitCostFromPack({ size: 0, unit: "ml", costMinor: 100 }, "ml"), null);
+  });
+
+  it("offers ml and litres together, anything else on its own", () => {
+    assert.deepEqual(packUnitsFor("ml"), ["ml", "litre"]);
+    assert.deepEqual(packUnitsFor("pad"), ["pad"]);
+    assert.deepEqual(packUnitsFor(""), []);
+  });
+
+  it("takes and shows a cost per ml down to a fraction of a penny", () => {
+    assert.equal(parseCost("0.008", { decimals: 6 }), 0.8);
+    assert.equal(parseCost("12.5", { decimals: 6 }), 1250);
+    assert.equal(parseCost("0.0000001", { decimals: 6 }), "invalid");
+    assert.equal(parseCost("0.008"), "invalid");
+    assert.equal(costInput(0.8), "0.008");
+    assert.equal(costInput(1250), "12.50");
   });
 });
 
