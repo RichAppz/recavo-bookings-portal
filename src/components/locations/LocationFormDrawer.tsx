@@ -188,12 +188,12 @@ export function LocationFormDrawer({
     shown.area ? "your area" : null,
   ].filter(Boolean) as string[];
 
-  const findPostcode = async (which: "address" | "area") => {
+  const findPostcode = async (which: "address" | "area"): Promise<Coords | null> => {
     const raw = which === "address" ? postcode : basePostcode;
     const tidy = tidyPostcode(raw);
     if (which === "address") setPostcode(tidy);
     else setBasePostcode(tidy);
-    if (!looksLikeUkPostcode(tidy)) return;
+    if (!looksLikeUkPostcode(tidy)) return null;
     setLookingUp(which);
     try {
       const found = await lookupPostcode(tidy);
@@ -203,7 +203,7 @@ export function LocationFormDrawer({
           ...e,
           [field]: "We couldn't find that postcode. Check it and try again.",
         }));
-        return;
+        return null;
       }
       setErrors((e) => ({ ...e, [field]: undefined }));
       if (which === "address") {
@@ -214,8 +214,10 @@ export function LocationFormDrawer({
         setBasePostcode(found.postcode);
         setAreaCoords({ lat: found.lat, lng: found.lng });
       }
+      return { lat: found.lat, lng: found.lng };
     } catch {
       // Offline or the lookup is down: the postcode is still saved, just without a map pin.
+      return null;
     } finally {
       setLookingUp(null);
     }
@@ -232,6 +234,12 @@ export function LocationFormDrawer({
       if (found.name) nameRef.current?.focus();
       return;
     }
+    let pin = coords;
+    let areaPin = areaCoords;
+    if (premises && hasAddress && pin.lat === null) pin = (await findPostcode("address")) ?? pin;
+    if (!premises && basePostcode.trim() && areaPin.lat === null) {
+      areaPin = (await findPostcode("area")) ?? areaPin;
+    }
     const details = premises
       ? {
           address: hasAddress
@@ -240,8 +248,8 @@ export function LocationFormDrawer({
                 line2: line2.trim() || null,
                 town: town.trim() || null,
                 postcode: tidyPostcode(postcode),
-                lat: coords.lat,
-                lng: coords.lng,
+                lat: pin.lat,
+                lng: pin.lng,
               }
             : null,
           parkingNote: parking.trim() || null,
@@ -253,8 +261,8 @@ export function LocationFormDrawer({
             ? {
                 basePostcode: tidyPostcode(basePostcode),
                 radiusMiles: radius,
-                lat: areaCoords.lat,
-                lng: areaCoords.lng,
+                lat: areaPin.lat,
+                lng: areaPin.lng,
               }
             : null,
           travelMinutes: travel,
