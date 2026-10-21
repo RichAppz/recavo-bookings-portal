@@ -23776,7 +23776,10 @@ export interface paths {
                             requiredResourceType?: "room" | "bay" | "chair" | "equipment" | null;
                         }[];
                         publicVisible?: boolean;
+                        /** @description Bookable or paused. `true` on an archived service also restores it. */
                         active?: boolean;
+                        /** @description `true` archives the service and switches it off (for one with bookings, which can’t be deleted). `false` restores it, still off. */
+                        archived?: boolean;
                         colour?: string | null;
                         displayOrder?: number;
                         /** @description The full list of follow-up reminders; `[]` switches them off. Omit to leave unchanged. Two rules may not share an interval. Takes precedence over `followUp` when both are sent. */
@@ -61573,6 +61576,11 @@ export interface components {
             }[];
             publicVisible: boolean;
             active: boolean;
+            /**
+             * Format: date-time
+             * @description When staff archived it; always inactive while set. Archived services stay for the bookings that used them and leave the console’s main list.
+             */
+            archivedAt: string | null;
             colour: string | null;
             displayOrder: number;
             /** @description Every "due again" reminder this service schedules, soonest first — e.g. a valet after a year and a ceramic top-up after two. Empty = none. */

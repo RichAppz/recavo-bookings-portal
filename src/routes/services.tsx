@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { BellRing, Clock, Eye, EyeOff, Package, Plus, Sparkles, Trash2, Users } from "lucide-react";
+import {
+  Archive,
+  BellRing,
+  ChevronDown,
+  Clock,
+  Eye,
+  EyeOff,
+  Package,
+  Plus,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -187,6 +199,10 @@ function ServicesPage() {
   const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const allServices = services.data ?? [];
+  const listed = allServices.filter((s) => !s.archivedAt);
+  const archived = allServices.filter((s) => s.archivedAt);
   // New services default to the business's opening hours — the location picked
   // in the sidebar, else the first active one with hours set.
   const businessHours = useMemo<BusinessHoursPreset | undefined>(() => {
@@ -239,7 +255,7 @@ function ServicesPage() {
           }
           action={<Button onClick={() => services.refetch()}>Try again</Button>}
         />
-      ) : (services.data ?? []).length === 0 ? (
+      ) : allServices.length === 0 ? (
         <EmptyState
           title={`No ${pluralLower} yet`}
           description={`Create your first bookable ${lower} to start taking bookings.`}
@@ -247,10 +263,17 @@ function ServicesPage() {
         />
       ) : (
         <div className="space-y-8">
-          {groupByCategory(services.data ?? []).map((group) => (
+          {listed.length === 0 ? (
+            <EmptyState
+              title={`No ${pluralLower} in use`}
+              description={`Every ${lower} is archived. Create one, or restore one below.`}
+              action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
+            />
+          ) : null}
+          {groupByCategory(listed).map((group) => (
             <section key={group.category ?? "__none"} className="space-y-3">
               {/* Headings only once categories are in use; a flat catalogue stays flat. */}
-              {hasCategories(services.data ?? []) ? (
+              {hasCategories(listed) ? (
                 <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   {group.category ?? "Other"}
                   <span className="ml-2 font-normal tabular-nums normal-case">
@@ -425,6 +448,61 @@ function ServicesPage() {
               </div>
             </section>
           ))}
+          {archived.length > 0 ? (
+            <section className="space-y-3">
+              <button
+                type="button"
+                aria-expanded={showArchived}
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase"
+              >
+                <Archive className="size-4" />
+                Archived
+                <span className="font-normal tabular-nums normal-case">{archived.length}</span>
+                <ChevronDown
+                  className={cn("size-4 transition-transform", showArchived && "rotate-180")}
+                />
+              </button>
+              {showArchived ? (
+                <ul className="surface-card divide-y">
+                  {archived.map((s) => (
+                    <li key={s.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Archived{" "}
+                          {new Date(s.archivedAt!).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}{" "}
+                          · Past bookings keep it
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateService.isPending}
+                        onClick={() =>
+                          updateService.mutate(
+                            { serviceId: s.id, version: s.version, body: { archived: false } },
+                            {
+                              onSuccess: () =>
+                                toast.success(`${noun} restored`, {
+                                  description: "It's back in your list, switched off.",
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        Restore
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       )}
 
@@ -446,9 +524,9 @@ function ServicesPage() {
         copy={(s) => ({
           title: `Delete ${s.name}?`,
           description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
-          inUseTitle: `Pause this ${lower} instead?`,
-          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
-          fallbackLabel: "Pause",
+          inUseTitle: `Archive this ${lower} instead?`,
+          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Archiving switches it off and moves it out of your list. Past bookings keep their details, and you can restore it from Archived at the bottom of this page.`,
+          fallbackLabel: "Archive",
         })}
         onDelete={async (s) => {
           await deleteService.mutateAsync(s.id);
@@ -458,9 +536,9 @@ function ServicesPage() {
           await updateService.mutateAsync({
             serviceId: s.id,
             version: s.version,
-            body: { active: false },
+            body: { archived: true },
           });
-          toast.success(`${noun} paused`);
+          toast.success(`${noun} archived`);
         }}
       />
     </>
