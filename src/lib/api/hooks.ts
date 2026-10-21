@@ -4919,6 +4919,10 @@ export type ReferralSummary = {
 export type ReferralProgram = {
   program: ReferralProgramKind;
   code: string;
+  /** True once the business has chosen its own code; absent on older APIs. */
+  custom?: boolean;
+  /** New codes the business may still choose; absent on older APIs (no custom codes). */
+  codeChangesLeft?: number;
   sharePath: string;
   stats: ReferralStats;
   /** Absent on APIs older than the referrals redesign. */
@@ -4979,6 +4983,24 @@ export function useReferralProgram() {
         `/api/v1/businesses/${businessId}/referral`,
       );
       return res.data.referral;
+    },
+  });
+}
+
+/** Swap the business's referral code for one it chooses. Errors are shown in the form. */
+export function useChangeReferralCode() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const res = await api.put<{ referral: ReferralProgram }>(
+        `/api/v1/businesses/${businessId}/referral/code`,
+        { code },
+      );
+      return res.data.referral;
+    },
+    onSuccess: (referral) => {
+      qc.setQueryData(queryKeys.referral(businessId), referral);
     },
   });
 }

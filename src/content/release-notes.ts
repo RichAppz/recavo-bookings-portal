@@ -7,7 +7,7 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-10-21",
-    title: "A waitlist that tells you who fits",
+    title: "A waitlist that tells you who fits, and your own referral code",
     items: [
       {
         kind: "improved",
@@ -33,6 +33,11 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         kind: "improved",
         text: "Clients joining from your booking page get a tidier form (mobile or email, days and time of day as buttons) and a clear “You're on the list” with what they asked for. Their account shows each waitlist entry with Leave. You can turn joining from the booking page off in Settings › Booking rules.",
         where: "Booking page",
+      },
+      {
+        kind: "new",
+        text: "Swap your referral code for one people will remember, like SHINECARS: tap Change code under your link. Use 4 to 16 letters or numbers. Links and codes you've already shared keep working, and nobody else can ever take them. Codes with explicit or offensive words aren't allowed, however they're spelt.",
+        where: "Referrals",
       },
     ],
   },

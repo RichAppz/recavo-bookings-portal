@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ReferralProgram, ReferredBusiness } from "./api/hooks.ts";
 import {
+  changesLeftLine,
+  codeErrorMessage,
+  codeShapeProblem,
+  compactCode,
   earnedTile,
   payingSub,
   progressOf,
@@ -40,6 +44,36 @@ function row(over: Partial<ReferredBusiness> = {}): ReferredBusiness {
   };
 }
 
+describe("choosing a code", () => {
+  it("previews the code as it will be saved", () => {
+    assert.equal(compactCode(" shine cars "), "SHINECARS");
+    assert.equal(compactCode("pt-2026"), "PT2026");
+  });
+
+  it("checks the shape while typing and leaves wording to the API", () => {
+    assert.equal(codeShapeProblem(""), null);
+    assert.equal(codeShapeProblem("shine cars"), null);
+    assert.equal(codeShapeProblem("abc"), "Use at least 4 characters.");
+    assert.equal(codeShapeProblem("A".repeat(17)), "Use 16 characters or fewer.");
+    assert.equal(codeShapeProblem("shine_cars"), "Use letters and numbers only.");
+    assert.equal(codeShapeProblem("1234"), "Include at least one letter.");
+    assert.equal(codeShapeProblem("ＳＨＩＮＥ"), "Use letters and numbers only.");
+  });
+
+  it("explains each refusal without naming the word that tripped it", () => {
+    assert.match(codeErrorMessage("NOT_ALLOWED"), /isn't allowed/);
+    assert.match(codeErrorMessage("TAKEN"), /Another business/);
+    assert.match(codeErrorMessage("LIMIT_REACHED"), /go back to a code/);
+    assert.match(codeErrorMessage(undefined), /try again/);
+  });
+
+  it("says how many new codes are left", () => {
+    assert.equal(changesLeftLine(3), "You can choose 3 more new codes.");
+    assert.equal(changesLeftLine(1), "You can choose 1 more new code.");
+    assert.match(changesLeftLine(0), /only go back/);
+  });
+});
+
 describe("referral link", () => {
   it("uses the API's origin with the short /join path", () => {
     assert.equal(
@@ -57,6 +91,13 @@ describe("referral link", () => {
       prefix: "book.recavo.app/join/",
       code: "F5SJ-WAAU",
     });
+  });
+
+  it("shows a chosen code in the link as chosen", () => {
+    assert.equal(
+      referralLink("https://book.recavo.app/register?ref=SHINECARS", "SHINECARS"),
+      "https://book.recavo.app/join/SHINECARS",
+    );
   });
 
   it("builds the share targets with the message", () => {
