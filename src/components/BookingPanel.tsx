@@ -1617,8 +1617,8 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {/* Materials the job used (automotive only; renders nothing elsewhere). Staff eyes only. */}
-                  <BookingConsumablesSection bookingId={booking.id} />
+                  {/* Materials the job used (detailing only, unless hidden from the menu). Staff eyes only. */}
+                  <BookingConsumablesSection booking={booking} plate={linkedRecordReg} />
                 </TabsContent>
 
                 <TabsContent value="history">

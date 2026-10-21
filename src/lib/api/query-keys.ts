@@ -65,6 +65,13 @@ export const queryKeys = {
 
   /** Consumables catalogue (automotive); the list carries `serviceIds` for "used by N services". */
   consumables: (businessId: string) => ["biz", businessId, "consumables"] as const,
+  /** The catalogue with each row's usage for a period (the page's "Used this month" column). */
+  consumablesForPeriod: (businessId: string, period: string) =>
+    ["biz", businessId, "consumables", "period", period] as const,
+  consumableFigures: (businessId: string, period: string) =>
+    ["biz", businessId, "consumables", "figures", period] as const,
+  consumableActivity: (businessId: string, consumableId: string, period: string, limit: number) =>
+    ["biz", businessId, "consumables", "activity", consumableId, period, limit] as const,
   serviceConsumables: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId, "consumables"] as const,
   bookingConsumables: (businessId: string, bookingId: string) =>

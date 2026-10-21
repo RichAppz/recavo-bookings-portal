@@ -41,15 +41,22 @@ import {
   useCreateService,
   useDeleteService,
   useLocationsList,
-  useReplaceServiceConsumables,
   useServiceConsumables,
   useServices,
+  useServicesConsumables,
   useStaffList,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
-import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
-import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { ServiceConsumablesEditor } from "@/components/consumables/ServiceConsumablesEditor";
+import { useConsumablesOn } from "@/components/consumables/use-consumables-on";
+import {
+  estimateMaterialsCost,
+  rowsFromLines,
+  rowsToItems,
+  type UsageRow,
+} from "@/lib/consumables";
+import { PERMISSIONS } from "@/lib/permissions";
 import { UpsellEditor } from "@/components/UpsellEditor";
 import { rowsFromUpsells, rowsToUpsellItems, type UpsellRow } from "@/lib/upsells";
 import { UpsellsUpgradeDialog } from "@/components/UpsellsUpgradeDialog";
@@ -157,7 +164,9 @@ function ServicesPage() {
   const deleteService = useDeleteService();
   // "N consumables" on each card: the catalogue rows carry the services they're on,
   // so one request covers every card. Detailing only; nothing is fetched otherwise.
-  const consumables = useConsumables({ enabled: isDetailing });
+  const consumablesOn = useConsumablesOn();
+  const canMoney = tenant.can(PERMISSIONS.PAYMENT_READ);
+  const consumables = useConsumables({ enabled: consumablesOn });
   const consumableCountByService = useMemo(() => {
     const counts = new Map<string, number>();
     for (const c of consumables.data ?? []) {
@@ -165,6 +174,16 @@ function ServicesPage() {
     }
     return counts;
   }, [consumables.data]);
+  // "about £12 a job" needs each service's default quantities; only services that
+  // have any are fetched, and only for staff who can see money.
+  const costedServiceIds = useMemo(
+    () => (canMoney ? [...consumableCountByService.keys()].sort() : []),
+    [canMoney, consumableCountByService],
+  );
+  const serviceDefaults = useServicesConsumables(costedServiceIds, { enabled: consumablesOn });
+  const materialsByService = new Map<string, number | null>(
+    costedServiceIds.map((id, i) => [id, estimateMaterialsCost(serviceDefaults[i]?.data ?? [])]),
+  );
   const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
@@ -282,16 +301,19 @@ function ServicesPage() {
                             {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
                           </span>
                         )}
-                        {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
+                        {consumablesOn && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
                           <span
                             className="flex items-center gap-1.5 text-muted-foreground"
-                            title="Materials this service uses by default — your records only"
+                            title="Materials this service uses by default. For your records only."
                           >
                             <Package className="size-4" />
                             {consumableCountByService.get(s.id)}{" "}
                             {consumableCountByService.get(s.id) === 1
                               ? "consumable"
                               : "consumables"}
+                            {materialsByService.get(s.id) != null
+                              ? ` · about ${formatMoney(materialsByService.get(s.id)!, s.currency, { compact: true })} a job`
+                              : ""}
                           </span>
                         ) : null}
                         {reminderRules.length > 0 ? (
@@ -585,12 +607,12 @@ function ServiceDialog({
     };
   }, [hoursOwnerIsMe, soleStaff?.displayName, lower]);
 
-  // Consumables used (detailing only): the materials a job of this service uses by
-  // default, saved through their own endpoint once the service itself has saved.
-  // Staff-only records — they never touch the price.
-  const consumableCatalogue = useConsumables({ enabled: isDetailing && open });
-  const serviceUsage = useServiceConsumables(service?.id, { enabled: isDetailing && open });
-  const replaceServiceUsage = useReplaceServiceConsumables();
+  // Consumables used (detailing, unless hidden from the menu): the materials a job of
+  // this service uses by default, saved with the service. Staff-only records; they
+  // never touch the price.
+  const consumablesOn = useConsumablesOn();
+  const consumableCatalogue = useConsumables({ enabled: consumablesOn && open });
+  const serviceUsage = useServiceConsumables(service?.id, { enabled: consumablesOn && open });
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageDirty, setUsageDirty] = useState(false);
   const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
@@ -623,7 +645,6 @@ function ServiceDialog({
     createService.isPending ||
     updateService.isPending ||
     updateStaff.isPending ||
-    replaceServiceUsage.isPending ||
     replaceUpsells.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
@@ -766,12 +787,11 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
-    // Validate the consumables before anything saves, so a bad row can't leave the
-    // service written and its materials not.
-    const usage = isDetailing && usageDirty ? rowsToItems(usageRows) : null;
+    // The materials list saves in the same request as the service, so a bad line
+    // fails the whole save rather than leaving one half written.
+    const usage = consumablesOn && usageDirty ? rowsToItems(usageRows) : null;
     if (usage && !usage.ok) {
       setUsageInvalid(usage.index);
-      toast.error("Pick a consumable and a quantity above zero on each line");
       throw new Error("validation");
     }
     setUsageInvalid(null);
@@ -815,6 +835,12 @@ function ServiceDialog({
       availabilityWindows: offerWindows,
       followUps: followUps.rules,
     };
+    if (usage?.ok) {
+      body.consumables = usage.items.map((it) => ({
+        consumableId: it.consumableId,
+        quantity: it.quantity,
+      }));
+    }
 
     setFieldErrors({});
     // Hours go first: saving the service can itself touch the staff record (to add
@@ -840,15 +866,7 @@ function ServiceDialog({
         saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
         toast.success(`${noun} created`);
       }
-      // Materials used by default. Its own endpoint, so it follows the service save;
-      // a failure here is toasted by the hook and leaves the service itself saved.
-      if (usage?.ok) {
-        try {
-          await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
-        } catch {
-          toast.warning("The consumables list didn't save — open the service and try again.");
-        }
-      }
+      if (usage?.ok) setUsageDirty(false);
       // Add-ons offered with this service. Its own endpoint; a plan without the
       // feature answers 403, which opens the bolt-on dialog rather than a toast.
       if (upsells?.ok) {
@@ -1136,18 +1154,17 @@ function ServiceDialog({
           </div>
 
           {/* Detailing: what a job of this service uses up. Records only; never priced in. */}
-          {isDetailing ? (
+          {consumablesOn ? (
             <div className="grid gap-2 border-t pt-4">
               <Label>Consumables used</Label>
               <p className="text-xs text-muted-foreground">
-                What one job of this {lower} typically uses — a bottle of coating, two pads. New
-                bookings start with this list, which you can adjust per job. For your records only;
-                it never changes the price or shows to clients.
+                What one job usually uses. Every new job starts with this list, and you can change
+                it on the day.
               </p>
               {serviceUsage.isLoading || consumableCatalogue.isLoading ? (
                 <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
               ) : (
-                <ConsumableUsageEditor
+                <ServiceConsumablesEditor
                   rows={usageRows}
                   onChange={(rows) => {
                     setUsageRows(rows);
@@ -1155,10 +1172,22 @@ function ServiceDialog({
                     setUsageInvalid(null);
                   }}
                   catalogue={consumableCatalogue.data ?? []}
-                  invalidIndex={usageInvalid}
-                  idPrefix="sc"
+                  priceMinor={(() => {
+                    try {
+                      return parseMoneyToMinor(price);
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                  currency={tenant.business?.currency || "GBP"}
+                  canMoney={tenant.can(PERMISSIONS.PAYMENT_READ)}
+                  canAddToCatalogue={tenant.can(PERMISSIONS.BUSINESS_UPDATE)}
+                  invalid={usageInvalid !== null}
                 />
               )}
+              {usageInvalid !== null ? (
+                <p className="text-xs text-destructive">Each line needs a quantity above zero.</p>
+              ) : null}
             </div>
           ) : null}
 

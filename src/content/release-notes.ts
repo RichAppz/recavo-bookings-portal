@@ -39,6 +39,21 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = [
         text: "Swap your referral code for one people will remember, like SHINECARS: tap Change code under your link. Use 4 to 16 letters or numbers. Links and codes you've already shared keep working, and nobody else can ever take them. Codes with explicit or offensive words aren't allowed, however they're spelt.",
         where: "Referrals",
       },
+      {
+        kind: "improved",
+        text: "Detailers: the Consumables page shows what your materials cost this month, the average per job, your most used item and your costliest service, with a period you can change. Each item shows its cost, the services it's on and how much was used. Click one to see its recent jobs.",
+        where: "Consumables",
+      },
+      {
+        kind: "improved",
+        text: "Jobs keep the cost each material had when it was recorded, so changing a price later no longer rewrites old jobs. A job's total says when an item has no cost, and Used as planned confirms a job's materials in one tap.",
+        where: "Bookings",
+      },
+      {
+        kind: "improved",
+        text: "Editing what a job used is a sheet with + and − buttons, a note on each line, and an offer to add a service's usual materials when you add that service to the job. Services set their consumables with the same buttons, show about what a job costs in materials, and save in one go with the service.",
+        where: "Services",
+      },
     ],
   },
   {

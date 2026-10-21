@@ -56,7 +56,23 @@ export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
 /** A booking's usage plus the staff-only estimated materials cost. */
 export type BookingConsumablesUsage = schemas["BookingConsumablesUsage"];
 /** Body of `PUT …/consumables` on a service or booking — replaces the list. */
-export type ConsumableUsageInput = { consumableId: string; quantity: number; note?: string | null };
+export type ConsumableUsageInput = {
+  consumableId: string;
+  quantity: number;
+  note?: string | null;
+  /** Booking lines only: where a new line came from (a service's defaults, or picked). */
+  source?: "default" | "added";
+  /** Booking lines only: fill a line recorded without a cost from today's catalogue cost. */
+  useCurrentCost?: boolean;
+};
+/** Reporting windows for the catalogue figures and a consumable's activity. */
+export type ConsumableUsagePeriod = "this_month" | "last_month" | "last_3_months" | "this_year";
+/** The catalogue's figure tiles for a period. */
+export type ConsumableFigures =
+  paths["/api/v1/businesses/{businessId}/consumables/figures"]["get"]["responses"]["200"]["content"]["application/json"]["figures"];
+/** One consumable's period stats, the services it's a default on, and its recent jobs. */
+export type ConsumableActivity =
+  paths["/api/v1/businesses/{businessId}/consumables/{consumableId}/activity"]["get"]["responses"]["200"]["content"]["application/json"]["activity"];
 export type Booking = schemas["Booking"];
 export type SupportRequest = schemas["SupportRequest"];
 export type SupportRequestCategory = SupportRequest["category"];

@@ -150,6 +150,14 @@ describe("summariseBookingChanges", () => {
       "Consumables: none → 2 pad Foam pad",
     );
     assert.equal(summariseBookingChanges([{ field: "consumables" }], terms), "Consumables updated");
+    const planned = {
+      field: "consumables",
+      from: ["1 bottle Ceramic coat"],
+      to: ["1 bottle Ceramic coat"],
+      asPlanned: true,
+    };
+    assert.equal(describeBookingChange(planned, terms), "Consumables confirmed as planned");
+    assert.equal(summariseBookingChanges([planned], terms), "Consumables confirmed as planned");
     assert.equal(
       summariseBookingChanges([{ field: "price" }, { field: "consumables" }], terms),
       "Booking edited — price and consumables",

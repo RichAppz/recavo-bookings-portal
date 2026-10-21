@@ -23,7 +23,7 @@ export const NAV_FEATURES: {
     key: "consumables",
     path: "/consumables",
     label: "Consumables",
-    hint: "Materials a job uses up — coatings, pads, chemicals.",
+    hint: "Materials a job uses up, such as coatings, pads and chemicals. Off also hides them on services and jobs.",
   },
   {
     key: "packages",

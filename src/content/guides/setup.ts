@@ -214,7 +214,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
           personal_training:
             "Turn on **Group** and set the number of places to run a class. Clients book a place rather than the whole slot, and the calendar shows how many are left. See *Group sessions* for the details.",
           car_detailing:
-            "Choose which staff can be booked for the service. Add **consumables** — products used up on the job, like coating or pads — so each job's cost is tracked. A **follow-up** interval reminds you to rebook a customer when a coating or protection is due.",
+            "Choose which staff can be booked for the service. Under **Consumables used**, add the products one job usually uses up, like coating or pads. Every new job starts with that list, you can change it on the day, and the Consumables page shows what your materials cost each month. For your records only. Never charged or shown to clients. A **follow-up** interval reminds you to rebook a customer when a coating or protection is due.",
         },
         link: { to: "/services", label: "Open {Services}" },
       },
