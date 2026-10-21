@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { ApiError } from "@/lib/api";
 import {
   useCreateStaff,
@@ -477,6 +478,7 @@ function StaffDialog({
   const services = useServices();
   const locations = useLocationsList();
   const soleLocation = useSoleLocation();
+  const tenant = useTenant();
 
   const [displayName, setDisplayName] = useState(staff?.displayName ?? "");
   const [title, setTitle] = useState(staff?.title ?? "");
@@ -490,6 +492,9 @@ function StaffDialog({
     staff?.eligibleServiceIds ?? [],
   );
   const [locationIds, setLocationIds] = useState<string[]>(staff?.locationIds ?? []);
+  const pickableLocations = (locations.data ?? []).filter(
+    (l) => l.active || locationIds.includes(l.id),
+  );
   const [workingRules, setWorkingRules] = useState<WorkingRuleRow[]>(() =>
     toWorkingRuleRows(staff),
   );
@@ -721,11 +726,11 @@ function StaffDialog({
           {soleLocation ? null : (
             <div className="grid gap-2 border-t pt-4">
               <Label>Locations</Label>
-              {(locations.data ?? []).length === 0 ? (
+              {pickableLocations.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No locations created yet.</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {(locations.data ?? []).map((l) => (
+                  {pickableLocations.map((l) => (
                     <label key={l.id} className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={locationIds.includes(l.id)}
@@ -737,7 +742,8 @@ function StaffDialog({
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Leave all unchecked to make this trainer available everywhere.
+                Leave all unchecked to make this {tenant.terminology.staff.toLowerCase()} available
+                everywhere.
               </p>
             </div>
           )}

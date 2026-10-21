@@ -28,7 +28,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Open Locations",
-        body: "In the sidebar, under **Studio**, choose **Locations**. Each card is one place clients can book, with its opening hours, team and the {services} offered there. Most businesses have one; add another if you work from a second site.",
+        body: "In the sidebar, under **What you offer**, choose **Locations**. Each card is one place clients can book, with its opening hours, team and the {services} offered there. Most businesses have one; add another if you work from a second site.",
         image: {
           name: "locations",
           alt: "The Locations page showing one location card with its opening hours, team and services.",

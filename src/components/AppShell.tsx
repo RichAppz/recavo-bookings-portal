@@ -271,6 +271,7 @@ function CustomerHostLanding() {
 
 function ConsoleShell({ children }: { children: ReactNode }) {
   const tenant = useTenant();
+  const activeLocations = tenant.locations.filter((l) => l.active);
   const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileNav, setMobileNav] = useState(false);
@@ -668,7 +669,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
 
               <div className="ml-auto flex items-center gap-2">
                 {/* A location filter only means something once there is more than one. */}
-                {tenant.locations.length > 1 ? (
+                {activeLocations.length > 1 ? (
                   <Select
                     value={tenant.currentLocationId}
                     onValueChange={tenant.setCurrentLocationId}
@@ -678,7 +679,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All locations</SelectItem>
-                      {tenant.locations.map((l) => (
+                      {activeLocations.map((l) => (
                         <SelectItem key={l.id} value={l.id}>
                           {l.name}
                         </SelectItem>

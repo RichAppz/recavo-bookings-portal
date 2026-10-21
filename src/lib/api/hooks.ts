@@ -1970,47 +1970,71 @@ export function useLocationsList() {
   });
 }
 
+type LocationDetailsBody = {
+  address?: {
+    line1: string;
+    line2?: string | null;
+    town?: string | null;
+    postcode: string;
+    lat?: number | null;
+    lng?: number | null;
+  } | null;
+  parkingNote?: string | null;
+  phone?: string | null;
+  serviceArea?: {
+    basePostcode: string;
+    radiusMiles: number;
+    lat?: number | null;
+    lng?: number | null;
+  } | null;
+  travelMinutes?: number;
+};
+
+export type CreateLocationBody = LocationDetailsBody & {
+  name: string;
+  type: Location["type"];
+  timezone: string;
+  openingHours?: OpeningHourInput[];
+  publicVisible?: boolean;
+};
+
+export type UpdateLocationBody = LocationDetailsBody & {
+  name?: string;
+  type?: Location["type"];
+  timezone?: string;
+  openingHours?: OpeningHourInput[];
+  active?: boolean;
+  publicVisible?: boolean;
+  displayOrder?: number;
+};
+
+function invalidateLocationWorld(qc: ReturnType<typeof useQueryClient>, businessId: string) {
+  void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+  invalidateOnboarding(qc, businessId);
+}
+
+/** Errors are left to the caller: the location drawer shows them inline. */
 export function useCreateLocation() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: {
-      name: string;
-      type: Location["type"];
-      timezone: string;
-      openingHours?: OpeningHourInput[];
-      publicVisible?: boolean;
-      active?: boolean;
-    }) => {
+    mutationFn: async (body: CreateLocationBody) => {
       const res = await api.post<{ location: Location }>(
         `/api/v1/businesses/${businessId}/locations`,
         body,
       );
       return res.data.location;
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
-      invalidateOnboarding(qc, businessId);
-    },
-    onError: (err) => toastApiError(err),
+    onSuccess: () => invalidateLocationWorld(qc, businessId),
   });
 }
 
+/** Errors are left to the caller; a version conflict reloads the list. */
 export function useUpdateLocation() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: {
-      locationId: string;
-      version: number;
-      body: {
-        name?: string;
-        timezone?: string;
-        openingHours?: OpeningHourInput[];
-        active?: boolean;
-        publicVisible?: boolean;
-      };
-    }) => {
+    mutationFn: async (vars: { locationId: string; version: number; body: UpdateLocationBody }) => {
       const res = await api.patch<{ location: Location }>(
         `/api/v1/businesses/${businessId}/locations/${vars.locationId}`,
         vars.body,
@@ -2019,15 +2043,114 @@ export function useUpdateLocation() {
       return res.data.location;
     },
     onSuccess: (location) => {
-      void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+      invalidateLocationWorld(qc, businessId);
       void qc.invalidateQueries({ queryKey: queryKeys.location(businessId, location.id) });
-      invalidateOnboarding(qc, businessId);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.isConflict) {
         void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
       }
+    },
+  });
+}
+
+export type LocationActivity =
+  paths["/api/v1/businesses/{businessId}/locations/activity"]["get"]["responses"]["200"]["content"]["application/json"]["activity"][number];
+
+/** This week's bookings, bookings still to come and "ever booked", per location. */
+export function useLocationActivity(week: { from: Date; to: Date }) {
+  const businessId = useBusinessId();
+  const from = week.from.toISOString();
+  const to = week.to.toISOString();
+  return useQuery({
+    queryKey: [...queryKeys.locations(businessId), "activity", from, to] as const,
+    enabled: Boolean(businessId),
+    queryFn: async () => {
+      const res = await api.get<{ activity: LocationActivity[] }>(
+        `/api/v1/businesses/${businessId}/locations/activity`,
+        { query: { from, to } },
+      );
+      return res.data.activity;
+    },
+  });
+}
+
+export type ArchiveLocationResult =
+  paths["/api/v1/businesses/{businessId}/locations/{locationId}/archive"]["post"]["responses"]["200"]["content"]["application/json"];
+
+export function useArchiveLocation() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      locationId: string;
+      version: number;
+      futureBookings?: "move" | "cancel";
+      moveToLocationId?: string;
+    }) => {
+      const res = await api.post<ArchiveLocationResult>(
+        `/api/v1/businesses/${businessId}/locations/${vars.locationId}/archive`,
+        {
+          ...(vars.futureBookings ? { futureBookings: vars.futureBookings } : {}),
+          ...(vars.moveToLocationId ? { moveToLocationId: vars.moveToLocationId } : {}),
+        },
+        { ifMatch: vars.version },
+      );
+      return res.data;
+    },
+    onSettled: () => {
+      invalidateLocationWorld(qc, businessId);
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+    },
+  });
+}
+
+export function useDeleteLocation() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (locationId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/locations/${locationId}`);
+    },
+    onSettled: () => {
+      invalidateLocationWorld(qc, businessId);
+      void qc.invalidateQueries({ queryKey: queryKeys.staff(businessId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
+    },
+  });
+}
+
+export function useReorderLocations() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (locationIds: string[]) => {
+      const res = await api.post<{ locations: Location[] }>(
+        `/api/v1/businesses/${businessId}/locations/order`,
+        { locationIds },
+      );
+      return res.data.locations;
+    },
+    onMutate: async (locationIds) => {
+      const key = queryKeys.locations(businessId);
+      await qc.cancelQueries({ queryKey: key, exact: true });
+      const previous = qc.getQueryData<Location[]>(key);
+      if (previous) {
+        const byId = new Map(previous.map((l) => [l.id, l]));
+        const ordered = locationIds.map((id, i) => ({ ...byId.get(id)!, displayOrder: i }));
+        const rest = previous.filter((l) => !locationIds.includes(l.id));
+        qc.setQueryData(key, [...ordered, ...rest]);
+      }
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKeys.locations(businessId), context.previous);
       toastApiError(err);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId), exact: true });
     },
   });
 }
