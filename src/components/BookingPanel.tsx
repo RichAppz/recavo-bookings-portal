@@ -166,6 +166,7 @@ import {
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { isMessageHistoryEntry } from "@/lib/message-history";
 import {
   formatWorkingSpan,
@@ -187,6 +188,9 @@ import { describeClientLift } from "@/lib/client-lift";
 import { bookingNotes, bookingNotesLabel, hasBookingNotes } from "@/lib/booking-notes";
 import { unmarkedPast } from "@/lib/bookings-list";
 import { cn } from "@/lib/utils";
+import { NumberPlate } from "@/components/vehicles/NumberPlate";
+import { useVehicleFields } from "@/components/vehicles/use-vehicles-data";
+import { registrationOf, vehicleTitle } from "@/lib/vehicles";
 
 const NOTES_SECTION_ID = "booking-panel-notes";
 
@@ -202,9 +206,12 @@ const FINAL_BOOKING_STATUSES = new Set<string>([
 export function BookingPanel({
   bookingId,
   onClose,
+  reschedule = false,
 }: {
   bookingId: string | null;
   onClose: () => void;
+  /** Open straight onto Reschedule (Messages → Move). */
+  reschedule?: boolean;
 }) {
   const tenant = useTenant();
   const businessId = useBusinessId();
@@ -216,6 +223,9 @@ export function BookingPanel({
   const [cancelNotify, setCancelNotify] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  useEffect(() => {
+    if (bookingId && reschedule) setRescheduleOpen(true);
+  }, [bookingId, reschedule]);
   const [editOpen, setEditOpen] = useState(false);
   /** Services to pre-add when Edit opens from an add-on request. */
   const [editAddServiceIds, setEditAddServiceIds] = useState<string[]>([]);
@@ -260,6 +270,10 @@ export function BookingPanel({
   const navigate = useNavigate();
   // The vehicle (or other linked record) on the job — resolves even after archive (RECA-90).
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
+  const { fields: recordFields } = useVehicleFields();
+  const linkedRecordReg = linkedRecord.data
+    ? registrationOf(linkedRecord.data.values, recordFields)
+    : null;
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
   // Cash / bank / terminal money staff recorded by hand lives in the settlement ledger,
@@ -1343,20 +1357,35 @@ export function BookingPanel({
                             params={{ clientId: booking.leadCustomerId }}
                             search={{ tab: "linked", record: booking.linkedRecordId }}
                             onClick={onClose}
-                            className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline"
+                            className="inline-flex max-w-full items-center gap-1.5 underline-offset-4 hover:text-primary hover:underline"
                           >
-                            {linkedRecord.data?.displayLabel ?? "…"}
+                            {linkedRecordReg ? (
+                              <>
+                                <NumberPlate
+                                  registration={linkedRecordReg}
+                                  size="small"
+                                  className="shrink-0"
+                                />
+                                <span className="truncate">
+                                  {vehicleTitle(linkedRecord.data!, recordFields)}
+                                </span>
+                              </>
+                            ) : (
+                              (linkedRecord.data?.displayLabel ?? "…")
+                            )}
                             <ChevronRight className="size-3.5 text-muted-foreground" />
                           </Link>
                         </dd>
                       </div>
                     ) : null}
                     {/* "Next top-up due": follow-ups this job scheduled, once it is done. */}
-                    <BookingFollowUpDetail
-                      bookingId={booking.id}
-                      timezone={timezone}
-                      onNavigate={onClose}
-                    />
+                    {remindersAvailable(tenant.business?.industryTemplateKey) ? (
+                      <BookingFollowUpDetail
+                        bookingId={booking.id}
+                        timezone={timezone}
+                        onNavigate={onClose}
+                      />
+                    ) : null}
                     {booking.clientLift ? (
                       <Detail
                         label="Lift"

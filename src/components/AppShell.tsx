@@ -99,6 +99,7 @@ import { useAuth } from "@/lib/auth/auth-store";
 import { useLiveUpdates } from "@/lib/live/use-live-updates";
 import { hiddenNavFrom, navFeatureForPath } from "@/lib/nav-features";
 import { notificationHref } from "@/lib/notification-link";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { markSessionLanded } from "@/lib/session-landing";
 import { useSoloPlan } from "@/lib/sole";
 import { lastActivity } from "@/lib/support";
@@ -337,6 +338,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
       (item.to !== "/vehicles" || hasLinkedRecords) &&
       // Consumables are a detailing concept (coatings, pads, chemicals).
       (item.to !== "/consumables" || isCarDetailing) &&
+      (item.to !== "/follow-ups" || remindersAvailable(tenant.business?.industryTemplateKey)) &&
       // One-seat plans have no team to manage.
       (item.to !== "/staff" || !soloPlan) &&
       !isHiddenByBusiness(item.to),

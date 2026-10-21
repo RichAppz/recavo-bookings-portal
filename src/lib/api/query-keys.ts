@@ -135,6 +135,17 @@ export const queryKeys = {
     ["biz", businessId, "conversations", conversationId] as const,
   messages: (businessId: string, conversationId: string) =>
     ["biz", businessId, "conversations", conversationId, "messages"] as const,
+  /** Paged thread (newest page first) for the Messages page; under `messages` so both refresh. */
+  threadPages: (businessId: string, conversationId: string) =>
+    ["biz", businessId, "conversations", conversationId, "messages", "pages"] as const,
+  /** Under `conversations` so a `conversation.changed` hint refreshes every inbox view. */
+  inbox: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "conversations", "inbox", filters ?? {}] as const,
+  savedReplies: (businessId: string) => ["biz", businessId, "saved-replies"] as const,
+  broadcasts: (businessId: string) => ["biz", businessId, "broadcasts"] as const,
+  broadcastPreview: (businessId: string, input: Record<string, unknown>) =>
+    ["biz", businessId, "broadcasts", "preview", input] as const,
+  broadcastOptions: (businessId: string) => ["biz", businessId, "broadcasts", "options"] as const,
   notifications: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "notifications", filters ?? {}] as const,
 

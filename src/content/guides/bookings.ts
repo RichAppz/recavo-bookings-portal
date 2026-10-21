@@ -29,13 +29,13 @@ export const BOOKING_GUIDES: readonly Guide[] = [
         heading: "Open the form",
         body: {
           personal_training:
-            "On the **Calendar**, click **Add session** — or click an empty slot to start with that time filled in. The **Create** button in the top bar and **Create booking** on a client's profile open the same form.",
+            "On the **Calendar**, click **Add session** — or click an empty slot to start with that time filled in. **New booking** in the top bar opens a menu whose first item, **Add booking**, opens the same form from any page (on a phone it's the only way in), and **New booking** on a client's profile starts it with them already picked. The calendar shows **Day**, **Week**, **Month** or **List** — swipe sideways to move between periods.",
           car_detailing:
-            "On the **Calendar**, click **Add job** — or click an empty slot to start with that time filled in. The **Create** button in the top bar and **Create booking** on a customer's profile open the same form.",
+            "On the **Calendar**, click **Add job** — or click an empty slot to start with that time filled in. **New booking** in the top bar opens a menu whose first item, **Add booking**, opens the same form from any page (on a phone it's the only way in), and **New booking** on a customer's profile starts it with them already picked. The calendar shows **Day**, **Week**, **Month** or **List** — swipe sideways to move between periods.",
         },
         image: {
           name: "create-menu",
-          alt: "The Create menu in the top bar, listing Add booking, Add to waitlist, Add client, Add event and more.",
+          alt: "The New booking menu in the top bar, listing Add booking, Add to waitlist, Add client, Add event and more.",
         },
         link: { to: "/calendar", label: "Open Calendar" },
       },
@@ -67,7 +67,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Open it any time",
-        body: "Click the booking on the calendar to open its panel: the client's contact buttons, who's doing it, the amount and what's outstanding, plus **History** and **Payments** tabs. The **⋯** menu holds Edit, Reminders, Message and Cancel.",
+        body: "Click the booking on the calendar to open its panel: the client's contact buttons, who's doing it, the amount and what's outstanding, with **Details**, **Payments** and **History** tabs. The **⋯** menu holds **Edit booking**, **Move**, **Copy link**, **Reminders**, **Message**, **Mark as no-show** and **Cancel booking**. Every booking is also listed under **Bookings** in the sidebar.",
         image: {
           name: "booking-panel",
           alt: "A booking's side panel showing the client, staff member, amount paid, duration and the attendance controls.",
@@ -154,7 +154,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Open Edit booking",
-        body: "Click the {booking} on the calendar, open the **⋯** menu and choose **Edit booking**. The **When** row at the top shows the current date and time with two buttons: **Fix date** and **Reschedule**.",
+        body: "Click the {booking} on the calendar, open the **⋯** menu and choose **Move** to go straight to picking a new time. Or choose **Edit booking**: the **When** row at the top shows the current date and time with two buttons, **Fix date** and **Reschedule**.",
         image: {
           name: "edit-booking",
           alt: "The Edit booking dialog with the When row showing the current time and the Fix date and Reschedule buttons.",
@@ -209,10 +209,10 @@ export const BOOKING_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Find the menu",
-        body: "Open the {booking} from the calendar (or from **Bookings** in the sidebar) and click **⋯** in the top corner. **Edit booking** is at the top; **Reminders**, **Message**, **Cancel booking** and **Delete booking** sit underneath. Edit is greyed out once a {booking} has been marked attended or cancelled — it's a record then.",
+        body: "Open the {booking} from the calendar (or from **Bookings** in the sidebar) and click **⋯** in the top corner. **Edit booking** is at the top, then **Move** and **Copy link**; **Reminders**, **Message**, **Mark as no-show**, **Cancel booking** and **Delete booking** sit underneath. A {booking} that has been marked attended can still be edited to correct the record — what was done, the price, a note — but cancelled and no-show {bookings} are locked.",
         image: {
           name: "booking-menu",
-          alt: "The booking panel's actions menu open, listing Edit booking, Reminders, Message, Cancel booking and Delete booking.",
+          alt: "The booking panel's actions menu open, listing Edit booking, Move, Copy link, Reminders, Message, Cancel booking and Delete booking.",
         },
         link: { to: "/bookings", label: "Open Bookings" },
       },
@@ -310,7 +310,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Add someone",
-        body: "Open **Waitlist** in the sidebar and click **Add to waitlist** (it's on the **Create** menu too). Pick the client and the {service} they want, and optionally a {staff}. **Roughly when** and **Days they can do** narrow the match; leave them blank for *as soon as possible*. **High priority** puts them first when a slot frees.",
+        body: "Open **Waitlist** in the sidebar and click **Add to waitlist** (it's on the top bar's **New booking** menu too). Pick the client and the {service} they want, and optionally a {staff}. **Roughly when** and **Days they can do** narrow the match; leave them blank for *as soon as possible*. **High priority** puts them first when a slot frees.",
         image: {
           name: "add-to-waitlist",
           alt: "The Add to waitlist form with client, service, staff, date range, days they can do, time of day and priority.",
@@ -390,7 +390,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Block availability quickly",
-        body: "The **Create** menu has **Block availability** for a quick one-off: pick the {staff}, day and hours and it's blocked without the ceremony of an event. On the **Solo** plan, where there's no **{Staff}** page, this and **Add event** are how you take time off.",
+        body: "The top bar's **New booking** menu has **Block availability** for a quick one-off: pick the {staff}, day and hours and it's blocked without the ceremony of an event. On the **Solo** plan, where there's no **{Staff}** page, this and **Add event** are how you take time off.",
       },
     ],
     related: ["add-staff-and-hours", "add-your-location"],
@@ -412,7 +412,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Start a class",
-        body: "**Create → Create group session** publishes a class at a set time with a trainer and books the first attendee — the **lead client**. From then on the slot shows on the booking page as something to join, and each person who books takes one place.",
+        body: "**New booking → Create group session** in the top bar publishes a class at a set time with a trainer and books the first attendee — the **lead client**. From then on the slot shows on the booking page as something to join, and each person who books takes one place.",
         image: {
           name: "create-group-session",
           alt: "The Create group session dialog with lead client, group service, staff, date and start time.",

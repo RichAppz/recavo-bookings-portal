@@ -40,6 +40,7 @@ import {
   clientReminderFromDraft,
   existingOpenReminder,
   followUpIntervalLabel,
+  followUpRuleList,
   todayIn,
   type ClientReminderDraft,
   type ClientReminderField,
@@ -79,6 +80,7 @@ export function ClientReminderDialog({
   serviceNoun,
   defaults,
   onShowExisting,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -89,6 +91,8 @@ export function ClientReminderDialog({
   defaults?: ClientReminderDefaults;
   /** Closes the dialog and points at the open reminder the duplicate warning names. */
   onShowExisting?: (followUp: ServiceFollowUp) => void;
+  /** After saving: lets the client's page point at the new reminder. */
+  onCreated?: (followUp: ServiceFollowUp) => void;
 }) {
   const tenant = useTenant();
   const timezone = tenant.business?.defaultTimezone || "Europe/London";
@@ -140,7 +144,9 @@ export function ClientReminderDialog({
   // A service with a rule already knows how often it is due: start from that.
   const pickService = (serviceId: string) => {
     const next = services.find((s) => s.id === serviceId);
-    const rule = next?.followUps.slice().sort((a, b) => a.intervalMonths - b.intervalMonths)[0];
+    const rule = followUpRuleList(next)
+      .slice()
+      .sort((a, b) => a.intervalMonths - b.intervalMonths)[0];
     setDraft((d) => {
       const preset = rule
         ? FOLLOW_UP_INTERVAL_PRESETS.find((p) => p.months === rule.intervalMonths)
@@ -181,6 +187,10 @@ export function ClientReminderDialog({
       toast.success(
         `Reminder set — ${created.title} for ${customerName}, due ${formatInTz(created.dueAt, timezone, { dateStyle: "medium" })}`,
       );
+      if (onCreated) {
+        showingExisting.current = true;
+        onCreated(created);
+      }
       onOpenChange(false);
     } catch {
       // The hook toasted the reason; the form stays open so nothing typed is lost.

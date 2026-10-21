@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/hooks";
 import { NAV_FEATURES, hiddenNavFrom, type NavFeature } from "@/lib/nav-features";
 import { PERMISSIONS, canManageSaasBilling } from "@/lib/permissions";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { useSoloPlan } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
@@ -52,7 +53,10 @@ export function MenuSwitches() {
 
   // Rows for things this business doesn't have at all are noise.
   const rows = NAV_FEATURES.filter(
-    (f) => (f.key !== "consumables" || isCarDetailing) && (f.key !== "records" || hasRecords),
+    (f) =>
+      (f.key !== "consumables" || isCarDetailing) &&
+      (f.key !== "follow_ups" || remindersAvailable(tenant.business?.industryTemplateKey)) &&
+      (f.key !== "records" || hasRecords),
   );
 
   const toggle = async (key: NavFeature, visible: boolean) => {

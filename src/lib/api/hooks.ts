@@ -842,6 +842,34 @@ export function useBookingSettlements(
   });
 }
 
+/**
+ * The settlement ledger for each of a client's bookings that has money on it, for the
+ * profile's Money tab and Paid column. Shares the cache with `useBookingSettlements`.
+ */
+export function useBookingsSettlements(
+  bookings: readonly Pick<Booking, "id" | "paidMinor">[],
+  enabled = true,
+) {
+  const businessId = useBusinessId();
+  const withMoney = bookings.filter((b) => (b.paidMinor ?? 0) > 0);
+  const results = useQueries({
+    queries: withMoney.map((b) => ({
+      queryKey: queryKeys.bookingSettlements(businessId, b.id),
+      enabled: Boolean(businessId) && enabled,
+      staleTime: 60_000,
+      queryFn: async () => {
+        const res = await api.get<{ settlements: BookingSettlementLine[] }>(
+          `/api/v1/businesses/${businessId}/bookings/${b.id}/settlements`,
+        );
+        return res.data.settlements;
+      },
+    })),
+  });
+  const byBooking = new Map<string, BookingSettlementLine[] | undefined>();
+  withMoney.forEach((b, i) => byBooking.set(b.id, results[i]?.data));
+  return { byBooking, isLoading: results.some((r) => r.isLoading) };
+}
+
 export function useTakeBookingPayment() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -909,6 +937,30 @@ export function useSyncBookingPayment() {
 
 /* ---------------- Catalogue / staff / locations ---------------- */
 
+/**
+ * An API that predates several reminders per service sends only the single
+ * `followUp` rule (or nothing). Callers always read `followUps`, so fill it in.
+ */
+export function withFollowUpRules(service: CatalogueService): CatalogueService {
+  if (!service || typeof service !== "object") return service;
+  if (Array.isArray(service.followUps)) {
+    let missingId = false;
+    const followUps = service.followUps.filter(Boolean).map((rule, i) => {
+      if (rule.id) return rule;
+      missingId = true;
+      return { ...rule, id: `legacy-${service.id}-${i}` };
+    });
+    if (!missingId && followUps.length === service.followUps.length) return service;
+    return { ...service, followUps };
+  }
+  const single = service.followUp ?? null;
+  return {
+    ...service,
+    followUps: single ? [{ ...single, id: single.id ?? `legacy-${service.id}` }] : [],
+    followUp: single,
+  };
+}
+
 export function useServices() {
   const businessId = useBusinessId();
   return useQuery({
@@ -918,8 +970,17 @@ export function useServices() {
       const res = await api.get<{ services: CatalogueService[] }>(
         `/api/v1/businesses/${businessId}/services`,
       );
-      return res.data.services;
+      return (res.data.services ?? []).map(withFollowUpRules);
     },
+    // Runs on restored cache too. An older saved catalogue has `followUp` and no
+    // `followUps`; reading `.followUps.slice` on that throws and the Reminders
+    // page shows the error screen before this query can refetch.
+    select: (services) =>
+      Array.isArray(services)
+        ? services
+            .filter((service) => service && typeof service === "object")
+            .map(withFollowUpRules)
+        : [],
   });
 }
 
@@ -933,7 +994,7 @@ export function useCreateService() {
         body,
         { idempotencyKey: newIdempotencyKey() },
       );
-      return res.data.service;
+      return withFollowUpRules(res.data.service);
     },
     onSuccess: (created) => {
       // Seed the list before the refetch lands so a caller can use the new service
@@ -983,7 +1044,7 @@ export function useUpdateService() {
         vars.body,
         { ifMatch: vars.version },
       );
-      return res.data.service;
+      return withFollowUpRules(res.data.service);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
@@ -1306,6 +1367,41 @@ export function useFollowUpAction() {
       void qc.invalidateQueries({ queryKey: queryKeys.followUps(businessId) });
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+const EVERY_FOLLOW_UP = { status: "scheduled,sent,completed,dismissed", all: true } as const;
+
+/**
+ * Every follow-up that is open, booked again or dismissed (cancelled ones are left
+ * out), all pages: the Reminders page's tabs, counts and stats are worked out from
+ * the whole set rather than the page on screen.
+ */
+export function useEveryFollowUp(opts: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.followUps(businessId, EVERY_FOLLOW_UP),
+    enabled: Boolean(businessId) && opts.enabled !== false,
+    queryFn: async ({ signal }) => {
+      const out: ServiceFollowUp[] = [];
+      let cursor: string | null = null;
+      let page = 0;
+      for (; page < 50; page += 1) {
+        const res: { data: { followUps: ServiceFollowUp[]; nextCursor?: string | null } } =
+          await api.get(`/api/v1/businesses/${businessId}/follow-ups`, {
+            query: {
+              status: EVERY_FOLLOW_UP.status,
+              limit: 200,
+              ...(cursor ? { cursor } : {}),
+            },
+            signal,
+          });
+        out.push(...res.data.followUps);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return { items: out, complete: cursor === null };
+    },
   });
 }
 
@@ -2021,6 +2117,162 @@ export function useCustomersBookings(customerIds: string[], enabled = true) {
   });
 }
 
+/* ---------------- Clients list stats ---------------- */
+
+/** Guards the whole-history walks below against a runaway cursor. */
+const CLIENT_STATS_MAX_PAGES = 100;
+
+/**
+ * Every booking the business holds, all locations, for the Clients list's last
+ * visit / next booking / sessions / owed columns — the customers endpoint carries
+ * no stats. Walked at the API's largest page; `complete` is false when the guard
+ * stopped it early. Keyed under `bookings` so any booking change refreshes it.
+ */
+export function useClientStatsBookings(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookings(businessId, { scope: "client-stats" }),
+    enabled: Boolean(businessId) && enabled,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      type Page = { bookings: Booking[]; nextCursor?: string | null };
+      const query = {
+        from: "2000-01-01T00:00:00.000Z",
+        to: new Date(Date.now() + 2 * 365 * 86_400_000).toISOString(),
+        limit: 200,
+      };
+      const bookings: Booking[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < CLIENT_STATS_MAX_PAGES; page += 1) {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/bookings`,
+          { query: { ...query, ...(cursor ? { cursor } : {}) }, signal },
+        );
+        bookings.push(...res.data.bookings);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return { bookings, complete: cursor === null };
+    },
+  });
+}
+
+/** Every payment the business has taken, for the Clients list's Spent column. */
+export function useClientStatsPayments(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.payments(businessId, { scope: "client-stats" }),
+    enabled: Boolean(businessId) && enabled,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      type Page = { payments: Payment[]; nextCursor?: string | null };
+      const payments: Payment[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < CLIENT_STATS_MAX_PAGES; page += 1) {
+        const res: { data: Page } = await api.get<Page>(
+          `/api/v1/businesses/${businessId}/payments`,
+          { query: { limit: 200, ...(cursor ? { cursor } : {}) }, signal },
+        );
+        payments.push(...res.data.payments);
+        cursor = res.data.nextCursor ?? null;
+        if (!cursor) break;
+      }
+      return payments;
+    },
+  });
+}
+
+/**
+ * Package credits for several clients, one cached lookup each (credits are only
+ * served per client). Shares the cache with `useCustomerCredits`. Returns the
+ * raw credit views per client id; only clients whose lookup has landed appear.
+ */
+export function useCustomersCredits(customerIds: readonly string[], enabled = true) {
+  const businessId = useBusinessId();
+  return useQueries({
+    queries: customerIds.map((customerId) => ({
+      queryKey: queryKeys.entitlements(businessId, { customerId }),
+      enabled: Boolean(businessId) && enabled,
+      staleTime: 5 * 60_000,
+      queryFn: async () => {
+        const res = await api.get<{ credits: EntitlementView[] }>(
+          `/api/v1/businesses/${businessId}/customers/${customerId}/credits`,
+        );
+        return res.data.credits;
+      },
+    })),
+    combine: (results) => {
+      const map = new Map<string, EntitlementView[]>();
+      results.forEach((r, i) => {
+        if (r.data) map.set(customerIds[i]!, r.data);
+      });
+      return map;
+    },
+  });
+}
+
+/**
+ * The extras the Add client drawer saves once the client exists: tags (found by
+ * name in the catalogue, else created), a staff note and a first linked record.
+ * Each is attempted on its own so one failure doesn't lose the others; the names
+ * of any that failed are returned for the caller to report.
+ */
+export function useSaveNewClientExtras() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      customerId: string;
+      tags: string[];
+      note: string;
+      record: { displayLabel: string; values: Record<string, unknown> } | null;
+    }) => {
+      const base = `/api/v1/businesses/${businessId}`;
+      const failed: string[] = [];
+      if (vars.tags.length > 0) {
+        try {
+          const catalogue = await api.get<{ tags: CustomerTag[] }>(`${base}/customer-tags`);
+          for (const name of vars.tags) {
+            const existing = catalogue.data.tags.find(
+              (t) => t.nameNormalised === name.trim().toLowerCase() || t.name === name.trim(),
+            );
+            const tag =
+              existing ??
+              (await api.post<{ tag: CustomerTag }>(`${base}/customer-tags`, { name: name.trim() }))
+                .data.tag;
+            await api.post(`${base}/customers/${vars.customerId}/tags`, { tagId: tag.id });
+          }
+        } catch {
+          failed.push("tags");
+        }
+      }
+      if (vars.note.trim()) {
+        try {
+          await api.post(`${base}/customers/${vars.customerId}/notes`, {
+            body: vars.note.trim(),
+            visibility: "internal" as const,
+          });
+        } catch {
+          failed.push("note");
+        }
+      }
+      if (vars.record) {
+        try {
+          await api.post(`${base}/customers/${vars.customerId}/linked-records`, vars.record);
+        } catch {
+          failed.push("record");
+        }
+      }
+      return { failed };
+    },
+    onSettled: (_data, _err, vars) => {
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customer-tags"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.linkedRecordsAll(businessId) });
+      invalidateCustomerQueries(qc, businessId, vars?.customerId);
+    },
+  });
+}
+
 export function useCreateCustomer() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -2260,12 +2512,19 @@ export function useCustomerLinkedRecords(customerId: string | undefined) {
  * name (server-side).
  */
 export function useLinkedRecordsInfinite(
-  filters: { search?: string; status?: "active" | "archived"; enabled?: boolean } = {},
+  filters: {
+    search?: string;
+    status?: "active" | "archived";
+    enabled?: boolean;
+    /** Page size (API max 100); part of the cache key when set. */
+    limit?: number;
+  } = {},
 ) {
   const businessId = useBusinessId();
   const query = {
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.limit ? { limit: String(filters.limit) } : {}),
   };
   const q = usePaginatedQuery<LinkedRecordWithOwner, "items">({
     queryKey: queryKeys.linkedRecords(businessId, query),
@@ -3042,28 +3301,6 @@ export function useSendMessage(conversationId: string | undefined) {
       void qc.invalidateQueries({ queryKey: messagesKey });
       void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
     },
-  });
-}
-
-export function useCreateAnnouncement() {
-  const businessId = useBusinessId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (vars: {
-      customerIds: string[];
-      body: string;
-      bookingId?: string | null;
-    }) => {
-      const res = await api.post<Record<string, unknown>>(
-        `/api/v1/businesses/${businessId}/announcements`,
-        vars,
-      );
-      return res.data;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.conversations(businessId) });
-    },
-    onError: (err) => toastApiError(err),
   });
 }
 
@@ -4527,12 +4764,71 @@ export type ReferralStats = {
  */
 export type ReferralProgramKind = "standard" | "partner";
 
+export type ReferralSummary = {
+  signedUpCount: number;
+  onTrialCount: number;
+  payingCount: number;
+  pendingRewardCount: number;
+  /** Rewards already applied. */
+  freeMonthsEarned: number;
+  /** Estimated from the current plan price; null without a Stripe plan. */
+  savedMinor: number | null;
+  currency: string | null;
+  nextReward: { at: string; appliesTo: "invoice" | "renewal" } | null;
+};
+
 export type ReferralProgram = {
   program: ReferralProgramKind;
   code: string;
   sharePath: string;
   stats: ReferralStats;
+  /** Absent on APIs older than the referrals redesign. */
+  available?: boolean;
+  trialDays?: number;
+  /** Null for staff without billing access; absent on older APIs. */
+  summary?: ReferralSummary | null;
 };
+
+export type ReferredBusinessStatus = "trial" | "paying" | "not_converted" | "cancelled";
+
+export type ReferredBusiness = {
+  id: string;
+  name: string;
+  industryTemplateKey: string | null;
+  signedUpAt: string;
+  status: ReferredBusinessStatus;
+  trialEndsAt: string | null;
+  endedAt: string | null;
+  firstPaidAt: string | null;
+  program: ReferralProgramKind;
+  reward: {
+    status: "waiting" | "pending" | "applied" | "none" | "partner";
+    appliesAt: string | null;
+    appliesTo: "invoice" | "renewal" | null;
+    appliedAt: string | null;
+    amountMinor: number | null;
+    currency: string | null;
+  } | null;
+};
+
+export const REFERRED_PAGE_SIZE = 25;
+
+export function useReferredBusinesses(page: number) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: [...queryKeys.referral(businessId), "referrals", page],
+    enabled: Boolean(businessId),
+    placeholderData: keepPreviousData,
+    retry: false,
+    queryFn: async () => {
+      const offset = page * REFERRED_PAGE_SIZE;
+      const res = await api.get<{ referrals: ReferredBusiness[]; total: number }>(
+        `/api/v1/businesses/${businessId}/referral/referrals?limit=${REFERRED_PAGE_SIZE}&offset=${offset}`,
+      );
+      return res.data;
+    },
+  });
+}
 
 export function useReferralProgram() {
   const businessId = useBusinessId();

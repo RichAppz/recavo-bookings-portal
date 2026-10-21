@@ -664,13 +664,15 @@ function StripBadge({ badge }: { badge: MenuBadge }) {
 function BusinessLogo({ business }: { business: MenuBusiness | null }) {
   if (business?.logoUrl) {
     return (
-      <img
-        src={business.logoUrl}
-        alt=""
-        className="size-9 shrink-0 rounded-[10px] object-cover"
-        width={36}
-        height={36}
-      />
+      <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-white ring-1 ring-black/5">
+        <img
+          src={business.logoUrl}
+          alt=""
+          className="size-full object-contain"
+          width={36}
+          height={36}
+        />
+      </span>
     );
   }
   return (

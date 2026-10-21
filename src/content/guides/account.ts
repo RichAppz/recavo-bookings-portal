@@ -79,12 +79,12 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "What the calendar colours mean",
-        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Calendar** — pick a colour, or clear the box to go back to the default — then **Save**.",
+        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Calendar → Booking colours** — pick a colour, or clear the box to go back to the default — then **Save**.",
         image: {
           name: "calendar-colours",
-          alt: "The Calendar colours settings with a colour for paid, deposit or part paid, unpaid and events.",
+          alt: "The Booking colours settings with a colour for paid, deposit or part paid, unpaid and events.",
         },
-        link: { to: "/settings/booking-rules", label: "Open Booking rules" },
+        link: { to: "/settings/calendar", label: "Open Calendar settings" },
       },
       {
         heading: "Colour by {staff}",

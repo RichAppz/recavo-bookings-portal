@@ -53,6 +53,7 @@ import { Route as ClientsClientIdRouteImport } from './routes/clients.$clientId'
 import { Route as ClientsImportRouteImport } from './routes/clients.import'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
+import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as OffersTokenRouteImport } from './routes/offers.$token'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsPageRouteImport } from './routes/settings.$page'
@@ -286,6 +287,11 @@ const InvoicesInvoiceIdRoute = InvoicesInvoiceIdRouteImport.update({
   path: '/invoices/$invoiceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinCodeRoute = JoinCodeRouteImport.update({
+  id: '/join/$code',
+  path: '/join/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OffersTokenRoute = OffersTokenRouteImport.update({
   id: '/offers/$token',
   path: '/offers/$token',
@@ -391,6 +397,7 @@ export interface FileRoutesByFullPath {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/join/$code': typeof JoinCodeRoute
   '/offers/$token': typeof OffersTokenRoute
   '/settings/$page': typeof SettingsPageRoute
   '/support/$requestId': typeof SupportRequestIdRoute
@@ -447,6 +454,7 @@ export interface FileRoutesByTo {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/join/$code': typeof JoinCodeRoute
   '/offers/$token': typeof OffersTokenRoute
   '/settings/$page': typeof SettingsPageRoute
   '/support/$requestId': typeof SupportRequestIdRoute
@@ -506,6 +514,7 @@ export interface FileRoutesById {
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/import': typeof ClientsImportRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
+  '/join/$code': typeof JoinCodeRoute
   '/offers/$token': typeof OffersTokenRoute
   '/settings/$page': typeof SettingsPageRoute
   '/support/$requestId': typeof SupportRequestIdRoute
@@ -566,6 +575,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/join/$code'
     | '/offers/$token'
     | '/settings/$page'
     | '/support/$requestId'
@@ -622,6 +632,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/join/$code'
     | '/offers/$token'
     | '/settings/$page'
     | '/support/$requestId'
@@ -680,6 +691,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/clients/import'
     | '/invoices/$invoiceId'
+    | '/join/$code'
     | '/offers/$token'
     | '/settings/$page'
     | '/support/$requestId'
@@ -736,6 +748,7 @@ export interface RootRouteChildren {
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsImportRoute: typeof ClientsImportRoute
   InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
+  JoinCodeRoute: typeof JoinCodeRoute
   OffersTokenRoute: typeof OffersTokenRoute
   SupportRequestIdRoute: typeof SupportRequestIdRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
@@ -1055,6 +1068,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoicesInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join/$code': {
+      id: '/join/$code'
+      path: '/join/$code'
+      fullPath: '/join/$code'
+      preLoaderRoute: typeof JoinCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/offers/$token': {
       id: '/offers/$token'
       path: '/offers/$token'
@@ -1231,6 +1251,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsImportRoute: ClientsImportRoute,
   InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
+  JoinCodeRoute: JoinCodeRoute,
   OffersTokenRoute: OffersTokenRoute,
   SupportRequestIdRoute: SupportRequestIdRoute,
   ClientsIndexRoute: ClientsIndexRoute,

@@ -39,7 +39,21 @@ export function WaitlistActions({
     setBusy(true);
     try {
       await act.mutateAsync({ entryId: entry.id, action });
-      toast.success(success);
+      if (action === "cancel") {
+        toast.success(success, {
+          duration: 6000,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              act.mutate(
+                { entryId: entry.id, action: "reopen" },
+                { onSuccess: () => toast.success(`${who} is back on the waitlist`) },
+              ),
+          },
+        });
+      } else {
+        toast.success(success);
+      }
     } catch {
       // Toasted by the hook.
     } finally {

@@ -230,6 +230,18 @@ describe("reminderRuleRows", () => {
       ],
     );
   });
+
+  it("treats a missing followUps list as no rules, and does not throw", () => {
+    const rows = reminderRuleRows([
+      { id: "s_old", name: "Old wax", active: true },
+      { id: "s_wash", name: null, active: true, followUps: [RULE_B] },
+    ] as never);
+    assert.deepEqual(
+      rows.map((r) => r.rule.id),
+      ["r_b"],
+    );
+    assert.deepEqual(reminderRuleRows(undefined), []);
+  });
 });
 
 describe("rulesWithSaved / rulesWithout", () => {
@@ -437,6 +449,14 @@ describe("orphanedFollowUps", () => {
     const archived = [{ id: "valet", active: false, followUps: [] }];
     const removed = followUp({ serviceId: "valet", ruleId: "r_valet", status: "sent" });
     assert.equal(orphanedFollowUps([removed], archived).length, 1);
+  });
+
+  it("does not treat a service that has not loaded its rule list as all rules deleted", () => {
+    const kept = followUp({ id: "b", serviceId: "coating", ruleId: "r_ceramic" });
+    assert.deepEqual(orphanedFollowUps([kept], [{ id: "coating" }] as never), []);
+    assert.doesNotThrow(() =>
+      orphanedFollowUps([kept], [{ id: "coating", followUps: null }] as never),
+    );
   });
 });
 

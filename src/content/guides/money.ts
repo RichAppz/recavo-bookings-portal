@@ -48,7 +48,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Where it ends up",
-        body: "Payments you record appear on the booking's Payments tab and on the client's **Payments** tab, and count towards what's outstanding. Card payments taken through Stripe are listed under **Payments** in the sidebar with their receipts and refunds.",
+        body: "Payments you record appear on the booking's Payments tab and on the client's **Money** tab, and count towards what's outstanding. Card payments taken through Stripe are listed under **Payments** in the sidebar with their receipts and refunds.",
         link: { to: "/payments", label: "Open Payments" },
       },
     ],

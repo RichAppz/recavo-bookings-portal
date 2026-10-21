@@ -32,6 +32,7 @@ import {
   draftFromRule,
   draftsFromRules,
   followUpNames,
+  followUpRuleList,
   followUpRuleSummary,
   followUpsForRule,
   rulesFromDrafts,
@@ -125,7 +126,7 @@ export function ReminderRuleDialog({
       services
         .filter((s) => s.active || s.id === serviceId)
         .slice()
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
     [services, serviceId],
   );
   const scheduled = useMemo(
@@ -135,7 +136,8 @@ export function ReminderRuleDialog({
         : [],
     [editing, canStopScheduled, openFollowUps.data, serviceId],
   );
-  const full = !editing && service !== undefined && service.followUps.length >= FOLLOW_UP_MAX_RULES;
+  const full =
+    !editing && service !== undefined && followUpRuleList(service).length >= FOLLOW_UP_MAX_RULES;
 
   const save = async () => {
     if (stopFailed.length > 0) return;
@@ -281,10 +283,11 @@ export function ReminderRuleDialog({
                 {choices.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
-                    {s.followUps.length > 0 ? (
+                    {followUpRuleList(s).length > 0 ? (
                       <span className="text-muted-foreground">
                         {" "}
-                        · {s.followUps.length} {s.followUps.length === 1 ? "reminder" : "reminders"}
+                        · {followUpRuleList(s).length}{" "}
+                        {followUpRuleList(s).length === 1 ? "reminder" : "reminders"}
                       </span>
                     ) : null}
                   </SelectItem>

@@ -85,6 +85,7 @@ import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { toast } from "sonner";
 
 /**
@@ -241,6 +242,7 @@ function ServicesPage() {
               <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {group.items.map((s) => {
                   const offered = offeredLabel(s);
+                  const reminderRules = Array.isArray(s.followUps) ? s.followUps : [];
                   return (
                     <article key={s.id} className="surface-card flex flex-col p-5">
                       <div className="flex items-start justify-between gap-3">
@@ -292,17 +294,17 @@ function ServicesPage() {
                               : "consumables"}
                           </span>
                         ) : null}
-                        {s.followUps.length > 0 ? (
+                        {reminderRules.length > 0 ? (
                           <span
                             className="flex items-center gap-1.5 text-muted-foreground"
                             title={
-                              s.followUps.length === 1
-                                ? `Clients (and you) are reminded ${s.followUps[0]!.leadDays} days before it is due again`
-                                : `${s.followUps.length} reminders: clients (and you) are told before each is due`
+                              reminderRules.length === 1
+                                ? `Clients (and you) are reminded ${reminderRules[0]!.leadDays} days before it is due again`
+                                : `${reminderRules.length} reminders: clients (and you) are told before each is due`
                             }
                           >
                             <BellRing className="size-4" />
-                            {followUpRulesSummary(s.followUps)}
+                            {followUpRulesSummary(reminderRules)}
                           </span>
                         ) : null}
                       </div>
@@ -1203,16 +1205,18 @@ function ServiceDialog({
           <UpsellsUpgradeDialog open={upsellsPaywall} onOpenChange={setUpsellsPaywall} />
 
           {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
-          <FollowUpRuleEditor
-            drafts={followUpDrafts}
-            onChange={(next) => {
-              setFollowUpDrafts(next);
-              setFollowUpError(null);
-            }}
-            error={followUpError}
-            serviceNoun={lower}
-            idPrefix="sfu"
-          />
+          {remindersAvailable(tenant.business?.industryTemplateKey) ? (
+            <FollowUpRuleEditor
+              drafts={followUpDrafts}
+              onChange={(next) => {
+                setFollowUpDrafts(next);
+                setFollowUpError(null);
+              }}
+              error={followUpError}
+              serviceNoun={lower}
+              idPrefix="sfu"
+            />
+          ) : null}
 
           {/* With one person on the books "everyone" and "them" are the same answer. */}
           {soleStaff ? null : (

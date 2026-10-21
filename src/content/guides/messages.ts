@@ -29,7 +29,7 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
         body: "Go to **Settings → Client messages**. Under **Reminders**, choose **Edit timing** and add a row for each reminder — *1 day before*, *2 hours before* — and choose how it goes: **Client's preference** follows each client's contact setting, or force **SMS** or **Email**. Changes apply to upcoming {bookings} straight away; reminders already sent are never repeated.",
         image: {
           name: "reminder-settings",
-          alt: "Settings, Notifications tab, with two reminder rows (1 day before by client's preference, 2 hours before by SMS) and the message templates below.",
+          alt: "Settings, Client messages page, with two reminder rows (1 day before by client's preference, 2 hours before by SMS) and the message templates below.",
         },
         link: { to: "/settings/client-messages", label: "Open Client messages" },
       },
@@ -58,17 +58,27 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
     slug: "send-a-message",
     title: "Message a client",
     summary:
-      "Two-way messages with one client, or an announcement to many. Everything lands in one inbox and on the client's record.",
+      "Texts and emails with your clients in one inbox, with their next {booking} beside the conversation. Send one announcement to many when you need to.",
     category: "messages",
     verticals: BOTH,
-    minutes: 3,
+    minutes: 4,
     keywords: [
       "inbox",
       "chat",
+      "reply",
+      "needs reply",
+      "mark as done",
+      "unread",
+      "saved replies",
+      "quick replies",
+      "booking link",
       "announcement",
       "broadcast",
       "closure",
       "bulk message",
+      "marketing",
+      "unsubscribe",
+      "schedule",
       "text a client",
       "whatsapp",
       "call",
@@ -76,33 +86,45 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "The inbox",
-        body: "**Messages** in the sidebar is every client conversation in one place. Pick a thread, type and **Send**. Clients read and reply from their client portal, and their replies appear here and on their record's **Messages** tab.",
+        body: "**Messages** in the sidebar is every client conversation, newest first. **Unread** shows what you haven't opened yet and **Needs reply** shows conversations where the client wrote last. Search finds a client by name, phone or email, or any word in a message. When nothing more is needed, **Mark as done** takes it off Needs reply; a new message from them puts it back. On a phone, swipe a conversation left to mark it done or unread.",
         image: {
           name: "messages",
-          alt: "The Messages page with the inbox on the left and an open conversation with a client on the right.",
+          alt: "The Messages page: the inbox with All, Unread and Needs reply tabs on the left, and an open conversation with Mark as done, the Client button, quick reply chips and the Text or Email switch.",
         },
         link: { to: "/messages", label: "Open Messages" },
       },
       {
-        heading: "Start from the client",
-        body: "**Message** on a client's record (and **Send message** on the **Create** menu) opens a quick composer: pick the conversation, type, send — no need to leave the page you're on. From a {booking}'s panel, **⋯ → Message** takes you to the inbox, and the icons beside the client's name let you **call**, **text** or **WhatsApp** them from your phone.",
+        heading: "Reply by text or email",
+        body: "Under the message box, choose **Text** or **Email**. It starts on whichever the client used last, and the note beside it shows the cost: a text uses 1 credit per 160 characters, and email is free. Press **Enter** to send (**Shift+Enter** adds a new line; on a phone, tap **Send**). The chips above the box suggest a quick answer when the client asks something, insert your **booking link**, or pick one of your **Saved replies**. Reminders and confirmations RECAVO sent show as small lines in the conversation; click one to see exactly what went.",
+      },
+      {
+        heading: "The client beside the conversation",
+        body: "The panel on the right shows the client's next {booking}, with **Open** and **Move**, plus quick actions and whether they can be reached by text or email. On a smaller screen it's behind the **Client** button; on a phone, tap **i**. **⋯** has **View profile**, **New booking**, **Mark as unread**, a switch to hide the automatic message lines, and **Block client**.",
+      },
+      {
+        heading: "Start a conversation",
+        body: "**+ New message** opens a client picker: your recent conversations first, or search for anyone. Picking a client opens their conversation with the cursor in the message box. **Message** at the top of a client's record opens their **Messages** tab, and from a {booking}'s panel **⋯ → Message** takes you to the inbox. The icons beside the client's name let you **call**, **text** or **WhatsApp** them from your phone.",
         image: {
           name: "client-message",
-          alt: "The Send message form with a recipient dropdown and a message box, opened from a client's record.",
+          alt: "A client's Messages tab showing the conversation, with the reminders and invoices sent to them, and a reply box.",
         },
       },
       {
         heading: "Send an announcement",
         body: {
           personal_training:
-            "**Send announcement** on the Messages page sends the same note to many clients at once — a bank-holiday closure, a new class. Tick the clients (or **Select all**), write it, send. Each person gets their own thread, so replies stay private.",
+            "**Send announcement** sends one message to a group: **All clients**, those **Booked in the next 30 days**, those **Not seen in 6 months**, or **Pick a list** by service, tag or location. Choose **Text, else email**, **Email only** or **Text only**, and use **Insert** to add each client's first name or your booking link. Before you send you'll see how many clients it reaches and the text credits it uses. **Send me a test** sends it to you first, and **Schedule** picks a later time.",
           car_detailing:
-            "**Send announcement** on the Messages page sends the same note to many customers at once — a closure, a winter protection offer. Tick the customers (or **Select all**), write it, send. Each person gets their own thread, so replies stay private.",
+            "**Send announcement** sends one message to a group: **All clients**, those **Booked in the next 30 days**, those **Not seen in 6 months**, or **Pick a list** by service, tag, vehicle make or location. Choose **Text, else email**, **Email only** or **Text only**, and use **Insert** to add each client's first name or your booking link. Before you send you'll see how many clients it reaches and the text credits it uses. **Send me a test** sends it to you first, and **Schedule** picks a later time.",
         },
         image: {
           name: "announcement",
-          alt: "The Send announcement dialog with a message box and a list of clients to tick.",
+          alt: "The Send announcement drawer with Who to send to options and their counts, the Send by choice and the message box.",
         },
+      },
+      {
+        heading: "Announcement rules",
+        body: "Announcements only go to clients who agreed to marketing, and each one carries an unsubscribe link. Anyone who uses it is taken off future announcements; their booking messages still arrive. You can send one announcement every 24 hours, and texts only go between 08:00 and 20:00. Outside those hours the button offers to send at 08:00. Each client gets it in their own conversation, so replies stay private. **Scheduled and sent** in the drawer lists what's coming up (with **Cancel**) and how past announcements did: delivered, failed, replies, and {bookings} within 7 days.",
       },
       {
         heading: "Templates are separate",
@@ -138,10 +160,10 @@ export const MESSAGE_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Edit what clients receive",
-        body: "Under **Settings → Client messages**, **Message templates** holds every message clients get — the confirmation, each reminder, payment requests, cancellations — in an email and a text version. Edit the wording to sound like you. Anything in double braces, like `{{first_name}}`, is filled in for each message; anything in double square brackets, like `[[ at {{location}} ]]`, is only included when the detail is known.",
+        body: "Under **Settings → Client messages**, **Message templates** lists every message clients get — the confirmation, each reminder, payment requests, cancellations. Pick one to open it, then switch between **Email** and **Text message** and edit **Your wording** to sound like you. **Add a detail** drops in the client's first name, the time, the location and so on. Anything in double braces, like `{{first_name}}`, is filled in for each message; anything in double square brackets, like `[[ at {{location}} ]]`, is only included when the detail is known.",
         image: {
           name: "message-templates",
-          alt: "The Message templates section with the email and text version of the booking confirmation.",
+          alt: "The booking confirmation template open for editing, with Email and Text message tabs, the wording box and the Add a detail buttons.",
         },
         link: { to: "/settings/client-messages", label: "Open Client messages" },
       },

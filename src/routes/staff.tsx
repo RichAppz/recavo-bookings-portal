@@ -46,8 +46,10 @@ import {
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
 import {
+  formatAllDaySpan,
+  formatBookingSpan,
   formatDuration,
-  formatInTz,
+  isAllDayEvent,
   minutesToTime,
   parseTimeInput,
   timeToMinutes,
@@ -350,7 +352,7 @@ function StaffPage() {
 
               <SectionCard
                 title="Time off and blocks"
-                description="Half-open [start, end) periods — the end instant itself is bookable again"
+                description="Holidays and blocked time. They can't be booked while they're off."
                 bodyClassName="p-0"
               >
                 <ul className="divide-y">
@@ -361,11 +363,9 @@ function StaffPage() {
                     >
                       <span className="min-w-0 flex-1 truncate">{b.reason ?? "Blocked"}</span>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatInTz(b.start, b.originatingTimezone, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}{" "}
-                        – {formatInTz(b.end, b.originatingTimezone, { timeStyle: "short" })}
+                        {isAllDayEvent(b.start, b.end, b.originatingTimezone)
+                          ? formatAllDaySpan(b.start, b.end, b.originatingTimezone)
+                          : formatBookingSpan(b.start, b.end, b.originatingTimezone)}
                       </span>
                       <Button
                         variant="ghost"

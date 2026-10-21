@@ -33,7 +33,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsPhone } from "@/hooks/use-media-query";
-import { useNotificationTemplates } from "@/lib/api/hooks";
+import { useNotificationTemplates, useRunReminders } from "@/lib/api/hooks";
+import { toast } from "sonner";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import type { MessageTemplate } from "@/lib/message-templates";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -274,6 +275,7 @@ function RemindersSection({ canEdit }: { canEdit: boolean }) {
   const smsCredits = useSmsCreditsSummary();
   const isPhone = useIsPhone();
   const [open, setOpen] = useState(false);
+  const runReminders = useRunReminders();
   const rules = tenant.configuration?.reminders?.rules ?? [];
   const sorted = [...rules].sort((a, b) => b.minutesBefore - a.minutesBefore);
   const summary =
@@ -282,7 +284,7 @@ function RemindersSection({ canEdit }: { canEdit: boolean }) {
       : sorted
           .map(
             (r) =>
-              `${describeOffset(r.minutesBefore)} by ${CHANNEL_LABELS[r.channel].toLowerCase()}`,
+              `${describeOffset(r.minutesBefore)} by ${(CHANNEL_LABELS[r.channel] ?? "their usual channel").toLowerCase()}`,
           )
           .join(" · ");
 
@@ -320,6 +322,24 @@ function RemindersSection({ canEdit }: { canEdit: boolean }) {
             {canEdit ? (sorted.length === 0 ? "Add reminder" : "Edit timing") : "View"}
           </Button>
         </SettingsRow>
+        {canEdit ? (
+          <SettingsRow
+            label="Send due reminders now"
+            hint={`Sends any reminders that are due across all ${tenant.terminology.client.toLowerCase()}s, without waiting for the next automatic run.`}
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={runReminders.isPending}
+              onClick={async () => {
+                const res = await runReminders.mutateAsync();
+                toast.success(`Reminder sweep complete — ${res.sent} sent, ${res.skipped} skipped`);
+              }}
+            >
+              {runReminders.isPending ? "Running…" : "Run reminder sweep"}
+            </Button>
+          </SettingsRow>
+        ) : null}
       </GroupedBlock>
       {smsCredits.credits && smsCredits.level === "low" ? (
         <p className="text-xs text-warning-foreground dark:text-amber">

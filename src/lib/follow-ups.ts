@@ -94,7 +94,7 @@ export function draftFromRule(rule: ServiceFollowUpRule): FollowUpRuleDraft {
 export function draftsFromRules(
   rules: readonly ServiceFollowUpRule[] | null | undefined,
 ): FollowUpRuleDraft[] {
-  return (rules ?? []).map(draftFromRule);
+  return (Array.isArray(rules) ? rules : []).map(draftFromRule);
 }
 
 /**
@@ -195,6 +195,20 @@ export function rulesFromDrafts(drafts: readonly FollowUpRuleDraft[]): FollowUpR
   return { ok: true, rules };
 }
 
+/**
+ * Rules on a service. Missing or non-array `followUps` (an older cached catalogue
+ * row, or an API that only sent the single `followUp`) is an empty list — callers
+ * must not throw and take the Reminders page down.
+ */
+export function followUpRuleList(
+  service: { followUps?: readonly ServiceFollowUpRule[] | null } | null | undefined,
+): readonly ServiceFollowUpRule[] {
+  if (!Array.isArray(service?.followUps)) return [];
+  return service.followUps.filter(
+    (rule): rule is ServiceFollowUpRule => Boolean(rule) && typeof rule === "object",
+  );
+}
+
 /** One reminder rule with the service it hangs off — a row on the Reminders page. */
 export type ReminderRuleRow = {
   serviceId: string;
@@ -209,13 +223,18 @@ export type ReminderRuleRow = {
  * rules contribute nothing.
  */
 export function reminderRuleRows(
-  services: readonly Pick<CatalogueService, "id" | "name" | "active" | "followUps">[],
+  services:
+    readonly Pick<CatalogueService, "id" | "name" | "active" | "followUps">[] | null | undefined,
 ): ReminderRuleRow[] {
+  if (!Array.isArray(services)) return [];
   return services
+    .filter((s) => s && typeof s === "object")
     .slice()
-    .sort((a, b) => (a.active === b.active ? a.name.localeCompare(b.name) : a.active ? -1 : 1))
+    .sort((a, b) =>
+      a.active === b.active ? (a.name ?? "").localeCompare(b.name ?? "") : a.active ? -1 : 1,
+    )
     .flatMap((s) =>
-      s.followUps
+      followUpRuleList(s)
         .slice()
         .sort((a, b) => a.intervalMonths - b.intervalMonths)
         .map((rule) => ({
@@ -234,10 +253,10 @@ export function reminderRuleRows(
  * follow-ups they have already scheduled.
  */
 export function rulesWithSaved(
-  existing: readonly ServiceFollowUpRule[],
+  existing: readonly ServiceFollowUpRule[] | null | undefined,
   saved: FollowUpRuleInput,
 ): FollowUpRuleInput[] {
-  const keep = existing.map((r): FollowUpRuleInput => ({
+  const keep = (Array.isArray(existing) ? existing : []).map((r): FollowUpRuleInput => ({
     id: r.id,
     intervalMonths: r.intervalMonths,
     leadDays: r.leadDays,
@@ -255,10 +274,10 @@ export function rulesWithSaved(
 
 /** The `followUps` payload with one rule removed; an empty list switches reminders off. */
 export function rulesWithout(
-  existing: readonly ServiceFollowUpRule[],
+  existing: readonly ServiceFollowUpRule[] | null | undefined,
   ruleId: string,
 ): FollowUpRuleInput[] {
-  return existing
+  return (Array.isArray(existing) ? existing : [])
     .filter((r) => r.id !== ruleId)
     .map((r) => ({
       id: r.id,
@@ -341,9 +360,12 @@ export function orphanedFollowUps<T extends RuleLink>(
   services: readonly Pick<CatalogueService, "id" | "followUps">[] | undefined,
 ): T[] {
   if (!followUps?.length || !services?.length) return [];
-  const rulesByService = new Map(
-    services.map((s) => [s.id, new Set(s.followUps.map((r) => r.id))]),
-  );
+  const rulesByService = new Map<string, Set<string>>();
+  for (const s of services) {
+    // No rule list yet (still the singular followUp, or not loaded): don't guess.
+    if (!Array.isArray(s.followUps)) continue;
+    rulesByService.set(s.id, new Set(s.followUps.map((r) => r.id)));
+  }
   return followUps.filter((f) => {
     if (!isOpenFollowUp(f) || f.source !== "rule" || !f.ruleId) return false;
     const rules = rulesByService.get(f.serviceId);
