@@ -196,6 +196,20 @@ describe("plan seats", () => {
     assert.equal(planLine(full), "5 of 5 on Growth");
     assert.equal(full.next, null);
   });
+
+  it("matches the subscription's billed plan to the catalogue", () => {
+    const billed = {
+      code: "solo_month",
+      name: "Solo (month)",
+      limits: { staff: 1, locations: 1 },
+    } as unknown as PublicCataloguePlan;
+    const seat = planSeat(billed, plans, 1);
+    assert.equal(seat.allowed, 1);
+    assert.equal(seat.atLimit, true);
+    assert.equal(seat.planName, "Solo");
+    assert.equal(seat.planCode, "solo");
+    assert.equal(seat.next?.name, "Business");
+  });
 });
 
 describe("weekBounds", () => {

@@ -260,7 +260,16 @@ export function planSeat(
   plans: readonly PublicCataloguePlan[],
   used: number,
 ): PlanSeat {
-  const allowed = plan?.limits["locations.active"] ?? null;
+  // The subscription reports the billed variant ("solo_month", limit key "locations");
+  // the catalogue entry it belongs to carries the canonical name and limits.
+  const baseCode = plan?.code.replace(/_(month|year)$/, "");
+  const listed = plans.find((p) => p.code === baseCode);
+  const limits = plan?.limits as Record<string, number | null | undefined> | undefined;
+  const allowed =
+    listed?.limits["locations.active"] ??
+    limits?.["locations.active"] ??
+    limits?.["locations"] ??
+    null;
   const ordered = [...plans].sort(
     (a, b) => (a.limits["locations.active"] ?? 0) - (b.limits["locations.active"] ?? 0),
   );
@@ -269,8 +278,8 @@ export function planSeat(
       ? null
       : (ordered.find((p) => (p.limits["locations.active"] ?? 0) > allowed) ?? null);
   return {
-    planName: plan?.name ?? "your",
-    planCode: plan?.code ?? null,
+    planName: listed?.name ?? plan?.name.replace(/\s*\((month|year)\)$/, "") ?? "your",
+    planCode: listed?.code ?? plan?.code ?? null,
     allowed,
     used,
     atLimit: allowed !== null && used >= allowed,
