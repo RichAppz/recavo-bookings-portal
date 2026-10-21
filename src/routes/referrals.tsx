@@ -25,12 +25,17 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useIsPhone, useMediaQuery } from "@/hooks/use-media-query";
+import { ApiError } from "@/lib/api/errors";
 import {
   REFERRED_PAGE_SIZE,
+  useChangeReferralCode,
   useReferralProgram,
   useReferredBusinesses,
   type ReferralProgram,
@@ -42,6 +47,11 @@ import { avatarTintIndex } from "@/lib/clients-list";
 import { formatMoney, initials } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
+  changesLeftLine,
+  CODE_MAX_LENGTH,
+  codeErrorMessage,
+  codeShapeProblem,
+  compactCode,
   earnedTile,
   payingSub,
   progressOf,
@@ -172,6 +182,12 @@ function ReferralsBody({ program, phone }: { program: ReferralProgram; phone: bo
     program.summary === undefined ? can(PERMISSIONS.BILLING_MANAGE) : program.summary !== null;
   const hasReferrals = summary.signedUpCount > 0;
   const [qrOpen, setQrOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  // Older APIs send no codeChangesLeft and have no way to change the code.
+  const onChangeCode =
+    program.codeChangesLeft !== undefined && can(PERMISSIONS.BUSINESS_UPDATE)
+      ? () => setCodeOpen(true)
+      : undefined;
 
   const share =
     program.available === false ? (
@@ -185,6 +201,7 @@ function ReferralsBody({ program, phone }: { program: ReferralProgram; phone: bo
         code={program.code}
         trialDays={trialDays}
         onQr={() => setQrOpen(true)}
+        onChangeCode={onChangeCode}
       />
     ) : (
       <ShareCard
@@ -193,6 +210,7 @@ function ReferralsBody({ program, phone }: { program: ReferralProgram; phone: bo
         trialDays={trialDays}
         partner={partner}
         onQr={() => setQrOpen(true)}
+        onChangeCode={onChangeCode}
       />
     );
 
@@ -223,7 +241,129 @@ function ReferralsBody({ program, phone }: { program: ReferralProgram; phone: bo
       )}
       {phone ? <PhoneHowItWorks trialDays={trialDays} partner={partner} /> : null}
       <QrDialog open={qrOpen} onOpenChange={setQrOpen} link={link} />
+      {onChangeCode ? (
+        <ChangeCodeDialog
+          open={codeOpen}
+          onOpenChange={setCodeOpen}
+          link={link}
+          changesLeft={program.codeChangesLeft ?? 0}
+        />
+      ) : null}
     </>
+  );
+}
+
+function ChangeCodeDialog({
+  open,
+  onOpenChange,
+  link,
+  changesLeft,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  link: string;
+  changesLeft: number;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Choose your code</DialogTitle>
+          <DialogDescription>
+            Make it easy to remember, like your business name. Links and codes you've already shared
+            keep working.
+          </DialogDescription>
+        </DialogHeader>
+        <ChangeCodeForm link={link} changesLeft={changesLeft} onDone={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Mounted with the dialog, so every opening starts empty. */
+function ChangeCodeForm({
+  link,
+  changesLeft,
+  onDone,
+}: {
+  link: string;
+  changesLeft: number;
+  onDone: () => void;
+}) {
+  const change = useChangeReferralCode();
+  const [value, setValue] = useState("");
+  const [serverError, setServerError] = useState<string | null>(null);
+  const { prefix } = referralLinkParts(link);
+  const code = compactCode(value);
+  const shapeError = codeShapeProblem(value);
+  const error = serverError ?? shapeError;
+
+  const submit = async () => {
+    if (!code || shapeError || change.isPending) return;
+    setServerError(null);
+    try {
+      const updated = await change.mutateAsync(code);
+      toast.success(`Your code is now ${updated.code}`);
+      onDone();
+    } catch (err) {
+      const field =
+        err instanceof ApiError ? err.fieldErrors.find((fe) => fe.field === "code") : undefined;
+      if (err instanceof ApiError && err.status === 429) {
+        setServerError("Too many attempts. Wait a minute and try again.");
+      } else {
+        setServerError(codeErrorMessage(field?.code));
+      }
+    }
+  };
+
+  return (
+    <form
+      className="space-y-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <Label htmlFor="referral-code">New code</Label>
+      <Input
+        id="referral-code"
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setServerError(null);
+        }}
+        placeholder="SHINECARS"
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        maxLength={CODE_MAX_LENGTH + 8}
+        aria-invalid={error ? true : undefined}
+        aria-describedby="referral-code-help"
+        className="uppercase"
+      />
+      <div id="referral-code-help" className="space-y-1 text-[13px]">
+        {error ? (
+          <p role="alert" className="font-semibold text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <p className="break-all text-muted-foreground">
+          {prefix}
+          <strong className="font-bold text-foreground">{code || "YOURCODE"}</strong>
+        </p>
+        <p className="text-muted-foreground">
+          4 to 16 letters or numbers. {changesLeftLine(changesLeft)}
+        </p>
+      </div>
+      <DialogFooter className="pt-2">
+        <Button type="button" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!code || Boolean(shapeError) || change.isPending}>
+          {change.isPending ? "Saving…" : "Save code"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 
@@ -337,12 +477,14 @@ function ShareCard({
   trialDays,
   partner,
   onQr,
+  onChangeCode,
 }: {
   link: string;
   code: string;
   trialDays: number;
   partner: boolean;
   onQr: () => void;
+  onChangeCode?: () => void;
 }) {
   const { copy, region } = useCopy();
   const touch = useMediaQuery("(pointer: coarse)");
@@ -406,6 +548,18 @@ function ShareCard({
           >
             Copy code
           </button>
+          {onChangeCode ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="cursor-pointer font-semibold text-foreground underline underline-offset-2"
+                onClick={onChangeCode}
+              >
+                Change code
+              </button>
+            </>
+          ) : null}
           {region}
         </p>
       </div>
@@ -484,6 +638,7 @@ function TermsDialog({
         "Businesses that sign up with your link or code get the partner discount on their RECAVO plan: 20% off their first six months on a monthly plan, or 10% off their first year on an annual plan.",
         "The code has to be used when they create their business. It can't be added afterwards.",
         "You can't use your own code.",
+        "If you change your code, links and codes you've already shared keep working. Codes with explicit or offensive words aren't allowed.",
         "The partner programme earns you no free months.",
       ]
     : [
@@ -492,6 +647,7 @@ function TermsDialog({
         "Several free months queue up, one per invoice or renewal.",
         "The code has to be used when they create their business. It can't be added afterwards.",
         "You can't use your own code.",
+        "If you change your code, links and codes you've already shared keep working. Codes with explicit or offensive words aren't allowed.",
       ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -532,11 +688,13 @@ function PhoneLinkCard({
   code,
   trialDays,
   onQr,
+  onChangeCode,
 }: {
   link: string;
   code: string;
   trialDays: number;
   onQr: () => void;
+  onChangeCode?: () => void;
 }) {
   const { copy, region } = useCopy();
   const shareLink = async () => {
@@ -585,6 +743,17 @@ function PhoneLinkCard({
           QR code
         </button>
       </p>
+      {onChangeCode ? (
+        <div className="-mt-2 flex justify-center">
+          <button
+            type="button"
+            className="min-h-[44px] cursor-pointer px-2 text-[13px] font-semibold text-muted-foreground underline underline-offset-2"
+            onClick={onChangeCode}
+          >
+            Change code
+          </button>
+        </div>
+      ) : null}
       {region}
     </section>
   );

@@ -6,6 +6,17 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-21",
+    title: "Choose your own referral code",
+    items: [
+      {
+        kind: "new",
+        text: "Swap your referral code for one people will remember, like SHINECARS: tap Change code under your link. Use 4 to 16 letters or numbers. Links and codes you've already shared keep working, and nobody else can ever take them. Codes with explicit or offensive words aren't allowed, however they're spelt.",
+        where: "Referrals",
+      },
+    ],
+  },
+  {
     date: "2026-10-20",
     title: "An Overview that starts with today",
     items: [

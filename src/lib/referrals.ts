@@ -23,6 +23,51 @@ export function referralLinkParts(link: string): { prefix: string; code: string 
   return { prefix: bare.slice(0, cut), code: bare.slice(cut) };
 }
 
+export const CODE_MIN_LENGTH = 4;
+export const CODE_MAX_LENGTH = 16;
+
+/** What the code field sends and previews: spaces and hyphens dropped, upper case. */
+export function compactCode(raw: string): string {
+  return raw.replace(/[-\s]/g, "").toUpperCase();
+}
+
+/**
+ * Shape check while typing, matching the API's. Whether a code is allowed or free is the
+ * API's call (the word screen lives there so it can't be skipped).
+ */
+export function codeShapeProblem(raw: string): string | null {
+  const code = compactCode(raw);
+  if (!code) return null;
+  if (!/^[A-Z0-9]+$/.test(code)) return "Use letters and numbers only.";
+  if (code.length < CODE_MIN_LENGTH) return `Use at least ${CODE_MIN_LENGTH} characters.`;
+  if (code.length > CODE_MAX_LENGTH) return `Use ${CODE_MAX_LENGTH} characters or fewer.`;
+  if (!/[A-Z]/.test(code)) return "Include at least one letter.";
+  return null;
+}
+
+/** Message for a `code` field error from PUT …/referral/code. */
+export function codeErrorMessage(fieldCode: string | undefined): string {
+  switch (fieldCode) {
+    case "INVALID":
+      return `Use ${CODE_MIN_LENGTH} to ${CODE_MAX_LENGTH} letters or numbers, with at least one letter.`;
+    case "NOT_ALLOWED":
+      return "That code isn't allowed. Choose something without explicit or offensive words.";
+    case "RESERVED":
+      return "That code is reserved. Choose something else.";
+    case "TAKEN":
+      return "Another business has that code. Try a different one.";
+    case "LIMIT_REACHED":
+      return "You've used all your code changes. You can still go back to a code you've had before.";
+    default:
+      return "Couldn't change your code. Please try again.";
+  }
+}
+
+export function changesLeftLine(left: number): string {
+  if (left <= 0) return "You can only go back to a code you've had before.";
+  return left === 1 ? "You can choose 1 more new code." : `You can choose ${left} more new codes.`;
+}
+
 export function shareMessage(link: string, trialDays: number): string {
   return `I use RECAVO for my bookings and payments. Try it free for ${trialDays} days with my link: ${link}`;
 }
