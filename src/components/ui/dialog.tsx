@@ -70,7 +70,9 @@ function PhoneSheetChrome({ children }: { children: React.ReactNode }) {
     <div
       ref={ref}
       className="pointer-events-none sticky top-0 z-20 h-0 shrink-0"
+      // Sticky offsets are measured inside the scroller's padding.
       style={{
+        top: -edge.top,
         marginTop: -edge.top,
         marginLeft: -edge.left,
         marginRight: -edge.right,
@@ -136,6 +138,8 @@ const DialogContent = React.forwardRef<
       >
         {phone ? (
           <PhoneSheetChrome>
+            {/* A bar for the form to scroll under, the height of the space above the title. */}
+            <span aria-hidden className="absolute inset-x-0 top-0 h-14 bg-background" />
             <span
               aria-hidden
               className="absolute top-2 left-1/2 h-1.5 w-10 -translate-x-1/2 rounded-full bg-border"
