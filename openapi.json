@@ -878,6 +878,11 @@
             "type": "integer",
             "description": "Money received to date across every channel — card, bank transfer, cash recorded by staff (RECA-523). Outstanding balance = priceMinor - paidMinor."
           },
+          "tipMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Tips recorded by staff on top of the price. Not part of paidMinor, so the balance, invoices and refunds are unaffected."
+          },
           "currency": {
             "type": "string",
             "example": "GBP"
@@ -50731,8 +50736,13 @@
                 "properties": {
                   "amountMinor": {
                     "type": "integer",
-                    "minimum": 1,
-                    "description": "Minor units; omitted = the full outstanding balance."
+                    "minimum": 0,
+                    "description": "Minor units; omitted = the full outstanding balance. 0 = a tip only."
+                  },
+                  "tipMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Minor units on top of the price, added to the booking’s tipMinor."
                   },
                   "method": {
                     "type": "string",

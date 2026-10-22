@@ -25702,8 +25702,10 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @description Minor units; omitted = the full outstanding balance. */
+                        /** @description Minor units; omitted = the full outstanding balance. 0 = a tip only. */
                         amountMinor?: number;
+                        /** @description Minor units on top of the price, added to the booking’s tipMinor. */
+                        tipMinor?: number;
                         /**
                          * @description How the money arrived — recorded on the audit trail.
                          * @enum {string}
@@ -61420,6 +61422,8 @@ export interface components {
             depositMinor?: number | null;
             /** @description Money received to date across every channel — card, bank transfer, cash recorded by staff (RECA-523). Outstanding balance = priceMinor - paidMinor. */
             paidMinor?: number;
+            /** @description Tips recorded by staff on top of the price. Not part of paidMinor, so the balance, invoices and refunds are unaffected. */
+            tipMinor?: number;
             /** @example GBP */
             currency: string;
             /** @enum {string} */

@@ -36,7 +36,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Record what you took",
-        body: "Click **Record payment**. The amount defaults to what's outstanding — change it for a part payment — and pick **how it was paid**: *Cash*, *Bank transfer*, *Card* for your own machine, or *Other*. The booking updates straight away; record the rest later if they're paying in stages.",
+        body: "Click **Record payment**. The amount defaults to what's outstanding — change it for a part payment, or enter more if they've added a tip and the extra is recorded as a tip — and pick **how it was paid**: *Cash*, *Bank transfer*, *Card* for your own machine, or *Other*. The booking updates straight away; record the rest later if they're paying in stages.",
         image: {
           name: "record-payment",
           alt: "The Record a payment dialog with the amount pre-filled and a How was it paid dropdown.",

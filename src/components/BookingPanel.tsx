@@ -1659,7 +1659,11 @@ export function BookingPanel({
                     <div className="rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
                         Paid in full — {formatMoney(settlement.paidMinor, booking.currency)}{" "}
-                        received.
+                        received
+                        {(booking.tipMinor ?? 0) > 0
+                          ? `, plus a ${formatMoney(booking.tipMinor ?? 0, booking.currency)} tip`
+                          : ""}
+                        .
                       </p>
                     </div>
                   ) : bankPending && settlement ? (
@@ -2050,34 +2054,36 @@ export function BookingPanel({
           outstandingMinor={settlement.outstandingMinor}
           depositOwedMinor={recordIntent === "deposit" ? depositOwedMinor : undefined}
           pending={busy === "payment"}
-          onSubmit={async (amountMinor, method) => {
+          onSubmit={async (amountMinor, method, tipMinor) => {
             setBusy("payment");
+            const tipNote = tipMinor > 0 ? ` + ${formatMoney(tipMinor, booking.currency)} tip` : "";
             // The API completes a started job the moment it is paid in full (see
             // recordPayment); mirror that so the panel doesn't flash "Attended" late.
             const settlesStartedJob =
+              amountMinor > 0 &&
               amountMinor >= settlement.outstandingMinor &&
               booking.status === "confirmed" &&
               new Date(booking.start).getTime() <= Date.now();
             try {
               const outcome = await outbox({
-                label: `Recorded ${formatMoney(amountMinor, booking.currency)} from ${customerName}`,
+                label: `Recorded ${formatMoney(amountMinor, booking.currency)}${tipNote} from ${customerName}`,
                 path: `/api/v1/businesses/${businessId}/bookings/${booking.id}/record-payment`,
-                body: { amountMinor, method },
+                body: { amountMinor, method, ...(tipMinor > 0 ? { tipMinor } : {}) },
                 invalidate: bookingKeys(booking.id),
                 booking: {
                   businessId,
                   bookingId: booking.id,
-                  patch: settlesStartedJob
-                    ? {
-                        paidMinor: (booking.paidMinor ?? 0) + amountMinor,
-                        attendanceStatus: "attended",
-                        status: "completed",
-                      }
-                    : { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
+                  patch: {
+                    paidMinor: (booking.paidMinor ?? 0) + amountMinor,
+                    ...(tipMinor > 0 ? { tipMinor: (booking.tipMinor ?? 0) + tipMinor } : {}),
+                    ...(settlesStartedJob
+                      ? { attendanceStatus: "attended" as const, status: "completed" as const }
+                      : {}),
+                  },
                 },
               });
               if (outcome.queued) {
-                toastQueued(`Recorded ${formatMoney(amountMinor, booking.currency)}`);
+                toastQueued(`Recorded ${formatMoney(amountMinor, booking.currency)}${tipNote}`);
                 setRecordOpen(false);
                 return;
               }
@@ -2090,13 +2096,13 @@ export function BookingPanel({
                 }
               }
               toast.success(
-                settlesStartedJob
+                (settlesStartedJob
                   ? "Paid in full — job marked done"
                   : amountMinor >= settlement.outstandingMinor
                     ? "Payment recorded — paid in full"
                     : recordIntent === "deposit" && amountMinor >= depositOwedMinor
                       ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
-                      : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+                      : `Recorded ${formatMoney(amountMinor, booking.currency)}`) + tipNote,
               );
               setRecordOpen(false);
             } catch (err) {
@@ -2409,7 +2415,8 @@ const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
 
 /**
  * Staff log money received outside the platform — the balance after a deposit,
- * or a partial payment. Defaults to settling the full outstanding amount.
+ * or a partial payment. Defaults to settling the full outstanding amount; anything
+ * entered over it is recorded as a tip, kept apart from the balance.
  */
 function RecordPaymentDialog({
   open,
@@ -2429,7 +2436,7 @@ function RecordPaymentDialog({
   /** Set when opened via "Deposit taken": presets the amount and rewords the copy. */
   depositOwedMinor?: number;
   pending: boolean;
-  onSubmit: (amountMinor: number, method: RecordPaymentMethod) => Promise<void>;
+  onSubmit: (amountMinor: number, method: RecordPaymentMethod, tipMinor: number) => Promise<void>;
 }) {
   const forDeposit = depositOwedMinor != null && depositOwedMinor > 0;
   const presetMinor = forDeposit ? depositOwedMinor : outstandingMinor;
@@ -2457,13 +2464,17 @@ function RecordPaymentDialog({
       setError("Enter an amount above zero");
       return;
     }
-    if (minor > outstandingMinor) {
-      setError(`That's more than the ${formatMoney(outstandingMinor, currency)} outstanding`);
-      return;
-    }
     setError(null);
-    await onSubmit(minor, method);
+    const paidMinor = Math.min(minor, outstandingMinor);
+    await onSubmit(paidMinor, method, minor - paidMinor);
   };
+
+  let tipMinor = 0;
+  try {
+    tipMinor = Math.max(0, parseMoneyToMinor(amount) - outstandingMinor);
+  } catch {
+    tipMinor = 0;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2487,6 +2498,15 @@ function RecordPaymentDialog({
               aria-invalid={Boolean(error)}
             />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {tipMinor > 0 && !error ? (
+              <p className="text-xs text-muted-foreground">
+                {formatMoney(outstandingMinor, currency)} settles the booking and the extra{" "}
+                <span className="font-medium text-foreground">
+                  {formatMoney(tipMinor, currency)}
+                </span>{" "}
+                is recorded as a tip.
+              </p>
+            ) : null}
             {parseFloat(amount) * 100 < outstandingMinor && !error ? (
               <button
                 type="button"
