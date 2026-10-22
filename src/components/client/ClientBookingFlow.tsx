@@ -585,6 +585,9 @@ export function ClientBookingFlow({
 
   /* ---------- actions ---------- */
 
+  // Desktop asks where once, the first time a session is picked; Change on the card asks again.
+  const askWhere = multiLocation && !locationId;
+
   const pickService = (id: string) => {
     setSelectedPackageId(null);
     setOfferPick(null);
@@ -593,13 +596,13 @@ export function ClientBookingFlow({
       setPromoFromOffer(false);
       setDetails((d) => ({ ...d, promoCode: "" }));
     }
-    if (id === serviceId && desktop) return;
+    if (id === serviceId && desktop && !askWhere) return;
     setServiceId(id);
     setStaffId(null);
     setExtraIds([]);
     setSelectedSlot(null);
     setDate(today);
-    if (desktop && !(multiLocation && !locationId)) return;
+    if (desktop && !askWhere) return;
     setStep(multiLocation ? "location" : "time");
     window.scrollTo({ top: 0 });
   };
@@ -610,13 +613,13 @@ export function ClientBookingFlow({
     setOfferPick({ code, kind: "service", id });
     setDetails((d) => ({ ...d, promoCode: code }));
     setPromoFromOffer(true);
-    if (id === serviceId && desktop) return;
+    if (id === serviceId && desktop && !askWhere) return;
     setServiceId(id);
     setStaffId(null);
     setExtraIds([]);
     setSelectedSlot(null);
     setDate(today);
-    if (desktop && !(multiLocation && !locationId)) {
+    if (desktop && !askWhere) {
       document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
