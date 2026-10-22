@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { isStaleBundleError, reloadForNewVersion } from "@/lib/stale-bundle";
+import { clearPersistedQueries } from "@/lib/offline/persist";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
@@ -61,12 +62,24 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       return;
     }
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    // Data the device saved under an older version can be a shape this one can't
+    // read, and the phone app restores it on every launch. Start once from fresh
+    // data before showing the error; the reload cooldown stops a loop.
+    let cancelled = false;
+    void clearPersistedQueries().then(() => {
+      if (!cancelled && reloadForNewVersion()) setReloading(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [error, stale]);
 
   if (reloading) {
     return (
       <div className="screen-center bg-background px-safe-4">
-        <p className="text-sm text-muted-foreground">Updating to the latest version…</p>
+        <p className="text-sm text-muted-foreground">
+          {stale ? "Updating to the latest version…" : "Reloading…"}
+        </p>
       </div>
     );
   }
@@ -80,6 +93,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {error?.message ? (
+          <p className="mt-3 text-xs break-words text-muted-foreground/70">
+            Details: {error.message}
+          </p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

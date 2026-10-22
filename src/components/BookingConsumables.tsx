@@ -426,14 +426,15 @@ function JobUsageSheet({
   // Prompts: a booked service whose usual materials aren't on the job, or seeded
   // lines whose service has since been removed.
   const onJob = new Set(rows.map((r) => r.consumableId));
-  const missing = usage.missingDefaults.filter(
+  const missing = (usage.missingDefaults ?? []).filter(
     (m) =>
       !handled.has(m.serviceId) &&
       !isDismissed(booking.id, m.serviceId) &&
       m.items.some((i) => !onJob.has(i.consumableId)),
   );
-  const orphaned = usage.orphanedConsumableIds.filter((id) => onJob.has(id));
-  const orphanKey = `removed:${[...usage.orphanedConsumableIds].sort().join(",")}`;
+  const orphanIds = usage.orphanedConsumableIds ?? [];
+  const orphaned = orphanIds.filter((id) => onJob.has(id));
+  const orphanKey = `removed:${[...orphanIds].sort().join(",")}`;
   const showOrphans =
     orphaned.length > 0 && !handled.has(orphanKey) && !isDismissed(booking.id, orphanKey);
   const markHandled = (key: string) => setHandled((s) => new Set([...s, key]));
