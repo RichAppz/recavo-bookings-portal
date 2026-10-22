@@ -473,7 +473,7 @@ function ConsumablesPage() {
     );
   } else if (phone) {
     body = (
-      <ul className="grid gap-2 p-2.5">
+      <ul className="grid gap-2">
         {rows.map((c) => (
           <li key={c.id}>
             <button
@@ -587,8 +587,15 @@ function ConsumablesPage() {
     );
   }
 
+  // Phone rows are cards themselves, so they sit straight on the page.
+  const phoneRows = phone && !loading && !list.isError && rows.length > 0;
   const listCard = (
-    <div className={cn("overflow-hidden rounded-2xl", phone ? "bg-secondary/30" : "surface-card")}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl",
+        !phone ? "surface-card" : !phoneRows && "bg-secondary/30",
+      )}
+    >
       {body}
       {!phone && !loading && !list.isError ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-[13px] text-muted-foreground">
