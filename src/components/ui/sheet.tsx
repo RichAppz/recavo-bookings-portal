@@ -90,7 +90,7 @@ const SheetContent = React.forwardRef<
       >
         <SheetPrimitive.Close
           className={cn(
-            "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
+            "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
             touchesTop && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
           )}
         >

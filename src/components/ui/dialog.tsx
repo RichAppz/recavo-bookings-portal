@@ -64,7 +64,7 @@ const DialogContent = React.forwardRef<
           glyph; the bare 16px icon it replaces was the only thing you could hit.
           On phones the glyph sits in a grey disc, the way iOS draws a sheet's
           close control, and the header drops below it (see DialogHeader). */}
-      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground">
+      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground">
         <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
           <X className="size-4.5 sm:size-4" />
         </span>
