@@ -766,6 +766,10 @@ function StoreBillingPage() {
   const managedHere = subscriptionManagedHere(current, "store");
   // Billed somewhere this app cannot manage: Stripe, or the other platform's store.
   const billedElsewhere = Boolean(current) && !blocked && !managedHere;
+  // A Stripe renewal that failed is still a live subscription: the API ignores a
+  // store plan bought on top of it, so selling one here would take the money and
+  // leave the workspace locked.
+  const owedElsewhere = isPaymentFailed(current) && !managedHere;
   const store = currentStoreCopy();
 
   // One card per tier for the chosen period. A tier the store only sells at the
@@ -813,7 +817,31 @@ function StoreBillingPage() {
   return (
     <div className="space-y-6">
       {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
-      {blocked ? (
+      {owedElsewhere && blocked ? (
+        <section
+          data-testid="payment-failed-elsewhere"
+          className="rounded-3xl border-2 border-amber-300 bg-amber-50/60 p-6 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/30"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold tracking-tight">
+                Your payment didn’t go through
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The last payment for your {plan?.name ?? "Recavo"} plan didn’t go through, so the
+                workspace is read-only for now. Nothing has been removed, and everything comes back
+                the moment it’s paid.
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This plan isn’t billed through the {store.name}, so it can’t be paid for in this
+                app.
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+      {blocked && !owedElsewhere ? (
         <div className="max-w-2xl">
           <p className="text-sm text-muted-foreground">
             {subscriptionAccessState(current) === "ended"
@@ -893,7 +921,7 @@ function StoreBillingPage() {
 
       {!blocked && current ? <SmsCreditsCard /> : null}
 
-      {managedHere || blocked ? (
+      {(managedHere || blocked) && !owedElsewhere ? (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold">{blocked ? "Choose a plan" : "Change plan"}</h2>
