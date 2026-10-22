@@ -38,7 +38,7 @@ export function useSoleLocation(): Location | null {
   const locations = useLocationsList();
   return useMemo(() => {
     if (!locations.isSuccess) return null;
-    const list = locations.data ?? [];
+    const list = (locations.data ?? []).filter((l) => l.active);
     return list.length === 1 ? list[0]! : null;
   }, [locations.isSuccess, locations.data]);
 }

@@ -11,6 +11,8 @@
  */
 
 @theme inline {
+  /* The client booking page goes two-column here (spec: columns wrap below ~900px). */
+  --breakpoint-desk: 900px;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
@@ -55,6 +57,21 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* Calendar payment tints (calendar spec §1.2): soft fill + readable text per state. */
+  --color-cal-paid: var(--cal-paid);
+  --color-cal-paid-bg: var(--cal-paid-bg);
+  --color-cal-paid-fg: var(--cal-paid-fg);
+  --color-cal-deposit: var(--cal-deposit);
+  --color-cal-deposit-bg: var(--cal-deposit-bg);
+  --color-cal-deposit-fg: var(--cal-deposit-fg);
+  --color-cal-unpaid: var(--cal-unpaid);
+  --color-cal-unpaid-bg: var(--cal-unpaid-bg);
+  --color-cal-unpaid-fg: var(--cal-unpaid-fg);
+  --color-cal-event: var(--cal-event);
+  --color-cal-event-bg: var(--cal-event-bg);
+  --color-cal-event-fg: var(--cal-event-fg);
+  --color-cal-today: var(--cal-today);
+  --color-cal-held: var(--cal-held);
   /* Headers on pages that have no sidebar (public booking, client portal). */
   --color-nav: var(--nav);
   --color-nav-foreground: var(--nav-foreground);
@@ -67,6 +84,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Dashboard "soft" look (dashboard-refresh spec): the floating content panel
+     and the brand colours that stay the same in both modes. */
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --color-mint: #2ee6a6;
+  --color-navy: #10172a;
+  --color-amber: #e99239;
+  --color-star: #e0a100;
+  --shadow-panel: var(--panel-shadow);
+  --shadow-active-row: 0 1px 2px rgba(20, 20, 20, 0.06);
   /* Flat surfaces — no elevation shadows anywhere in the product. */
   --shadow-2xs: 0 0 #0000;
   --shadow-xs: 0 0 #0000;
@@ -116,6 +143,20 @@
   --chart-3: oklch(0.735 0.145 62);
   --chart-4: oklch(0.6 0.09 285);
   --chart-5: oklch(0.66 0.13 145);
+  --cal-paid: #349d62;
+  --cal-paid-bg: #e6f3eb;
+  --cal-paid-fg: #1d5c38;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #fcefdf;
+  --cal-deposit-fg: #7a4a10;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #fdeaea;
+  --cal-unpaid-fg: #8c1d22;
+  --cal-event: #64748b;
+  --cal-event-bg: #eef0f3;
+  --cal-event-fg: #3c4757;
+  --cal-today: #fbfaf7;
+  --cal-held: #fffaf3;
   --nav: oklch(0.238 0.014 258);
   --nav-foreground: oklch(0.96 0.004 250);
   --nav-accent: oklch(0.295 0.016 258);
@@ -127,6 +168,118 @@
   --sidebar-accent-foreground: oklch(0.97 0.004 250);
   --sidebar-border: oklch(0.32 0.014 258);
   --sidebar-ring: oklch(0.68 0.12 178);
+  --panel: var(--card);
+  --panel-border: var(--border);
+  --panel-shadow: 0 0 #0000;
+}
+
+/*
+ * The business dashboard ("dash" on <html> while the console shell is mounted):
+ * warm app background with the menu sitting straight on it, white content panel,
+ * navy primary; dark mode is a true dark rather than the old grey. Client-facing
+ * screens never carry the class, so they keep their own palette.
+ */
+.dash {
+  --radius: 0.625rem;
+  --background: #efece6;
+  --foreground: #191e26;
+  --card: #ffffff;
+  --card-foreground: #191e26;
+  --popover: #ffffff;
+  --popover-foreground: #191e26;
+  --primary: #10172a;
+  --primary-foreground: #ffffff;
+  --primary-soft: #d8f8ea;
+  --secondary: #f7f5f1;
+  --secondary-foreground: #4b525c;
+  --muted: #f7f5f1;
+  --muted-foreground: #6a717b;
+  --accent: #f3f0ea;
+  --accent-foreground: #191e26;
+  --warning: #e99239;
+  --warning-foreground: #5a3407;
+  --warning-soft: #fcefe0;
+  --border: #ece9e3;
+  --input: #e0ddd5;
+  --ring: #2ee6a6;
+  --sidebar: #efece6;
+  --sidebar-foreground: #4b525c;
+  --sidebar-primary: #2ee6a6;
+  --sidebar-primary-foreground: #10172a;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #191e26;
+  --sidebar-border: #e0dcd4;
+  --sidebar-ring: #2ee6a6;
+  --panel: #ffffff;
+  --panel-border: #e4e0d8;
+  --cal-paid: #349d62;
+  --cal-paid-bg: #e6f3eb;
+  --cal-paid-fg: #1d5c38;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #fcefdf;
+  --cal-deposit-fg: #7a4a10;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #fdeaea;
+  --cal-unpaid-fg: #8c1d22;
+  --cal-event: #64748b;
+  --cal-event-bg: #eef0f3;
+  --cal-event-fg: #3c4757;
+  --cal-today: #fbfaf7;
+  --cal-held: #fffaf3;
+  --panel-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+}
+
+.dash.dark {
+  --background: #0f1218;
+  --foreground: #eef0f3;
+  --card: #161a22;
+  --card-foreground: #eef0f3;
+  --popover: #161a22;
+  --popover-foreground: #eef0f3;
+  --primary: #2ee6a6;
+  --primary-foreground: #10172a;
+  --primary-soft: #16382e;
+  --secondary: #1d222b;
+  --secondary-foreground: #a8afba;
+  --muted: #1d222b;
+  --muted-foreground: #9aa1ad;
+  --accent: #1d222b;
+  --accent-foreground: #eef0f3;
+  --warning: #e99239;
+  --warning-foreground: #ffd9ae;
+  --warning-soft: #3a2a14;
+  --success-foreground: oklch(0.9 0.09 155);
+  --success-soft: oklch(0.32 0.06 155);
+  --info-soft: oklch(0.31 0.05 255);
+  --destructive-soft: oklch(0.33 0.07 22);
+  --border: #232833;
+  --input: #2b313c;
+  --ring: #2ee6a6;
+  --sidebar: #0f1218;
+  --sidebar-foreground: #a8afba;
+  --sidebar-primary: #2ee6a6;
+  --sidebar-primary-foreground: #10172a;
+  --sidebar-accent: #1d222b;
+  --sidebar-accent-foreground: #eef0f3;
+  --sidebar-border: #232833;
+  --sidebar-ring: #2ee6a6;
+  --panel: #161a22;
+  --panel-border: #232833;
+  --cal-paid: #349d62;
+  --cal-paid-bg: #1b3127;
+  --cal-paid-fg: #b5e5c8;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #382a1c;
+  --cal-deposit-fg: #f5c896;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #381e21;
+  --cal-unpaid-fg: #f5b3b5;
+  --cal-event: #64748b;
+  --cal-event-bg: #232934;
+  --cal-event-fg: #c4cbd6;
+  --cal-today: rgba(110, 231, 176, 0.04);
+  --cal-held: rgba(233, 146, 57, 0.05);
+  --panel-shadow: 0 0 #0000;
 }
 
 .dark {
@@ -148,11 +301,27 @@
   --warning: oklch(0.86 0.14 75);
   --warning-foreground: oklch(0.94 0.07 85);
   --warning-soft: oklch(0.36 0.08 70);
+  /* Light text on the dark soft green; the light-mode value is near-black and vanished. */
+  --success-foreground: oklch(0.9 0.09 155);
   --success-soft: oklch(0.32 0.06 155);
   --info-soft: oklch(0.31 0.05 255);
   --destructive-soft: oklch(0.33 0.07 22);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
+  --cal-paid: #349d62;
+  --cal-paid-bg: #1b3127;
+  --cal-paid-fg: #b5e5c8;
+  --cal-deposit: #e99239;
+  --cal-deposit-bg: #382a1c;
+  --cal-deposit-fg: #f5c896;
+  --cal-unpaid: #e5484d;
+  --cal-unpaid-bg: #381e21;
+  --cal-unpaid-fg: #f5b3b5;
+  --cal-event: #64748b;
+  --cal-event-bg: #232934;
+  --cal-event-fg: #c4cbd6;
+  --cal-today: rgba(110, 231, 176, 0.04);
+  --cal-held: rgba(233, 146, 57, 0.05);
   --ring: oklch(0.7 0.12 178);
 }
 
@@ -426,6 +595,10 @@
   justify-content: safe center;
   padding-top: calc(env(safe-area-inset-top, 0px) + --spacing(6));
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(6));
+}
+/* Top edge of a tall phone sheet: a peek of the page above, never under the status bar. */
+@utility top-sheet-peek {
+  top: max(60px, calc(env(safe-area-inset-top, 0px) + 16px));
 }
 /* Safe-area room as a spacer pseudo-element rather than padding, for panels
    (e.g. Sheet) whose consumers set their own padding. Works in block and

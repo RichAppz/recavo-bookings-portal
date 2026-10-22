@@ -6,6 +6,472 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-10-21",
+    title: "A waitlist that tells you who fits, and your own referral code",
+    items: [
+      {
+        kind: "improved",
+        text: "The Waitlist page has Waiting, Booked in and Removed tabs with counts, and figures across the top: who's waiting, how many are high priority, how many have a free day that suits this week, and how many you've booked in (and what they brought in) over 90 days. Search by name, phone or email, filter by service or location, and use Fits a day to see only the people who could take a given date and time.",
+        where: "Waitlist",
+      },
+      {
+        kind: "new",
+        text: "When a cancellation frees time that suits someone waiting, a banner says so on the Waitlist page and the calendar, the sidebar shows a dot, and Needs your attention on the Overview says how many could take it. Show them lists exactly who fits. Nothing is booked or sent automatically.",
+        where: "Waitlist",
+      },
+      {
+        kind: "new",
+        text: "Click anyone on the list to open their entry: Call, Text or Email, up to three free times that fit (each with Book this), what they want and when, their notes and a history of every change. Booked entries link to the booking, and the booking shows “From the waitlist”.",
+        where: "Waitlist",
+      },
+      {
+        kind: "improved",
+        text: "Adding someone is a side drawer with From and Until dates, the days that suit, a time of day and High priority. It warns if the client is already waiting for that service, tells you exactly what's missing, and can let the client know they're on the list. Remove has an Undo, and Put back returns a removed entry to the list.",
+        where: "Waitlist",
+      },
+      {
+        kind: "improved",
+        text: "Clients joining from your booking page get a tidier form (mobile or email, days and time of day as buttons) and a clear “You're on the list” with what they asked for. Their account shows each waitlist entry with Leave. You can turn joining from the booking page off in Settings › Booking rules.",
+        where: "Booking page",
+      },
+      {
+        kind: "new",
+        text: "Swap your referral code for one people will remember, like SHINECARS: tap Change code under your link. Use 4 to 16 letters or numbers. Links and codes you've already shared keep working, and nobody else can ever take them. Codes with explicit or offensive words aren't allowed, however they're spelt.",
+        where: "Referrals",
+      },
+      {
+        kind: "improved",
+        text: "Detailers: the Consumables page shows what your materials cost this month, the average per job, your most used item and your costliest service, with a period you can change. Each item shows its cost, the services it's on and how much was used. Click one to see its recent jobs.",
+        where: "Consumables",
+      },
+      {
+        kind: "improved",
+        text: "Jobs keep the cost each material had when it was recorded, so changing a price later no longer rewrites old jobs. A job's total says when an item has no cost, and Used as planned confirms a job's materials in one tap.",
+        where: "Bookings",
+      },
+      {
+        kind: "improved",
+        text: "Editing what a job used is a sheet with + and − buttons, a note on each line, and an offer to add a service's usual materials when you add that service to the job. Services set their consumables with the same buttons, show about what a job costs in materials, and save in one go with the service.",
+        where: "Services",
+      },
+    ],
+  },
+  {
+    date: "2026-10-20",
+    title: "An Overview that starts with today",
+    items: [
+      {
+        kind: "improved",
+        text: "The Overview now answers “what's happening now?” before “how's the month going?”, and uses the whole width of the page. It greets you by name for the time of day, and an Up next card shows your next session, how long until it starts (“In 42 min”, “On now · ends 12:00”, “Tomorrow 08:00”), who it's with and whether it's paid, with Message and Open — or Send payment link when money is due. Trainers see their own next session.",
+        where: "Overview",
+      },
+      {
+        kind: "improved",
+        text: "Today lists every session with one status each — Upcoming, Unpaid, Mark attendance, Attended or No-show — instead of two badges side by side. Finished sessions fade, a red line marks the current time, and Mark attendance is a button: tap it and choose Attended or No-show without opening the booking. Events stay in the list in time order.",
+        where: "Overview",
+      },
+      {
+        kind: "new",
+        text: "Needs your attention counts the things that actually need doing and opens straight to them: payments to collect this week or overdue, sessions to mark, package requests, add-on requests, clients on the waitlist, low text credits and any set-up steps left. When there's nothing, it says you're all caught up. On a phone it's one amber row that opens the full list.",
+        where: "Overview",
+      },
+      {
+        kind: "improved",
+        text: "“How October is going” shows Money taken, Sessions, Attended and Places filled with the change on the same days last month and a small trend, for this Week, Month or Year (Last 7 days, Last 30 days and All time are under More). Money in and Attendance are now simple bars with a labelled row for each payment method or outcome, plus Still to collect, Package credits used and your Busiest day.",
+        where: "Overview",
+      },
+      {
+        kind: "new",
+        text: "Hide amounts (the eye button) swaps every £ on the page for £••• — handy with a client looking over your shoulder — and Customise lets you hide, show and reorder the cards and quick actions. Both are remembered for you on that device; any cards you'd hidden before stay hidden.",
+        where: "Overview",
+      },
+      {
+        kind: "improved",
+        text: "When Remind a client warns that the client already has an open reminder for that service, Show it closes the form and takes you straight to the one they have: on a client's page it scrolls to it under Reminders, and on the Reminders page it finds its row under Who is due.",
+        where: "Reminders",
+      },
+      {
+        kind: "improved",
+        text: "Month view chips give each detail you tick in the ⋯ menu its own line — the time, then the client, the vehicle, and the service (with its category) — so a chip showing a client and a vehicle is two lines rather than one squeezed line that has to slide.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
+        text: "Texts you reword can go out without the link at the end. Under the text, switch off “Add the Book link at the end” (or Pay, Details — whichever link that message carries) and the preview shows exactly what the client gets; handy when your text already says “call 07… to book”. Put {{link}} in your wording to place the link somewhere else instead.",
+        where: "Settings → Client messages",
+      },
+      {
+        kind: "new",
+        text: "Vehicles have a Mileage box, straight after Year, on every vehicle — including the ones you've already added. Update it when the car comes in; the client's page shows it as “Mileage: 45,210 miles”. It isn't used to describe the car on invoices or in pickers, which still read “EO76 ZWZ · Audi · RS5”.",
+        where: "Vehicles",
+      },
+    ],
+  },
+  {
+    date: "2026-10-19",
+    title: "A calendar that uses the whole screen",
+    items: [
+      {
+        kind: "improved",
+        text: "The calendar fills the width of the page. Sessions are soft blocks tinted by payment — green paid, amber deposit, red unpaid — with the amount still owed on a small pill, and the day header and hour column stay put while you scroll. The week shows your opening hours (widened to fit anything booked outside them), today's column is tinted with a red line at the current time, and sessions at the same time sit side by side. The toolbar reads “19 to 25 October · 9 sessions · £486 expected”, the waitlist is an hourglass with an amber count, and Day, Week, Month and the new List view sit in one switcher. Options (···) gain Show cancelled and a choice of what week blocks say; colours and bank holidays now live in Settings → Calendar, one link away from the legend.",
+        where: "Calendar",
+      },
+      {
+        kind: "new",
+        text: "On a phone the calendar has its own header — the month, the value of what's on screen (“£54 today · 3 sessions”), waitlist and options buttons — with Day, Week, Month and List built for touch: a week strip for Day and List, a week card that scrolls both ways with its headers pinned, and a List grouped by day.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
+        text: "Bookings is grouped by day with time and client first (the reference sits under the name) and tabs for Upcoming, Needs action — held, unpaid within a week, or past and not marked — Past and All. The search box finds a client, service or reference; the date range is a button with presets (This week, Next 7 days, This month, Last 30 days, Custom); click anywhere on a row to open it; held rows are tinted amber; and Export downloads the current list as a spreadsheet. 25 to a page.",
+        where: "Bookings",
+      },
+      {
+        kind: "improved",
+        text: "Opening a booking puts the status and reference (tap to copy) at the top, says what's going on in plain words — “Waiting for payment. The slot is held until 20:10” — and keeps Message, Move, Copy link and Cancel together in the ⋯ menu. The Payments tab shows what's due and History flags any message that didn't send. The footer asks “Did they turn up?” with one Attended button; No-show has moved into the ⋯ menu as “Mark as no-show”, since it's the exception rather than the everyday answer (detailers, who don't tick people in, get no footer row at all). Money is mentioned once: when the notice says what's owed, the Deposit paid / Payment due / bank-transfer pill under it is left off. Record payment's choices are simply Cash, Bank transfer, Card and Other. A job that has finished without being marked done or no-show now says so — a “Not marked done” pill on the Bookings list (it's why the row is under Needs action), and for detailers, whose jobs are usually marked done by taking the money, a job paid up front gets “Finished, but not marked done” with a Mark as done link in its panel.",
+        where: "Bookings",
+      },
+      {
+        kind: "improved",
+        text: "Swiping between days, weeks and months on the calendar now moves with your finger and slides across, the way it does on your phone's own calendar, instead of switching in place. A quick flick turns the page too; let go early and it eases back. The next and previous pages are loaded ahead and come into view beside the one you're on as you drag, with a small gap between them, so nothing blank or half-loaded ever shows.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
+        text: "Month view: untick Show the time in the ⋯ menu and every chip becomes a single line — just the client, service or whatever you've chosen to show — so a busy day fits more before it scrolls. A job that runs over several days is now drawn as one bar stretching across those days — square where it carries on into the next week — instead of a chip in each cell with arrows between them. The little arrow that scrolls a full day on now sits beside the date instead of over the last chip.",
+        where: "Calendar",
+      },
+      {
+        kind: "improved",
+        text: "A booking marked as attended can still be edited to correct the record — what was actually done, the price, who did it, a note or the date — and stays attended. It can't be moved or cancelled, and the client only hears about the change if you choose to tell them.",
+        where: "Bookings",
+      },
+      {
+        kind: "fixed",
+        text: "On a phone, opening a dropdown part-way down a page — like a client's Preferred channel — no longer throws you back to the top of the page with the list out of sight. The list opens where you tapped and your choice sticks.",
+        where: "Clients",
+      },
+      {
+        kind: "improved",
+        text: "When a payment link or reminder can't be delivered you're told why in plain words, not the email service's error. For example: “Emails to Jordan Lee are blocked because an earlier one bounced or was marked as spam. Check their email address, or add a mobile number so it can go by text.” An Open client button takes you to their details to fix it.",
+        where: "Overview",
+      },
+      {
+        kind: "fixed",
+        text: "Booking with a session credit works again on your booking page. Choosing “Use a session credit” left Confirm booking greyed out, because it waited for a policy box that isn't shown when you pay with a credit (the cancellation terms are spelled out instead), so clients could only finish by paying.",
+        where: "Booking page",
+      },
+      {
+        kind: "improved",
+        text: "Your account no longer puts a “1 credit” tag on bookings paid with a credit. Nothing is owed on them, and the Credits card beside Next up already shows how many you have left.",
+        where: "Your account",
+      },
+      {
+        kind: "fixed",
+        text: "Credits left on a package after its expiry date no longer count. A client's page shows only the credits they can still book with, an expired package reads “Expired” with its leftover credits marked as unusable, and you can't add credits to it by mistake. New bookings no longer offer “Use package credit” when the only credits left have expired, and clients booking online aren't offered an expired credit that would then be refused.",
+        where: "Clients",
+      },
+      {
+        kind: "fixed",
+        text: "Opening book.recavo.app while you're signed in there with an account that also runs a business now keeps you on book.recavo.app and opens your client account. Before, it could open the business console there, and if the plan needed attention it carried you over to bookings.recavo.app's billing page.",
+        where: "book.recavo.app",
+      },
+      {
+        kind: "fixed",
+        text: "Removing a reminder now stops the reminders it had already scheduled. Before, customers it had already been set for would still have been reminded. The confirm step tells you who first — “This also stops 2 reminders already scheduled (Dermetree, David Dbx)” — and if any can't be stopped you're told which, with Try again.",
+        where: "Reminders",
+      },
+      {
+        kind: "fixed",
+        text: "Reminders left behind by one you removed earlier are marked “Reminder removed” under Who is due, and a note above the list lets you stop them all with one button.",
+        where: "Reminders",
+      },
+      {
+        kind: "improved",
+        text: "Reminders you set for one client with Remind a client are now listed in the Your reminders card too, under Set for one client — who it's for, how often (“Full valet every 2 months”) and when it's due. Tap one to jump to its row. When nothing is showing, the page explains that a reminder closes by itself once that client is booked in again, and where to find it: Closed, marked Booked again.",
+        where: "Reminders",
+      },
+    ],
+  },
+  {
+    date: "2026-10-18",
+    title: "A way back in when a payment fails",
+    items: [
+      {
+        kind: "improved",
+        text: "Settings has a new shape. Instead of a row of eleven tabs there is an index down the left — Your account, Business, How it works, Clients, Money, Records — with a search box, and each setting has its own page and address (so a link to Settings → Get paid opens exactly that). An amber dot on the index marks anything that needs you: no way to get paid yet, a failed payment, texts running low. Every switch saves the moment you flip it and shows a small Saved tick; anything you type gathers into one Save bar at the bottom of the page, and leaving with changes unsaved asks first. Old Settings links and bookmarks still work — they land on the right page. Nothing has been taken away: every setting from before is here under a clearer name (Configuration is now Booking rules, Branding, Calendar and Tax and address; Notifications is Client messages; Payments is Get paid; Billing is RECAVO plan; Audit is Activity log).",
+        where: "Settings",
+      },
+      {
+        kind: "improved",
+        text: "Client messages shows reminders as one line (“1 day before by client's choice · 2 hours before by text”) with Edit timing beside it, and every message template in a grouped list — Sessions, Payments, Packages, Extras and invoices — with a green dot on the ones you have reworded. Pick one to edit its email and text wording side by side with a live preview (the text as a phone bubble, the email as a mini email), and add details like the client's first name or the time with a tap rather than typing double braces.",
+        where: "Settings → Client messages",
+      },
+      {
+        kind: "improved",
+        text: "Activity log can be searched and filtered by person, type and date, and hides automatic system jobs unless you switch them on. Entries are grouped by day with who did what and when.",
+        where: "Settings → Activity log",
+      },
+      {
+        kind: "improved",
+        text: "Team shows each person's role with a one-line description of what it allows and a status pill (Active, Invited, Access removed), with a menu on each row to change their role or remove and restore access. Anything on a bigger plan or an add-on is shown with a lock and the price rather than hidden, and pages you can view but not change say so in one line at the top with who to ask.",
+        where: "Settings → Team",
+      },
+      {
+        kind: "fixed",
+        text: "If your monthly payment doesn't go through, the Plan page now says so and gets you back in. It shows what is owed and why the card was declined, with Pay now to charge the card Stripe has on file (update it first with Update card in Stripe, if you need to), or Pay with a different card to settle it on Stripe's own page. The moment it goes through your workspace reopens — nothing is removed while it is read-only. Before, this screen offered another free trial, which couldn't be started and left you stuck.",
+        where: "Plan",
+      },
+      {
+        kind: "improved",
+        text: "The plan buttons say Subscribe rather than Start free trial once you have already had your trial.",
+        where: "Plan",
+      },
+      {
+        kind: "new",
+        text: "A failed payment now gives you 48 hours of full access before the workspace goes read-only, and we email you at both points: when the card is declined (with the exact time your access would pause and a Pay now link) and again if it does pause. The 48 hours start from the moment we first see the payment has failed, even if Stripe's own notification to us is late, so nobody is locked out without warning. The Plan page and the red banner show the time as well as the date.",
+        where: "Plan",
+      },
+      {
+        kind: "new",
+        text: "A fresh look for the console. The page now sits on a soft, rounded panel with the menu beside it on a warm background, and the menu is grouped by job: Overview on top, then Schedule, Clients, What you offer and Money. Each group folds away with a tap on its heading, and the button next to the logo collapses the whole menu to a strip of icons (hover one for its name). On a phone the menu is the same drawer as before.",
+        where: "Menu",
+      },
+      {
+        kind: "new",
+        text: "Favourites. Press Edit at the top of the menu and star anything you use a lot — it moves up into Favourites, in the order you choose (drag the handle, or use the arrow keys). Your favourites, folded groups and collapsed menu are saved to your account, so they follow you to any device.",
+        where: "Menu → Favourites",
+      },
+      {
+        kind: "improved",
+        text: "The bottom of the menu is now your business card (switch business, your account, sign out) and a More button holding Settings, Finish setting up, Text credits, Plan & billing, What's new, Guides and Contact support. A number on a row says what is up: amber when something needs you (texts running low, a failed payment, a trial about to end), green when there is something new. The help button has gone from the top bar; Guides and support live under More.",
+        where: "Menu → More",
+      },
+      {
+        kind: "new",
+        text: "A failed subscription payment now shows under More as Plan & billing with an amber Payment failed badge (Pay now once the workspace is read-only), and a tap takes you to the Plan page to settle it.",
+        where: "Menu → More",
+      },
+    ],
+  },
+  {
+    date: "2026-10-17",
+    title: "Reminders in the menu, set up in one tap",
+    items: [
+      {
+        kind: "new",
+        text: "Follow-ups is now Reminders, and it is where you set them up as well as see who is due. Press Add reminder, pick the service, how often it is due again — every 2 months, every 2 years, or your own number of months — how many days ahead to remind, and what to call it. Every reminder you have is listed at the top of the page; tap one to change or remove it. The same reminders still show on each service under Services, and on a phone the Reminders page is the quick way in.",
+        where: "Reminders → Add reminder",
+      },
+      {
+        kind: "new",
+        text: "Remind one client, without waiting for a finished job. On Reminders, press Remind a client: pick who, which service, when it was last done (today if you leave it blank), how long until it is due again and how far ahead to remind, and you see the due date and reminder day before you save. Handy for work done before you used RECAVO, or a client you simply want to chase in two months. It then behaves like any other reminder — they and you are told, it shows under Who is due marked “set by you”, and booking the service again closes it. A client's page has the same button under Reminders.",
+        where: "Reminders → Remind a client",
+      },
+      {
+        kind: "improved",
+        text: "A client's account overview no longer opens with a big “Package request sent” box. The Credits card now tells the whole story in one place: sessions left with “+10 on the way” underneath while a package waits on you; a quiet “0 — your 10 session block is on its way” with Book and pay for a session when they have nothing usable yet; and, if they have no credits at all, a short invitation to see your packages — shown only when you actually sell some.",
+        where: "Client account → Overview",
+      },
+      {
+        kind: "improved",
+        text: "Service cards on a one-person business no longer carry an “Offered: whenever you're available” line — it said nothing you didn't know. The line still appears when a service is limited to certain days or times.",
+        where: "Services",
+      },
+      {
+        kind: "improved",
+        text: "Offer links now open in the new booking page design, the same as everything else your clients see. A private link (one that doesn't show your full catalogue) opens on a page that leads with the offer — its sessions and packages at the offer's price, with your about, team, reviews and location underneath — and nothing from the catalogue. Buying a package, from an offer or from your Packages list, is now three short steps in the same style: details, review and pay (or a request you confirm, if you don't take cards online), and a done screen with the way into their account.",
+        where: "Offer links → the link you share",
+      },
+      {
+        kind: "improved",
+        text: "On a desktop, the Offers section on your booking page now works like Sessions: each offer session or package has a round selector rather than a link, and choosing one fills the calendar and price on the right — pick a session from the catalogue and the offer unselects. Nothing changes on a phone, where a tap still opens the offer.",
+        where: "book.recavo.app/your-link?offer=…",
+      },
+      {
+        kind: "improved",
+        text: 'In a booking\'s History tab, the "Invoice · Email" row now opens the invoice it sent — tap anywhere on the row to see it, download the PDF or send it again. Nothing extra is stored to make this work: the invoice is already kept and its PDF is produced on demand.',
+        where: "Booking → History",
+      },
+      {
+        kind: "fixed",
+        text: "Discounted prices on the booking page now always show both pence digits — 10% off £45 reads £40.50, not £40.5.",
+        where: "Booking page",
+      },
+    ],
+  },
+  {
+    date: "2026-10-16",
+    title: "A new booking page for your clients, and you decide how it looks",
+    items: [
+      {
+        kind: "new",
+        text: "Your public booking page has been rebuilt from the ground up. Clients land on your name, photo and sessions, see the next free time straight away, pick a day and time (Morning, Afternoon, Evening) and a trainer if you have more than one, and book in three short steps. On a phone the whole thing fits in one hand; on a desktop the calendar and times sit beside your page. Share the same link as before — nothing to change.",
+        where: "book.recavo.app/your-link",
+      },
+      {
+        kind: "new",
+        text: "Booking page is a new area where you choose how that page looks and reads. Pick a theme (Studio, Night or Editorial) and an accent colour, upload a header photo or pick a gradient, write a short intro, and turn sections on or off: about, team, reviews, location. A phone and desktop preview updates as you type, and nothing goes live until you press Publish changes — Discard throws a draft away.",
+        where: "Business → Booking page → Design, Content, Sections",
+      },
+      {
+        kind: "new",
+        text: "Clients now see their offers on your booking page. Anyone who arrives by an offer link, or signs in and has been given one, gets an Offers section with each offer's sessions and packages at the offer's price, ready to book. It sits just above Sessions to start with; move it wherever you like, or turn it off, under Sections. Nobody else sees it.",
+        where: "Booking page → Sections",
+      },
+      {
+        kind: "new",
+        text: "Offer links can now open extra times. When you create a link with sessions in it, add times you don't normally offer for each one — every Sunday 10:00 to 14:00, say, or one particular Saturday evening — and only clients who book through that link will see them. Anything already in your diary stays unavailable, and you can change the extra times on a link you have already sent.",
+        where: "Offer links → New offer link → Extra times",
+      },
+      {
+        kind: "new",
+        text: "Shorten your booking link to something you can say out loud. Old links keep working: anyone using the previous address is taken to the new one.",
+        where: "Business → Booking page → Link and sharing",
+      },
+      {
+        kind: "new",
+        text: "Connect your Google listing to show your star rating and latest reviews on the booking page. It searches by your business name, you pick the right listing, and the reviews refresh themselves about once a day.",
+        where: "Business → Booking page → Content → Google reviews",
+      },
+      {
+        kind: "improved",
+        text: "Invoices from a business that hasn't uploaded a logo now carry the RECAVO mark in the header rather than the business name set large. Your own name, address and contact details are still printed in full under From, and as soon as you upload a logo it takes the mark's place on every invoice, including ones you had already started.",
+        where: "Invoices → Preview / PDF",
+      },
+      {
+        kind: "improved",
+        text: "Automotive businesses no longer see an Occupancy rate card. It measured seats booked against capacity, which only means something for classes — a job is always one car in one slot, so the figure could only ever read 0% or 100%. The Overview and Reports now show Average job value in its place, and Reports drops the seats-vs-capacity chart and talks about jobs, completion rate and job outcomes.",
+        where: "Overview and Reports (automotive)",
+      },
+      {
+        kind: "new",
+        text: "Invoice lines can carry detail under the heading. Press Enter in a line's description to add up to five more lines — “Paint correction”, then “Bonnet and both front wings” and “Two-stage machine polish” beneath it. The heading prints as before and the detail sits under it in smaller grey type, on the PDF and on the invoice page.",
+        where: "Invoices → draft → Lines → Description",
+      },
+      {
+        kind: "improved",
+        text: 'Review and pay shows only the ways to pay you have switched on, as a short list to pick from — pay now by card, pay on the day, bank transfer, or a session credit when the client has one. The tick box spells out your cancellation deadline as a real date and time ("Free to cancel until Sun 18 Oct, 15:00") rather than "24 hours before".',
+        where: "Booking page → Review and pay",
+      },
+      {
+        kind: "improved",
+        text: "The confirmation gives clients everything for the day: add to calendar, directions, what's still to pay and how, and one suggested extra. Managing the booking is one tap into their account.",
+        where: "Booking page → You're booked",
+      },
+      {
+        kind: "improved",
+        text: "Clients' accounts have a new overview: the next session up front with Pay, Add to calendar, Directions, Move and Cancel; session credits with how many are left and when they run out; everything coming up; and anything they're on the waitlist for. Cancelling or moving tells them exactly what happens to their money before they confirm.",
+        where: "Client account → Overview",
+      },
+      {
+        kind: "improved",
+        text: "Client sign-in is simpler: one email, one code, no password. Someone arriving from your page gets a Back to {your business} link, and on a phone an Open email app button. The business login lives on its own page so clients and staff don't end up in each other's doors.",
+        where: "book.recavo.app → Sign in",
+      },
+      {
+        kind: "improved",
+        text: "When a time is taken while someone is choosing it, when their ten-minute hold runs out, or when a day is fully booked, the page says so plainly and offers the nearest times or the waitlist. Times that pass while the page is open simply drop off the list.",
+        where: "Booking page → Date and time",
+      },
+      {
+        kind: "improved",
+        text: "Take payment online is clearer about what happens before you connect Stripe or add bank details: your page keeps taking bookings as pay on the day rather than turning clients away.",
+        where: "Payments → Take payment online",
+      },
+      {
+        kind: "fixed",
+        text: "Pay by bank transfer is back where you look for it. The bank details form — account name, sort code, account number and the on/off switch — now sits on the Payments page under your payout account, as well as in Settings → Payments where it was easy to miss at the end of the tab row. Nothing about bank transfer itself changed: clients still choose Bank transfer at Review and pay when it is on, see your details and their reference on the confirmation, and the booking waits as awaiting payment until you mark the money received.",
+        where: "Payments → Pay by bank transfer",
+      },
+      {
+        kind: "improved",
+        text: "You can clear notifications from the bell: an × on each one, or Clear all at the bottom. Cleared ones stay cleared on every device you sign in on.",
+        where: "Top bar → Bell",
+      },
+      {
+        kind: "improved",
+        text: "On a desktop or tablet you can tuck the side menu away to give the calendar the full width. Press the hide button at the top of the menu; it slides off and a small handle sits in the bottom-left corner to bring it back. RECAVO remembers your choice on that device.",
+        where: "Side menu → Hide menu",
+      },
+      {
+        kind: "fixed",
+        text: "On an iPhone, tapping the price box when adding a booking with more than one service zoomed the whole page in and it would not zoom back out. The box (and a couple of other small fields) now use the size Safari leaves alone.",
+        where: "Add session → services → price",
+      },
+      {
+        kind: "fixed",
+        text: "The × on a pop-up message did nothing while a form was open — worse, on some phones the tap went through and closed the form behind it. Messages can now be closed with the × or swiped away (up or to the right) at any time, and the form stays put.",
+        where: "Pop-up messages",
+      },
+      {
+        kind: "improved",
+        text: "Invoice previews can be enlarged. Tap the page (or Enlarge) to open it full screen, zoom in to 300% with the text staying sharp, and on a computer open the PDF in a new tab in the browser's own viewer.",
+        where: "Invoices → open an invoice → Preview",
+      },
+      {
+        kind: "fixed",
+        text: "Typing into the middle of the Vehicle field on an invoice sent the cursor to the far right after the first character. It now stays where you put it.",
+        where: "Invoices → draft → Vehicle",
+      },
+      {
+        kind: "fixed",
+        text: "The client's saved vehicles offered under the Vehicle field now carry the registration, make and model (“EO76 ZWZ · Audi · RS5”) rather than just the short display name, so what you tap is exactly what the invoice prints. The vehicle filled in from a booking already worked this way; if a draft was made before the registration was added to the car, retype it or pick the chip.",
+        where: "Invoices → draft → Vehicle",
+      },
+      {
+        kind: "fixed",
+        text: "Preview and Download on a draft invoice now include what you have just typed. They save your edits first (the buttons read “Save & preview” / “Save & download PDF” while there is something unsaved), so the PDF always matches the form. Issuing does the same, so an edit you forgot to save is never left off the final invoice. If a line can't be saved, you're told and taken to it.",
+        where: "Invoices → draft → Preview / Download PDF / Issue",
+      },
+      {
+        kind: "fixed",
+        text: "Upload your logo and it now appears on invoices you had already started, not just new ones. A draft takes its business details from your current settings when you preview or download it, and an invoice issued before you had a logo prints the one you have now. Logo uploads themselves also work again.",
+        where: "Settings → Configuration → Logo, then Invoices → Preview",
+      },
+      {
+        kind: "new",
+        text: "A booking with notes on it now says so at the top of its drawer — “Note from the client”, “Internal note” or “Notes on this booking” — next to the status pills; tap it to jump straight to them. What the client typed when booking is shown in its own box on Details, where before only your internal notes were.",
+        where: "Calendar → open a booking",
+      },
+      {
+        kind: "new",
+        text: "A service can now carry more than one follow-up reminder. Set a maintenance valet after a year and a ceramic top-up after two on the same coating, each with its own notice period and name; every finished job schedules all of them, and when the client books the service again the old reminders close and the clocks start over. Up to five per service, and the card lists them soonest first.",
+        where: "Services → edit a service → Follow-up reminders → Add another reminder",
+      },
+      {
+        kind: "improved",
+        text: "Recording the last of the money on a job that has already started marks it done in the same step, so it shows up under Job outcomes and the invoice is raised without a second visit to the booking.",
+        where: "Bookings → Record payment",
+      },
+      {
+        kind: "improved",
+        text: "When the money already received on an invoice is the booking's deposit, the totals now say “Deposit taken” rather than “Paid”, on the PDF and on the invoice page. Once more than the deposit has come in, or the invoice is settled, it reads “Paid” as before.",
+        where: "Invoices → PDF",
+      },
+      {
+        kind: "improved",
+        text: "Every page you click into — an invoice, a client, a support request, a guide — has a Back that returns you to exactly where you were, including in the desktop and phone apps where there is no browser button.",
+        where: "Everywhere",
+      },
+      {
+        kind: "fixed",
+        text: "A client giving up an unpaid booking inside your notice window got an error instead of a cancellation. It now cancels cleanly, and only confirmed bookings count as late cancellations.",
+        where: "Client account → Cancel",
+      },
+      {
+        kind: "fixed",
+        text: "A client who bought a package by bank transfer, or one you sold them in person, saw an empty Purchases page because only card payments were listed. Every package they have bought now appears there with its name, credits and date; card purchases keep their receipt.",
+        where: "Client account → Purchases",
+      },
+      {
+        kind: "fixed",
+        text: "A booking you had marked paid by bank transfer or cash said “Paid in full” and then “No payments yet” underneath, because only card payments were listed. Money you record by hand now appears there with how it arrived (cash, bank transfer, your card machine) and when, alongside any card payments.",
+        where: "Booking → Payments",
+      },
+    ],
+  },
+  {
     date: "2026-10-14",
     title: "Several vehicles on one invoice, previews that work on a phone, reminders a year out",
     items: [

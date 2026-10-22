@@ -35,12 +35,14 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   downloadExportFile,
   useDashboard,
+  useReportsByLocation,
   useRequestExport,
   type ExportType,
 } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api/errors";
 import type { ExportRequest } from "@/lib/api/types";
 import { formatMoney, pct } from "@/lib/format";
+import { averageJobValueMinor, fourthStatFor } from "@/lib/dashboard-stats";
 import { monthStartIn, previousReportRange, reportRange, todayIn } from "@/lib/report-range";
 import { toast } from "sonner";
 
@@ -97,9 +99,14 @@ function ReportsPage() {
   // Reports are in the business's calendar, not the browser's: September for a London
   // business is September in London wherever the owner is reading this from.
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  // A detailer completes jobs one car at a time: seat occupancy means nothing to them,
+  // so the fourth figure and the occupancy chart give way to the average job value.
+  const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [fromDate, setFromDate] = useState(() => monthStartIn(timezone));
   const [toDate, setToDate] = useState(() => todayIn(timezone));
-  const [locationId, setLocationId] = useState<string>("all");
+  // Starts on the location picked in the top bar; the page can then look elsewhere.
+  const [locationId, setLocationId] = useState<string>(() => tenant.currentLocationId ?? "all");
+  const activeLocationCount = tenant.locations.filter((l) => l.active).length;
   const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>(
     [],
   );
@@ -119,12 +126,22 @@ function ReportsPage() {
     to: range.to,
     locationId: locationId === "all" ? null : locationId,
   });
+  const byLocation = useReportsByLocation({
+    from: range.from,
+    to: range.to,
+    enabled: activeLocationCount > 1,
+  });
   const previous = useDashboard({
     from: prevRange.from,
     to: prevRange.to,
     locationId: locationId === "all" ? null : locationId,
   });
   const requestExport = useRequestExport();
+  const fourthStat = fourthStatFor(
+    tenant.business?.industryTemplateKey,
+    dashboard.data?.bookings ?? { count: 0, valueMinor: 0 },
+  );
+  const previousAverageMinor = previous.data ? averageJobValueMinor(previous.data.bookings) : null;
 
   const planGate = dashboard.isError ? planGateMessage(dashboard.error) : null;
 
@@ -138,7 +155,10 @@ function ReportsPage() {
 
   const attendanceBreakdown = dashboard.data
     ? [
-        { name: "Attended", value: dashboard.data.attendance.attended },
+        {
+          name: isCarDetailing ? "Completed" : "Attended",
+          value: dashboard.data.attendance.attended,
+        },
         { name: "No-show", value: dashboard.data.attendance.noShow },
         { name: "Cancelled", value: dashboard.data.attendance.cancelled },
       ]
@@ -287,7 +307,7 @@ function ReportsPage() {
               // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
               saasPurchasesAllowedInApp() ? (
                 <Button asChild>
-                  <Link to="/settings" search={{ tab: "billing" }}>
+                  <Link to="/settings/$page" params={{ page: "plan" }}>
                     Go to billing
                   </Link>
                 </Button>
@@ -320,7 +340,7 @@ function ReportsPage() {
                 }
               />
               <StatCard
-                label="Attendance rate"
+                label={isCarDetailing ? "Completion rate" : "Attendance rate"}
                 value={pct(
                   dashboard.data.attendance.attended + dashboard.data.attendance.noShow > 0
                     ? (dashboard.data.attendance.attended /
@@ -329,8 +349,65 @@ function ReportsPage() {
                     : 0,
                 )}
               />
-              <StatCard label="Occupancy rate" value={pct(dashboard.data.occupancy.rate * 100)} />
+              {fourthStat.kind === "occupancy" ? (
+                <StatCard label="Occupancy rate" value={pct(dashboard.data.occupancy.rate * 100)} />
+              ) : (
+                <StatCard
+                  label="Average job value"
+                  value={
+                    fourthStat.averageMinor === null
+                      ? "—"
+                      : formatMoney(fourthStat.averageMinor, dashboard.data.basis.currency)
+                  }
+                  change={
+                    previous.data && fourthStat.averageMinor !== null
+                      ? pctChange(fourthStat.averageMinor, previousAverageMinor ?? 0)
+                      : undefined
+                  }
+                />
+              )}
             </div>
+
+            {activeLocationCount > 1 && (byLocation.data?.length ?? 0) > 1 ? (
+              <SectionCard title="By location" description="The same range, side by side">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th scope="col" className="py-2 pr-4 font-semibold">
+                          Location
+                        </th>
+                        <th scope="col" className="py-2 pr-4 text-right font-semibold">
+                          {tenant.terminology.booking}s
+                        </th>
+                        <th scope="col" className="py-2 pr-4 text-right font-semibold">
+                          Revenue
+                        </th>
+                        <th scope="col" className="py-2 text-right font-semibold">
+                          {isCarDetailing ? "Completed" : "Occupancy"}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byLocation.data!.map((row) => (
+                        <tr key={row.locationId} className="border-t border-border">
+                          <th scope="row" className="py-2.5 pr-4 text-left font-semibold">
+                            {row.name}
+                          </th>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">{row.bookings}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">
+                            {formatMoney(row.netRevenueMinor, dashboard.data!.basis.currency)}
+                          </td>
+                          <td className="py-2.5 text-right tabular-nums">
+                            {isCarDetailing ? String(row.attended) : pct(row.occupancyRate * 100)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+            ) : null}
 
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard
@@ -378,8 +455,12 @@ function ReportsPage() {
               </SectionCard>
 
               <SectionCard
-                title="Attendance"
-                description="Attended, no-show and cancelled sessions"
+                title={isCarDetailing ? "Job outcomes" : "Attendance"}
+                description={
+                  isCarDetailing
+                    ? "Completed, no-show and cancelled jobs"
+                    : "Attended, no-show and cancelled sessions"
+                }
               >
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -405,39 +486,41 @@ function ReportsPage() {
             </div>
 
             <div className="grid gap-5 xl:grid-cols-2">
-              <SectionCard title="Occupancy" description="Seats booked vs capacity">
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        tickLine={false}
-                        axisLine={false}
-                        fontSize={12}
-                        width={110}
-                      />
-                      <ChartTooltip />
-                      {/* Raw tokens, not the `--color-*` aliases: an alias resolves once on
+              {isCarDetailing ? null : (
+                <SectionCard title="Occupancy" description="Seats booked vs capacity">
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={occupancy} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tickLine={false}
+                          axisLine={false}
+                          fontSize={12}
+                          width={110}
+                        />
+                        <ChartTooltip />
+                        {/* Raw tokens, not the `--color-*` aliases: an alias resolves once on
                           `:root`, so the capacity bar came out near-white in dark mode. */}
-                      <Bar
-                        dataKey="capacity"
-                        name="Capacity"
-                        fill="var(--secondary)"
-                        radius={[0, 8, 8, 0]}
-                      />
-                      <Bar
-                        dataKey="booked"
-                        name="Booked"
-                        fill="var(--primary)"
-                        radius={[0, 8, 8, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </SectionCard>
+                        <Bar
+                          dataKey="capacity"
+                          name="Capacity"
+                          fill="var(--secondary)"
+                          radius={[0, 8, 8, 0]}
+                        />
+                        <Bar
+                          dataKey="booked"
+                          name="Booked"
+                          fill="var(--primary)"
+                          radius={[0, 8, 8, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </SectionCard>
+              )}
 
               <SectionCard title="Packages and credits" description="Prepaid activity in range">
                 <dl className="grid grid-cols-2 gap-4 text-sm">

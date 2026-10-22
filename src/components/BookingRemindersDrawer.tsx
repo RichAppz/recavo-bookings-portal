@@ -127,12 +127,12 @@ export function BookingRemindersDrawer({
         className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
         data-testid="reminders-drawer"
       >
-        <SheetHeader className="space-y-1 border-b px-5 py-4 pr-12 text-left">
+        <SheetHeader className="space-y-1 border-b px-4 sm:px-5 py-4 pr-12 text-left">
           <SheetTitle>Reminders</SheetTitle>
           <SheetDescription>{description}</SheetDescription>
           {creditsLine ? <p className="text-xs text-muted-foreground">{creditsLine}</p> : null}
         </SheetHeader>
-        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-5">{list}</div>
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{list}</div>
       </SheetContent>
     </Sheet>
   );

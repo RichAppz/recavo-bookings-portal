@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight, BookOpen, Clock, LifeBuoy } from "lucide-react";
+import { ArrowUpRight, BookOpen, Clock, LifeBuoy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ContactSupportDialog } from "@/components/ContactSupportDialog";
 import { GuideBody, GuideCard, GuideImage } from "@/components/guides";
 import { useGuideCopy, useGuideVertical } from "@/lib/use-guides";
 import { EmptyState, PageHeader } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/BackLink";
 import { GUIDES } from "@/content/guides";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { findGuide, GUIDE_CATEGORIES, type Guide } from "@/lib/guides";
@@ -36,13 +37,7 @@ function GuidePage() {
   const { vertical } = useGuideVertical();
   const guide = findGuide(GUIDES, slug);
 
-  const back = (
-    <Button variant="ghost" size="sm" asChild className="-ml-2 w-fit">
-      <Link to="/support/guides">
-        <ArrowLeft className="size-4" /> All guides
-      </Link>
-    </Button>
-  );
+  const back = <BackLink fallbackTo="/support/guides" fallbackLabel="All guides" />;
 
   if (!guide || !guide.verticals.includes(vertical)) {
     return (

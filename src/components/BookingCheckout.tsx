@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
@@ -31,16 +31,41 @@ function stripeFor(publishableKey: string, stripeAccount: string): Promise<Strip
   return created;
 }
 
+/** How the themed client page wants the Stripe iframe to look. */
+export type CheckoutLook = {
+  dark: boolean;
+  accent: string;
+  radius: string;
+  fontFamily?: string;
+};
+
+/** Lets a page-level button submit the card form that lives inside Stripe's iframe. */
+export type CheckoutSubmitHandle = { submit: () => Promise<void>; ready: boolean } | null;
+
 export function BookingCheckout({
   payment,
   contact,
   onPaid,
+  look,
+  submitRef,
+  onSubmittingChange,
+  onReadyChange,
+  hideButton = false,
 }: {
   payment: PublicBookingPayment;
   /** Details already given on the Details step, so checkout doesn't ask twice. */
   contact: BookingContact;
   /** Runs once the card has cleared, to wait for the booking to be confirmed. */
   onPaid: () => Promise<void>;
+  /** Overrides the portal theme when the form sits on a themed booking page. */
+  look?: CheckoutLook;
+  /** Filled with a `submit` the caller's own Pay button can call. */
+  submitRef?: MutableRefObject<CheckoutSubmitHandle>;
+  onSubmittingChange?: (submitting: boolean) => void;
+  /** Tracks whether Stripe is loaded and idle, so a page-level Pay button can enable itself. */
+  onReadyChange?: (ready: boolean) => void;
+  /** Hide the built-in Pay button when the page provides its own. */
+  hideButton?: boolean;
 }) {
   const stripe = useMemo(
     () => stripeFor(payment.publishableKey, payment.connectedAccountId),
@@ -51,13 +76,17 @@ export function BookingCheckout({
   // Elements and the Link prompt inside it render in a Stripe-owned iframe, so they
   // cannot inherit the page's CSS — left alone, the card fields stay bright white on a
   // dark booking page. Stripe's own night theme is the only way to follow along.
-  const appearance = useMemo(
-    () => ({
-      theme: (resolvedTheme === "dark" ? "night" : "stripe") as "night" | "stripe",
-      variables: { borderRadius: "0.75rem" },
-    }),
-    [resolvedTheme],
-  );
+  const appearance = useMemo(() => {
+    const dark = look ? look.dark : resolvedTheme === "dark";
+    return {
+      theme: (dark ? "night" : "stripe") as "night" | "stripe",
+      variables: {
+        borderRadius: look?.radius ?? "0.75rem",
+        ...(look ? { colorPrimary: look.accent } : {}),
+        ...(look?.fontFamily ? { fontFamily: look.fontFamily } : {}),
+      },
+    };
+  }, [resolvedTheme, look]);
 
   return (
     <Elements
@@ -67,7 +96,15 @@ export function BookingCheckout({
         appearance,
       }}
     >
-      <CheckoutForm payment={payment} contact={contact} onPaid={onPaid} />
+      <CheckoutForm
+        payment={payment}
+        contact={contact}
+        onPaid={onPaid}
+        submitRef={submitRef}
+        onSubmittingChange={onSubmittingChange}
+        onReadyChange={onReadyChange}
+        hideButton={hideButton}
+      />
     </Elements>
   );
 }
@@ -76,15 +113,27 @@ function CheckoutForm({
   payment,
   contact,
   onPaid,
+  submitRef,
+  onSubmittingChange,
+  onReadyChange,
+  hideButton,
 }: {
   payment: PublicBookingPayment;
   contact: BookingContact;
   onPaid: () => Promise<void>;
+  submitRef?: MutableRefObject<CheckoutSubmitHandle>;
+  onSubmittingChange?: (submitting: boolean) => void;
+  onReadyChange?: (ready: boolean) => void;
+  hideButton: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onSubmittingChange?.(submitting);
+  }, [submitting, onSubmittingChange]);
 
   // Stripe rejects explicit nulls here, so only what we actually have is passed. This
   // seeds both the billing fields and Link's "save my details" block, which otherwise
@@ -125,20 +174,34 @@ function CheckoutForm({
     setSubmitting(false);
   };
 
+  useEffect(() => {
+    if (!submitRef) return;
+    const ready = Boolean(stripe && elements) && !submitting;
+    submitRef.current = { submit: pay, ready };
+    onReadyChange?.(ready);
+    return () => {
+      submitRef.current = null;
+      onReadyChange?.(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitRef, stripe, elements, submitting]);
+
   return (
     <div className="space-y-4">
       <PaymentElement options={{ defaultValues: { billingDetails } }} />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button
-        size="xl"
-        className="w-full"
-        disabled={!stripe || submitting}
-        onClick={() => void pay()}
-      >
-        {submitting
-          ? "Taking payment…"
-          : `Pay ${formatMoney(payment.amountMinor, payment.currency)}`}
-      </Button>
+      {hideButton ? null : (
+        <Button
+          size="xl"
+          className="w-full"
+          disabled={!stripe || submitting}
+          onClick={() => void pay()}
+        >
+          {submitting
+            ? "Taking payment…"
+            : `Pay ${formatMoney(payment.amountMinor, payment.currency)}`}
+        </Button>
+      )}
     </div>
   );
 }

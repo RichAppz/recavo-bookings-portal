@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CreditCard, ExternalLink, Landmark, Receipt, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { BankTransferSetting } from "@/components/BankTransferSetting";
 import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
 import { PaymentsHoldNotice } from "@/components/PaymentsHoldNotice";
 import { StripeFeesNote } from "@/components/StripeFeesNote";
@@ -278,6 +279,10 @@ function PaymentsPage() {
           </SectionCard>
         )}
       </Can>
+
+      {/* Pay-by-bank sits with the payout account: this page is where people look
+          for "how do clients pay me", not Settings → Payments. */}
+      <BankTransferSetting />
 
       <SectionCard
         title="Transactions"

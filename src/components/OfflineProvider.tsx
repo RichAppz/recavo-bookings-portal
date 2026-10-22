@@ -111,7 +111,7 @@ function ConnectivityStrip() {
       <div
         className={cn(
           "pointer-events-auto mt-1 flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium shadow-md",
-          online ? "bg-success text-success-foreground" : "bg-foreground text-background",
+          online ? "bg-success text-white" : "bg-foreground text-background",
         )}
       >
         {online ? (

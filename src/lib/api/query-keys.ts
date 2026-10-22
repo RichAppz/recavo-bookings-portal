@@ -22,6 +22,8 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId, "history"] as const,
   bookingPayments: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "payments"] as const,
+  bookingSettlements: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "settlements"] as const,
 
   /** Prefix for every calendar-block list — invalidate after any block write. */
   calendarBlocksAll: (businessId: string) => ["biz", businessId, "calendar-blocks"] as const,
@@ -63,6 +65,13 @@ export const queryKeys = {
 
   /** Consumables catalogue (automotive); the list carries `serviceIds` for "used by N services". */
   consumables: (businessId: string) => ["biz", businessId, "consumables"] as const,
+  /** The catalogue with each row's usage for a period (the page's "Used this month" column). */
+  consumablesForPeriod: (businessId: string, period: string) =>
+    ["biz", businessId, "consumables", "period", period] as const,
+  consumableFigures: (businessId: string, period: string) =>
+    ["biz", businessId, "consumables", "figures", period] as const,
+  consumableActivity: (businessId: string, consumableId: string, period: string, limit: number) =>
+    ["biz", businessId, "consumables", "activity", consumableId, period, limit] as const,
   serviceConsumables: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId, "consumables"] as const,
   bookingConsumables: (businessId: string, bookingId: string) =>
@@ -82,6 +91,14 @@ export const queryKeys = {
       ? (["biz", businessId, "waitlist", filter] as const)
       : (["biz", businessId, "waitlist"] as const),
   waitlistSummary: (businessId: string) => ["biz", businessId, "waitlist", "summary"] as const,
+  waitlistEntry: (businessId: string, entryId: string) =>
+    ["biz", businessId, "waitlist", "entry", entryId] as const,
+  waitlistFigures: (businessId: string, locationId?: string) =>
+    ["biz", businessId, "waitlist", "figures", locationId ?? null] as const,
+  waitlistSlotEvents: (businessId: string, locationId?: string) =>
+    ["biz", businessId, "waitlist", "slot-events", locationId ?? null] as const,
+  waitlistFreeTimes: (businessId: string, entryId: string) =>
+    ["biz", businessId, "waitlist", "free-times", entryId] as const,
 
   /** Upsells: a service's add-on pairings, and the offers/requests on staff-made bookings. */
   serviceUpsells: (businessId: string, serviceId: string) =>
@@ -133,6 +150,17 @@ export const queryKeys = {
     ["biz", businessId, "conversations", conversationId] as const,
   messages: (businessId: string, conversationId: string) =>
     ["biz", businessId, "conversations", conversationId, "messages"] as const,
+  /** Paged thread (newest page first) for the Messages page; under `messages` so both refresh. */
+  threadPages: (businessId: string, conversationId: string) =>
+    ["biz", businessId, "conversations", conversationId, "messages", "pages"] as const,
+  /** Under `conversations` so a `conversation.changed` hint refreshes every inbox view. */
+  inbox: (businessId: string, filters?: Record<string, unknown>) =>
+    ["biz", businessId, "conversations", "inbox", filters ?? {}] as const,
+  savedReplies: (businessId: string) => ["biz", businessId, "saved-replies"] as const,
+  broadcasts: (businessId: string) => ["biz", businessId, "broadcasts"] as const,
+  broadcastPreview: (businessId: string, input: Record<string, unknown>) =>
+    ["biz", businessId, "broadcasts", "preview", input] as const,
+  broadcastOptions: (businessId: string) => ["biz", businessId, "broadcasts", "options"] as const,
   notifications: (businessId: string, filters?: Record<string, unknown>) =>
     ["biz", businessId, "notifications", filters ?? {}] as const,
 
@@ -192,6 +220,19 @@ export const queryKeys = {
     ["public", businessId, "availability", filters ?? {}] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
+  publicStaff: (businessId: string) => ["public", businessId, "staff"] as const,
+  publicCancellationPolicy: (businessId: string) =>
+    ["public", businessId, "policies", "cancellation"] as const,
+  publicReviews: (businessId: string) => ["public", businessId, "reviews"] as const,
+  /** The Google listing a studio connected for its booking page, staff side. */
+  googlePlace: (businessId: string) => ["biz", businessId, "booking-page", "google-place"] as const,
+  googlePlaceSearch: (businessId: string, q: string) =>
+    ["biz", businessId, "booking-page", "google-place", "search", q] as const,
+  /** The studio's own booking page settings (draft + published), staff side. */
+  bookingPage: (businessId: string) => ["biz", businessId, "booking-page"] as const,
+  slugAvailability: (businessId: string, slug: string) =>
+    ["biz", businessId, "slug-availability", slug] as const,
+  portalWaitlist: (businessId: string) => ["portal", businessId, "waitlist"] as const,
 
   /** Not business-scoped: it is the lookup that finds which businesses to scope to. */
   portalBusinesses: () => ["portal", "businesses"] as const,
@@ -207,6 +248,7 @@ export const queryKeys = {
   portalPayments: (businessId: string) => ["portal", businessId, "payments"] as const,
   portalNotes: (businessId: string) => ["portal", businessId, "notes"] as const,
   portalCredits: (businessId: string) => ["portal", businessId, "credits"] as const,
+  portalPurchases: (businessId: string) => ["portal", businessId, "purchases"] as const,
   portalPackageRequests: (businessId: string) =>
     ["portal", businessId, "package-requests"] as const,
   portalPackageLinks: (businessId: string) => ["portal", businessId, "package-links"] as const,

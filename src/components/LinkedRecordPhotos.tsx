@@ -29,8 +29,8 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { toast } from "sonner";
 
 /** Matches the API's default upload allow-list for images (ADR 0010). */
-const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /**
  * Photo gallery for a linked record (vehicle images, RECA-524). Uploads go through
@@ -63,7 +63,7 @@ export function LinkedRecordPhotosDialog({
   );
 }
 
-function PhotosPanel({ record }: { record: LinkedRecord }) {
+export function PhotosPanel({ record }: { record: LinkedRecord }) {
   const tenant = useTenant();
   const businessId = useBusinessId();
   const qc = useQueryClient();
@@ -136,7 +136,7 @@ function PhotosPanel({ record }: { record: LinkedRecord }) {
           // Pointer to plans only where they can be bought (saasPurchasesAllowedInApp).
           saasPurchasesAllowedInApp() ? (
             <Button asChild>
-              <Link to="/settings" search={{ tab: "billing" }}>
+              <Link to="/settings/$page" params={{ page: "plan" }}>
                 View plans
               </Link>
             </Button>
@@ -218,7 +218,7 @@ function PhotosPanel({ record }: { record: LinkedRecord }) {
   );
 }
 
-function PhotoTile({
+export function PhotoTile({
   file,
   canDelete,
   deleting,

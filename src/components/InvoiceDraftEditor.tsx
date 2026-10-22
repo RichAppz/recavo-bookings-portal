@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useState, type Ref } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { useCustomer, useCustomerLinkedRecords, useCustomers } from "@/lib/api/hooks";
+import {
+  useCustomer,
+  useCustomerLinkedRecords,
+  useCustomers,
+  useLinkedRecordDefinition,
+} from "@/lib/api/hooks";
 import { useUpdateInvoice, type Invoice } from "@/lib/api/invoices";
 import type { Customer } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
@@ -32,21 +37,42 @@ import {
   type InvoiceLineDraft,
   type LineDraftError,
 } from "@/lib/invoices";
+import { summariseLinkedRecord, summaryFieldsOf } from "@/lib/linked-record-summary";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { useFormattedChange } from "@/hooks/use-formatted-change";
 import { cn } from "@/lib/utils";
+
+/** Pasted line breaks become spaces; registrations are upper-cased as they are typed. */
+const formatRecordValue = (raw: string) => upperCaseRegistration(raw.replace(/\r?\n/g, " "));
 
 /**
  * Edit a draft's lines, due date, notes and customer. The API recomputes totals
  * on every save and returns the whole invoice; nothing here does money maths
  * beyond turning "12.50" into 1250 pence.
  */
+/**
+ * What the page around the editor can do with it: find out whether there are unsaved
+ * edits, and save them before rendering a PDF so the preview shows what was typed.
+ */
+export type InvoiceDraftEditorHandle = {
+  /** Saves pending edits. Resolves to the saved invoice, or null when validation or the API refused. */
+  save: () => Promise<Invoice | null>;
+};
+
+export const INVOICE_DRAFT_EDITOR_ID = "invoice-draft-editor";
+
 export function InvoiceDraftEditor({
   invoice,
   onSaved,
+  onDirtyChange,
+  ref,
   disabled = false,
 }: {
   invoice: Invoice;
   onSaved?: (invoice: Invoice) => void;
+  /** Fires whenever the editor starts or stops holding unsaved edits. */
+  onDirtyChange?: (dirty: boolean) => void;
+  ref?: Ref<InvoiceDraftEditorHandle>;
   /** Read-only view of a draft (e.g. reception, or the bolt-on has lapsed). */
   disabled?: boolean;
 }) {
@@ -109,8 +135,15 @@ export function InvoiceDraftEditor({
     null;
 
   // The client's saved vehicles, offered one tap away so a second car can be added
-  // without retyping its registration. Anything already on the invoice is left out.
+  // without retyping its registration. Each chip carries the same "reg · make · model"
+  // text the PDF prints (not just the display label), so what is picked is what is
+  // invoiced. Anything already on the invoice is left out.
   const customerRecords = useCustomerLinkedRecords(recordSupported ? customerId : undefined);
+  const recordDefinition = useLinkedRecordDefinition();
+  const summaryFields = useMemo(
+    () => summaryFieldsOf(recordDefinition.data?.fields),
+    [recordDefinition.data?.fields],
+  );
   const typedRecord = recordSupported ? linkedRecordInput(recordBase, recordValues) : null;
   const typedRecordValue = typedRecord?.value ?? "";
   const recordSuggestions = useMemo(() => {
@@ -118,10 +151,26 @@ export function InvoiceDraftEditor({
       linkedRecordEntries({ value: typedRecordValue }).map((v) => v.toLowerCase()),
     );
     return (customerRecords.data ?? [])
-      .filter((r) => r.status === "active" && !present.has(r.displayLabel.trim().toLowerCase()))
+      .filter((r) => r.status === "active")
+      .map((r) => ({
+        id: r.id,
+        text: formatRecordValue(
+          summariseLinkedRecord(
+            { displayLabel: r.displayLabel, values: r.values as Record<string, unknown> },
+            summaryFields,
+          ),
+        ),
+      }))
+      .filter((r) => !present.has(r.text.trim().toLowerCase()))
       .slice(0, 6);
-  }, [customerRecords.data, typedRecordValue]);
+  }, [customerRecords.data, summaryFields, typedRecordValue]);
   const recordRowsFull = recordValues.length >= INVOICE_LINKED_RECORD_LIMITS.maxEntries;
+  const onRecordChange = useFormattedChange(
+    formatRecordValue,
+    useCallback((typed: string, i: number) => {
+      setRecordValues((prev) => prev.map((v, j) => (j === i ? typed : v)));
+    }, []),
+  );
   const addRecordValue = (value: string) => {
     setRecordValues((prev) => {
       const next = [...prev];
@@ -158,29 +207,34 @@ export function InvoiceDraftEditor({
     setLineErrors((prev) => prev.map((e, i) => (i === index ? {} : e)));
   };
 
-  const save = async () => {
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
+  const save = async ({ quiet = false }: { quiet?: boolean } = {}): Promise<Invoice | null> => {
     setFormError(null);
     setServerErrors([]);
     const result = validateLineDrafts(lines);
     if (!result.ok) {
       setLineErrors(result.errors);
       setFormError(result.form ?? "Fix the highlighted lines.");
-      return;
+      return null;
     }
     if (dueDate && !isIsoDate(dueDate)) {
       setFormError("Due date must be a calendar date.");
-      return;
+      return null;
     }
     const trimmedNotes = notes.trim();
     if (trimmedNotes.length > INVOICE_LINE_LIMITS.notesMax) {
       setFormError(`Notes can be at most ${INVOICE_LINE_LIMITS.notesMax} characters.`);
-      return;
+      return null;
     }
     const record = recordSupported ? linkedRecordInput(recordBase, recordValues) : undefined;
     const recordError = recordSupported ? linkedRecordProblem(record ?? null, recordBase) : null;
     if (recordError) {
       setFormError(recordError);
-      return;
+      return null;
     }
     setLineErrors([]);
     try {
@@ -194,23 +248,35 @@ export function InvoiceDraftEditor({
           ...(customerId !== invoice.customerId ? { customerId } : {}),
         },
       });
-      toast.success("Draft saved");
+      if (!quiet) toast.success("Draft saved");
       onSaved?.(saved);
+      return saved;
     } catch (err) {
       if (err instanceof ApiError && err.fieldErrors.length > 0) {
         setServerErrors(
           err.fieldErrors.map((fe) => `${fe.field}: ${fe.message ?? fe.code}`.trim()),
         );
       }
+      return null;
     }
   };
+
+  // The page's Preview / Download buttons save through this so the PDF shows what has
+  // been typed, not the last saved copy. Nothing to save → resolves to the invoice as is.
+  useImperativeHandle(ref, () => ({
+    save: () => (dirty ? save({ quiet: true }) : Promise.resolve(invoice)),
+  }));
 
   return (
     <SectionCard
       title="Draft"
       description="Edit freely until you issue it. Totals are recalculated when you save."
     >
-      <fieldset disabled={disabled || update.isPending} className="grid gap-5">
+      <fieldset
+        id={INVOICE_DRAFT_EDITOR_ID}
+        disabled={disabled || update.isPending}
+        className="grid scroll-mt-4 gap-5"
+      >
         <div className="grid gap-2">
           <Label>Bill to</Label>
           <CustomerSearchPicker
@@ -280,11 +346,15 @@ export function InvoiceDraftEditor({
                         errs.description && "border-destructive",
                       )}
                       onChange={(e) =>
-                        setLine(i, { description: e.target.value.replace(/\r?\n/g, " ") })
+                        setLine(i, { description: e.target.value.replace(/\r\n?/g, "\n") })
                       }
                     />
                     {errs.description ? (
                       <p className="text-xs text-destructive">{errs.description}</p>
+                    ) : i === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Press Enter for detail lines — they print under the heading.
+                      </p>
                     ) : null}
                   </div>
                   <div
@@ -406,10 +476,7 @@ export function InvoiceDraftEditor({
                     }
                     aria-label={`${recordBase} ${i + 1}`}
                     autoCapitalize="characters"
-                    onChange={(e) => {
-                      const typed = upperCaseRegistration(e.target.value.replace(/\r?\n/g, " "));
-                      setRecordValues((prev) => prev.map((v, j) => (j === i ? typed : v)));
-                    }}
+                    onChange={onRecordChange(i)}
                   />
                   {recordValues.length > 1 ? (
                     <Button
@@ -444,11 +511,11 @@ export function InvoiceDraftEditor({
                   size="sm"
                   className="max-w-full"
                   disabled={recordRowsFull && !recordValues.some((v) => v.trim() === "")}
-                  title={`Add ${r.displayLabel}`}
-                  onClick={() => addRecordValue(r.displayLabel)}
+                  title={`Add ${r.text}`}
+                  onClick={() => addRecordValue(r.text)}
                 >
                   <Plus className="size-3.5 shrink-0" />
-                  <span className="truncate">{r.displayLabel}</span>
+                  <span className="truncate">{r.text}</span>
                 </Button>
               ))}
             </div>

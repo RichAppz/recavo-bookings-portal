@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { BellRing, Clock, Eye, EyeOff, Package, Plus, Sparkles, Trash2, Users } from "lucide-react";
+import {
+  Archive,
+  BellRing,
+  ChevronDown,
+  Clock,
+  Eye,
+  EyeOff,
+  Package,
+  Plus,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
@@ -41,15 +53,23 @@ import {
   useCreateService,
   useDeleteService,
   useLocationsList,
-  useReplaceServiceConsumables,
   useServiceConsumables,
   useServices,
+  useServicesConsumables,
   useStaffList,
+  useResources,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
-import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
-import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
+import { ServiceConsumablesEditor } from "@/components/consumables/ServiceConsumablesEditor";
+import { useConsumablesOn } from "@/components/consumables/use-consumables-on";
+import {
+  estimateMaterialsCost,
+  rowsFromLines,
+  rowsToItems,
+  type UsageRow,
+} from "@/lib/consumables";
+import { PERMISSIONS } from "@/lib/permissions";
 import { UpsellEditor } from "@/components/UpsellEditor";
 import { rowsFromUpsells, rowsToUpsellItems, type UpsellRow } from "@/lib/upsells";
 import { UpsellsUpgradeDialog } from "@/components/UpsellsUpgradeDialog";
@@ -59,11 +79,11 @@ import {
   useServiceUpsells,
   useUpsellsEntitled,
 } from "@/lib/api/upsells";
-import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
+import { FollowUpRuleEditor, type FollowUpRuleError } from "@/components/FollowUpRuleEditor";
 import {
-  draftFromRule,
-  followUpRuleSummary,
-  ruleFromDraft,
+  draftsFromRules,
+  followUpRulesSummary,
+  rulesFromDrafts,
   type FollowUpRuleDraft,
 } from "@/lib/follow-ups";
 import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
@@ -83,8 +103,10 @@ import {
 } from "@/lib/working-hours";
 import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { resourceWords } from "@/lib/locations";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { toast } from "sonner";
 
 /**
@@ -145,22 +167,20 @@ function ServicesPage() {
   const locations = useLocationsList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
-  const { user } = useAuth();
-  // No offer windows on a one-person business means "whenever they're free" —
-  // say so in their words rather than the team wording.
-  const offeredLabel = (s: CatalogueService) => {
-    if (!soleStaff || s.availabilityWindows.length > 0) {
-      return formatAvailabilityWindows(s.availabilityWindows);
-    }
-    return soleStaff.userId === user?.id
-      ? "Whenever you're available"
-      : `Whenever ${soleStaff.displayName} is available`;
+  // No offer windows on a one-person business means "whenever they're free",
+  // which tells them nothing — the row is left off. With windows set it still
+  // shows the days and times.
+  const offeredLabel = (s: CatalogueService): string | null => {
+    if (soleStaff && s.availabilityWindows.length === 0) return null;
+    return formatAvailabilityWindows(s.availabilityWindows);
   };
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   // "N consumables" on each card: the catalogue rows carry the services they're on,
   // so one request covers every card. Detailing only; nothing is fetched otherwise.
-  const consumables = useConsumables({ enabled: isDetailing });
+  const consumablesOn = useConsumablesOn();
+  const canMoney = tenant.can(PERMISSIONS.PAYMENT_READ);
+  const consumables = useConsumables({ enabled: consumablesOn });
   const consumableCountByService = useMemo(() => {
     const counts = new Map<string, number>();
     for (const c of consumables.data ?? []) {
@@ -168,9 +188,23 @@ function ServicesPage() {
     }
     return counts;
   }, [consumables.data]);
+  // "about £12 a job" needs each service's default quantities; only services that
+  // have any are fetched, and only for staff who can see money.
+  const costedServiceIds = useMemo(
+    () => (canMoney ? [...consumableCountByService.keys()].sort() : []),
+    [canMoney, consumableCountByService],
+  );
+  const serviceDefaults = useServicesConsumables(costedServiceIds, { enabled: consumablesOn });
+  const materialsByService = new Map<string, number | null>(
+    costedServiceIds.map((id, i) => [id, estimateMaterialsCost(serviceDefaults[i]?.data ?? [])]),
+  );
   const [editing, setEditing] = useState<CatalogueService | null>(null);
   const [deleting, setDeleting] = useState<CatalogueService | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const allServices = services.data ?? [];
+  const listed = allServices.filter((s) => !s.archivedAt);
+  const archived = allServices.filter((s) => s.archivedAt);
   // New services default to the business's opening hours — the location picked
   // in the sidebar, else the first active one with hours set.
   const businessHours = useMemo<BusinessHoursPreset | undefined>(() => {
@@ -223,7 +257,7 @@ function ServicesPage() {
           }
           action={<Button onClick={() => services.refetch()}>Try again</Button>}
         />
-      ) : (services.data ?? []).length === 0 ? (
+      ) : allServices.length === 0 ? (
         <EmptyState
           title={`No ${pluralLower} yet`}
           description={`Create your first bookable ${lower} to start taking bookings.`}
@@ -231,10 +265,17 @@ function ServicesPage() {
         />
       ) : (
         <div className="space-y-8">
-          {groupByCategory(services.data ?? []).map((group) => (
+          {listed.length === 0 ? (
+            <EmptyState
+              title={`No ${pluralLower} in use`}
+              description={`Every ${lower} is archived. Create one, or restore one below.`}
+              action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
+            />
+          ) : null}
+          {groupByCategory(listed).map((group) => (
             <section key={group.category ?? "__none"} className="space-y-3">
               {/* Headings only once categories are in use; a flat catalogue stays flat. */}
-              {hasCategories(services.data ?? []) ? (
+              {hasCategories(listed) ? (
                 <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   {group.category ?? "Other"}
                   <span className="ml-2 font-normal tabular-nums normal-case">
@@ -243,159 +284,227 @@ function ServicesPage() {
                 </h2>
               ) : null}
               <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {group.items.map((s) => (
-                  <article key={s.id} className="surface-card flex flex-col p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {s.publicVisible ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <Eye className="size-3.5" /> Public
+                {group.items.map((s) => {
+                  const offered = offeredLabel(s);
+                  const reminderRules = Array.isArray(s.followUps) ? s.followUps : [];
+                  return (
+                    <article key={s.id} className="surface-card flex flex-col p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {s.publicVisible ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Eye className="size-3.5" /> Public
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <EyeOff className="size-3.5" /> Hidden from booking page
+                            </span>
+                          )}
+                          <StatusBadge status={s.active ? "active" : "inactive"} />
+                        </div>
+                      </div>
+                      <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
+
+                      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="size-4 text-muted-foreground" />
+                          {formatDuration(s.durationMinutes)}
+                        </span>
+                        <span className="flex items-center gap-1.5 font-semibold">
+                          {formatMoney(s.basePriceMinor, s.currency)}
+                          {s.capacityMax > 1 ? " pp" : ""}
+                        </span>
+                        {s.depositMinor && s.depositMinor > 0 ? (
+                          <span className="text-muted-foreground">
+                            {formatMoney(s.depositMinor, s.currency)} deposit
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <EyeOff className="size-3.5" /> Hidden from booking page
+                        ) : null}
+                        {isDetailing && s.capacityMax === 1 ? null : (
+                          <span className="flex items-center gap-1.5">
+                            <Users className="size-4 text-muted-foreground" />
+                            {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
                           </span>
                         )}
-                        <StatusBadge status={s.active ? "active" : "inactive"} />
+                        {consumablesOn && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
+                          <span
+                            className="flex items-center gap-1.5 text-muted-foreground"
+                            title="Materials this service uses by default. For your records only."
+                          >
+                            <Package className="size-4" />
+                            {consumableCountByService.get(s.id)}{" "}
+                            {consumableCountByService.get(s.id) === 1
+                              ? "consumable"
+                              : "consumables"}
+                            {materialsByService.get(s.id) != null
+                              ? ` · about ${formatMoney(materialsByService.get(s.id)!, s.currency, { compact: true })} a job`
+                              : ""}
+                          </span>
+                        ) : null}
+                        {reminderRules.length > 0 ? (
+                          <span
+                            className="flex items-center gap-1.5 text-muted-foreground"
+                            title={
+                              reminderRules.length === 1
+                                ? `Clients (and you) are reminded ${reminderRules[0]!.leadDays} days before it is due again`
+                                : `${reminderRules.length} reminders: clients (and you) are told before each is due`
+                            }
+                          >
+                            <BellRing className="size-4" />
+                            {followUpRulesSummary(reminderRules)}
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
-                    <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
 
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="size-4 text-muted-foreground" />
-                        {formatDuration(s.durationMinutes)}
-                      </span>
-                      <span className="flex items-center gap-1.5 font-semibold">
-                        {formatMoney(s.basePriceMinor, s.currency)}
-                        {s.capacityMax > 1 ? " pp" : ""}
-                      </span>
-                      {s.depositMinor && s.depositMinor > 0 ? (
-                        <span className="text-muted-foreground">
-                          {formatMoney(s.depositMinor, s.currency)} deposit
-                        </span>
+                      {s.variants.length > 0 ? (
+                        <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+                          {s.variants.map((v) => (
+                            <li key={v.id} className="flex items-center justify-between">
+                              <span>{v.name}</span>
+                              <span className="tabular-nums">
+                                {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
+                                {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       ) : null}
-                      {isDetailing && s.capacityMax === 1 ? null : (
-                        <span className="flex items-center gap-1.5">
-                          <Users className="size-4 text-muted-foreground" />
-                          {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
-                        </span>
-                      )}
-                      {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title="Materials this service uses by default — your records only"
-                        >
-                          <Package className="size-4" />
-                          {consumableCountByService.get(s.id)}{" "}
-                          {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
-                        </span>
-                      ) : null}
-                      {s.followUp ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title={`Clients (and you) are reminded ${s.followUp.leadDays} days before it is due again`}
-                        >
-                          <BellRing className="size-4" />
-                          {followUpRuleSummary(s.followUp)}
-                        </span>
-                      ) : null}
-                    </div>
 
-                    {s.variants.length > 0 ? (
-                      <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-                        {s.variants.map((v) => (
-                          <li key={v.id} className="flex items-center justify-between">
-                            <span>{v.name}</span>
-                            <span className="tabular-nums">
-                              {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
-                              {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                      {/* One person / one place: the rows would only ever say "All". */}
-                      {soleStaff ? null : (
+                      <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
+                        {/* One person / one place: the rows would only ever say "All". */}
+                        {soleStaff ? null : (
+                          <Row
+                            label={
+                              tenant.terminology.staff.toLowerCase().endsWith("s")
+                                ? tenant.terminology.staff
+                                : `${tenant.terminology.staff}s`
+                            }
+                            value={describeDeliverers(s, staff.data ?? [])}
+                          />
+                        )}
+                        {soleLocation ? null : (
+                          <Row
+                            label="Locations"
+                            value={
+                              s.locationIds
+                                .map((id) => locations.data?.find((l) => l.id === id)?.name)
+                                .filter(Boolean)
+                                .join(", ") || "All"
+                            }
+                          />
+                        )}
                         <Row
-                          label={
-                            tenant.terminology.staff.toLowerCase().endsWith("s")
-                              ? tenant.terminology.staff
-                              : `${tenant.terminology.staff}s`
-                          }
-                          value={describeDeliverers(s, staff.data ?? [])}
+                          label="Booking notice"
+                          value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
                         />
-                      )}
-                      {soleLocation ? null : (
                         <Row
-                          label="Locations"
-                          value={
-                            s.locationIds
-                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                              .filter(Boolean)
-                              .join(", ") || "All"
-                          }
+                          label="Cancellation"
+                          value={`${s.cancellationPolicy.windowHours} hours`}
                         />
-                      )}
-                      <Row
-                        label="Booking notice"
-                        value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
-                      />
-                      <Row
-                        label="Cancellation"
-                        value={`${s.cancellationPolicy.windowHours} hours`}
-                      />
-                      <Row
-                        label="Buffer"
-                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
-                      />
-                      <Row label="Offered" value={offeredLabel(s)} />
-                    </dl>
+                        <Row
+                          label="Buffer"
+                          value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
+                        />
+                        {offered ? <Row label="Offered" value={offered} /> : null}
+                      </dl>
 
-                    <div className="mt-5 flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Switch
-                          checked={s.active}
-                          disabled={updateService.isPending}
-                          onCheckedChange={(v) => {
-                            updateService.mutate(
-                              {
-                                serviceId: s.id,
-                                version: s.version,
-                                body: { active: v },
-                              },
-                              {
-                                onSuccess: () =>
-                                  toast.success(v ? `${noun} activated` : `${noun} paused`),
-                              },
-                            );
-                          }}
-                        />
-                        {s.active ? "Bookable" : "Hidden"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-destructive"
-                          aria-label={`Delete ${lower}`}
-                          onClick={() => setDeleting(s)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                          Edit {lower}
-                        </Button>
+                      <div className="mt-5 flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Switch
+                            checked={s.active}
+                            disabled={updateService.isPending}
+                            onCheckedChange={(v) => {
+                              updateService.mutate(
+                                {
+                                  serviceId: s.id,
+                                  version: s.version,
+                                  body: { active: v },
+                                },
+                                {
+                                  onSuccess: () =>
+                                    toast.success(v ? `${noun} activated` : `${noun} paused`),
+                                },
+                              );
+                            }}
+                          />
+                          {s.active ? "Bookable" : "Hidden"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete ${lower}`}
+                            onClick={() => setDeleting(s)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
+                            Edit {lower}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}
+          {archived.length > 0 ? (
+            <section className="space-y-3">
+              <button
+                type="button"
+                aria-expanded={showArchived}
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase"
+              >
+                <Archive className="size-4" />
+                Archived
+                <span className="font-normal tabular-nums normal-case">{archived.length}</span>
+                <ChevronDown
+                  className={cn("size-4 transition-transform", showArchived && "rotate-180")}
+                />
+              </button>
+              {showArchived ? (
+                <ul className="surface-card divide-y">
+                  {archived.map((s) => (
+                    <li key={s.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Archived{" "}
+                          {new Date(s.archivedAt!).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}{" "}
+                          · Past bookings keep it
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateService.isPending}
+                        onClick={() =>
+                          updateService.mutate(
+                            { serviceId: s.id, version: s.version, body: { archived: false } },
+                            {
+                              onSuccess: () =>
+                                toast.success(`${noun} restored`, {
+                                  description: "It's back in your list, switched off.",
+                                }),
+                            },
+                          )
+                        }
+                      >
+                        Restore
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       )}
 
@@ -417,9 +526,9 @@ function ServicesPage() {
         copy={(s) => ({
           title: `Delete ${s.name}?`,
           description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
-          inUseTitle: `Pause this ${lower} instead?`,
-          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
-          fallbackLabel: "Pause",
+          inUseTitle: `Archive this ${lower} instead?`,
+          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Archiving switches it off and moves it out of your list. Past bookings keep their details, and you can restore it from Archived at the bottom of this page.`,
+          fallbackLabel: "Archive",
         })}
         onDelete={async (s) => {
           await deleteService.mutateAsync(s.id);
@@ -429,9 +538,9 @@ function ServicesPage() {
           await updateService.mutateAsync({
             serviceId: s.id,
             version: s.version,
-            body: { active: false },
+            body: { archived: true },
           });
-          toast.success(`${noun} paused`);
+          toast.success(`${noun} archived`);
         }}
       />
     </>
@@ -502,6 +611,17 @@ function ServiceDialog({
     service && service.eligibleStaffIds.length > 0 ? "selected" : "all",
   );
   const [staffIds, setStaffIds] = useState<string[]>(service?.eligibleStaffIds ?? []);
+  // Where it's offered. Empty `locationIds` means every location, now and later.
+  const activeLocations = tenant.locations.filter((l) => l.active);
+  const [offeredMode, setOfferedMode] = useState<"all" | "some">(
+    service && service.locationIds.length > 0 ? "some" : "all",
+  );
+  const [offeredIds, setOfferedIds] = useState<string[]>(service?.locationIds ?? []);
+  const resourcesQuery = useResources();
+  const words = resourceWords(tenant.business?.industryTemplateKey);
+  const [needsResource, setNeedsResource] = useState(Boolean(service?.requiredResourceType));
+  const showResourceField =
+    (resourcesQuery.data ?? []).some((r) => r.active) || Boolean(service?.requiredResourceType);
   const staffPluralLower = (() => {
     const t = tenant.terminology.staff.trim().toLowerCase() || "staff member";
     return t.endsWith("s") ? t : `${t}s`;
@@ -578,12 +698,12 @@ function ServiceDialog({
     };
   }, [hoursOwnerIsMe, soleStaff?.displayName, lower]);
 
-  // Consumables used (detailing only): the materials a job of this service uses by
-  // default, saved through their own endpoint once the service itself has saved.
-  // Staff-only records — they never touch the price.
-  const consumableCatalogue = useConsumables({ enabled: isDetailing && open });
-  const serviceUsage = useServiceConsumables(service?.id, { enabled: isDetailing && open });
-  const replaceServiceUsage = useReplaceServiceConsumables();
+  // Consumables used (detailing, unless hidden from the menu): the materials a job of
+  // this service uses by default, saved with the service. Staff-only records; they
+  // never touch the price.
+  const consumablesOn = useConsumablesOn();
+  const consumableCatalogue = useConsumables({ enabled: consumablesOn && open });
+  const serviceUsage = useServiceConsumables(service?.id, { enabled: consumablesOn && open });
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageDirty, setUsageDirty] = useState(false);
   const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
@@ -601,15 +721,12 @@ function ServiceDialog({
       setUpsellRows(rowsFromUpsells(serviceUpsells.data));
     }
   }, [open, upsellsDirty, serviceUpsells.data]);
-  // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
-  // so it saves with the service itself. All verticals.
-  const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
-    draftFromRule(service?.followUp),
+  // Follow-up reminders ("valet after a year, ceramic top-up every 2 years"): part of
+  // the service payload, so they save with the service itself. All verticals.
+  const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpRuleDraft[]>(() =>
+    draftsFromRules(service?.followUps),
   );
-  const [followUpError, setFollowUpError] = useState<{
-    field: "intervalMonths" | "leadDays" | "label";
-    message: string;
-  } | null>(null);
+  const [followUpError, setFollowUpError] = useState<FollowUpRuleError | null>(null);
   // The defaults arrive after the dialog opens; adopt them until staff start editing.
   useEffect(() => {
     if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
@@ -619,7 +736,6 @@ function ServiceDialog({
     createService.isPending ||
     updateService.isPending ||
     updateStaff.isPending ||
-    replaceServiceUsage.isPending ||
     replaceUpsells.isPending;
 
   const resetFrom = (s: CatalogueService | null) => {
@@ -651,7 +767,7 @@ function ServiceDialog({
     setUpsellRows(s && serviceUpsells.data ? rowsFromUpsells(serviceUpsells.data) : []);
     setUpsellsDirty(false);
     setUpsellInvalid(null);
-    setFollowUpDraft(draftFromRule(s?.followUp));
+    setFollowUpDrafts(draftsFromRules(s?.followUps));
     setFollowUpError(null);
   };
 
@@ -755,6 +871,11 @@ function ServiceDialog({
         priceMinor: v.priceMinor.trim() ? parseMoneyToMinor(v.priceMinor) : null,
       }));
 
+    if (activeLocations.length > 1 && offeredMode === "some" && offeredIds.length === 0) {
+      setFieldErrors((prev) => ({ ...prev, locationIds: "Pick at least one location." }));
+      toast.error(`Choose where this ${lower} is offered`);
+      throw new Error("validation");
+    }
     const eligibleStaffIds = staffMode === "selected" ? staffIds : [];
     if (staffMode === "selected" && staffIds.length === 0) {
       setFieldErrors((prev) => ({ ...prev, eligibleStaffIds: "Pick at least one person." }));
@@ -762,12 +883,11 @@ function ServiceDialog({
       throw new Error("validation");
     }
 
-    // Validate the consumables before anything saves, so a bad row can't leave the
-    // service written and its materials not.
-    const usage = isDetailing && usageDirty ? rowsToItems(usageRows) : null;
+    // The materials list saves in the same request as the service, so a bad line
+    // fails the whole save rather than leaving one half written.
+    const usage = consumablesOn && usageDirty ? rowsToItems(usageRows) : null;
     if (usage && !usage.ok) {
       setUsageInvalid(usage.index);
-      toast.error("Pick a consumable and a quantity above zero on each line");
       throw new Error("validation");
     }
     setUsageInvalid(null);
@@ -780,10 +900,18 @@ function ServiceDialog({
     }
     setUpsellInvalid(null);
 
-    const followUp = ruleFromDraft(followUpDraft);
-    if (!followUp.ok) {
-      setFollowUpError({ field: followUp.field, message: followUp.message });
-      toast.error("Check the follow-up reminder");
+    const followUps = rulesFromDrafts(followUpDrafts);
+    if (!followUps.ok) {
+      setFollowUpError({
+        index: followUps.index,
+        field: followUps.field,
+        message: followUps.message,
+      });
+      toast.error(
+        followUpDrafts.length > 1
+          ? `Check follow-up reminder ${followUps.index + 1}`
+          : "Check the follow-up reminder",
+      );
       throw new Error("validation");
     }
     setFollowUpError(null);
@@ -801,8 +929,22 @@ function ServiceDialog({
       depositMinor,
       variants: variantsPayload,
       availabilityWindows: offerWindows,
-      followUp: followUp.rule,
+      followUps: followUps.rules,
     };
+    if (activeLocations.length > 1) {
+      body.locationIds = offeredMode === "all" ? [] : offeredIds;
+    }
+    if (showResourceField) {
+      body.requiredResourceType = needsResource
+        ? (service?.requiredResourceType ?? (words.one === "bay" ? "bay" : "room"))
+        : null;
+    }
+    if (usage?.ok) {
+      body.consumables = usage.items.map((it) => ({
+        consumableId: it.consumableId,
+        quantity: it.quantity,
+      }));
+    }
 
     setFieldErrors({});
     // Hours go first: saving the service can itself touch the staff record (to add
@@ -828,15 +970,7 @@ function ServiceDialog({
         saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
         toast.success(`${noun} created`);
       }
-      // Materials used by default. Its own endpoint, so it follows the service save;
-      // a failure here is toasted by the hook and leaves the service itself saved.
-      if (usage?.ok) {
-        try {
-          await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
-        } catch {
-          toast.warning("The consumables list didn't save — open the service and try again.");
-        }
-      }
+      if (usage?.ok) setUsageDirty(false);
       // Add-ons offered with this service. Its own endpoint; a plan without the
       // feature answers 403, which opens the bolt-on dialog rather than a toast.
       if (upsells?.ok) {
@@ -1124,18 +1258,17 @@ function ServiceDialog({
           </div>
 
           {/* Detailing: what a job of this service uses up. Records only; never priced in. */}
-          {isDetailing ? (
+          {consumablesOn ? (
             <div className="grid gap-2 border-t pt-4">
               <Label>Consumables used</Label>
               <p className="text-xs text-muted-foreground">
-                What one job of this {lower} typically uses — a bottle of coating, two pads. New
-                bookings start with this list, which you can adjust per job. For your records only;
-                it never changes the price or shows to clients.
+                What one job usually uses. Every new job starts with this list, and you can change
+                it on the day.
               </p>
               {serviceUsage.isLoading || consumableCatalogue.isLoading ? (
                 <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
               ) : (
-                <ConsumableUsageEditor
+                <ServiceConsumablesEditor
                   rows={usageRows}
                   onChange={(rows) => {
                     setUsageRows(rows);
@@ -1143,10 +1276,22 @@ function ServiceDialog({
                     setUsageInvalid(null);
                   }}
                   catalogue={consumableCatalogue.data ?? []}
-                  invalidIndex={usageInvalid}
-                  idPrefix="sc"
+                  priceMinor={(() => {
+                    try {
+                      return parseMoneyToMinor(price);
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                  currency={tenant.business?.currency || "GBP"}
+                  canMoney={tenant.can(PERMISSIONS.PAYMENT_READ)}
+                  canAddToCatalogue={tenant.can(PERMISSIONS.BUSINESS_UPDATE)}
+                  invalid={usageInvalid !== null}
                 />
               )}
+              {usageInvalid !== null ? (
+                <p className="text-xs text-destructive">Each line needs a quantity above zero.</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -1193,16 +1338,18 @@ function ServiceDialog({
           <UpsellsUpgradeDialog open={upsellsPaywall} onOpenChange={setUpsellsPaywall} />
 
           {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
-          <FollowUpRuleEditor
-            draft={followUpDraft}
-            onChange={(next) => {
-              setFollowUpDraft(next);
-              setFollowUpError(null);
-            }}
-            error={followUpError}
-            serviceNoun={lower}
-            idPrefix="sfu"
-          />
+          {remindersAvailable(tenant.business?.industryTemplateKey) ? (
+            <FollowUpRuleEditor
+              drafts={followUpDrafts}
+              onChange={(next) => {
+                setFollowUpDrafts(next);
+                setFollowUpError(null);
+              }}
+              error={followUpError}
+              serviceNoun={lower}
+              idPrefix="sfu"
+            />
+          ) : null}
 
           {/* With one person on the books "everyone" and "them" are the same answer. */}
           {soleStaff ? null : (
@@ -1276,6 +1423,80 @@ function ServiceDialog({
               ) : null}
             </div>
           )}
+
+          {activeLocations.length > 1 ? (
+            <div className="grid gap-3 border-t pt-4">
+              <Label id="s-offered-label">Offered at</Label>
+              <RadioGroup
+                value={offeredMode}
+                onValueChange={(v) => setOfferedMode(v as "all" | "some")}
+                aria-labelledby="s-offered-label"
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                {(
+                  [
+                    ["all", "All locations", "Including any you add later."],
+                    ["some", "Only some locations", "Clients only see it where it's offered."],
+                  ] as const
+                ).map(([value, title, help]) => (
+                  <label
+                    key={value}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                      offeredMode === value && "border-primary/40 bg-primary-soft/40",
+                    )}
+                  >
+                    <RadioGroupItem value={value} className="mt-0.5" />
+                    <span className="grid gap-0.5">
+                      <span className="text-sm font-medium">{title}</span>
+                      <span className="text-xs text-muted-foreground">{help}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+              {offeredMode === "some" ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {activeLocations.map((l) => (
+                    <label key={l.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={offeredIds.includes(l.id)}
+                        onCheckedChange={(checked) =>
+                          setOfferedIds((ids) =>
+                            checked ? [...ids, l.id] : ids.filter((id) => id !== l.id),
+                          )
+                        }
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {fieldErrors.locationIds ? (
+                <p className="text-xs text-destructive">{fieldErrors.locationIds}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Staff can still book it elsewhere after a warning.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {showResourceField ? (
+            <div className="flex items-start justify-between gap-4 border-t pt-4">
+              <div className="grid gap-0.5">
+                <Label htmlFor="s-needs-resource">Needs a {words.one}</Label>
+                <p className="text-xs text-muted-foreground">
+                  Each {tenant.terminology.booking.toLowerCase()} takes a free {words.one} at its
+                  location. Times with none free aren't offered.
+                </p>
+              </div>
+              <Switch
+                id="s-needs-resource"
+                checked={needsResource}
+                onCheckedChange={setNeedsResource}
+              />
+            </div>
+          ) : null}
 
           {soleStaff ? (
             <WeeklyWindowsEditor

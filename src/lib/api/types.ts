@@ -30,6 +30,14 @@ export type WaitlistPreferences = schemas["WaitlistPreferences"];
 export type WaitlistTimeOfDay = WaitlistPreferences["timeOfDay"];
 export type WaitlistAction = "cancel" | "reopen";
 export type PublicWaitlistReceipt = schemas["PublicWaitlistReceipt"];
+export type WaitlistHistoryItem = schemas["WaitlistHistoryItem"];
+export type WaitlistCounts = schemas["WaitlistCounts"];
+export type WaitlistFigures = schemas["WaitlistFigures"];
+export type WaitlistFreeTimes = schemas["WaitlistFreeTimes"];
+export type WaitlistFreeTime = WaitlistFreeTimes["times"][number];
+/** A cancellation that freed time someone waiting could take (the slot-freed banner). */
+export type WaitlistSlotEvent = schemas["WaitlistSlotEvent"];
+export type WaitlistTab = "waiting" | "booked" | "removed";
 /** Upsells: add-ons paired with a service, and the post-booking offer loop. */
 export type ServiceUpsell = schemas["ServiceUpsell"];
 export type PublicServiceUpsell = schemas["PublicServiceUpsell"];
@@ -43,12 +51,30 @@ export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
  * Staff-only bookkeeping: never priced into a booking, never shown to a client.
  */
 export type Consumable = schemas["Consumable"];
+/** What was paid for what was bought ("5 litres for £40"). */
+export type ConsumablePack = NonNullable<Consumable["pack"]>;
 /** One consumable on a service (default usage) or a booking (actual usage). */
 export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
 /** A booking's usage plus the staff-only estimated materials cost. */
 export type BookingConsumablesUsage = schemas["BookingConsumablesUsage"];
 /** Body of `PUT …/consumables` on a service or booking — replaces the list. */
-export type ConsumableUsageInput = { consumableId: string; quantity: number; note?: string | null };
+export type ConsumableUsageInput = {
+  consumableId: string;
+  quantity: number;
+  note?: string | null;
+  /** Booking lines only: where a new line came from (a service's defaults, or picked). */
+  source?: "default" | "added";
+  /** Booking lines only: fill a line recorded without a cost from today's catalogue cost. */
+  useCurrentCost?: boolean;
+};
+/** Reporting windows for the catalogue figures and a consumable's activity. */
+export type ConsumableUsagePeriod = "this_month" | "last_month" | "last_3_months" | "this_year";
+/** The catalogue's figure tiles for a period. */
+export type ConsumableFigures =
+  paths["/api/v1/businesses/{businessId}/consumables/figures"]["get"]["responses"]["200"]["content"]["application/json"]["figures"];
+/** One consumable's period stats, the services it's a default on, and its recent jobs. */
+export type ConsumableActivity =
+  paths["/api/v1/businesses/{businessId}/consumables/{consumableId}/activity"]["get"]["responses"]["200"]["content"]["application/json"]["activity"];
 export type Booking = schemas["Booking"];
 export type SupportRequest = schemas["SupportRequest"];
 export type SupportRequestCategory = SupportRequest["category"];
@@ -101,6 +127,12 @@ export type Package = schemas["Package"];
 export type PackageLink = schemas["PackageLink"];
 /** Money off through an offer link: a whole percentage, or a fixed amount in minor units. */
 export type PackageLinkDiscount = NonNullable<PackageLink["discount"]>;
+/**
+ * An extra bookable window an offer link opens for one of its sessions: a weekly rule
+ * (`dayOfWeek` 1–7, Monday = 1) or one local calendar day (`date`), with half-open
+ * wall-clock minutes. Only a client arriving with the link's code sees these times.
+ */
+export type PackageLinkExtraWindow = PackageLink["extraAvailability"][number];
 export type PackagePurchase = schemas["PackagePurchase"];
 export type Entitlement = schemas["Entitlement"];
 export type CreditBalance = schemas["CreditBalance"];
@@ -108,12 +140,19 @@ export type EntitlementView = schemas["EntitlementView"];
 export type CreditLedgerEntry = schemas["CreditLedgerEntry"];
 export type PublicCataloguePlan = schemas["PublicCataloguePlan"];
 export type Payment = schemas["Payment"];
+/** One movement of money against a booking from the settlement ledger (card or recorded by hand). */
+export type BookingSettlementLine = schemas["BookingSettlement"];
 export type Refund = schemas["Refund"];
 export type PaymentReceipt = schemas["PaymentReceipt"];
 export type ConnectAccount = schemas["ConnectAccount"];
 export type Conversation = schemas["Conversation"];
 export type ConversationMessage = schemas["ConversationMessage"];
 export type Notification = schemas["Notification"];
+/** A phone or browser the signed-in user has turned push notifications on for. */
+export type PushDevice = schemas["PushDevice"];
+export type PushPlatform = PushDevice["platform"];
+/** Which push providers this deployment can deliver through, and the VAPID key for browsers. */
+export type PushConfig = schemas["PushConfig"];
 export type Dashboard = schemas["Dashboard"];
 export type FileResource = schemas["File"];
 export type Resource = schemas["Resource"];

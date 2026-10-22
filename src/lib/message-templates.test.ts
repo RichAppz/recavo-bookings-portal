@@ -6,6 +6,7 @@ import {
   SMS_WARN_LENGTH,
   smsSegments,
   unknownPlaceholders,
+  wordingPlacesLink,
   type TemplatePlaceholder,
 } from "./message-templates.ts";
 
@@ -59,5 +60,15 @@ describe("text message sizing", () => {
   it("warns just under the API's two-segment cap", () => {
     assert.equal(SMS_WARN_LENGTH, 300);
     assert.equal(smsSegments(SMS_WARN_LENGTH), 2);
+  });
+});
+
+describe("wordingPlacesLink", () => {
+  it("spots {{link}} and the follow-up alias, however they are spaced or cased", () => {
+    assert.equal(wordingPlacesLink("Book here: {{link}}"), true);
+    assert.equal(wordingPlacesLink("Book: {{ Booking_Link }}"), true);
+    assert.equal(wordingPlacesLink("Book: {{bookinglink}}"), true);
+    assert.equal(wordingPlacesLink("07858 399914 to book"), false);
+    assert.equal(wordingPlacesLink("{{linked_record}} is due"), false);
   });
 });

@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
+import { useTenant } from "@/lib/tenant/tenant-context";
 import { ApiError } from "@/lib/api";
 import {
   useCreateStaff,
@@ -46,8 +47,10 @@ import {
 } from "@/lib/api/hooks";
 import type { Staff } from "@/lib/api/types";
 import {
+  formatAllDaySpan,
+  formatBookingSpan,
   formatDuration,
-  formatInTz,
+  isAllDayEvent,
   minutesToTime,
   parseTimeInput,
   timeToMinutes,
@@ -350,7 +353,7 @@ function StaffPage() {
 
               <SectionCard
                 title="Time off and blocks"
-                description="Half-open [start, end) periods — the end instant itself is bookable again"
+                description="Holidays and blocked time. They can't be booked while they're off."
                 bodyClassName="p-0"
               >
                 <ul className="divide-y">
@@ -361,11 +364,9 @@ function StaffPage() {
                     >
                       <span className="min-w-0 flex-1 truncate">{b.reason ?? "Blocked"}</span>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatInTz(b.start, b.originatingTimezone, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}{" "}
-                        – {formatInTz(b.end, b.originatingTimezone, { timeStyle: "short" })}
+                        {isAllDayEvent(b.start, b.end, b.originatingTimezone)
+                          ? formatAllDaySpan(b.start, b.end, b.originatingTimezone)
+                          : formatBookingSpan(b.start, b.end, b.originatingTimezone)}
                       </span>
                       <Button
                         variant="ghost"
@@ -477,6 +478,7 @@ function StaffDialog({
   const services = useServices();
   const locations = useLocationsList();
   const soleLocation = useSoleLocation();
+  const tenant = useTenant();
 
   const [displayName, setDisplayName] = useState(staff?.displayName ?? "");
   const [title, setTitle] = useState(staff?.title ?? "");
@@ -490,6 +492,9 @@ function StaffDialog({
     staff?.eligibleServiceIds ?? [],
   );
   const [locationIds, setLocationIds] = useState<string[]>(staff?.locationIds ?? []);
+  const pickableLocations = (locations.data ?? []).filter(
+    (l) => l.active || locationIds.includes(l.id),
+  );
   const [workingRules, setWorkingRules] = useState<WorkingRuleRow[]>(() =>
     toWorkingRuleRows(staff),
   );
@@ -599,13 +604,13 @@ function StaffDialog({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="px-6 pt-safe-6 pb-4">
+        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 sm:pt-safe-6">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 pb-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 sm:px-6 pb-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="st-name">Name</Label>
@@ -721,11 +726,11 @@ function StaffDialog({
           {soleLocation ? null : (
             <div className="grid gap-2 border-t pt-4">
               <Label>Locations</Label>
-              {(locations.data ?? []).length === 0 ? (
+              {pickableLocations.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No locations created yet.</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {(locations.data ?? []).map((l) => (
+                  {pickableLocations.map((l) => (
                     <label key={l.id} className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={locationIds.includes(l.id)}
@@ -737,7 +742,8 @@ function StaffDialog({
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                Leave all unchecked to make this trainer available everywhere.
+                Leave all unchecked to make this {tenant.terminology.staff.toLowerCase()} available
+                everywhere.
               </p>
             </div>
           )}
@@ -840,7 +846,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter className="px-6 pb-safe-6">
+        <DialogFooter className="px-4 sm:px-6 pb-safe-6 max-sm:mx-0">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

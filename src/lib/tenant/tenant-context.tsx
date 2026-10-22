@@ -157,7 +157,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (currentLocationId === "all") return;
-    if (locations.length && !locations.some((l) => l.id === currentLocationId)) {
+    if (locations.length && !locations.some((l) => l.id === currentLocationId && l.active)) {
       setCurrentLocationIdState("all");
       writeStored(LOCATION_KEY, "all");
     }

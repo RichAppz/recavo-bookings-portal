@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { Layers, Package, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupGate } from "@/components/SetupGate";
+import { AddClientDialog } from "@/components/AddClientDialog";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
-import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import type { ContactChannel } from "@/lib/api/types";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { CustomerAddressFields } from "@/components/CustomerAddressFields";
-import { EMPTY_ADDRESS, formToAddress, type AddressFormState } from "@/lib/customers/address-form";
 import {
   Select,
   SelectContent,
@@ -33,7 +28,6 @@ import {
   useAddStaffTimeOff,
   useConversations,
   useCreateBooking,
-  useCreateCustomer,
   useCustomers,
   useIssuePackagePurchase,
   useLocationsList,
@@ -43,7 +37,7 @@ import {
   useStaffList,
   useStartPackagePurchase,
 } from "@/lib/api/hooks";
-import { customerDisplayName, type Customer } from "@/lib/api/types";
+import { customerDisplayName } from "@/lib/api/types";
 import { formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -169,201 +163,7 @@ function firstGate(
   return checks.find((c) => c.when)?.gate ?? null;
 }
 
-/**
- * The add-client drawer. Also opened over the top of the Add booking form via its
- * "+" — pass `onCreated` there so the new client lands straight in the picker and
- * the toast doesn't offer to navigate away from the half-filled booking.
- */
-export function AddClientDialog({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated?: (customer: Customer) => void;
-}) {
-  const navigate = useNavigate();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [nickname, setNickname] = useState("");
-  const [address, setAddress] = useState<AddressFormState>(EMPTY_ADDRESS);
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  // Default to SMS when a text would actually go out right now (Growth, or credits
-  // in hand); with an empty balance default to email so nothing silently falls back.
-  const smsCredits = useSmsCreditsSummary();
-  const defaultChannel: ContactChannel = smsCredits.canText ? "sms" : "email";
-  const [preferredChannel, setPreferredChannel] = useState<ContactChannel>(defaultChannel);
-  const [operationalNotifications, setOperationalNotifications] = useState(true);
-  const createCustomer = useCreateCustomer();
-
-  const reset = () => {
-    setFirstName("");
-    setLastName("");
-    setNickname("");
-    setAddress(EMPTY_ADDRESS);
-    setEmail("");
-    setPhone("");
-    setPreferredChannel(defaultChannel);
-    setOperationalNotifications(true);
-  };
-
-  return (
-    <Shell
-      open={open}
-      onClose={() => {
-        onClose();
-        reset();
-      }}
-      title="Add client"
-      description="Create a client record. They can be invited to the booking page later."
-      submitLabel="Add client"
-      what="this client"
-      dirty={Boolean(
-        firstName.trim() ||
-        lastName.trim() ||
-        nickname.trim() ||
-        email.trim() ||
-        phone.trim() ||
-        Object.values(address).some((v) => String(v ?? "").trim()),
-      )}
-      onSubmit={async () => {
-        if (!firstName.trim()) {
-          toast.error("A first name is required");
-          return;
-        }
-        const { customer, possibleDuplicates } = await createCustomer.mutateAsync({
-          firstName,
-          lastName: lastName || null,
-          nickname: nickname.trim() || null,
-          address: formToAddress(address),
-          email: email || null,
-          phone: phone || null,
-          preferredChannel,
-          operationalNotifications,
-        });
-        onCreated?.(customer);
-        if (possibleDuplicates.length > 0) {
-          const first = possibleDuplicates[0];
-          toast.warning(
-            `Client added — ${possibleDuplicates.length} similar ${
-              possibleDuplicates.length === 1 ? "record" : "records"
-            } already exist`,
-            {
-              description: `Did you mean ${customerDisplayName(first)}? Check you haven't created a duplicate.`,
-              action: onCreated
-                ? undefined
-                : {
-                    label: "View match",
-                    onClick: () =>
-                      void navigate({ to: "/clients/$clientId", params: { clientId: first.id } }),
-                  },
-            },
-          );
-        } else {
-          toast.success("Client added", {
-            action: onCreated
-              ? undefined
-              : {
-                  label: "Open",
-                  onClick: () =>
-                    void navigate({
-                      to: "/clients/$clientId",
-                      params: { clientId: customer.id },
-                    }),
-                },
-          });
-        }
-        reset();
-      }}
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="c-first">First name</Label>
-          <Input
-            id="c-first"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="Harriet"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="c-last">Last name</Label>
-          <Input
-            id="c-last"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            placeholder="Cole"
-          />
-        </div>
-        <div className="grid gap-2 sm:col-span-2">
-          <Label htmlFor="c-nickname">Known as</Label>
-          <Input
-            id="c-nickname"
-            value={nickname}
-            maxLength={80}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="e.g. Harriet – red Audi"
-          />
-          <p className="text-xs text-muted-foreground">
-            Optional. A name that helps you remember them; never shown to the client.
-          </p>
-        </div>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="c-email">Email</Label>
-        <Input
-          id="c-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="harriet.cole@example.co.uk"
-        />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="c-phone">Mobile</Label>
-        <Input
-          id="c-phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="07700 900123"
-        />
-      </div>
-      <CustomerAddressFields idPrefix="c-addr" value={address} onChange={setAddress} />
-      <div className="grid gap-2">
-        <Label>Preferred channel</Label>
-        <Select
-          value={preferredChannel}
-          onValueChange={(v) => setPreferredChannel(v as ContactChannel)}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="email">Email</SelectItem>
-            <SelectItem value="phone">Phone</SelectItem>
-            <SelectItem value="sms">SMS</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          SMS needs a mobile number — reminders fall back to email until one is saved.
-          {preferredChannel === "sms" && smsCredits.level !== "unlimited"
-            ? ` ${smsCredits.note}`
-            : ""}
-        </p>
-      </div>
-      <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-        <div>
-          <p className="text-sm font-medium">Operational notifications</p>
-          <p className="text-xs text-muted-foreground">Booking reminders and service updates.</p>
-        </div>
-        <Switch checked={operationalNotifications} onCheckedChange={setOperationalNotifications} />
-      </label>
-    </Shell>
-  );
-}
+export { AddClientDialog };
 
 function SellPackageDialog({
   open,

@@ -341,6 +341,8 @@ export interface BookingFlowProps {
   readonly initialServiceId?: string;
   readonly initialLocationId?: string;
   readonly initialSlot?: AvailabilitySlot | null;
+  /** Opens straight on a package's Details step (the client booking page's Packages list). */
+  readonly initialPackageId?: string | null;
   /**
    * Code from a package link the studio shared (`?offer=`). The first step then
    * shows only that link's packages — including ones kept off the public page —
@@ -361,6 +363,7 @@ export function BookingFlow({
   initialServiceId,
   initialLocationId,
   initialSlot = null,
+  initialPackageId = null,
   offerCode = null,
   onLeaveOffer,
 }: BookingFlowProps) {
@@ -368,10 +371,10 @@ export function BookingFlow({
   const navigate = useNavigate();
   const auth = useAuth();
   const signedIn = auth.status === "authenticated";
-  const [step, setStep] = useState(initialSlot ? STEP_DETAILS : STEP_CHOOSE);
+  const [step, setStep] = useState(initialSlot || initialPackageId ? STEP_DETAILS : STEP_CHOOSE);
   /** Which of the two journeys the customer is on, chosen on the first step. */
-  const [mode, setMode] = useState<"service" | "package">("service");
-  const [packageId, setPackageId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"service" | "package">(initialPackageId ? "package" : "service");
+  const [packageId, setPackageId] = useState<string | null>(initialPackageId);
   const [serviceId, setServiceId] = useState<string | null>(initialServiceId ?? null);
   const [locationId, setLocationId] = useState<string | null>(
     initialLocationId ?? initialSlot?.locationId ?? null,
@@ -389,8 +392,9 @@ export function BookingFlow({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
-  // "Can't find a time? Join the waitlist" — the sheet for the expanded service.
+  // "None of these work? Join the waitlist": the sheet for the expanded service.
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const waitlistOn = studio?.waitlistEnabled !== false;
   const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
@@ -1248,10 +1252,15 @@ export function BookingFlow({
                                     <p className="text-sm text-muted-foreground">
                                       {loadingTimes
                                         ? "Checking this date…"
-                                        : "No availability on this date. Try another day."}
+                                        : waitlistOn
+                                          ? "Try another day, or join the waitlist and we'll be in touch if a time opens."
+                                          : "No availability on this date. Try another day."}
                                     </p>
-                                    {loadingTimes ? null : (
-                                      <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    {loadingTimes || !waitlistOn ? null : (
+                                      <WaitlistPrompt
+                                        lead={null}
+                                        onClick={() => setWaitlistOpen(true)}
+                                      />
                                     )}
                                   </div>
                                 ) : (
@@ -1288,7 +1297,12 @@ export function BookingFlow({
                                     <p className="text-xs text-muted-foreground">
                                       Times shown in {slots[0]?.displayTimezone}.
                                     </p>
-                                    <WaitlistPrompt onClick={() => setWaitlistOpen(true)} />
+                                    {waitlistOn ? (
+                                      <WaitlistPrompt
+                                        lead="None of these work?"
+                                        onClick={() => setWaitlistOpen(true)}
+                                      />
+                                    ) : null}
                                   </>
                                 )}
                               </div>
@@ -1843,10 +1857,10 @@ export function BookingFlow({
 }
 
 /** The one line under the times: the diary can't help, but the studio can. */
-function WaitlistPrompt({ onClick }: { onClick: () => void }) {
+function WaitlistPrompt({ lead, onClick }: { lead: string | null; onClick: () => void }) {
   return (
     <p className="text-sm text-muted-foreground">
-      Can't find a time that works?{" "}
+      {lead ? `${lead} ` : null}
       <button
         type="button"
         onClick={onClick}
