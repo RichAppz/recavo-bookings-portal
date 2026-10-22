@@ -20,9 +20,9 @@ import { useMoney } from "./shared";
 const HERO =
   "rounded-[20px] bg-[#10172a] text-white dark:border dark:border-[#1f2a3d] dark:bg-[#0b1220]";
 const MINT_BUTTON =
-  "h-10 rounded-[11px] bg-[#2bb985] font-bold text-[#10172a] hover:bg-[#2bb985]/90 dark:bg-[#2ee6a6] dark:hover:bg-[#2ee6a6]/90";
+  "h-11 gap-2 rounded-[12px] bg-[#2bb985] px-5 font-bold text-[#10172a] hover:bg-[#2bb985]/90 dark:bg-[#2ee6a6] dark:hover:bg-[#2ee6a6]/90";
 const OUTLINE_BUTTON =
-  "h-10 rounded-[11px] border border-white/20 bg-transparent font-bold text-white hover:bg-white/10 hover:text-white";
+  "h-11 gap-2 rounded-[12px] border border-white/20 bg-transparent px-5 font-bold text-white hover:bg-white/10 hover:text-white";
 
 function Label({ children }: { children: string }) {
   return (
@@ -65,7 +65,7 @@ export function UpNextEmpty({
           ? "Share your booking page so clients can book themselves, or add one yourself."
           : "Share your booking page and the diary fills itself."}
       </p>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:flex">
+      <div className={cn("mt-4 gap-2", firstBooking ? "grid grid-cols-2 sm:flex" : "flex")}>
         <Button className={MINT_BUTTON} onClick={onShare}>
           <Share2 className="size-4" /> Share booking page
         </Button>

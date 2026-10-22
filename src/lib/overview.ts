@@ -367,19 +367,19 @@ export function attentionSummary(items: readonly AttentionItem[]): string {
     .map((i) => {
       switch (i.kind) {
         case "payments":
-          return `${i.count} ${plural(i.count, "payment")}`;
+          return `${i.count} to collect`;
         case "attendance":
-          return "attendance";
+          return `${i.count} to mark`;
         case "package_requests":
-          return `${i.count} ${plural(i.count, "package")}`;
+          return `${i.count} package ${plural(i.count, "request")}`;
         case "add_ons":
-          return `${i.count} ${plural(i.count, "add-on")}`;
+          return `${i.count} add-on ${plural(i.count, "request")}`;
         case "waitlist":
           return `${i.count} waiting`;
         case "sms_low":
-          return "texts";
+          return "texts running low";
         case "setup":
-          return "set-up";
+          return `${i.count} set-up ${plural(i.count, "step")}`;
       }
     })
     .join(" · ");

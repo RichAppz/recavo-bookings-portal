@@ -184,18 +184,39 @@ export function AttentionStrip({
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   const total = attentionTotal(items);
+  // One thing to do: show it and go straight there, rather than a list of one.
+  const only = items.length === 1 ? items[0]! : null;
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-2xl border border-[#f3d6b5] bg-[#fdf4ea] px-3.5 py-3 text-left dark:border-[rgba(233,146,57,0.32)] dark:bg-[rgba(233,146,57,0.10)]"
+        onClick={() => (only ? onSelect(only) : setOpen(true))}
+        className="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-2xl border border-[#f3d6b5] bg-[#fdf4ea] px-3.5 py-3 text-left transition-colors active:bg-[#fbead6] dark:border-[rgba(233,146,57,0.32)] dark:bg-[rgba(233,146,57,0.10)] dark:active:bg-[rgba(233,146,57,0.16)]"
       >
-        <CountPill total={total} />
+        {only ? (
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-[38px] shrink-0 items-center justify-center rounded-[11px]",
+              ATTENTION_TILE[only.tone],
+            )}
+          >
+            {ICONS[only.kind]}
+          </span>
+        ) : (
+          <span
+            aria-hidden
+            className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-[#e99239] text-[15px] font-extrabold text-white tabular-nums"
+          >
+            {total}
+          </span>
+        )}
         <span className="min-w-0 flex-1">
-          <span className="block text-[14.5px] font-bold">Needs your attention</span>
+          <span className="block truncate text-[14.5px] font-bold">
+            {only ? only.title : `${total} things need you`}
+          </span>
           <span className="block truncate text-[12.5px] text-muted-foreground">
-            {attentionSummary(items)}
+            {only ? only.detail : attentionSummary(items)}
           </span>
         </span>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />

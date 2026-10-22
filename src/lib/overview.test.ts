@@ -304,7 +304,10 @@ describe("attention", () => {
     assert.equal(items[3]!.title, "10 texts left");
     assert.equal(items[4]!.title, "Finish setting up · 2 left");
     assert.equal(attentionTotal(items), 2 + 1 + 2 + 1 + 2);
-    assert.equal(attentionSummary(items), "2 payments · attendance · 2 packages · texts · set-up");
+    assert.equal(
+      attentionSummary(items),
+      "2 to collect · 1 to mark · 2 package requests · texts running low · 2 set-up steps",
+    );
   });
 
   it("counts several sessions to mark in the trade's words", () => {
