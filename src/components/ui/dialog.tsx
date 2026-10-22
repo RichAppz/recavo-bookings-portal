@@ -48,6 +48,41 @@ function useIsPhoneDialog(): boolean {
 }
 
 /**
+ * The phone sheet's grab handle and close disc, kept at the top while the form
+ * scrolls. A zero-height sticky strip, pulled out to the sheet's edges by reading
+ * the padding it sits in, since consumers may change that padding.
+ */
+function PhoneSheetChrome({ children }: { children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = React.useState({ top: 0, left: 0, right: 0, gap: 0 });
+  React.useLayoutEffect(() => {
+    const parent = ref.current?.parentElement;
+    if (!parent) return;
+    const style = getComputedStyle(parent);
+    setEdge({
+      top: parseFloat(style.paddingTop) || 0,
+      left: parseFloat(style.paddingLeft) || 0,
+      right: parseFloat(style.paddingRight) || 0,
+      gap: parseFloat(style.rowGap) || 0,
+    });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none sticky top-0 z-20 h-0 shrink-0"
+      style={{
+        marginTop: -edge.top,
+        marginLeft: -edge.left,
+        marginRight: -edge.right,
+        marginBottom: -edge.gap,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * Dialogs render as a right-hand side drawer over the content. Phones get the iOS
  * sheet presentation instead: up from the bottom, stopping short of the top so the
  * page shows behind it, with a grab handle (the same as ui/sheet.tsx).
@@ -64,6 +99,22 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onInteractOutside, ...props }, ref) => {
   const phone = useIsPhoneDialog();
+  // A finger-sized square (44px on phones, 36px with a pointer) around the glyph.
+  // On phones the glyph sits in a grey disc, the way iOS draws a sheet's close
+  // control, and the header drops below it (see DialogHeader).
+  const close = (
+    <DialogPrimitive.Close
+      className={cn(
+        "pointer-events-auto absolute right-safe-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
+        phone ? "top-2" : "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+      )}
+    >
+      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+        <X className="size-5 sm:size-[18px]" />
+      </span>
+      <span className="sr-only">Close</span>
+    </DialogPrimitive.Close>
+  );
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -84,27 +135,16 @@ const DialogContent = React.forwardRef<
         {...props}
       >
         {phone ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute top-2 left-1/2 h-1.5 w-10 -translate-x-1/2 rounded-full bg-border"
-          />
+          <PhoneSheetChrome>
+            <span
+              aria-hidden
+              className="absolute top-2 left-1/2 h-1.5 w-10 -translate-x-1/2 rounded-full bg-border"
+            />
+            {close}
+          </PhoneSheetChrome>
         ) : null}
         {children}
-        {/* A finger-sized square (44px on phones, 36px with a pointer) around the
-          glyph; the bare 16px icon it replaces was the only thing you could hit.
-          On phones the glyph sits in a grey disc, the way iOS draws a sheet's
-          close control, and the header drops below it (see DialogHeader). */}
-        <DialogPrimitive.Close
-          className={cn(
-            "absolute right-safe-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
-            phone ? "top-2" : "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
-          )}
-        >
-          <span className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-            <X className="size-5 sm:size-[18px]" />
-          </span>
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {phone ? null : close}
       </DialogPrimitive.Content>
     </DialogPortal>
   );
