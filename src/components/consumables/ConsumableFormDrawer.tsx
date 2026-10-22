@@ -308,7 +308,7 @@ export function ConsumableFormDrawer({
         {phone ? (
           <span aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
         ) : null}
-        <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+        <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
           <SheetTitle className="text-xl font-extrabold">
             {consumable ? "Edit consumable" : "Add consumable"}
           </SheetTitle>
@@ -317,7 +317,7 @@ export function ConsumableFormDrawer({
 
         <form
           id="consumable-form"
-          className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5"
+          className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-4 sm:px-6 py-5"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
@@ -678,7 +678,7 @@ export function ConsumableFormDrawer({
           ) : null}
         </form>
 
-        <footer className="grid gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <footer className="grid gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {tried && missing.length > 0 ? (
             <p className="text-xs text-muted-foreground" aria-live="polite">
               Still needed: {missing.join(", ")}.

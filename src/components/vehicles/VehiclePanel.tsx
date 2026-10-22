@@ -222,7 +222,7 @@ export function VehiclePanel({
               <SheetTitle className="sr-only">{term}</SheetTitle>
               <SheetDescription className="sr-only">Loading</SheetDescription>
               {fetched.isError ? (
-                <p className="px-6 text-center text-sm">
+                <p className="px-4 sm:px-6 text-center text-sm">
                   Couldn't load this {lower}. It may have been deleted.
                 </p>
               ) : (
@@ -231,7 +231,7 @@ export function VehiclePanel({
             </div>
           ) : (
             <>
-              <header className="flex items-start gap-3 border-b px-6 pt-6 pb-4">
+              <header className="flex items-start gap-3 border-b px-4 sm:px-6 pt-6 pb-4">
                 <div className="grid min-w-0 flex-1 gap-2">
                   {reg ? <NumberPlate registration={reg} size="large" className="w-fit" /> : null}
                   <SheetTitle className="truncate text-[22px] leading-tight font-extrabold tracking-tight">
@@ -306,7 +306,7 @@ export function VehiclePanel({
                 </div>
               </header>
 
-              <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
+              <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-4 sm:px-6 py-5">
                 <OwnerCard
                   customerId={record.customerId}
                   name={owner.data ? customerDisplayName(owner.data) : null}
@@ -450,7 +450,7 @@ export function VehiclePanel({
                 <OtherFields values={values} fields={fields} />
               </div>
 
-              <footer className="flex gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <footer className="flex gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {canEdit ? (
                   <Button
                     variant="outline"

@@ -70,7 +70,7 @@ export function NewMessagePicker({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[460px]">
-        <DialogHeader className="px-5 pt-5 pb-3 text-left">
+        <DialogHeader className="px-4 sm:px-5 pt-5 pb-3 text-left">
           <DialogTitle className="text-[20px] font-extrabold">New message</DialogTitle>
           <DialogDescription>Pick a client to message.</DialogDescription>
         </DialogHeader>

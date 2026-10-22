@@ -939,7 +939,7 @@ function RemindersPage() {
 
       <Sheet open={rulesSheet} onOpenChange={setRulesSheet}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[420px]">
-          <SheetHeader className="border-b px-5 pt-6 pb-4 text-left">
+          <SheetHeader className="border-b px-4 sm:px-5 pt-6 pb-4 text-left">
             <SheetTitle className="text-xl font-extrabold">Repeat reminders</SheetTitle>
             <SheetDescription>
               Set on a {serviceNoun}. Every time it&rsquo;s done, the client is reminded when
@@ -948,14 +948,14 @@ function RemindersPage() {
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rules.length === 0 ? (
-              <p className="p-5 text-sm text-muted-foreground">None yet.</p>
+              <p className="p-4 sm:p-5 text-sm text-muted-foreground">None yet.</p>
             ) : (
               <ul className="divide-y">{rules.map(ruleRow)}</ul>
             )}
             <div className="grid gap-4 p-4">{messageCard}</div>
           </div>
           {canEditRules ? (
-            <footer className="border-t px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <footer className="border-t px-4 sm:px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <Button
                 className="h-12 w-full"
                 onClick={() => {
@@ -974,14 +974,14 @@ function RemindersPage() {
         <SheetContent side="bottom" className="max-h-[85vh] gap-0 rounded-t-3xl p-0">
           {detail ? (
             <>
-              <SheetHeader className="px-5 pt-6 pb-3 text-left">
+              <SheetHeader className="px-4 sm:px-5 pt-6 pb-3 text-left">
                 <SheetTitle className="flex items-center gap-3 text-xl font-extrabold">
                   <Avatar f={detail} size={40} />
                   <span className="truncate">{customerName(detail)}</span>
                 </SheetTitle>
                 <SheetDescription className="sr-only">Reminder details</SheetDescription>
               </SheetHeader>
-              <div className="grid gap-3 px-5 pb-4 text-sm">
+              <div className="grid gap-3 px-4 sm:px-5 pb-4 text-sm">
                 {dueFor(detail)}
                 <dl className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-secondary/60 px-3 py-2.5">
@@ -1000,7 +1000,7 @@ function RemindersPage() {
                   {lastInLabel(detail.lastDoneAt, timezone, now)}
                 </p>
               </div>
-              <footer className="flex items-center gap-2 border-t px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <footer className="flex items-center gap-2 border-t px-4 sm:px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <Button
                   variant="outline"
                   className="h-12 flex-1"

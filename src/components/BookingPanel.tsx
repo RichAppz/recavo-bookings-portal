@@ -975,7 +975,7 @@ export function BookingPanel({
         />
         {/* Spec §5.2: status pill and reference on the top row with the menu and close;
             the service as the title; when and where under it. */}
-        <header className="flex items-start justify-between gap-3 border-b p-5">
+        <header className="flex items-start justify-between gap-3 border-b p-4 sm:p-5">
           {bookingQuery.isLoading || !booking ? (
             <div className="w-full">
               <TableGhost rows={3} />
@@ -1105,7 +1105,7 @@ export function BookingPanel({
         </header>
 
         {bookingQuery.isError ? (
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-4 sm:p-5">
             <p className="text-sm text-destructive">
               {bookingQuery.error instanceof Error
                 ? bookingQuery.error.message
@@ -1113,7 +1113,7 @@ export function BookingPanel({
             </p>
           </div>
         ) : !booking ? (
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-4 sm:p-5">
             {online ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (
@@ -1131,7 +1131,7 @@ export function BookingPanel({
           </div>
         ) : (
           <>
-            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5 pb-12 sm:pb-5">
+            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 sm:p-5 pb-12 sm:pb-5">
               {/* Spec §5.2 state notice: what is going on, in plain words, only when
                   there is something to know. */}
               {stateNotice ? (

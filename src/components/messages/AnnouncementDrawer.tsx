@@ -98,7 +98,7 @@ export function AnnouncementDrawer({
           phone ? "h-dvh w-full max-w-none border-0" : "w-full sm:max-w-[480px]",
         )}
       >
-        <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+        <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
           <SheetTitle className="text-[22px] font-extrabold tracking-tight">
             Send announcement
           </SheetTitle>
@@ -299,7 +299,7 @@ function Composer({ onDone }: { onDone: () => void }) {
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6 py-5">
         <fieldset>
           <legend className="mb-2 text-[13.5px] font-extrabold">Who to send to</legend>
           <div
@@ -495,7 +495,7 @@ function Composer({ onDone }: { onDone: () => void }) {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t bg-panel px-6 pt-4 pb-safe-5">
+      <div className="flex flex-wrap items-center gap-2 border-t bg-panel px-4 sm:px-6 pt-4 pb-safe-5">
         <Button
           variant="outline"
           size="sm"
@@ -744,16 +744,17 @@ function History() {
   const scheduled = rows.filter((r) => r.broadcast.status === "scheduled");
   const done = rows.filter((r) => r.broadcast.status !== "scheduled");
 
-  if (list.isLoading) return <p className="px-6 py-5 text-sm text-muted-foreground">Loading…</p>;
+  if (list.isLoading)
+    return <p className="px-4 sm:px-6 py-5 text-sm text-muted-foreground">Loading…</p>;
   if (rows.length === 0) {
     return (
-      <p className="px-6 py-8 text-center text-[13.5px] text-muted-foreground">
+      <p className="px-4 sm:px-6 py-8 text-center text-[13.5px] text-muted-foreground">
         Announcements you schedule or send show here, with how they did.
       </p>
     );
   }
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6 py-5">
       {scheduled.length ? (
         <section aria-label="Scheduled">
           <h3 className="mb-2 text-[13.5px] font-extrabold">Scheduled</h3>

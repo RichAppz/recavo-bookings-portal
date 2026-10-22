@@ -71,7 +71,7 @@ export function DuplicatesDialog({
         }}
       >
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[520px]">
-          <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+          <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
             <SheetTitle className="text-[22px] font-extrabold tracking-tight">
               Registrations on more than one client
             </SheetTitle>
@@ -80,7 +80,7 @@ export function DuplicatesDialog({
               that's out of date, or mark them as different {lower}s.
             </SheetDescription>
           </SheetHeader>
-          <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-6 py-5">
+          <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-4 sm:px-6 py-5">
             {groups.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing left to review.</p>
             ) : (

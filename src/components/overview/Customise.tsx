@@ -38,7 +38,7 @@ function SortableList<T extends string>({
 }) {
   const [dragging, setDragging] = useState<T | null>(null);
   return (
-    <section className="px-5 py-3">
+    <section className="px-4 py-3 sm:px-5">
       <h3 className="pb-2 text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
         {title}
       </h3>
@@ -137,7 +137,7 @@ export function CustomiseSheet({
           side === "bottom" ? "max-h-[92dvh] rounded-t-2xl" : "w-full sm:max-w-md",
         )}
       >
-        <SheetHeader className="px-5 pt-5 pb-2 text-left">
+        <SheetHeader className="px-4 sm:px-5 pt-5 pb-2 text-left">
           <SheetTitle>Customise Overview</SheetTitle>
           <SheetDescription>
             Choose what shows and in what order. Saved for you on this device.
@@ -166,7 +166,7 @@ export function CustomiseSheet({
           }
           onHidden={(quickHidden) => update({ quickHidden })}
         />
-        <SheetFooter className="mt-auto flex-row justify-between border-t border-border px-5 py-3">
+        <SheetFooter className="mt-auto flex-row justify-between border-t border-border px-4 sm:px-5 py-3">
           <Button
             variant="ghost"
             onClick={() =>

@@ -480,7 +480,7 @@ function JobUsageSheet({
         {phone ? (
           <span aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
         ) : null}
-        <SheetHeader className="border-b px-6 pt-5 pb-4 text-left">
+        <SheetHeader className="border-b px-4 sm:px-6 pt-5 pb-4 text-left">
           <div className="flex items-start justify-between gap-3">
             <div className="grid min-w-0 gap-0.5">
               <SheetTitle className="text-xl font-extrabold">What this job used</SheetTitle>
@@ -492,7 +492,7 @@ function JobUsageSheet({
           </div>
         </SheetHeader>
 
-        <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-6 py-5">
+        <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto px-4 sm:px-6 py-5">
           {missing.map((m) => (
             <div key={m.serviceId} className={cn("grid gap-2 rounded-xl px-3.5 py-3", MINT_TINT)}>
               <p className="text-[13px]">
@@ -605,7 +605,7 @@ function JobUsageSheet({
           )}
         </div>
 
-        <footer className="grid gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <footer className="grid gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}

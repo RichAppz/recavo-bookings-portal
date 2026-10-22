@@ -108,13 +108,13 @@ export function WaitlistEntryPanel({
           />
         ) : (
           <>
-            <SheetHeader className="px-6 pt-6 pb-4 text-left">
+            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 text-left">
               <SheetTitle>
                 <Skeleton className="h-6 w-40" />
               </SheetTitle>
               <SheetDescription className="sr-only">Loading the waitlist entry</SheetDescription>
             </SheetHeader>
-            <div className="grid gap-3 px-6">
+            <div className="grid gap-3 px-4 sm:px-6">
               <Skeleton className="h-11 w-full" />
               <Skeleton className="h-28 w-full" />
               <Skeleton className="h-20 w-full" />
@@ -172,7 +172,7 @@ function PanelBody({
 
   return (
     <>
-      <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+      <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
         <div className="flex items-center gap-3 pr-8">
           <WaitlistAvatar entry={entry} size={38} />
           <div className="grid min-w-0 gap-0.5">
@@ -190,7 +190,7 @@ function PanelBody({
         </div>
       </SheetHeader>
 
-      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
+      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-4 sm:px-6 py-5">
         <section aria-label="Contact" className="grid gap-2">
           <div className="grid grid-cols-3 gap-2">
             <ContactButton
@@ -374,7 +374,7 @@ function PanelBody({
         </section>
       </div>
 
-      <footer className="flex items-center gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <footer className="flex items-center gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
         {waiting ? (
           canAct ? (
             <>

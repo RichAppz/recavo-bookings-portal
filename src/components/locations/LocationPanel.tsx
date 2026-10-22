@@ -158,19 +158,19 @@ export function LocationPanel({
             onAllBookings={onAllBookings}
           />
         ) : outsideScope ? (
-          <SheetHeader className="px-6 pt-6 pb-4 text-left">
+          <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 text-left">
             <SheetTitle>Location</SheetTitle>
             <SheetDescription>This location isn't one of yours.</SheetDescription>
           </SheetHeader>
         ) : (
           <>
-            <SheetHeader className="px-6 pt-6 pb-4 text-left">
+            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 text-left">
               <SheetTitle>
                 <Skeleton className="h-6 w-40" />
               </SheetTitle>
               <SheetDescription className="sr-only">Loading the location</SheetDescription>
             </SheetHeader>
-            <div className="grid gap-3 px-6">
+            <div className="grid gap-3 px-4 sm:px-6">
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-28 w-full" />
             </div>
@@ -222,7 +222,7 @@ function PanelBody({
 
   return (
     <>
-      <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+      <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
         <div className="flex items-center gap-3 pr-8">
           <PinTile kind={kind} />
           <div className="grid min-w-0 gap-0.5">
@@ -239,7 +239,7 @@ function PanelBody({
         </div>
       </SheetHeader>
 
-      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
+      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-4 sm:px-6 py-5">
         <section aria-label="Facts" className="grid grid-cols-3 gap-2">
           <Fact label="Today" value={l.active ? today.pill : "Archived"} />
           <Fact
@@ -371,7 +371,7 @@ function PanelBody({
       </div>
 
       {canEdit ? (
-        <footer className="flex items-center gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <footer className="flex items-center gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {!everBooked ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

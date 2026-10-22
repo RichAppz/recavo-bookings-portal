@@ -49,7 +49,7 @@ export function PhoneLocationSwitcher({ className }: { className?: string }) {
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="pb-safe gap-0 rounded-t-3xl p-0">
-          <SheetHeader className="px-5 pt-5 pb-2 text-left">
+          <SheetHeader className="px-4 sm:px-5 pt-5 pb-2 text-left">
             <SheetTitle>Show</SheetTitle>
             <SheetDescription>
               Applies to the calendar, jobs, overview, waitlist and messages on this device.

@@ -604,13 +604,13 @@ function StaffDialog({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="px-6 pt-6 pb-4 sm:pt-safe-6">
+        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 sm:pt-safe-6">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 pb-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 sm:px-6 pb-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="st-name">Name</Label>
@@ -846,7 +846,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter className="px-6 pb-safe-6 max-sm:mx-0">
+        <DialogFooter className="px-4 sm:px-6 pb-safe-6 max-sm:mx-0">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

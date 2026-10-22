@@ -373,7 +373,7 @@ export function VehicleFormDrawer({
             document.getElementById("vf-reg")?.focus();
           }}
         >
-          <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+          <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
             <SheetTitle className="text-[22px] font-extrabold tracking-tight">
               {isEdit ? `Edit ${lower}` : `Add ${lower}`}
             </SheetTitle>
@@ -389,7 +389,7 @@ export function VehicleFormDrawer({
           <form
             id="vehicle-form"
             noValidate
-            className="no-scrollbar grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-6 py-5"
+            className="no-scrollbar grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-4 sm:px-6 py-5"
             onSubmit={(e) => {
               e.preventDefault();
               void submit("add");
@@ -695,7 +695,7 @@ export function VehicleFormDrawer({
             </section>
           </form>
 
-          <footer className="flex gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:justify-end">
+          <footer className="flex gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button
               type="button"
               variant="ghost"

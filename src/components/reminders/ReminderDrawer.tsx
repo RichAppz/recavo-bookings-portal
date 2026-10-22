@@ -478,7 +478,7 @@ export function ReminderDrawer({
             e.preventDefault();
           }}
         >
-          <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+          <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
             <SheetTitle className="text-[22px] font-extrabold tracking-tight">
               {editing ? "Edit reminder" : "Add reminder"}
             </SheetTitle>
@@ -490,7 +490,7 @@ export function ReminderDrawer({
           <form
             id="reminder-form"
             noValidate
-            className="no-scrollbar grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-6 py-5 **:min-w-0"
+            className="no-scrollbar grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-4 sm:px-6 py-5 **:min-w-0"
             onSubmit={(e) => {
               e.preventDefault();
               void save();
@@ -856,7 +856,7 @@ export function ReminderDrawer({
             ) : null}
           </form>
 
-          <footer className="flex gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:justify-end">
+          <footer className="flex gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:justify-end">
             <Button
               type="button"
               variant="ghost"

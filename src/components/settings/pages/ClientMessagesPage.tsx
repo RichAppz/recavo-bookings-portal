@@ -369,14 +369,14 @@ function RemindersSection({ canEdit }: { canEdit: boolean }) {
       ) : (
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
-            <SheetHeader className="space-y-1 border-b px-5 py-4 pr-12 text-left">
+            <SheetHeader className="space-y-1 border-b px-4 sm:px-5 py-4 pr-12 text-left">
               <SheetTitle>Reminder timing</SheetTitle>
               <SheetDescription>
                 When reminders go out before each {tenant.terminology.booking.toLowerCase()}, and by
                 which channel.
               </SheetDescription>
             </SheetHeader>
-            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-5">{editor}</div>
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{editor}</div>
           </SheetContent>
         </Sheet>
       )}

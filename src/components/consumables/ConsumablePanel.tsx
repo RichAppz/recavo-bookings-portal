@@ -108,13 +108,13 @@ export function ConsumablePanel({
           />
         ) : (
           <>
-            <SheetHeader className="px-6 pt-6 pb-4 text-left">
+            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 text-left">
               <SheetTitle>
                 <Skeleton className="h-6 w-40" />
               </SheetTitle>
               <SheetDescription className="sr-only">Loading the consumable</SheetDescription>
             </SheetHeader>
-            <div className="grid gap-3 px-6">
+            <div className="grid gap-3 px-4 sm:px-6">
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-28 w-full" />
             </div>
@@ -164,7 +164,7 @@ function PanelBody({
 
   return (
     <>
-      <SheetHeader className="border-b px-6 pt-6 pb-4 text-left">
+      <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
         <div className="flex items-center gap-3 pr-8">
           <ItemTile size={44} />
           <div className="grid min-w-0 gap-0.5">
@@ -181,7 +181,7 @@ function PanelBody({
         </div>
       </SheetHeader>
 
-      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
+      <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-4 sm:px-6 py-5">
         <div role="group" aria-label="Period" className="flex gap-2">
           {PANEL_PERIODS.map((p) => (
             <button
@@ -327,7 +327,7 @@ function PanelBody({
       </div>
 
       {canEdit ? (
-        <footer className="flex items-center gap-2 border-t px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <footer className="flex items-center gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

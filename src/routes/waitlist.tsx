@@ -900,11 +900,11 @@ function WaitlistPage() {
 
       <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
         <SheetContent side="bottom" className="gap-0 rounded-t-3xl p-0">
-          <SheetHeader className="px-5 pt-6 pb-3 text-left">
+          <SheetHeader className="px-4 sm:px-5 pt-6 pb-3 text-left">
             <SheetTitle className="text-xl font-extrabold">Search and filters</SheetTitle>
             <SheetDescription className="sr-only">Narrow the waitlist</SheetDescription>
           </SheetHeader>
-          <div className="grid gap-3 px-5 pb-6">
+          <div className="grid gap-3 px-4 sm:px-5 pb-6">
             {searchBox("w-full")}
             <div className="flex flex-wrap gap-2">
               {serviceFilter}
