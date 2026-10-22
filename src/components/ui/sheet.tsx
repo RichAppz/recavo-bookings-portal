@@ -135,8 +135,8 @@ const SheetContent = React.forwardRef<
             )}
           >
             {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
-            <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-              <X className="size-4.5 sm:size-4" />
+            <span className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+              <X className="size-5 sm:size-[18px]" />
             </span>
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

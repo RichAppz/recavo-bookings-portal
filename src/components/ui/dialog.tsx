@@ -100,8 +100,8 @@ const DialogContent = React.forwardRef<
             phone ? "top-2" : "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
           )}
         >
-          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-            <X className="size-4.5 sm:size-4" />
+          <span className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+            <X className="size-5 sm:size-[18px]" />
           </span>
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

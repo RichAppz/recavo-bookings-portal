@@ -1092,8 +1092,14 @@ export function BookingPanel({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close panel">
-              <X className="size-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10 rounded-full bg-muted text-foreground/70 sm:size-9 sm:rounded-md sm:bg-transparent sm:text-inherit [&_svg]:size-5 sm:[&_svg]:size-[18px]"
+              onClick={onClose}
+              aria-label="Close panel"
+            >
+              <X />
             </Button>
           </div>
         </header>

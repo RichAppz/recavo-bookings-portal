@@ -297,11 +297,11 @@ export function VehiclePanel({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="size-9"
+                    className="size-10 rounded-full bg-muted text-foreground/70 sm:size-9 sm:rounded-md sm:bg-transparent sm:text-inherit [&_svg]:size-5 sm:[&_svg]:size-[18px]"
                     aria-label="Close"
                     onClick={onClose}
                   >
-                    <X className="size-4" />
+                    <X />
                   </Button>
                 </div>
               </header>
