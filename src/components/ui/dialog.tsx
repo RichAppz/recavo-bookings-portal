@@ -178,7 +178,9 @@ DialogHeader.displayName = "DialogHeader";
  * Phones: actions stack full width at iOS button height, primary on top, and stay
  * pinned to the bottom of the sheet while the form scrolls behind them. The sheet
  * drops its own bottom padding when it has a footer (see DialogContent) so the
- * footer can sit flush and carry the home-indicator inset itself.
+ * footer can sit flush and carry the home-indicator inset itself. A plain-text
+ * Cancel on the bottom row is shorter and sits closer to the edge, since its
+ * label alone (no filled button) already floats in the middle of its tap area.
  */
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
@@ -187,6 +189,7 @@ const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
       "mt-auto flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0",
       "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-6 max-sm:bg-background max-sm:px-6 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
       "max-sm:[&>a]:h-12 max-sm:[&>a]:rounded-xl max-sm:[&>a]:text-base max-sm:[&>button]:h-12 max-sm:[&>button]:rounded-xl max-sm:[&>button]:text-base",
+      "max-sm:[&>button[data-variant=ghost]]:h-10 max-sm:has-[>button[data-variant=ghost]:first-child]:pb-[max(0.25rem,env(safe-area-inset-bottom))]",
       className,
     )}
     {...props}

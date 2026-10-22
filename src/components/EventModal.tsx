@@ -497,10 +497,18 @@ export function EventModal({
           ) : null}
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        {/* Phones stack the primary on top and Cancel at the bottom; with a pointer
+            Remove moves to the far left. */}
+        <DialogFooter className="gap-2 sm:gap-2 sm:space-x-0">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button className="max-sm:order-1" disabled={!valid || saving} onClick={submit}>
+            {saving ? "Saving…" : editing ? "Save changes" : "Add event"}
+          </Button>
           {editing ? (
             confirmDelete ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 sm:order-first sm:mr-auto">
                 <span className="text-sm text-muted-foreground">Remove this event?</span>
                 <Button variant="destructive" size="sm" disabled={saving} onClick={remove}>
                   Yes, remove
@@ -512,24 +520,14 @@ export function EventModal({
             ) : (
               <Button
                 variant="ghost"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive sm:order-first sm:mr-auto"
                 disabled={saving}
                 onClick={() => setConfirmDelete(true)}
               >
                 <Trash2 className="size-4" /> Remove
               </Button>
             )
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button disabled={!valid || saving} onClick={submit}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Add event"}
-            </Button>
-          </div>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
