@@ -53,6 +53,8 @@ const sheetVariants = cva(
   },
 );
 
+const FULL_HEIGHT = /(^|\s)(top-0|inset-0|h-full|h-dvh|h-screen|h-\[100dvh\])(\s|$)/;
+
 interface SheetContentProps
   extends
     React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
@@ -61,36 +63,48 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, onInteractOutside, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
-    <SheetPrimitive.Content
-      ref={ref}
-      data-sheet-side={side}
-      onInteractOutside={(e) => {
-        keepOpenForToast(e);
-        onInteractOutside?.(e);
-      }}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      <SheetPrimitive.Close
+>(({ side = "right", className, children, onInteractOutside, ...props }, ref) => {
+  // A bottom sheet stretched to the top of the screen sits under the status bar
+  // unless it reserves the inset like the top/left/right sheets do.
+  const touchesTop = side !== "bottom" || FULL_HEIGHT.test(className ?? "");
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
+      <SheetPrimitive.Content
+        ref={ref}
+        data-sheet-side={side}
+        onInteractOutside={(e) => {
+          keepOpenForToast(e);
+          onInteractOutside?.(e);
+        }}
         className={cn(
-          "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
-          side !== "bottom" && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+          sheetVariants({ side }),
+          side === "bottom" && touchesTop && "safe-spacer-top",
+          side === "bottom" &&
+            !touchesTop &&
+            "max-h-[calc(100dvh-max(2.5rem,calc(env(safe-area-inset-top,0px)+0.75rem)))] overflow-y-auto",
+          className,
         )}
+        {...props}
       >
-        {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
-        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-          <X className="size-4.5 sm:size-4" />
-        </span>
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+        <SheetPrimitive.Close
+          className={cn(
+            "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
+            touchesTop && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+          )}
+        >
+          {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
+          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+            <X className="size-4.5 sm:size-4" />
+          </span>
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

@@ -596,6 +596,10 @@
   padding-top: calc(env(safe-area-inset-top, 0px) + --spacing(6));
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + --spacing(6));
 }
+/* Top edge of a tall phone sheet: a peek of the page above, never under the status bar. */
+@utility top-sheet-peek {
+  top: max(60px, calc(env(safe-area-inset-top, 0px) + 16px));
+}
 /* Safe-area room as a spacer pseudo-element rather than padding, for panels
    (e.g. Sheet) whose consumers set their own padding. Works in block and
    flex-column layouts; zero-height outside the mobile app. */

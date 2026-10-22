@@ -222,20 +222,22 @@ export function AttentionStrip({
         <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="h-[100dvh] max-h-none gap-0 overflow-y-auto p-0">
-          <SheetHeader className="px-[18px] pt-5 pb-3 text-left">
+        <SheetContent side="bottom" className="flex h-[100dvh] max-h-none flex-col gap-0 p-0">
+          <SheetHeader className="shrink-0 px-[18px] pt-5 pb-3 pr-16 text-left">
             <SheetTitle className="flex items-center gap-2">
               Needs your attention <CountPill total={total} />
             </SheetTitle>
           </SheetHeader>
-          <Rows
-            items={items}
-            onSelect={(item) => {
-              setOpen(false);
-              onSelect(item);
-            }}
-          />
-          <WorthLinks links={worth} />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <Rows
+              items={items}
+              onSelect={(item) => {
+                setOpen(false);
+                onSelect(item);
+              }}
+            />
+            <WorthLinks links={worth} />
+          </div>
         </SheetContent>
       </Sheet>
     </>

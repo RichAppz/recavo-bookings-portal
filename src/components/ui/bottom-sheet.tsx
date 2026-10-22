@@ -35,7 +35,7 @@ const BottomSheetContent = React.forwardRef<
       <div
         data-bottom-sheet-viewport=""
         // Taps in the gap above the panel fall through to the overlay and dismiss.
-        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex h-dvh flex-col justify-end pt-10"
+        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex h-dvh flex-col justify-end pt-[max(2.5rem,calc(env(safe-area-inset-top,0px)+0.75rem))]"
         style={viewport ? { top: viewport.offsetTop, height: viewport.height } : undefined}
       >
         <DialogPrimitive.Content

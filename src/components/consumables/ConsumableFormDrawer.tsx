@@ -302,7 +302,7 @@ export function ConsumableFormDrawer({
         side={phone ? "bottom" : "right"}
         className={cn(
           "flex w-full flex-col gap-0 p-0",
-          phone ? "top-[60px] rounded-t-3xl" : "sm:max-w-[480px]",
+          phone ? "top-sheet-peek rounded-t-3xl" : "sm:max-w-[480px]",
         )}
       >
         {phone ? (
