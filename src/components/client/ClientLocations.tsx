@@ -138,7 +138,7 @@ export function ClientLocationStep({
 
   return (
     <div>
-      <ClientColumn>
+      <ClientColumn className="desk:pt-8">
         <StepHeader step={1} total={3} label="Choose" onBack={onBack} />
         <PageTitle>Where would you like it done?</PageTitle>
         {serviceName ? (
@@ -164,7 +164,7 @@ export function ClientLocationStep({
                   onBlur={() => void check(postcode)}
                   autoComplete="postal-code"
                   placeholder="e.g. LS6 2AB"
-                  className="h-12 w-full min-w-0 rounded-[var(--radius)] border border-input bg-card px-4 text-[16px] uppercase outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  className="h-12 w-full min-w-0 rounded-[var(--radius)] border border-input bg-card px-4 text-[16px] uppercase outline-none placeholder:normal-case focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </label>
               <button
@@ -279,26 +279,33 @@ export function LocationLine({
   const line = placeLine(location);
   const href = locationDirections(location);
   return (
-    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted-foreground">
-      <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-      <span className="font-semibold text-foreground">{location.name}</span>
-      {line ? <span>· {line}</span> : null}
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="font-semibold text-primary underline-offset-4 hover:underline"
-        >
-          Directions
-        </a>
-      ) : null}
+    <div className="mt-2 flex items-start gap-2 text-[14px] text-muted-foreground">
+      <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-foreground">{location.name}</p>
+        {line || href ? (
+          <p>
+            {line}
+            {line && href ? " · " : null}
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                Directions
+              </a>
+            ) : null}
+          </p>
+        ) : null}
+      </div>
       {onChange ? (
-        <TextLink onClick={onChange} className="text-[14px]">
+        <TextLink onClick={onChange} className="shrink-0 text-[14px]">
           Change
         </TextLink>
       ) : null}
-    </p>
+    </div>
   );
 }
 
