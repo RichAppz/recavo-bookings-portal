@@ -846,7 +846,7 @@ function StaffDialog({
             )}
           </div>
         </div>
-        <DialogFooter className="px-6 pb-safe-6">
+        <DialogFooter className="px-6 pb-safe-6 max-sm:mx-0">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

@@ -77,7 +77,7 @@ const DialogContent = React.forwardRef<
           "no-scrollbar fixed z-50 flex w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto bg-background px-safe-6 pb-safe-12 shadow-xl sm:pb-6 outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
           phone
-            ? "inset-x-0 bottom-0 top-sheet-peek rounded-t-3xl border-t pt-6 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+            ? "inset-x-0 bottom-0 top-sheet-peek rounded-t-3xl border-t pt-6 has-[[data-dialog-footer]]:pb-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
             : "inset-y-0 right-0 h-full border-l pt-safe-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
           className,
         )}
@@ -130,11 +130,18 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 DialogHeader.displayName = "DialogHeader";
 
-/* Phones: actions stack full width at iOS button height, primary on top. */
+/*
+ * Phones: actions stack full width at iOS button height, primary on top, and stay
+ * pinned to the bottom of the sheet while the form scrolls behind them. The sheet
+ * drops its own bottom padding when it has a footer (see DialogContent) so the
+ * footer can sit flush and carry the home-indicator inset itself.
+ */
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-dialog-footer=""
     className={cn(
       "mt-auto flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0",
+      "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-6 max-sm:bg-background max-sm:px-6 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
       "max-sm:[&>a]:h-12 max-sm:[&>a]:rounded-xl max-sm:[&>a]:text-base max-sm:[&>button]:h-12 max-sm:[&>button]:rounded-xl max-sm:[&>button]:text-base",
       className,
     )}
