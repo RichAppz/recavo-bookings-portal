@@ -967,7 +967,12 @@ export function BookingPanel({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-[rgba(8,10,14,0.28)]" onClick={onClose} />
-      <aside className="pt-safe pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l bg-card shadow-[-16px_0_40px_rgba(0,0,0,0.12)]">
+      {/* Phones get the bottom-sheet presentation the Sheet drawers use (ui/sheet.tsx). */}
+      <aside className="pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l bg-card shadow-[-16px_0_40px_rgba(0,0,0,0.12)] sm:pt-safe max-sm:top-sheet-peek max-sm:inset-x-0 max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-t-3xl max-sm:border-t max-sm:border-l-0 max-sm:shadow-[0_-16px_40px_rgba(0,0,0,0.18)] max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300">
+        <span
+          aria-hidden
+          className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border sm:hidden"
+        />
         {/* Spec §5.2: status pill and reference on the top row with the menu and close;
             the service as the title; when and where under it. */}
         <header className="flex items-start justify-between gap-3 border-b p-5">

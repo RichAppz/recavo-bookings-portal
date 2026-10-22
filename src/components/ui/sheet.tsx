@@ -53,58 +53,102 @@ const sheetVariants = cva(
   },
 );
 
+const PHONE_QUERY = "(max-width: 639.98px)";
+
+function subscribeToPhone(onChange: () => void) {
+  const mql = window.matchMedia(PHONE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+/** Read straight from the window so a sheet open on first paint doesn't flash in sideways. */
+function useIsPhoneSheet(): boolean {
+  return React.useSyncExternalStore(
+    subscribeToPhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+}
+
 const FULL_HEIGHT = /(^|\s)(top-0|inset-0|h-full|h-dvh|h-screen|h-\[100dvh\])(\s|$)/;
 
 interface SheetContentProps
   extends
     React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+  /**
+   * On phones a right-hand drawer is presented from the bottom, like an iOS sheet.
+   * "side" keeps it sliding in from the right.
+   */
+  phonePresentation?: "sheet" | "side";
+}
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, onInteractOutside, ...props }, ref) => {
-  // A bottom sheet stretched to the top of the screen sits under the status bar
-  // unless it reserves the inset like the top/left/right sheets do.
-  const touchesTop = side !== "bottom" || FULL_HEIGHT.test(className ?? "");
-  return (
-    <SheetPortal>
-      <SheetOverlay />
-      {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
-      <SheetPrimitive.Content
-        ref={ref}
-        data-sheet-side={side}
-        onInteractOutside={(e) => {
-          keepOpenForToast(e);
-          onInteractOutside?.(e);
-        }}
-        className={cn(
-          sheetVariants({ side }),
-          side === "bottom" && touchesTop && "safe-spacer-top",
-          side === "bottom" &&
-            !touchesTop &&
-            "max-h-[calc(100dvh-max(2.5rem,calc(env(safe-area-inset-top,0px)+0.75rem)))] overflow-y-auto",
-          className,
-        )}
-        {...props}
-      >
-        <SheetPrimitive.Close
+>(
+  (
+    {
+      side: requestedSide = "right",
+      phonePresentation = "sheet",
+      className,
+      children,
+      onInteractOutside,
+      ...props
+    },
+    ref,
+  ) => {
+    const phone = useIsPhoneSheet();
+    const presented = phone && requestedSide === "right" && phonePresentation === "sheet";
+    const side = presented ? "bottom" : requestedSide;
+    // A bottom sheet stretched to the top of the screen sits under the status bar
+    // unless it reserves the inset like the top/left/right sheets do.
+    const touchesTop = !presented && (side !== "bottom" || FULL_HEIGHT.test(className ?? ""));
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        {/* data-sheet-side lets the toast host step clear of an open right-hand drawer (ui/sonner.tsx). */}
+        <SheetPrimitive.Content
+          ref={ref}
+          data-sheet-side={side}
+          onInteractOutside={(e) => {
+            keepOpenForToast(e);
+            onInteractOutside?.(e);
+          }}
           className={cn(
-            "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
-            touchesTop && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+            sheetVariants({ side }),
+            side === "bottom" && touchesTop && "safe-spacer-top",
+            side === "bottom" &&
+              !touchesTop &&
+              "max-h-[calc(100dvh-max(2.5rem,calc(env(safe-area-inset-top,0px)+0.75rem)))] overflow-y-auto",
+            className,
+            // After the consumer's classes so its desktop width and height give way.
+            presented &&
+              "top-sheet-peek h-auto max-h-none w-full max-w-none rounded-t-3xl border-x-0",
           )}
+          {...props}
         >
-          {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
-          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-            <X className="size-4.5 sm:size-4" />
-          </span>
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-        {children}
-      </SheetPrimitive.Content>
-    </SheetPortal>
-  );
-});
+          <SheetPrimitive.Close
+            className={cn(
+              "absolute right-safe-2 top-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
+              touchesTop && "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+            )}
+          >
+            {/* Same iOS-style grey disc as ui/dialog.tsx on phones. */}
+            <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+              <X className="size-4.5 sm:size-4" />
+            </span>
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+          {presented ? (
+            <span aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
+          ) : null}
+          {children}
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    );
+  },
+);
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
