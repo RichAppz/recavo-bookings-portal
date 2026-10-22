@@ -76,7 +76,7 @@ function PhoneSheetChrome({ children }: { children: React.ReactNode }) {
         marginTop: -edge.top,
         marginLeft: -edge.left,
         marginRight: -edge.right,
-        marginBottom: -edge.gap,
+        marginBottom: edge.top - edge.gap,
       }}
     >
       {children}
