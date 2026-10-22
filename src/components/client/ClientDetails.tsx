@@ -25,9 +25,14 @@ export type DetailsValues = {
   notes: string;
   promoCode: string;
   marketingConsent: boolean;
+  /** Where to come to, for a location that travels to the client. */
+  address?: string;
 };
 
-export type DetailsField = keyof Pick<DetailsValues, "firstName" | "lastName" | "email" | "phone">;
+export type DetailsField = keyof Pick<
+  DetailsValues,
+  "firstName" | "lastName" | "email" | "phone" | "address"
+>;
 
 /** What the desktop summary card shows beside the form: a session and its time. */
 export type SessionDetailsSummary = {
@@ -84,6 +89,7 @@ export function ClientDetails({
   onSignIn,
   onNotYou,
   pendingLabel = "Holding your time…",
+  askAddress = false,
 }: {
   values: DetailsValues;
   onChange: (patch: Partial<DetailsValues>) => void;
@@ -105,6 +111,8 @@ export function ClientDetails({
   onNotYou: () => void;
   /** What the desktop button says while `pending` ("Setting up payment…" for a package). */
   pendingLabel?: string;
+  /** "We come to you": ask where. */
+  askAddress?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = useState(Boolean(values.notes));
   const desktop = layout === "desktop";
@@ -213,6 +221,29 @@ export function ClientDetails({
             />
           </div>
         </Field>
+        {askAddress ? (
+          <Field
+            label="Your address"
+            error={errors.address}
+            hint="Where we'll come to you"
+            className="col-span-2"
+          >
+            <textarea
+              value={values.address ?? ""}
+              onChange={(e) => onChange({ address: e.target.value })}
+              rows={2}
+              maxLength={300}
+              autoComplete="street-address"
+              placeholder="House number, street, town, postcode"
+              required
+              className={cn(
+                "w-full resize-none rounded-[var(--radius)] border bg-card px-4 py-3 text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30",
+                errors.address ? "border-destructive" : "border-input",
+                desktop ? "text-[15px]" : "text-[17px]",
+              )}
+            />
+          </Field>
+        ) : null}
       </div>
 
       <div className="mt-4">

@@ -20,6 +20,7 @@ import {
   type DetailsValues,
 } from "@/components/client/ClientDetails";
 import { ClientLanding, type NextAvailable } from "@/components/client/ClientLanding";
+import { ClientLocationStep, isMobileLocation } from "@/components/client/ClientLocations";
 import type { OfferPick } from "@/components/client/ClientOffers";
 import {
   CLIENT_DESKTOP_QUERY,
@@ -52,6 +53,7 @@ import {
   usePublicAvailability,
   usePublicCancellationPolicy,
   usePublicLocations,
+  type PublicLocation,
   usePublicPackageLink,
   usePublicPackages,
   usePublicServices,
@@ -94,11 +96,12 @@ import {
   type BookingPageContent,
 } from "@/lib/client-theme";
 import { formatInTz, formatTimeInTz, isoDateInTz } from "@/lib/format";
+import { addressText } from "@/lib/locations";
 import { creditsCovering } from "@/lib/portal-credits";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
 import { hasExtraTimesForService } from "@/lib/offer-extra-times";
 
-type Step = "landing" | "time" | "details" | "review" | "done";
+type Step = "landing" | "location" | "time" | "details" | "review" | "done";
 
 /** How far ahead one availability request looks; the API caps requests at 62 days. */
 const WINDOW_DAYS = 28;
@@ -121,6 +124,7 @@ const EMPTY_DETAILS: DetailsValues = {
   notes: "",
   promoCode: "",
   marketingConsent: false,
+  address: "",
 };
 
 /**
@@ -185,6 +189,7 @@ export function ClientBookingFlow({
   const [offerPick, setOfferPick] = useState<OfferPick | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [clientPostcode, setClientPostcode] = useState("");
   const [extraIds, setExtraIds] = useState<string[]>([]);
   // Availability is keyed on its `from`; a fresh timestamp each render would make
   // every render a new query and refetch without end, so the window starts on a
@@ -330,6 +335,8 @@ export function ClientBookingFlow({
   const soleLocationId = locations.data?.length === 1 ? locations.data[0]!.id : null;
   const activeLocationId = locationId ?? soleLocationId ?? locations.data?.[0]?.id ?? null;
   const location = locations.data?.find((l) => l.id === activeLocationId) ?? null;
+  const multiLocation = (locations.data?.length ?? 0) > 1;
+  const comesToClient = location ? isMobileLocation(location) : false;
 
   // Promo codes are offer-link codes. The link is looked up as typed; a code that
   // names this session goes with the hold (it may unlock a hidden session, carry a
@@ -592,8 +599,8 @@ export function ClientBookingFlow({
     setExtraIds([]);
     setSelectedSlot(null);
     setDate(today);
-    if (desktop) return;
-    setStep("time");
+    if (desktop && !(multiLocation && !locationId)) return;
+    setStep(multiLocation ? "location" : "time");
     window.scrollTo({ top: 0 });
   };
 
@@ -609,12 +616,31 @@ export function ClientBookingFlow({
     setExtraIds([]);
     setSelectedSlot(null);
     setDate(today);
-    if (desktop) {
+    if (desktop && !(multiLocation && !locationId)) {
       document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
-    setStep("time");
+    setStep(multiLocation ? "location" : "time");
     window.scrollTo({ top: 0 });
+  };
+
+  const chooseLocation = (id: string, postcode: string) => {
+    if (id !== locationId) {
+      setLocationId(id);
+      setStaffId(null);
+      setSelectedSlot(null);
+    }
+    setClientPostcode(postcode);
+    if (!desktop) {
+      setStep("time");
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    setStep("landing");
+    window.setTimeout(
+      () => document.getElementById("booking-card")?.scrollIntoView({ behavior: "smooth" }),
+      50,
+    );
   };
 
   // Desktop: a package is a radio row like the sessions, and the card becomes its
@@ -697,6 +723,7 @@ export function ClientBookingFlow({
         phone: toE164(details.phone) ?? (details.phone.trim() || null),
         notesCustomer: details.notes.trim() || null,
         marketingConsent: details.marketingConsent,
+        clientAddress: comesToClient ? details.address?.trim() || null : null,
       },
       {
         onSuccess: (res) => {
@@ -978,6 +1005,7 @@ export function ClientBookingFlow({
     details.lastName.trim().length > 0 &&
     looksLikeEmail(details.email) &&
     details.phone.trim().length > 0 &&
+    (!comesToClient || Boolean(details.address?.trim())) &&
     !(details.promoCode.trim() && promo.isPending);
 
   /* ---------- derived display ---------- */
@@ -1006,12 +1034,24 @@ export function ClientBookingFlow({
       ? new Date(new Date(start).getTime() - cancellationHours * 3_600_000).toISOString()
       : null;
   const address = page.venue.address ?? business.address ?? null;
+  const placeOf = (l: PublicLocation | null | undefined) =>
+    !l
+      ? address
+      : isMobileLocation(l)
+        ? details.address?.trim() || null
+        : addressText(l.address) || address;
   // "Northside Studio, LS6": the venue and the outward half of its postcode.
   const whereLabel = location
-    ? [location.name, location.type === "physical" ? shortPlace(address)?.split(" ").pop() : null]
+    ? [
+        location.name,
+        location.type === "physical" ? shortPlace(placeOf(location))?.split(" ").pop() : null,
+      ]
         .filter(Boolean)
         .join(", ")
     : null;
+  const confirmedLocation = confirmed
+    ? locations.data?.find((l) => l.id === confirmed.locationId)
+    : undefined;
   const bookingFor =
     [details.firstName.trim(), details.lastName.trim()].filter(Boolean).join(" ") ||
     contact.name ||
@@ -1113,7 +1153,8 @@ export function ClientBookingFlow({
 
   // On desktop the landing is also the "choose" step, so the stepper starts at Details.
   const onLanding = step === "landing" || (desktop && step === "time");
-  const stepNumber = step === "time" ? 1 : step === "details" ? 2 : step === "review" ? 3 : 0;
+  const stepNumber =
+    step === "time" || step === "location" ? 1 : step === "details" ? 2 : step === "review" ? 3 : 0;
 
   const myBookings = (
     <TextLink
@@ -1195,6 +1236,8 @@ export function ClientBookingFlow({
         currency={selectedSlot?.currency ?? service?.currency ?? business.currency}
         cancellationWindowHours={cancellationHours}
         offerNote={offerNote}
+        location={service ? location : null}
+        onChangeLocation={multiLocation ? () => setStep("location") : undefined}
       />
     </div>
   ) : null;
@@ -1244,6 +1287,17 @@ export function ClientBookingFlow({
           />
         ) : null}
 
+        {step === "location" && locations.data ? (
+          <ClientLocationStep
+            locations={locations.data}
+            locationId={locationId}
+            serviceName={service?.name ?? null}
+            postcode={clientPostcode}
+            onBack={() => setStep("landing")}
+            onContinue={chooseLocation}
+          />
+        ) : null}
+
         {step === "time" && !desktop && service ? (
           <ClientDateTime
             service={service}
@@ -1256,10 +1310,7 @@ export function ClientBookingFlow({
             }}
             locations={locations.data ?? []}
             locationId={activeLocationId}
-            onLocation={(id) => {
-              setLocationId(id);
-              setSelectedSlot(null);
-            }}
+            onChangeLocation={() => setStep("location")}
             extras={service.upsells ?? []}
             extraIds={extraIds}
             onToggleExtra={(id) => {
@@ -1279,7 +1330,7 @@ export function ClientBookingFlow({
             selected={selectedSlot}
             onSelect={setSelectedSlot}
             offerNote={offerNote}
-            onBack={() => setStep("landing")}
+            onBack={() => setStep(multiLocation ? "location" : "landing")}
             onContinue={() => {
               if (!selectedSlot) return;
               setStep("details");
@@ -1317,6 +1368,7 @@ export function ClientBookingFlow({
             signedInAs={signedInName}
             onSignIn={() => openSignIn("stay")}
             onNotYou={() => void auth.signOut()}
+            askAddress={comesToClient}
           />
         ) : null}
 
@@ -1371,9 +1423,9 @@ export function ClientBookingFlow({
             businessName={business.tradingName}
             serviceName={confirmed.serviceSnapshot.name}
             staffName={staffFor(confirmed.staffId)}
-            locationName={locations.data?.find((l) => l.id === confirmed.locationId)?.name ?? null}
-            address={address}
-            parkingNote={page.venue.parkingNote}
+            locationName={confirmedLocation?.name ?? null}
+            address={placeOf(confirmedLocation)}
+            parkingNote={confirmedLocation?.parkingNote ?? page.venue.parkingNote}
             email={contact.email}
             phoneGiven={Boolean(contact.phone)}
             bankTransfer={bankInstructions}

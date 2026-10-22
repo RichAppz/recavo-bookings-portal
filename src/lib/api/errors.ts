@@ -119,6 +119,13 @@ export class ApiError extends Error {
 }
 
 /** The API's `409` for a time inside a location closure, which staff may book anyway. */
+/** A 409 because the service isn't offered at the location: the API's sentence. */
+export function notOfferedMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  if (err.extensions.reason !== "service_not_offered_here") return null;
+  return err.detail || "That service isn't offered at this location.";
+}
+
 export function closedLocationMessage(err: unknown): string | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
   if (err.extensions.reason !== "location_closed") return null;

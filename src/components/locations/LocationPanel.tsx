@@ -42,6 +42,7 @@ import {
   useBusinessId,
   useCreateResource,
   useCustomersById,
+  useUpdateResource,
 } from "@/lib/api/hooks";
 import type { LocationActivity } from "@/lib/api/hooks";
 import type { CatalogueService, Location, Resource, Staff } from "@/lib/api/types";
@@ -457,8 +458,10 @@ function ResourcesSection({
   const tenant = useTenant();
   const words = resourceWords(tenant.business?.industryTemplateKey);
   const create = useCreateResource();
+  const update = useUpdateResource();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const here = resources.filter((r) => r.locationId === location.id && r.active);
   if (here.length === 0 && !canEdit) return null;
 
@@ -489,18 +492,79 @@ function ResourcesSection({
       </SectionHeading>
       {here.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
-          {here.map((r) => (
-            <span
-              key={r.id}
-              className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold"
-            >
-              {r.name}
-            </span>
-          ))}
+          {here.map((r) =>
+            canEdit ? (
+              <DropdownMenu key={r.id}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full bg-secondary py-1 pr-1.5 pl-2.5 text-xs font-semibold hover:bg-secondary/80"
+                    aria-label={`${r.name} options`}
+                  >
+                    {r.name}
+                    <MoreHorizontal aria-hidden className="size-3.5 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onSelect={() => setRenaming({ id: r.id, name: r.name })}>
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      void update
+                        .mutateAsync({ resourceId: r.id, active: false })
+                        .then(() => toast.success(`${r.name} archived`))
+                        .catch(() => undefined)
+                    }
+                  >
+                    Archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <span
+                key={r.id}
+                className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold"
+              >
+                {r.name}
+              </span>
+            ),
+          )}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">None yet.</p>
       )}
+      {renaming ? (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const next = renaming.name.trim();
+            if (!next) return;
+            void update
+              .mutateAsync({ resourceId: renaming.id, name: next })
+              .then(() => {
+                toast.success("Changes saved");
+                setRenaming(null);
+              })
+              .catch(() => undefined);
+          }}
+        >
+          <Input
+            autoFocus
+            aria-label={`New ${words.one} name`}
+            value={renaming.name}
+            maxLength={60}
+            onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+          />
+          <Button type="submit" disabled={!renaming.name.trim() || update.isPending}>
+            Save
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setRenaming(null)}>
+            Cancel
+          </Button>
+        </form>
+      ) : null}
       {adding ? (
         <form
           className="flex gap-2"
@@ -523,7 +587,12 @@ function ResourcesSection({
         </form>
       ) : null}
       <p className="text-xs text-muted-foreground">
-        Only one {tenant.terminology.booking.toLowerCase()} can use a {words.one} at a time.
+        Only one {tenant.terminology.booking.toLowerCase()} can use a {words.one} at a time. Set
+        which {tenant.terminology.service.replace(/\s+type$/i, "").toLowerCase()}s need one in{" "}
+        <Link to="/services" className="font-semibold text-primary hover:underline">
+          Services
+        </Link>
+        .
       </p>
     </section>
   );

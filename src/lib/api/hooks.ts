@@ -2319,10 +2319,13 @@ export function useUpdateResource() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { resourceId: string; active: boolean }) => {
+    mutationFn: async (vars: { resourceId: string; active?: boolean; name?: string }) => {
       const res = await api.patch<{ resource: Resource }>(
         `/api/v1/businesses/${businessId}/resources/${vars.resourceId}`,
-        { active: vars.active },
+        {
+          ...(vars.active !== undefined ? { active: vars.active } : {}),
+          ...(vars.name !== undefined ? { name: vars.name } : {}),
+        },
       );
       return res.data.resource;
     },
@@ -3628,6 +3631,35 @@ export function useConnectLoginLink() {
       return res.data.url;
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+export type LocationReportRow = {
+  locationId: string;
+  name: string;
+  bookings: number;
+  bookingValueMinor: number;
+  netRevenueMinor: number;
+  occupancyRate: number;
+  attended: number;
+  noShow: number;
+  cancelled: number;
+};
+
+/** Bookings, takings and occupancy for each location side by side. */
+export function useReportsByLocation(range: { from: string; to: string; enabled?: boolean }) {
+  const businessId = useBusinessId();
+  const query = { from: range.from, to: range.to };
+  return useQuery({
+    queryKey: [...queryKeys.dashboard(businessId, query), "by-location"] as const,
+    enabled: Boolean(businessId) && range.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ locations: LocationReportRow[] }>(
+        `/api/v1/businesses/${businessId}/reports/by-location`,
+        { query },
+      );
+      return res.data.locations;
+    },
   });
 }
 
@@ -6148,7 +6180,13 @@ export type PublicService = Pick<
   upsells?: PublicServiceUpsell[];
 };
 
-export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours">;
+export type PublicLocation = Pick<Location, "id" | "name" | "type" | "timezone" | "openingHours"> &
+  Partial<
+    Pick<
+      Location,
+      "address" | "parkingNote" | "phone" | "serviceArea" | "travelMinutes" | "displayOrder"
+    >
+  >;
 
 export interface PublicBusinessProfile {
   id: string;
@@ -6974,6 +7012,8 @@ export function useCreatePublicBookingHold(businessId: string | undefined) {
           phone?: string | null;
           notesCustomer?: string | null;
           marketingConsent?: boolean;
+          /** Where to come to, for a location that travels to the client. */
+          clientAddress?: string | null;
         },
         idempotencyKey: string,
       ) => {

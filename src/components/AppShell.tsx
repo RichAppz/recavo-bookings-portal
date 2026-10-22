@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useNavigate, useRouterState } from "@tanstack/react-router";
+import { PhoneLocationSwitcher } from "@/components/locations/PhoneLocationSwitcher";
 import {
   Banknote,
   BarChart3,
@@ -230,6 +231,16 @@ function useMediaQuery(query: string): boolean {
     return () => mql.removeEventListener("change", onChange);
   }, [query]);
   return matches;
+}
+
+/** Pages a location filter applies to; the phone shows its chip only there. */
+function showsPhoneSwitcher(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    ["/calendar", "/bookings", "/waitlist", "/messages"].some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    )
+  );
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -668,6 +679,9 @@ function ConsoleShell({ children }: { children: ReactNode }) {
               <GlobalSearch pages={searchablePages} />
 
               <div className="ml-auto flex items-center gap-2">
+                {showsPhoneSwitcher(pathname) ? (
+                  <PhoneLocationSwitcher className="lg:hidden" />
+                ) : null}
                 {/* A location filter only means something once there is more than one. */}
                 {activeLocations.length > 1 ? (
                   <Select

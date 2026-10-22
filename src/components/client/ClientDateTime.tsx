@@ -9,6 +9,7 @@ import {
   StepHeader,
 } from "@/components/client/ClientPage";
 import { PersonMark } from "@/components/client/ClientLanding";
+import { LocationLine } from "@/components/client/ClientLocations";
 import type { PublicLocation, PublicService, PublicStaff } from "@/lib/api/hooks";
 import type { AvailabilitySlot, PublicServiceUpsell } from "@/lib/api/types";
 import { addCalendarDays } from "@/lib/client-booking";
@@ -26,7 +27,7 @@ export function ClientDateTime({
   onStaff,
   locations,
   locationId,
-  onLocation,
+  onChangeLocation,
   extras,
   extraIds,
   onToggleExtra,
@@ -52,10 +53,10 @@ export function ClientDateTime({
   staff: PublicStaff[];
   staffId: string | null;
   onStaff: (staffId: string | null) => void;
-  /** Shown as a chip row only when there is more than one. */
   locations: PublicLocation[];
   locationId: string | null;
-  onLocation: (locationId: string) => void;
+  /** Back to the location step; offered when there is more than one location. */
+  onChangeLocation: () => void;
   extras: PublicServiceUpsell[];
   extraIds: string[];
   onToggleExtra: (serviceId: string) => void;
@@ -113,6 +114,7 @@ export function ClientDateTime({
   const monthLabel = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "UTC" }).format(
     new Date(`${date}T12:00:00Z`),
   );
+  const location = locations.find((l) => l.id === locationId) ?? null;
   const staffName = staffId ? staff.find((s) => s.id === staffId)?.displayName : null;
   const extrasTotal = extras
     .filter((u) => extraIds.includes(u.serviceId))
@@ -128,17 +130,11 @@ export function ClientDateTime({
           {priceMinor === 0 ? "Free" : price(priceMinor, currency)}
         </p>
 
-        {locations.length > 1 ? (
-          <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0">
-            {locations.map((loc) => (
-              <PersonChip
-                key={loc.id}
-                label={loc.name}
-                active={locationId === loc.id}
-                onClick={() => onLocation(loc.id)}
-              />
-            ))}
-          </div>
+        {location ? (
+          <LocationLine
+            location={location}
+            onChange={locations.length > 1 ? onChangeLocation : undefined}
+          />
         ) : null}
 
         {/* One trainer means no choice to make; the chips only appear when there are several. */}

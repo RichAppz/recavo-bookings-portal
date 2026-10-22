@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Check,
   ChevronDown,
@@ -41,6 +41,7 @@ import {
   useDiscardBookingPageDraft,
   useGooglePlace,
   useGooglePlaceSearch,
+  useLocationsList,
   usePublicAvailability,
   usePublicBusiness,
   usePublicLocations,
@@ -660,6 +661,11 @@ function Swatch({ colour, selected }: { colour: string; selected: boolean }) {
 /* ----------------------------------------------------------------- content */
 
 function ContentTab({ page, edit, disabled }: TabProps) {
+  const locations = useLocationsList();
+  // Once a location has its own address the booking page shows those instead.
+  const perLocation = (locations.data ?? []).some(
+    (l) => l.active && (Boolean(l.address) || Boolean(l.serviceArea)),
+  );
   return (
     <>
       <SectionCard title="Headline" description="Shown under your name at the top of the page.">
@@ -694,32 +700,46 @@ function ContentTab({ page, edit, disabled }: TabProps) {
       </SectionCard>
       <SectionCard
         title="Venue"
-        description="Where clients come to see you. Leave the address blank to use your main location."
+        description={
+          perLocation
+            ? "Your booking page lists each location with its own address and parking."
+            : "Where clients come to see you. Leave the address blank to use your main location."
+        }
       >
         <div className="grid gap-4 p-4 sm:p-5">
-          <div className="grid gap-2">
-            <Label htmlFor="bp-address">Address</Label>
-            <Input
-              id="bp-address"
-              value={page.venue.address ?? ""}
-              disabled={disabled}
-              maxLength={240}
-              placeholder="12 Mill Street, Leeds LS1 4AB"
-              onChange={(e) => edit({ venue: { address: e.target.value || null } })}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="bp-parking">Parking and how to find you</Label>
-            <Textarea
-              id="bp-parking"
-              rows={3}
-              value={page.venue.parkingNote ?? ""}
-              disabled={disabled}
-              maxLength={400}
-              placeholder="Free parking on Mill Street after 6pm. We're the blue door next to the bakery."
-              onChange={(e) => edit({ venue: { parkingNote: e.target.value || null } })}
-            />
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Addresses are set on each location.{" "}
+            <Link to="/locations" className="font-medium text-primary hover:underline">
+              Edit locations ›
+            </Link>
+          </p>
+          {perLocation ? null : (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="bp-address">Address</Label>
+                <Input
+                  id="bp-address"
+                  value={page.venue.address ?? ""}
+                  disabled={disabled}
+                  maxLength={240}
+                  placeholder="12 Mill Street, Leeds LS1 4AB"
+                  onChange={(e) => edit({ venue: { address: e.target.value || null } })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="bp-parking">Parking and how to find you</Label>
+                <Textarea
+                  id="bp-parking"
+                  rows={3}
+                  value={page.venue.parkingNote ?? ""}
+                  disabled={disabled}
+                  maxLength={400}
+                  placeholder="Free parking on Mill Street after 6pm. We're the blue door next to the bakery."
+                  onChange={(e) => edit({ venue: { parkingNote: e.target.value || null } })}
+                />
+              </div>
+            </>
+          )}
         </div>
       </SectionCard>
     </>

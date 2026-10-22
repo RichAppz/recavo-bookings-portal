@@ -11,6 +11,7 @@ import { Landmark } from "lucide-react";
 
 import { Marquee } from "@/components/Marquee";
 import type { Booking, CalendarBlock, Staff } from "@/lib/api/types";
+import { useResources } from "@/lib/api/hooks";
 import {
   fitHourHeight,
   firstName,
@@ -36,6 +37,7 @@ import {
   lastDayOf,
   LiftTag,
   minutesOf,
+  ResourceChip,
   placeItems,
   type HolidayItem,
   type LaneEntry,
@@ -129,6 +131,9 @@ export function TimeGrid({
 }) {
   const v = VARIANT[variant];
   const isoDays = useMemo(() => days.map(isoDate), [days]);
+  const resourceList = useResources().data;
+  const resourceName = (id: string | null | undefined) =>
+    id ? resourceList?.find((r) => r.id === id)?.name : undefined;
   const staffName = (id: string | null | undefined) =>
     id ? staff.find((s) => s.id === id)?.displayName : undefined;
   const isAllDay = (ev: CalendarBlock) => isAllDayEvent(ev.start, ev.end, timezone);
@@ -775,7 +780,8 @@ export function TimeGrid({
                   : [tag, showClient ? client : null, showTrainer ? trainer : null]
                       .filter(Boolean)
                       .join(" · ");
-                const spoken = `${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)}${
+                const bay = resourceName(b.resourceId);
+                const spoken = `${b.clientLift ? "Lift needed, " : ""}${tag ? `${tag}, ` : ""}${serviceLabel(b)}${bay ? `, ${bay}` : ""}${
                   client ? `, ${client}` : ""
                 }, ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} ${timeLabel(b.start)} to ${timeLabel(b.end)}${
                   occupancy ? `, ${occupancy}taken` : ""
@@ -857,6 +863,7 @@ export function TimeGrid({
                                 <span className="font-normal opacity-75"> · {category}</span>
                               ) : null}
                             </span>
+                            {bay ? <ResourceChip name={bay} /> : null}
                           </p>
                           {!cancelled ? (
                             <DuePill
@@ -894,6 +901,7 @@ export function TimeGrid({
                               <span className="font-normal opacity-75"> · {category}</span>
                             ) : null}
                           </span>
+                          {bay ? <ResourceChip name={bay} /> : null}
                         </p>
                         {px >= 36 && secondLine ? (
                           <p className="truncate text-[11.5px] opacity-85">{secondLine}</p>

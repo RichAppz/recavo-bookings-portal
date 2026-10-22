@@ -57,6 +57,7 @@ import {
   useServices,
   useServicesConsumables,
   useStaffList,
+  useResources,
   useUpdateService,
   useUpdateStaff,
 } from "@/lib/api/hooks";
@@ -102,6 +103,7 @@ import {
 } from "@/lib/working-hours";
 import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { resourceWords } from "@/lib/locations";
 import type { CatalogueService, Staff } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { remindersAvailable } from "@/lib/service-reminders";
@@ -609,6 +611,17 @@ function ServiceDialog({
     service && service.eligibleStaffIds.length > 0 ? "selected" : "all",
   );
   const [staffIds, setStaffIds] = useState<string[]>(service?.eligibleStaffIds ?? []);
+  // Where it's offered. Empty `locationIds` means every location, now and later.
+  const activeLocations = tenant.locations.filter((l) => l.active);
+  const [offeredMode, setOfferedMode] = useState<"all" | "some">(
+    service && service.locationIds.length > 0 ? "some" : "all",
+  );
+  const [offeredIds, setOfferedIds] = useState<string[]>(service?.locationIds ?? []);
+  const resourcesQuery = useResources();
+  const words = resourceWords(tenant.business?.industryTemplateKey);
+  const [needsResource, setNeedsResource] = useState(Boolean(service?.requiredResourceType));
+  const showResourceField =
+    (resourcesQuery.data ?? []).some((r) => r.active) || Boolean(service?.requiredResourceType);
   const staffPluralLower = (() => {
     const t = tenant.terminology.staff.trim().toLowerCase() || "staff member";
     return t.endsWith("s") ? t : `${t}s`;
@@ -858,6 +871,11 @@ function ServiceDialog({
         priceMinor: v.priceMinor.trim() ? parseMoneyToMinor(v.priceMinor) : null,
       }));
 
+    if (activeLocations.length > 1 && offeredMode === "some" && offeredIds.length === 0) {
+      setFieldErrors((prev) => ({ ...prev, locationIds: "Pick at least one location." }));
+      toast.error(`Choose where this ${lower} is offered`);
+      throw new Error("validation");
+    }
     const eligibleStaffIds = staffMode === "selected" ? staffIds : [];
     if (staffMode === "selected" && staffIds.length === 0) {
       setFieldErrors((prev) => ({ ...prev, eligibleStaffIds: "Pick at least one person." }));
@@ -913,6 +931,14 @@ function ServiceDialog({
       availabilityWindows: offerWindows,
       followUps: followUps.rules,
     };
+    if (activeLocations.length > 1) {
+      body.locationIds = offeredMode === "all" ? [] : offeredIds;
+    }
+    if (showResourceField) {
+      body.requiredResourceType = needsResource
+        ? (service?.requiredResourceType ?? (words.one === "bay" ? "bay" : "room"))
+        : null;
+    }
     if (usage?.ok) {
       body.consumables = usage.items.map((it) => ({
         consumableId: it.consumableId,
@@ -1397,6 +1423,80 @@ function ServiceDialog({
               ) : null}
             </div>
           )}
+
+          {activeLocations.length > 1 ? (
+            <div className="grid gap-3 border-t pt-4">
+              <Label id="s-offered-label">Offered at</Label>
+              <RadioGroup
+                value={offeredMode}
+                onValueChange={(v) => setOfferedMode(v as "all" | "some")}
+                aria-labelledby="s-offered-label"
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                {(
+                  [
+                    ["all", "All locations", "Including any you add later."],
+                    ["some", "Only some locations", "Clients only see it where it's offered."],
+                  ] as const
+                ).map(([value, title, help]) => (
+                  <label
+                    key={value}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
+                      offeredMode === value && "border-primary/40 bg-primary-soft/40",
+                    )}
+                  >
+                    <RadioGroupItem value={value} className="mt-0.5" />
+                    <span className="grid gap-0.5">
+                      <span className="text-sm font-medium">{title}</span>
+                      <span className="text-xs text-muted-foreground">{help}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+              {offeredMode === "some" ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {activeLocations.map((l) => (
+                    <label key={l.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={offeredIds.includes(l.id)}
+                        onCheckedChange={(checked) =>
+                          setOfferedIds((ids) =>
+                            checked ? [...ids, l.id] : ids.filter((id) => id !== l.id),
+                          )
+                        }
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {fieldErrors.locationIds ? (
+                <p className="text-xs text-destructive">{fieldErrors.locationIds}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Staff can still book it elsewhere after a warning.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {showResourceField ? (
+            <div className="flex items-start justify-between gap-4 border-t pt-4">
+              <div className="grid gap-0.5">
+                <Label htmlFor="s-needs-resource">Needs a {words.one}</Label>
+                <p className="text-xs text-muted-foreground">
+                  Each {tenant.terminology.booking.toLowerCase()} takes a free {words.one} at its
+                  location. Times with none free aren't offered.
+                </p>
+              </div>
+              <Switch
+                id="s-needs-resource"
+                checked={needsResource}
+                onCheckedChange={setNeedsResource}
+              />
+            </div>
+          ) : null}
 
           {soleStaff ? (
             <WeeklyWindowsEditor

@@ -117,6 +117,15 @@ export function DuePill({
  * The client needs running somewhere once the car is in. A glyph rather than a word:
  * chips are narrow and the panel spells out where to.
  */
+/** The bay (or other resource) a job holds, as a small chip on its block. */
+export function ResourceChip({ name }: { name: string }) {
+  return (
+    <span className="shrink-0 rounded bg-black/10 px-1 text-[9.5px] leading-4 font-bold dark:bg-white/15">
+      {name}
+    </span>
+  );
+}
+
 export function LiftTag() {
   return (
     <CarFront

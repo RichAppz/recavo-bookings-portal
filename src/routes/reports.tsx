@@ -35,6 +35,7 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   downloadExportFile,
   useDashboard,
+  useReportsByLocation,
   useRequestExport,
   type ExportType,
 } from "@/lib/api/hooks";
@@ -103,7 +104,9 @@ function ReportsPage() {
   const isCarDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const [fromDate, setFromDate] = useState(() => monthStartIn(timezone));
   const [toDate, setToDate] = useState(() => todayIn(timezone));
-  const [locationId, setLocationId] = useState<string>("all");
+  // Starts on the location picked in the top bar; the page can then look elsewhere.
+  const [locationId, setLocationId] = useState<string>(() => tenant.currentLocationId ?? "all");
+  const activeLocationCount = tenant.locations.filter((l) => l.active).length;
   const [exports, setExports] = useState<Array<{ export: ExportRequest; downloadUrl?: string }>>(
     [],
   );
@@ -122,6 +125,11 @@ function ReportsPage() {
     from: range.from,
     to: range.to,
     locationId: locationId === "all" ? null : locationId,
+  });
+  const byLocation = useReportsByLocation({
+    from: range.from,
+    to: range.to,
+    enabled: activeLocationCount > 1,
   });
   const previous = useDashboard({
     from: prevRange.from,
@@ -359,6 +367,47 @@ function ReportsPage() {
                 />
               )}
             </div>
+
+            {activeLocationCount > 1 && (byLocation.data?.length ?? 0) > 1 ? (
+              <SectionCard title="By location" description="The same range, side by side">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th scope="col" className="py-2 pr-4 font-semibold">
+                          Location
+                        </th>
+                        <th scope="col" className="py-2 pr-4 text-right font-semibold">
+                          {tenant.terminology.booking}s
+                        </th>
+                        <th scope="col" className="py-2 pr-4 text-right font-semibold">
+                          Revenue
+                        </th>
+                        <th scope="col" className="py-2 text-right font-semibold">
+                          {isCarDetailing ? "Completed" : "Occupancy"}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byLocation.data!.map((row) => (
+                        <tr key={row.locationId} className="border-t border-border">
+                          <th scope="row" className="py-2.5 pr-4 text-left font-semibold">
+                            {row.name}
+                          </th>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">{row.bookings}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums">
+                            {formatMoney(row.netRevenueMinor, dashboard.data!.basis.currency)}
+                          </td>
+                          <td className="py-2.5 text-right tabular-nums">
+                            {isCarDetailing ? String(row.attended) : pct(row.occupancyRate * 100)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+            ) : null}
 
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard

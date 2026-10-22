@@ -48,6 +48,8 @@ import {
   useCustomerCredits,
   useCustomerLinkedRecords,
   useCustomer,
+  useClosures,
+  useUpdateCustomer,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
@@ -56,7 +58,9 @@ import {
   useStaffList,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
-import { closedLocationMessage, type BookingConflict } from "@/lib/api/errors";
+import { closedLocationMessage, notOfferedMessage, type BookingConflict } from "@/lib/api/errors";
+import { todayWithClosures } from "@/lib/closures";
+import { addressFromText, customerAddressText, kindOf } from "@/lib/locations";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { formatAllDayDuration } from "@/lib/booking-duration";
@@ -232,7 +236,12 @@ export function AddBookingModal({
   const [closedPrompt, setClosedPrompt] = useState<{
     message: string;
     body: Record<string, unknown>;
+    /** Which rule staff are overriding: a closure, or a service not offered here. */
+    kind: "closed" | "notOffered";
   } | null>(null);
+  // Where a "We go to the client" job happens, and whether to keep it on their profile.
+  const [clientAddress, setClientAddress] = useState("");
+  const [saveAddress, setSaveAddress] = useState(false);
   // Price override (pounds, as typed). null = the catalogue total.
   const [priceInput, setPriceInput] = useState<string | null>(null);
   // "10% off" / "£10 off" the list price. Typing a price clears it and vice versa,
@@ -385,6 +394,7 @@ export function AddBookingModal({
   const customerList = useMemo(() => customers.data?.items ?? [], [customers.data]);
   // The chosen client may sit beyond the first page (e.g. opened from their profile).
   const chosenCustomer = useCustomer(customerId || undefined);
+  const updateCustomer = useUpdateCustomer();
   const selectedCustomer =
     customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
   // A box is greyed out (not silently ignored) when that channel can't reach the
@@ -470,6 +480,21 @@ export function AddBookingModal({
     tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
   ).toLowerCase();
   const service = serviceList.find((s) => s.id === serviceId);
+  const chosenLocation = locationList.find((l) => l.id === locationId);
+  const mobileJob = chosenLocation ? kindOf(chosenLocation) === "mobile" : false;
+  const savedAddressText = customerAddressText(chosenCustomer.data?.address);
+  const closureRange = useMemo(() => {
+    const day = 24 * 3600 * 1000;
+    const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    return { from: iso(Date.now() - day), to: iso(Date.now() + day) };
+  }, []);
+  const closures = useClosures({ ...closureRange, enabled: open && !soleLocation }).data ?? [];
+  // Prefill the visit address from the client's profile the first time it's needed.
+  useEffect(() => {
+    if (!mobileJob || clientAddress || !savedAddressText) return;
+    setClientAddress(savedAddressText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileJob, savedAddressText]);
   // The API rejects a missing linkedRecordId when either flag is on, so mirror
   // that here rather than letting the submit bounce.
   const recordRequired =
@@ -993,6 +1018,8 @@ export function AddBookingModal({
     setVariantId("none");
     setStaffId("all");
     setLocationId("");
+    setClientAddress("");
+    setSaveAddress(false);
     setSlotKey(null);
     setPaymentMethodState(defaultMethod);
     setDepositInput(null);
@@ -1017,6 +1044,15 @@ export function AddBookingModal({
   const create = async (body: Record<string, unknown>): Promise<boolean> => {
     try {
       const { bankTransfer } = await createBooking.mutateAsync(body);
+      if (saveAddress && typeof body.clientAddress === "string" && chosenCustomer.data) {
+        void updateCustomer
+          .mutateAsync({
+            customerId: chosenCustomer.data.id,
+            version: chosenCustomer.data.version,
+            body: { address: addressFromText(body.clientAddress) },
+          })
+          .catch(() => undefined);
+      }
       if (bankTransfer) {
         // Keep the dialog open on the details so staff can read them out.
         setBankResult(bankTransfer);
@@ -1031,8 +1067,11 @@ export function AddBookingModal({
       return true;
     } catch (err) {
       const closed = closedLocationMessage(err);
-      if (closed && body.closureOverride !== true) {
-        setClosedPrompt({ message: closed, body });
+      const notOffered = notOfferedMessage(err);
+      if (notOffered && body.offeredAtOverride !== true) {
+        setClosedPrompt({ message: notOffered, body, kind: "notOffered" });
+      } else if (closed && body.closureOverride !== true) {
+        setClosedPrompt({ message: closed, body, kind: "closed" });
       } else if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
         setOverride({ conflicts: err.conflicts, body, allDay: body.allDay === true });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
@@ -1059,7 +1098,10 @@ export function AddBookingModal({
 
   const confirmClosed = async () => {
     if (!closedPrompt) return;
-    const body = { ...closedPrompt.body, closureOverride: true };
+    const body = {
+      ...closedPrompt.body,
+      ...(closedPrompt.kind === "closed" ? { closureOverride: true } : { offeredAtOverride: true }),
+    };
     setClosedPrompt(null);
     setSubmitting(true);
     try {
@@ -1203,6 +1245,7 @@ export function AddBookingModal({
       ...(depositOverridden && depositApplies ? { depositMinor: depositMinor ?? 0 } : {}),
       notesInternal: notes || null,
       ...(clientLift ? { clientLift } : {}),
+      ...(mobileJob && clientAddress.trim() ? { clientAddress: clientAddress.trim() } : {}),
       notifyChannels,
       source: "staff_console",
       ...(waitlistEntryId ? { waitlistEntryId } : {}),
@@ -1306,7 +1349,7 @@ export function AddBookingModal({
           <SetupGate
             icon={<MapPin className="size-5" />}
             title="Add a location first"
-            description="Pick where this booking happens — your premises, a mobile visit, or a service area."
+            description={`Add where you work, or the area you cover, so we know where this ${tenant.terminology.booking.toLowerCase()} happens.`}
             step="location"
             to="/locations"
             cta="Add location"
@@ -1502,15 +1545,67 @@ export function AddBookingModal({
                       <SelectValue placeholder="Choose a location" />
                     </SelectTrigger>
                     <SelectContent>
-                      {locationList.map((l) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          {l.name}
-                        </SelectItem>
-                      ))}
+                      {locationList
+                        .filter((l) => l.active || l.id === locationId)
+                        .map((l) => {
+                          const offered =
+                            !service ||
+                            service.locationIds.length === 0 ||
+                            service.locationIds.includes(l.id);
+                          const line = offered
+                            ? todayWithClosures(l, closures).pill
+                            : `Doesn't offer ${service.name}`;
+                          return (
+                            <SelectItem key={l.id} value={l.id} textValue={l.name}>
+                              <span className="grid">
+                                <span>{l.name}</span>
+                                <span
+                                  className={cn(
+                                    "text-xs",
+                                    offered
+                                      ? "text-muted-foreground"
+                                      : "text-amber-700 dark:text-amber-400",
+                                  )}
+                                >
+                                  {line}
+                                </span>
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
                     </SelectContent>
                   </Select>
                 </div>
               )}
+              {mobileJob ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="ab-client-address">Client's address</Label>
+                  <Input
+                    id="ab-client-address"
+                    value={clientAddress}
+                    maxLength={300}
+                    placeholder="e.g. 12 Oak Road, Leeds LS6 2AB"
+                    onChange={(e) => setClientAddress(e.target.value)}
+                  />
+                  {chosenCustomer.data &&
+                  clientAddress.trim() &&
+                  clientAddress.trim() !== savedAddressText ? (
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={saveAddress}
+                        onCheckedChange={(v) => setSaveAddress(v === true)}
+                      />
+                      Save to the client's profile
+                    </label>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {chosenLocation && chosenLocation.travelMinutes > 0
+                        ? `Times include ${chosenLocation.travelMinutes} min travel each way.`
+                        : "Where you're going for this job."}
+                    </p>
+                  )}
+                </div>
+              ) : null}
               {soleStaff ? null : (
                 <div className="grid gap-2">
                   <Label>{staffNoun}</Label>
@@ -2228,6 +2323,13 @@ export function AddBookingModal({
       />
       <ClosureOverrideDialog
         message={closedPrompt?.message ?? null}
+        {...(closedPrompt?.kind === "notOffered"
+          ? {
+              title: "Not offered here",
+              tail: "Clients can't book it there, but you can.",
+              cancelLabel: "Pick another location",
+            }
+          : {})}
         onOpenChange={(next) => {
           if (!next && !submitting) setClosedPrompt(null);
         }}

@@ -169,6 +169,34 @@ export function addressText(address: LocationAddress | null | undefined): string
     .join(", ");
 }
 
+type PostalAddress = {
+  line1?: string | null;
+  line2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postcode?: string | null;
+};
+
+/** A client's saved address on one line. */
+export function customerAddressText(address: PostalAddress | null | undefined): string {
+  if (!address) return "";
+  return [address.line1, address.line2, address.city, address.postcode]
+    .map((p) => p?.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** A typed one-line address back into fields, with a UK postcode split off the end. */
+export function addressFromText(text: string): PostalAddress {
+  const trimmed = text.trim();
+  const match = /,?\s*([A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2})$/.exec(trimmed);
+  if (!match) return { line1: trimmed };
+  return {
+    line1: trimmed.slice(0, match.index).replace(/,\s*$/, "") || trimmed,
+    postcode: tidyPostcode(match[1]!),
+  };
+}
+
 /** "Within 15 miles of LS1 4AB · adds 30 min travel". */
 export function areaText(area: ServiceArea | null | undefined, travelMinutes: number): string {
   if (!area) return "No area set yet";

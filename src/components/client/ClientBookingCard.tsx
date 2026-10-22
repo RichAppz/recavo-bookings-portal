@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { ClientMonthCalendar } from "@/components/client/ClientMonthCalendar";
 import { PersonMark } from "@/components/client/ClientLanding";
+import { LocationLine } from "@/components/client/ClientLocations";
 import { PrimaryButton } from "@/components/client/ClientPage";
-import type { PublicPackage, PublicService, PublicStaff } from "@/lib/api/hooks";
+import type { PublicLocation, PublicPackage, PublicService, PublicStaff } from "@/lib/api/hooks";
 import type { AvailabilitySlot, PublicServiceUpsell } from "@/lib/api/types";
 import { addCalendarDays, monthOf } from "@/lib/client-booking";
 import { dedupeSlotsByStart, hoursLabel, price } from "@/lib/client-journey";
@@ -43,6 +44,8 @@ export function ClientBookingCard({
   currency,
   cancellationWindowHours,
   offerNote = null,
+  location = null,
+  onChangeLocation,
 }: {
   service: PublicService | null;
   /** A package picked instead of a session: the card becomes a buy card. */
@@ -75,6 +78,9 @@ export function ClientBookingCard({
   cancellationWindowHours: number;
   /** A line above the calendar, e.g. when an offer opens times not normally on sale. */
   offerNote?: string | null;
+  /** Where the session happens, with Change when there is more than one location. */
+  location?: PublicLocation | null;
+  onChangeLocation?: () => void;
 }) {
   const [month, setMonth] = useState(() => monthOf(date));
   // A "next free" jump can land in another month; follow it.
@@ -122,6 +128,11 @@ export function ClientBookingCard({
 
   return (
     <div className="rounded-[var(--radius)] border border-border bg-card p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      {location ? (
+        <div className="-mt-2 mb-3">
+          <LocationLine location={location} onChange={onChangeLocation} />
+        </div>
+      ) : null}
       {staff.length > 1 ? (
         <div className="mb-4 flex flex-wrap gap-2">
           <TrainerChip

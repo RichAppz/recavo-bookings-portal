@@ -1,6 +1,7 @@
 import { Fragment, useEffect, type ReactNode } from "react";
 import { ChevronRight, MapPin, Navigation, Share, Star } from "lucide-react";
 import { toast } from "sonner";
+import { LocationRows, locationsHaveDetails } from "@/components/client/ClientLocations";
 import { OfferCard, type OfferPick } from "@/components/client/ClientOffers";
 import {
   BarSummary,
@@ -148,8 +149,11 @@ export function ClientLanding({
     sectionEnabled(page, "reviews") && reviews !== null && reviews.reviews.length > 0;
   const reviewsChip = sectionEnabled(page, "reviews") ? reviewsChipLabel(reviews) : null;
   const showAbout = sectionEnabled(page, "about") && Boolean(page.about?.trim());
+  // Once locations carry their own addresses the section lists every one of them.
+  const detailedLocations = locationsHaveDetails(locations);
   const showLocation =
-    sectionEnabled(page, "location") && (Boolean(address) || Boolean(page.venue.parkingNote));
+    sectionEnabled(page, "location") &&
+    (detailedLocations || Boolean(address) || Boolean(page.venue.parkingNote));
   const offerList = preview ? [sampleOffer(services, packages)] : offers;
   const showOffers = offersSectionVisible({
     enabled: sectionEnabled(page, "offers"),
@@ -182,8 +186,9 @@ export function ClientLanding({
   const sessionSelectedId = offerPick ? null : selectedServiceId;
   const packageSelectedId = offerPick ? null : selectedPackageId;
   const inPerson = locations.some((l) => l.type === "physical");
-  const online = locations.some((l) => l.type !== "physical");
-  const where = inPerson && online ? "In person or online" : online ? "Online" : "In person";
+  const travels = locations.some((l) => l.type !== "physical");
+  const where =
+    inPerson && travels ? "In person or we come to you" : travels ? "We come to you" : "In person";
   const venue = locations.find((l) => l.type === "physical") ?? null;
   const place = shortPlace(address);
   const parkingChip = page.venue.parkingNote
@@ -355,28 +360,36 @@ export function ClientLanding({
       ) : null,
       location: showLocation ? (
         <section className="mt-10">
-          <DesktopHeading>Location and parking</DesktopHeading>
-          <div className="flex items-start gap-3">
-            <MapPin className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              {venue ? <p className="text-[16px] font-semibold">{venue.name}</p> : null}
-              {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
-              {page.venue.parkingNote ? (
-                <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+          <DesktopHeading>
+            {detailedLocations && locations.length > 1
+              ? "Locations and parking"
+              : "Location and parking"}
+          </DesktopHeading>
+          {detailedLocations ? (
+            <LocationRows locations={locations} preview={preview} />
+          ) : (
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                {venue ? <p className="text-[16px] font-semibold">{venue.name}</p> : null}
+                {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
+                {page.venue.parkingNote ? (
+                  <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+                ) : null}
+              </div>
+              {address && !preview ? (
+                <a
+                  href={directionsUrl(address)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Directions
+                </a>
               ) : null}
             </div>
-            {address && !preview ? (
-              <a
-                href={directionsUrl(address)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
-              >
-                <Navigation className="h-4 w-4" />
-                Directions
-              </a>
-            ) : null}
-          </div>
+          )}
         </section>
       ) : null,
     };
@@ -566,35 +579,45 @@ export function ClientLanding({
     ) : null,
     location: showLocation ? (
       <div className="mt-6">
-        <SectionLabel>Location and parking</SectionLabel>
+        <SectionLabel>
+          {detailedLocations && locations.length > 1
+            ? "Locations and parking"
+            : "Location and parking"}
+        </SectionLabel>
         <ClientCard>
-          <div className="flex items-start gap-3 px-4 py-4">
-            <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              {locations
-                .filter((l) => l.type === "physical")
-                .map((l) => (
-                  <p key={l.id} className="text-[16px] font-semibold">
-                    {l.name}
-                  </p>
-                ))}
-              {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
-              {page.venue.parkingNote ? (
-                <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+          {detailedLocations ? (
+            <div className="px-4 py-4">
+              <LocationRows locations={locations} preview={preview} />
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 px-4 py-4">
+              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                {locations
+                  .filter((l) => l.type === "physical")
+                  .map((l) => (
+                    <p key={l.id} className="text-[16px] font-semibold">
+                      {l.name}
+                    </p>
+                  ))}
+                {address ? <p className="text-[15px] text-muted-foreground">{address}</p> : null}
+                {page.venue.parkingNote ? (
+                  <p className="mt-1 text-[14px] text-foreground/80">{page.venue.parkingNote}</p>
+                ) : null}
+              </div>
+              {address && !preview ? (
+                <a
+                  href={directionsUrl(address)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Directions
+                </a>
               ) : null}
             </div>
-            {address && !preview ? (
-              <a
-                href={directionsUrl(address)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-[13px] font-semibold hover:bg-muted"
-              >
-                <Navigation className="h-4 w-4" />
-                Directions
-              </a>
-            ) : null}
-          </div>
+          )}
         </ClientCard>
       </div>
     ) : null,
@@ -700,7 +723,7 @@ function ServiceList({
   locations: PublicLocation[];
   onPick: (serviceId: string) => void;
 }) {
-  const online = locations.length > 0 && locations.every((l) => l.type !== "physical");
+  const travels = locations.length > 0 && locations.every((l) => l.type !== "physical");
   return (
     <ClientCard>
       <ul className="divide-y divide-border">
@@ -715,7 +738,7 @@ function ServiceList({
                 <span className="block text-[16px] font-semibold">{service.name}</span>
                 <span className="block text-[13px] text-muted-foreground">
                   {formatDuration(service.durationMinutes)}
-                  {online ? " · Online" : locations.length > 0 ? " · In person" : ""}
+                  {travels ? " · We come to you" : locations.length > 0 ? " · In person" : ""}
                 </span>
               </span>
               <span className="text-[16px] font-semibold">
@@ -759,13 +782,13 @@ function RadioRows({
   selectedId: string | null;
   onPick: (serviceId: string) => void;
 }) {
-  const online = locations.length > 0 && locations.every((l) => l.type !== "physical");
+  const travels = locations.length > 0 && locations.every((l) => l.type !== "physical");
   return (
     <ul className="divide-y divide-border" role="radiogroup" aria-label="Sessions">
       {services.map((service) => {
         const parts = [formatDuration(service.durationMinutes)];
         if (service.description?.trim()) parts.push(service.description.trim());
-        else if (online) parts.push("Online");
+        else if (travels) parts.push("We come to you");
         return (
           <li key={service.id}>
             <RadioRow

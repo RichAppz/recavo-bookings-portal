@@ -99,6 +99,9 @@ export function EventModal({
 
   const [title, setTitle] = useState("");
   const [staffId, setStaffId] = useState("");
+  // "all" = the person's whole diary; otherwise the one location it's shown under.
+  const [locationId, setLocationId] = useState("all");
+  const activeLocations = tenant.locations.filter((l) => l.active);
   // First and last day the event covers (local YYYY-MM-DD, inclusive). A one-day
   // event has both the same; "Holiday Mon–Fri" has Friday as its endDate.
   const [startDate, setStartDate] = useState(isoDate(new Date()));
@@ -129,6 +132,7 @@ export function EventModal({
       const dates = eventDatesFromInterval(block.start, block.end, timezone);
       setTitle(block.title);
       setStaffId(block.staffId);
+      setLocationId(block.locationId ?? "all");
       setStartDate(dates.startDate);
       setEndDate(dates.endDate);
       setFrom(dates.from);
@@ -140,6 +144,7 @@ export function EventModal({
     }
     setTitle("");
     setStaffId(defaultStaffId ?? "");
+    setLocationId(tenant.currentLocationId ?? "all");
     const day = defaultDate ?? isoDate(new Date());
     setStartDate(day);
     setEndDate(day);
@@ -149,7 +154,15 @@ export function EventModal({
     setAllDay(false);
     setColour(startColour);
     setNotes("");
-  }, [open, block, defaultDate, defaultTime, defaultStaffId, startColour]);
+  }, [
+    open,
+    block,
+    defaultDate,
+    defaultTime,
+    defaultStaffId,
+    startColour,
+    tenant.currentLocationId,
+  ]);
 
   // A one-person business: pick them silently and drop the field.
   const soleStaff = useSoleStaff();
@@ -226,6 +239,7 @@ export function EventModal({
           body: {
             title: title.trim(),
             staffId,
+            locationId: locationId === "all" ? null : locationId,
             start: range.start,
             end: range.end,
             colour,
@@ -236,6 +250,7 @@ export function EventModal({
       } else {
         await create.mutateAsync({
           staffId,
+          locationId: locationId === "all" ? null : locationId,
           title: title.trim(),
           start: range.start,
           end: range.end,
@@ -306,6 +321,25 @@ export function EventModal({
               </Select>
             </div>
           )}
+
+          {activeLocations.length > 1 ? (
+            <div className="grid gap-2">
+              <Label>Location</Label>
+              <Select value={locationId} onValueChange={setLocationId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {activeLocations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="grid gap-2">
             <Label htmlFor="ev-dates">Dates</Label>

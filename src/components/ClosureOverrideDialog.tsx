@@ -19,10 +19,17 @@ export function ClosureOverrideDialog({
   onOpenChange,
   busy,
   confirmLabel = "Book anyway",
+  title = "Closed at this time",
+  tail = "Clients can't book then, but you can.",
+  cancelLabel = "Pick another time",
   onConfirm,
 }: {
   /** The API's sentence; null keeps the dialog closed. */
   message: string | null;
+  title?: string;
+  /** Said after the API's sentence. */
+  tail?: string;
+  cancelLabel?: string;
   onOpenChange: (open: boolean) => void;
   busy?: boolean;
   confirmLabel?: string;
@@ -32,13 +39,13 @@ export function ClosureOverrideDialog({
     <AlertDialog open={message !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Closed at this time</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            {message} Clients can't book then, but you can.
+            {message} {tail}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Pick another time</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} disabled={busy}>
             {busy ? "Booking…" : confirmLabel}
           </AlertDialogAction>
