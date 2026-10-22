@@ -676,9 +676,11 @@ function Upcoming({ location, onAll }: { location: Location; onAll: () => void }
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-0.5 rounded-xl bg-secondary/60 px-3 py-2.5">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-secondary/60 px-3 py-2.5">
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>
-      <span className="truncate text-[15px] font-extrabold">{value}</span>
+      <span className="line-clamp-2 break-words text-[15px] font-extrabold leading-tight">
+        {value}
+      </span>
     </div>
   );
 }
