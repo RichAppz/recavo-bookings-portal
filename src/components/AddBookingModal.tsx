@@ -14,6 +14,7 @@ import { ServiceDefaultsHint } from "@/components/BookingConsumables";
 import { SetupGate } from "@/components/SetupGate";
 import { AddClientDialog } from "@/components/QuickActions";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
+import { ClosureOverrideDialog } from "@/components/ClosureOverrideDialog";
 import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import { ClientLiftFields } from "@/components/ClientLiftFields";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,7 @@ import {
   useStaffList,
 } from "@/lib/api/hooks";
 import { ApiError, toastApiError } from "@/lib/api";
-import type { BookingConflict } from "@/lib/api/errors";
+import { closedLocationMessage, type BookingConflict } from "@/lib/api/errors";
 import { customerDisplayName } from "@/lib/api/types";
 import { emptySlotsMessage } from "@/lib/availability-windows";
 import { formatAllDayDuration } from "@/lib/booking-duration";
@@ -225,6 +226,12 @@ export function AddBookingModal({
     conflicts: BookingConflict[];
     body: Record<string, unknown>;
     allDay: boolean;
+  } | null>(null);
+  // A 409 because the location is closed then: the API's sentence and the body to
+  // re-send with `closureOverride: true` once staff confirm.
+  const [closedPrompt, setClosedPrompt] = useState<{
+    message: string;
+    body: Record<string, unknown>;
   } | null>(null);
   // Price override (pounds, as typed). null = the catalogue total.
   const [priceInput, setPriceInput] = useState<string | null>(null);
@@ -996,6 +1003,7 @@ export function AddBookingModal({
     setAllDay(false);
     setDropIn(false);
     setOverride(null);
+    setClosedPrompt(null);
     setEndTouched(false);
     setNotes("");
     setLift(EMPTY_LIFT_DRAFT);
@@ -1022,7 +1030,10 @@ export function AddBookingModal({
       onOpenChange(false);
       return true;
     } catch (err) {
-      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+      const closed = closedLocationMessage(err);
+      if (closed && body.closureOverride !== true) {
+        setClosedPrompt({ message: closed, body });
+      } else if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
         setOverride({ conflicts: err.conflicts, body, allDay: body.allDay === true });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         handleConflict(err.conflicts);
@@ -1041,6 +1052,18 @@ export function AddBookingModal({
     try {
       const ok = await create({ ...override.body, dropIn: true });
       if (ok) setOverride(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmClosed = async () => {
+    if (!closedPrompt) return;
+    const body = { ...closedPrompt.body, closureOverride: true };
+    setClosedPrompt(null);
+    setSubmitting(true);
+    try {
+      await create(body);
     } finally {
       setSubmitting(false);
     }
@@ -2202,6 +2225,14 @@ export function AddBookingModal({
         timezone={timezone}
         busy={submitting}
         onConfirm={() => void confirmOverride()}
+      />
+      <ClosureOverrideDialog
+        message={closedPrompt?.message ?? null}
+        onOpenChange={(next) => {
+          if (!next && !submitting) setClosedPrompt(null);
+        }}
+        busy={submitting}
+        onConfirm={() => void confirmClosed()}
       />
       {/* Stacks over the booking drawer; the new client is selected on save. */}
       <AddClientDialog

@@ -85,6 +85,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
+import { ClosureOverrideDialog } from "@/components/ClosureOverrideDialog";
 import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import {
   useAvailability,
@@ -115,7 +116,7 @@ import {
 import { useOnline } from "@/lib/offline/network";
 import { toastQueued, useBookingQueued, useOutbox } from "@/lib/offline/outbox";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
-import type { BookingConflict } from "@/lib/api/errors";
+import { closedLocationMessage, type BookingConflict } from "@/lib/api/errors";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import {
   allDayHolds,
@@ -2585,9 +2586,14 @@ function RescheduleDialog({
     conflicts: BookingConflict[];
     body: Record<string, unknown>;
   } | null>(null);
+  const [closedPrompt, setClosedPrompt] = useState<{
+    message: string;
+    body: Record<string, unknown>;
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
+      setClosedPrompt(null);
       setStaffId(booking.staffId);
       setDate(isoDateInTz(booking.start, timezone));
       setSlotStart(null);
@@ -2721,7 +2727,10 @@ function RescheduleDialog({
       onOpenChange(false);
       return true;
     } catch (err) {
-      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+      const closed = closedLocationMessage(err);
+      if (closed && body.closureOverride !== true) {
+        setClosedPrompt({ message: closed, body });
+      } else if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
         setOverride({ conflicts: err.conflicts, body });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         if (mode === "custom") {
@@ -2779,6 +2788,13 @@ function RescheduleDialog({
     if (!override) return;
     const ok = await move({ ...override.body, dropIn: true });
     if (ok) setOverride(null);
+  };
+
+  const confirmClosed = async () => {
+    if (!closedPrompt) return;
+    const body = { ...closedPrompt.body, closureOverride: true };
+    setClosedPrompt(null);
+    await move(body);
   };
 
   return (
@@ -3066,6 +3082,15 @@ function RescheduleDialog({
         timezone={timezone}
         busy={rescheduleAction.isPending}
         onConfirm={() => void confirmOverride()}
+      />
+      <ClosureOverrideDialog
+        message={closedPrompt?.message ?? null}
+        onOpenChange={(next) => {
+          if (!next && !rescheduleAction.isPending) setClosedPrompt(null);
+        }}
+        busy={rescheduleAction.isPending}
+        confirmLabel="Move anyway"
+        onConfirm={() => void confirmClosed()}
       />
     </Dialog>
   );

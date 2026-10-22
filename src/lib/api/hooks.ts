@@ -4,6 +4,8 @@ import type { MessageTemplate, TemplateChannel, TemplatePreview } from "@/lib/me
 import { useLiveConnected } from "@/lib/live/live-status";
 import { ledgerBehind } from "@/lib/booking-money";
 import { dismissEach } from "@/lib/follow-ups";
+import type { PublicHolidayRegion } from "@/lib/calendar-settings";
+import type { BookingInTheWay, JobsInTheWay, LocationClosure } from "@/lib/closures";
 import { toast } from "sonner";
 import {
   keepPreviousData,
@@ -2152,6 +2154,128 @@ export function useReorderLocations() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId), exact: true });
     },
+  });
+}
+
+/** Closures overlapping the local dates `from`..`to`, for every location (or one). */
+export function useClosures(range: {
+  from: string;
+  to: string;
+  locationId?: string;
+  enabled?: boolean;
+}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: [
+      ...queryKeys.locations(businessId),
+      "closures",
+      range.from,
+      range.to,
+      range.locationId ?? "all",
+    ] as const,
+    enabled: Boolean(businessId) && range.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ closures: LocationClosure[] }>(
+        `/api/v1/businesses/${businessId}/closures`,
+        { query: { from: range.from, to: range.to, locationId: range.locationId } },
+      );
+      return res.data.closures;
+    },
+  });
+}
+
+export type ClosureBody = {
+  startsOn: string;
+  endsOn: string;
+  startMinute: number | null;
+  endMinute: number | null;
+  reason: string | null;
+  jobsInTheWay?: JobsInTheWay;
+};
+
+export type ClosureOutcome = {
+  closure: LocationClosure;
+  inTheWay: number;
+  asked: number;
+  cancelled: number;
+  refunded: number;
+  failed: { bookingId: string; reason: string }[];
+};
+
+/** The bookings a closure with these dates would catch (editing: only newly caught ones). */
+export async function previewClosure(
+  businessId: string,
+  body: ClosureBody & { locationId: string; closureId?: string },
+): Promise<{ count: number; bookings: BookingInTheWay[] }> {
+  const res = await api.post<{ count: number; bookings: BookingInTheWay[] }>(
+    `/api/v1/businesses/${businessId}/closures/preview`,
+    body,
+  );
+  return res.data;
+}
+
+function invalidateClosureWorld(qc: ReturnType<typeof useQueryClient>, businessId: string) {
+  void qc.invalidateQueries({ queryKey: queryKeys.locations(businessId) });
+  void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+  void qc.invalidateQueries({ queryKey: ["biz", businessId, "availability"] });
+}
+
+/** Errors are left to the caller: the closure drawer shows them inline. */
+export function useSaveClosure() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      vars:
+        | { kind: "create"; locationId: string; body: ClosureBody }
+        | { kind: "update"; closureId: string; version: number; body: ClosureBody },
+    ) => {
+      const res =
+        vars.kind === "create"
+          ? await api.post<ClosureOutcome>(`/api/v1/businesses/${businessId}/closures`, {
+              locationId: vars.locationId,
+              ...vars.body,
+            })
+          : await api.patch<ClosureOutcome>(
+              `/api/v1/businesses/${businessId}/closures/${vars.closureId}`,
+              vars.body,
+              { ifMatch: vars.version },
+            );
+      return res.data;
+    },
+    onSettled: () => invalidateClosureWorld(qc, businessId),
+  });
+}
+
+export function useDeleteClosure() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (closureId: string) => {
+      await api.delete(`/api/v1/businesses/${businessId}/closures/${closureId}`);
+    },
+    onSettled: () => invalidateClosureWorld(qc, businessId),
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useAddBankHolidays() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { locationId: string; region?: PublicHolidayRegion }) => {
+      const res = await api.post<{
+        added: LocationClosure[];
+        skipped: number;
+        bookingsInTheWay: number;
+      }>(
+        `/api/v1/businesses/${businessId}/locations/${vars.locationId}/closures/bank-holidays`,
+        vars.region ? { region: vars.region } : {},
+      );
+      return res.data;
+    },
+    onSettled: () => invalidateClosureWorld(qc, businessId),
+    onError: (err) => toastApiError(err),
   });
 }
 

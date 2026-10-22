@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ClosuresSection } from "@/components/locations/ClosuresSection";
 import {
   HiddenPill,
   PinTile,
@@ -45,6 +46,8 @@ import {
 import type { LocationActivity } from "@/lib/api/hooks";
 import type { CatalogueService, Location, Resource, Staff } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
+import type { LocationClosure } from "@/lib/closures";
+import { todayWithClosures } from "@/lib/closures";
 import {
   DAY_LONG,
   directionsUrl,
@@ -54,7 +57,6 @@ import {
   rangesText,
   resourceWords,
   timezoneLabel,
-  todayState,
   wallClock,
   whereText,
 } from "@/lib/locations";
@@ -93,6 +95,7 @@ export function LocationPanel({
   staff,
   services,
   resources,
+  closures,
   canEdit,
   onClose,
   onEdit,
@@ -111,6 +114,7 @@ export function LocationPanel({
   staff: Staff[];
   services: CatalogueService[];
   resources: Resource[];
+  closures: readonly LocationClosure[];
   canEdit: boolean;
   onClose: () => void;
   onEdit: (l: Location) => void;
@@ -139,6 +143,7 @@ export function LocationPanel({
             staff={staff}
             services={services}
             resources={resources}
+            closures={closures}
             canEdit={canEdit}
             onEdit={onEdit}
             onEditHours={onEditHours}
@@ -178,6 +183,7 @@ function PanelBody({
   staff,
   services,
   resources,
+  closures,
   canEdit,
   onEdit,
   onEditHours,
@@ -192,6 +198,7 @@ function PanelBody({
   staff: Staff[];
   services: CatalogueService[];
   resources: Resource[];
+  closures: readonly LocationClosure[];
   canEdit: boolean;
   onEdit: (l: Location) => void;
   onEditHours: (l: Location) => void;
@@ -203,7 +210,7 @@ function PanelBody({
 }) {
   const tenant = useTenant();
   const kind = kindOf(l);
-  const today = todayState(l);
+  const today = todayWithClosures(l, closures);
   const noun = tenant.terminology.booking.toLowerCase();
   const team = teamAt(staff, l.id);
   const offered = servicesAt(services, l.id);
@@ -271,6 +278,8 @@ function PanelBody({
             {timezoneLabel(l.timezone)} ({l.timezone})
           </p>
         </section>
+
+        {l.active ? <ClosuresSection location={l} closures={closures} canEdit={canEdit} /> : null}
 
         {kind === "premises" && l.address ? (
           <section className="grid gap-2 rounded-xl bg-secondary/60 px-3.5 py-3 text-sm">

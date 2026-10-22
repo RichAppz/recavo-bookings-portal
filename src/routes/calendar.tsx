@@ -79,6 +79,7 @@ import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   useBookings,
   useCalendarBlocks,
+  useClosures,
   useCustomersById,
   useLinkedRecordDefinition,
   useLinkedRecordsById,
@@ -91,6 +92,7 @@ import {
 } from "@/lib/api/hooks";
 import { addDays, formatMoney, isoDate, isoDateInTz, startOfWeek } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
+import { closureShades } from "@/lib/closures";
 import {
   customerDisplayName,
   type Booking,
@@ -183,6 +185,7 @@ type PeriodInputs = {
   holidays: readonly PublicHoliday[];
   locations: readonly Location[];
   currentLocationId: string;
+  timezone: string;
 };
 
 type PeriodData = ReturnType<typeof usePeriodData>;
@@ -205,6 +208,7 @@ function usePeriodData(anchor: Date, inputs: PeriodInputs) {
     holidays,
     locations,
     currentLocationId,
+    timezone,
   } = inputs;
   const days = useMemo(() => periodDays(view, anchor), [view, anchor]);
   const rangeStart = days[0]!;
@@ -280,6 +284,33 @@ function usePeriodData(anchor: Date, inputs: PeriodInputs) {
       : null;
   }, [locations, currentLocationId, days]);
 
+  // Closures are shaded only when the grid shows one location: with several in view
+  // a band would hide the places that are still open.
+  const shadedLocation = useMemo(() => {
+    const active = locations.filter((l) => l.active);
+    if (currentLocationId !== "all") return active.find((l) => l.id === currentLocationId) ?? null;
+    return active.length === 1 ? active[0]! : null;
+  }, [locations, currentLocationId]);
+  const closureQuery = useClosures({
+    // A day either side covers the location's zone differing from the calendar's.
+    from: isoDate(addDays(rangeStart, -1)),
+    to: isoDate(rangeEnd),
+    locationId: shadedLocation?.id,
+    enabled: shadedLocation !== null,
+  });
+  const closures = useMemo(
+    () =>
+      shadedLocation && closureQuery.data
+        ? closureShades(
+            closureQuery.data.filter((c) => c.locationId === shadedLocation.id),
+            shadedLocation.timezone,
+            days.map(isoDate),
+            timezone,
+          )
+        : undefined,
+    [shadedLocation, closureQuery.data, days, timezone],
+  );
+
   return {
     anchor,
     days,
@@ -293,6 +324,7 @@ function usePeriodData(anchor: Date, inputs: PeriodInputs) {
     customers,
     holidayItems,
     opening,
+    closures,
   };
 }
 
@@ -477,6 +509,7 @@ function CalendarPage() {
     holidays: publicHolidays.holidays,
     locations: locations.data ?? NO_LOCATIONS,
     currentLocationId: tenant.currentLocationId,
+    timezone: tenant.business?.defaultTimezone ?? "Europe/London",
   };
   const period = usePeriodData(anchor, periodInputs);
   const { days, rangeStart, rangeEnd, bookings, blocks, events, filtered } = period;
@@ -929,6 +962,7 @@ function CalendarPage() {
           variant="phoneDay"
           days={p.days}
           opening={p.opening}
+          closures={p.closures}
           fields={blockFields}
           emptyTitle={emptyTitle}
           emptyActions={emptyActions}
@@ -943,6 +977,7 @@ function CalendarPage() {
         variant={phone ? "phoneWeek" : "desktop"}
         days={p.days}
         opening={p.opening}
+        closures={p.closures}
         fields={blockFields}
         bottomReserve={phone ? 64 : 76}
         emptyTitle={emptyTitle}

@@ -118,6 +118,13 @@ export class ApiError extends Error {
   }
 }
 
+/** The API's `409` for a time inside a location closure, which staff may book anyway. */
+export function closedLocationMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  if (err.extensions.reason !== "location_closed") return null;
+  return err.detail || "This location is closed then.";
+}
+
 export function parseProblemDetails(body: unknown, status: number, requestId?: string): ApiError {
   if (body && typeof body === "object") {
     const p = body as ProblemDetails;

@@ -21,6 +21,7 @@ import {
 import { formatInTz, isAllDayEvent, isoDate, isoDateInTz } from "@/lib/format";
 import type { PaymentColours } from "@/lib/payment-colours";
 import { segmentOn } from "@/lib/working-days";
+import type { ClosureShade } from "@/lib/closures";
 import { cn } from "@/lib/utils";
 
 import {
@@ -79,6 +80,7 @@ export function TimeGrid({
   paymentColours,
   eventColour,
   opening,
+  closures,
   fields,
   clientFor,
   tagFor,
@@ -106,6 +108,8 @@ export function TimeGrid({
   paymentColours: PaymentColours;
   eventColour: (colour: string) => string;
   opening: { openMinute: number; closeMinute: number } | null;
+  /** Location closures per ISO day, drawn as striped "Closed" bands. */
+  closures?: ReadonlyMap<string, readonly ClosureShade[]>;
   fields: BlockFields;
   clientFor: (b: Booking) => string | null;
   tagFor: (b: Booking) => string | null;
@@ -654,6 +658,21 @@ export function TimeGrid({
                 className="absolute inset-0 cursor-pointer transition-colors hover:bg-secondary/40"
                 aria-label={`Add to ${day.toLocaleDateString("en-GB", { dateStyle: "full" })}`}
               />
+
+              {(closures?.get(iso) ?? []).map((c) => {
+                const start = Math.max(c.startMin, rangeStartMin);
+                const end = Math.min(c.endMin, rangeEndMin);
+                if (end <= start) return null;
+                return (
+                  <div
+                    key={`${c.startMin}-${c.endMin}-${c.label}`}
+                    className="pointer-events-none absolute inset-x-0 overflow-hidden bg-[repeating-linear-gradient(135deg,var(--color-secondary)_0_6px,transparent_6px_12px)] px-1.5 py-1 text-[11px] font-semibold text-muted-foreground"
+                    style={{ top: topOf(start), height: topOf(end) - topOf(start) }}
+                  >
+                    <span className="rounded bg-background/85 px-1">{c.label}</span>
+                  </div>
+                );
+              })}
 
               {loading
                 ? [0, 1, 2].map((n) => {

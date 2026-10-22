@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { AppShell } from "@/components/AppShell";
 import { CardsGhost } from "@/components/ghost";
+import { ClosuresSection } from "@/components/locations/ClosuresSection";
 import { HoursEditorDrawer } from "@/components/locations/HoursEditorDrawer";
 import {
   ArchiveLocationDialog,
@@ -26,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
+  useClosures,
   useLocationActivity,
   useLocationsList,
   usePlans,
@@ -39,6 +41,8 @@ import {
 import type { LocationActivity } from "@/lib/api/hooks";
 import { ApiError } from "@/lib/api/errors";
 import type { Location } from "@/lib/api/types";
+import type { LocationClosure } from "@/lib/closures";
+import { todayWithClosures } from "@/lib/closures";
 import type { OpeningHour, PlanSeat } from "@/lib/locations";
 import {
   directionsUrl,
@@ -50,7 +54,6 @@ import {
   resourceWords,
   sortLocations,
   timezoneLabel,
-  todayState,
   weekBounds,
   whereText,
 } from "@/lib/locations";
@@ -97,6 +100,14 @@ function LocationsPage() {
   const list = useLocationsList();
   const week = useMemo(() => weekBounds(), []);
   const activityQuery = useLocationActivity(week);
+  const closureRange = useMemo(() => {
+    // A day either side of UTC today covers every location's own today.
+    const day = 24 * 3600 * 1000;
+    const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    return { from: iso(Date.now() - day), to: iso(Date.now() + 366 * day) };
+  }, []);
+  const closuresQuery = useClosures(closureRange);
+  const closures = closuresQuery.data ?? [];
   const staffQuery = useStaffList();
   const servicesQuery = useServices();
   const resourcesQuery = useResources();
@@ -270,6 +281,7 @@ function LocationsPage() {
         activity={activityById.get(active[0]!.id)}
         seat={seat}
         canEdit={canEdit}
+        closures={closures}
         resourcesCount={resources.filter((r) => r.locationId === active[0]!.id && r.active).length}
         resourceNames={resources
           .filter((r) => r.locationId === active[0]!.id && r.active)
@@ -334,6 +346,7 @@ function LocationsPage() {
               key={l.id}
               location={l}
               activity={activityById.get(l.id)}
+              closures={closures}
               teamNames={(() => {
                 const t = teamAt(staff, l.id);
                 return [...t.here, ...t.anywhere].map((s) => s.displayName);
@@ -391,6 +404,7 @@ function LocationsPage() {
         staff={staff}
         services={services}
         resources={resources}
+        closures={closures}
         canEdit={canEdit}
         onClose={() => setSearch({ location: undefined })}
         onEdit={openEdit}
@@ -462,6 +476,7 @@ function LocationsPage() {
 function LocationCard({
   location: l,
   activity,
+  closures,
   teamNames,
   noun,
   draggable,
@@ -474,6 +489,7 @@ function LocationCard({
 }: {
   location: Location;
   activity: LocationActivity | undefined;
+  closures: readonly LocationClosure[];
   teamNames: string[];
   noun: string;
   draggable: boolean;
@@ -485,7 +501,7 @@ function LocationCard({
   onRestore?: () => void;
 }) {
   const kind = kindOf(l);
-  const today = todayState(l);
+  const today = todayWithClosures(l, closures);
   const weekCount = activity?.weekBookings ?? 0;
   const where = whereText(l);
   const label = [
@@ -585,6 +601,7 @@ function OneLocation({
   activity,
   seat,
   canEdit,
+  closures,
   resourceNames,
   onOpen,
   onEdit,
@@ -597,6 +614,7 @@ function OneLocation({
   activity: LocationActivity | undefined;
   seat: PlanSeat;
   canEdit: boolean;
+  closures: readonly LocationClosure[];
   resourcesCount: number;
   resourceNames: string[];
   onOpen: () => void;
@@ -608,7 +626,7 @@ function OneLocation({
 }) {
   const tenant = useTenant();
   const kind = kindOf(l);
-  const today = todayState(l);
+  const today = todayWithClosures(l, closures);
   const words = resourceWords(tenant.business?.industryTemplateKey);
   const noun = tenant.terminology.booking.toLowerCase();
   const nextPlan = seat.next;
@@ -705,6 +723,12 @@ function OneLocation({
             <WeekHours location={l} />
           </section>
           <section className="grid content-start gap-3 rounded-[18px] border bg-card p-5">
+            <ClosuresSection
+              location={l}
+              closures={closures}
+              canEdit={canEdit}
+              className="border-b pb-4"
+            />
             <div className="flex items-center justify-between">
               <h3 className="text-[15px] font-extrabold">{words.many}</h3>
               {canEdit ? (
