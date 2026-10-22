@@ -222,7 +222,11 @@ export function AttentionStrip({
         <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="flex h-[100dvh] max-h-none flex-col gap-0 p-0">
+        <SheetContent
+          side="bottom"
+          className="top-sheet-peek flex max-h-none flex-col gap-0 rounded-t-3xl p-0"
+        >
+          <span aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
           <SheetHeader className="shrink-0 px-[18px] pt-5 pb-3 pr-16 text-left">
             <SheetTitle className="flex items-center gap-2">
               Needs your attention <CountPill total={total} />

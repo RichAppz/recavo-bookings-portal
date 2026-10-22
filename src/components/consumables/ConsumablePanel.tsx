@@ -87,9 +87,12 @@ export function ConsumablePanel({
         side={phone ? "bottom" : "right"}
         className={cn(
           "flex w-full flex-col gap-0 p-0",
-          phone ? "top-0 h-full" : "sm:max-w-[480px]",
+          phone ? "top-sheet-peek rounded-t-3xl" : "sm:max-w-[480px]",
         )}
       >
+        {phone ? (
+          <span aria-hidden className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
+        ) : null}
         {consumable ? (
           <PanelBody
             key={consumable.id}
