@@ -14,6 +14,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { isStaleBundleError, reloadForNewVersion } from "@/lib/stale-bundle";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
@@ -52,9 +53,23 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const stale = isStaleBundleError(error);
+  const [reloading, setReloading] = useState(false);
   useEffect(() => {
+    if (stale && reloadForNewVersion()) {
+      setReloading(true);
+      return;
+    }
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+  }, [error, stale]);
+
+  if (reloading) {
+    return (
+      <div className="screen-center bg-background px-safe-4">
+        <p className="text-sm text-muted-foreground">Updating to the latest version…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="screen-center bg-background px-safe-4">
@@ -68,6 +83,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
+              if (stale) {
+                window.location.reload();
+                return;
+              }
               router.invalidate();
               reset();
             }}
@@ -205,6 +224,14 @@ function RootComponent() {
     window.addEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
     return () => window.removeEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
   }, [queryClient]);
+
+  useEffect(() => {
+    const onPreloadError = (event: Event) => {
+      if (reloadForNewVersion()) event.preventDefault();
+    };
+    window.addEventListener("vite:preloadError", onPreloadError);
+    return () => window.removeEventListener("vite:preloadError", onPreloadError);
+  }, []);
 
   return (
     <OfflineProvider queryClient={queryClient}>
