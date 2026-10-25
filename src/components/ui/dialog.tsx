@@ -101,6 +101,9 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onInteractOutside, ...props }, ref) => {
   const phone = useIsPhoneDialog();
+  // tailwind-merge doesn't know `p-0` overrides the custom `px-safe-*` utilities,
+  // so a consumer that pads its own header, body and footer would get both.
+  const flush = /(^|\s)p-0(\s|$)/.test(className ?? "");
   // A finger-sized square (44px on phones, 36px with a pointer) around the glyph.
   // On phones the glyph sits in a grey disc, the way iOS draws a sheet's close
   // control, and the header drops below it (see DialogHeader).
@@ -127,7 +130,8 @@ const DialogContent = React.forwardRef<
           onInteractOutside?.(e);
         }}
         className={cn(
-          "no-scrollbar fixed z-50 flex w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto bg-background px-safe-4 sm:px-safe-6 pb-safe-12 shadow-xl sm:pb-6 outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
+          "no-scrollbar fixed z-50 flex w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto bg-background pb-safe-12 shadow-xl sm:pb-6 outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
+          !flush && "px-safe-4 sm:px-safe-6",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
           phone
             ? "inset-x-0 bottom-0 top-sheet-peek rounded-t-3xl border-t pt-6 has-[[data-dialog-footer]]:pb-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"

@@ -604,7 +604,7 @@ function StaffDialog({
       }}
     >
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="px-4 sm:px-6 pt-6 pb-4 sm:pt-safe-6">
+        <DialogHeader className="px-4 max-sm:pr-4 sm:px-6 pt-6 pb-4 sm:pt-safe-6">
           <DialogTitle>{staff ? "Edit staff profile" : "Add staff"}</DialogTitle>
           <DialogDescription>
             Working hours, services delivered and locations used across booking and availability.
