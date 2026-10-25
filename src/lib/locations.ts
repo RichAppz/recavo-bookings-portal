@@ -282,29 +282,28 @@ export type PlanSeat = {
   next: PublicCataloguePlan | null;
 };
 
-/** How many active locations the plan allows and the next plan that allows more. */
+/**
+ * How many active locations (or, with `"staff.active"`, team seats) the plan allows
+ * and the next plan that allows more.
+ */
 export function planSeat(
   plan: PublicCataloguePlan | null | undefined,
   plans: readonly PublicCataloguePlan[],
   used: number,
+  limitKey: "locations.active" | "staff.active" = "locations.active",
 ): PlanSeat {
   // The subscription reports the billed variant ("solo_month", limit key "locations");
   // the catalogue entry it belongs to carries the canonical name and limits.
+  const legacyKey = limitKey.replace(/\.active$/, "");
   const baseCode = plan?.code.replace(/_(month|year)$/, "");
   const listed = plans.find((p) => p.code === baseCode);
   const limits = plan?.limits as Record<string, number | null | undefined> | undefined;
+  const limitOf = (p: PublicCataloguePlan) =>
+    (p.limits as Record<string, number | null | undefined>)[limitKey] ?? null;
   const allowed =
-    listed?.limits["locations.active"] ??
-    limits?.["locations.active"] ??
-    limits?.["locations"] ??
-    null;
-  const ordered = [...plans].sort(
-    (a, b) => (a.limits["locations.active"] ?? 0) - (b.limits["locations.active"] ?? 0),
-  );
-  const next =
-    allowed === null
-      ? null
-      : (ordered.find((p) => (p.limits["locations.active"] ?? 0) > allowed) ?? null);
+    (listed ? limitOf(listed) : null) ?? limits?.[limitKey] ?? limits?.[legacyKey] ?? null;
+  const ordered = [...plans].sort((a, b) => (limitOf(a) ?? 0) - (limitOf(b) ?? 0));
+  const next = allowed === null ? null : (ordered.find((p) => (limitOf(p) ?? 0) > allowed) ?? null);
   return {
     planName: listed?.name ?? plan?.name.replace(/\s*\((month|year)\)$/, "") ?? "your",
     planCode: listed?.code ?? plan?.code ?? null,

@@ -125,10 +125,11 @@ function navLabel(
     booking: string;
     linkedRecord: string;
   },
+  solo = false,
 ): string {
   if (to === "/clients") return pluralizeTerm(terminology.client);
   if (to === "/vehicles") return pluralizeTerm(terminology.linkedRecord);
-  if (to === "/staff") return terminology.staff;
+  if (to === "/team") return solo ? "Your availability" : fallback;
   if (to === "/services") return pluralizeTerm(terminology.service.replace(/\s+type$/i, ""));
   if (to === "/bookings") {
     const bookingLabel = pluralizeTerm(terminology.booking);
@@ -203,8 +204,8 @@ const NAV: NavItem[] = [
   },
   { to: "/locations", label: "Locations", icon: MapPin, anyOf: [PERMISSIONS.BUSINESS_READ] },
   {
-    to: "/staff",
-    label: "Staff",
+    to: "/team",
+    label: "Team",
     icon: UserRound,
     anyOf: [PERMISSIONS.TEAM_INVITE, PERMISSIONS.BUSINESS_READ],
   },
@@ -351,14 +352,12 @@ function ConsoleShell({ children }: { children: ReactNode }) {
       // Consumables are a detailing concept (coatings, pads, chemicals).
       (item.to !== "/consumables" || isCarDetailing) &&
       (item.to !== "/follow-ups" || remindersAvailable(tenant.business?.industryTemplateKey)) &&
-      // One-seat plans have no team to manage.
-      (item.to !== "/staff" || !soloPlan) &&
       !isHiddenByBusiness(item.to),
   );
   const canSeeSettings = tenant.can(PERMISSIONS.BUSINESS_READ);
   const menuItems: MenuItemDef[] = visibleNav.map((item) => ({
     to: item.to,
-    label: navLabel(item.to, item.label, tenant.terminology),
+    label: navLabel(item.to, item.label, tenant.terminology, soloPlan),
     icon: item.icon,
     badge:
       item.to === "/waitlist" && waitlistSummary.data?.slotFreed
@@ -485,7 +484,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
   const searchablePages: SearchablePage[] = [
     ...visibleNav.map((item) => ({
       to: item.to,
-      label: navLabel(item.to, item.label, tenant.terminology),
+      label: navLabel(item.to, item.label, tenant.terminology, soloPlan),
       icon: item.icon,
     })),
     ...(canSeeSettings ? [{ to: "/settings", label: "Settings", icon: Settings }] : []),

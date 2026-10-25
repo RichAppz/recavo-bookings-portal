@@ -85,7 +85,7 @@ export const SETUP_GUIDES: readonly Guide[] = [
           name: "staff",
           alt: "The staff page: a team list on the left and the selected person's availability on the right.",
         },
-        link: { to: "/staff", label: "Open {Staff}" },
+        link: { to: "/team", label: "Open Team" },
       },
       {
         heading: "Add someone",

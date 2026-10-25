@@ -89,7 +89,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       {
         heading: "Colour by {staff}",
         body: "Each {staff} has a **calendar colour** on their card under **{Staff}**. Filter the calendar to one person to see just their day, or use the colour to tell teams apart at a glance.",
-        link: { to: "/staff", label: "Open {Staff}" },
+        link: { to: "/team", label: "Open Team" },
       },
     ],
     related: ["add-staff-and-hours", "notification-preferences"],

@@ -31,7 +31,7 @@ const ICONS: Record<AttentionKind, ReactNode> = {
   setup: <ListChecks className="size-4" />,
 };
 
-export type WorthALook = { key: string; label: string; to: "/packages" | "/messages" | "/staff" };
+export type WorthALook = { key: string; label: string; to: "/packages" | "/messages" | "/team" };
 
 function CountPill({ total }: { total: number }) {
   return (

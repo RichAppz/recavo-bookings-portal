@@ -40,6 +40,7 @@ import { Route as ResetRouteImport } from './routes/reset'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as TeamRouteImport } from './routes/team'
 import { Route as VehiclesRouteImport } from './routes/vehicles'
 import { Route as WaitlistRouteImport } from './routes/waitlist'
 import { Route as WhatsNewRouteImport } from './routes/whats-new'
@@ -222,6 +223,11 @@ const StaffRoute = StaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeamRoute = TeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VehiclesRoute = VehiclesRouteImport.update({
   id: '/vehicles',
   path: '/vehicles',
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRouteWithChildren
   '/staff': typeof StaffRoute
+  '/team': typeof TeamRoute
   '/vehicles': typeof VehiclesRoute
   '/waitlist': typeof WaitlistRoute
   '/whats-new': typeof WhatsNewRoute
@@ -444,6 +451,7 @@ export interface FileRoutesByTo {
   '/reset': typeof ResetRoute
   '/services': typeof ServicesRoute
   '/staff': typeof StaffRoute
+  '/team': typeof TeamRoute
   '/vehicles': typeof VehiclesRoute
   '/waitlist': typeof WaitlistRoute
   '/whats-new': typeof WhatsNewRoute
@@ -504,6 +512,7 @@ export interface FileRoutesById {
   '/services': typeof ServicesRoute
   '/settings': typeof SettingsRouteWithChildren
   '/staff': typeof StaffRoute
+  '/team': typeof TeamRoute
   '/vehicles': typeof VehiclesRoute
   '/waitlist': typeof WaitlistRoute
   '/whats-new': typeof WhatsNewRoute
@@ -565,6 +574,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/settings'
     | '/staff'
+    | '/team'
     | '/vehicles'
     | '/waitlist'
     | '/whats-new'
@@ -622,6 +632,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/services'
     | '/staff'
+    | '/team'
     | '/vehicles'
     | '/waitlist'
     | '/whats-new'
@@ -681,6 +692,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/settings'
     | '/staff'
+    | '/team'
     | '/vehicles'
     | '/waitlist'
     | '/whats-new'
@@ -741,6 +753,7 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   StaffRoute: typeof StaffRoute
+  TeamRoute: typeof TeamRoute
   VehiclesRoute: typeof VehiclesRoute
   WaitlistRoute: typeof WaitlistRoute
   WhatsNewRoute: typeof WhatsNewRoute
@@ -975,6 +988,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/team': {
+      id: '/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vehicles': {
@@ -1244,6 +1264,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRoute,
   SettingsRoute: SettingsRouteWithChildren,
   StaffRoute: StaffRoute,
+  TeamRoute: TeamRoute,
   VehiclesRoute: VehiclesRoute,
   WaitlistRoute: WaitlistRoute,
   WhatsNewRoute: WhatsNewRoute,

@@ -93,6 +93,7 @@ import {
 import { addDays, formatMoney, isoDate, isoDateInTz, startOfWeek } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { closureShades } from "@/lib/closures";
+import { mergeShades, takesBookings, timeAwayLabel, timeAwayShades } from "@/lib/team";
 import {
   customerDisplayName,
   type Booking,
@@ -100,7 +101,12 @@ import {
   type CatalogueService,
   type Location,
 } from "@/lib/api/types";
-import { paymentColoursFrom, paymentDotStyle, type PaymentColours } from "@/lib/payment-colours";
+import {
+  colourByStaff,
+  paymentColoursFrom,
+  paymentDotStyle,
+  type PaymentColours,
+} from "@/lib/payment-colours";
 import type { PaymentTone } from "@/lib/booking-payment";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
@@ -311,6 +317,29 @@ function usePeriodData(anchor: Date, inputs: PeriodInputs) {
     [shadedLocation, closureQuery.data, days, timezone],
   );
 
+  // Time away is hatched only when the grid shows one person, for the same reason.
+  const staffList = useStaffList();
+  const awayShades = useMemo(() => {
+    const people = (staffList.data ?? []).filter(takesBookings);
+    const person =
+      staffFilter !== "all"
+        ? (staffList.data ?? []).find((s) => s.id === staffFilter)
+        : people.length === 1
+          ? people[0]
+          : undefined;
+    if (!person || person.timeOff.length === 0) return undefined;
+    return timeAwayShades(
+      person.timeOff.map((t) => ({
+        start: t.start,
+        end: t.end,
+        label: timeAwayLabel(t, null),
+      })),
+      days.map(isoDate),
+      timezone,
+    );
+  }, [staffList.data, staffFilter, days, timezone]);
+  const shades = useMemo(() => mergeShades(closures, awayShades), [closures, awayShades]);
+
   return {
     anchor,
     days,
@@ -324,7 +353,7 @@ function usePeriodData(anchor: Date, inputs: PeriodInputs) {
     customers,
     holidayItems,
     opening,
-    closures,
+    closures: shades,
   };
 }
 
@@ -362,10 +391,16 @@ const VIEW_OPTIONS: { value: CalendarView; label: string }[] = [
 function CalendarPage() {
   const tenant = useTenant();
   const phone = useIsPhone();
-  const paymentColours = useMemo<PaymentColours>(
-    () => paymentColoursFrom(tenant.configuration),
-    [tenant.configuration],
-  );
+  const colourStaff = useStaffList();
+  const paymentColours = useMemo<PaymentColours>(() => {
+    const base = paymentColoursFrom(tenant.configuration);
+    if (!colourByStaff(tenant.configuration)) return base;
+    const byStaff = new Map<string, string>();
+    for (const s of colourStaff.data ?? []) {
+      if (s.calendarColour) byStaff.set(s.id, s.calendarColour);
+    }
+    return { ...base, byStaff };
+  }, [tenant.configuration, colourStaff.data]);
   // View and filters come back the way they were last left, per business.
   const prefKey = (name: string) => `recavo.calendar.${name}.${tenant.businessId ?? "none"}`;
   const [view, setView] = useStoredState<CalendarView>(prefKey("view"), "week", CALENDAR_VIEWS);
@@ -873,11 +908,13 @@ function CalendarPage() {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all">All {staffNoun.toLowerCase()}s</SelectItem>
-        {(staff.data ?? []).map((s) => (
-          <SelectItem key={s.id} value={s.id}>
-            {s.displayName}
-          </SelectItem>
-        ))}
+        {(staff.data ?? [])
+          .filter((s) => takesBookings(s) || s.id === staffFilter)
+          .map((s) => (
+            <SelectItem key={s.id} value={s.id}>
+              {s.displayName}
+            </SelectItem>
+          ))}
       </SelectContent>
     </Select>
   );

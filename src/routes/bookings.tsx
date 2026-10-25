@@ -83,6 +83,8 @@ import { cn } from "@/lib/utils";
 /** `?booking=<id>` opens that booking's drawer — the staff add-on request email links here. */
 const searchSchema = z.object({
   booking: z.string().min(1).optional(),
+  /** Opens filtered to one person, e.g. from Team's "I'll sort them first". */
+  staff: z.string().min(1).optional(),
 });
 
 export const Route = createFileRoute("/bookings")({
@@ -149,7 +151,7 @@ function BookingsPage() {
   const tenant = useTenant();
   const [tab, setTab] = useState<BookingsTab>("upcoming");
   const [query, setQuery] = useState("");
-  const [staffFilter, setStaffFilter] = useState("all");
+  const [staffFilter, setStaffFilter] = useState(search.staff ?? "all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCancelled, setShowCancelled] = useState(false);

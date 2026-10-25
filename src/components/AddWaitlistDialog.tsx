@@ -10,6 +10,7 @@ import { DayToggles, TimeOfDayButtons } from "@/components/waitlist/parts";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { takesBookings } from "@/lib/team";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -165,11 +166,12 @@ export function AddWaitlistDialog({
     () =>
       (staff.data ?? []).filter(
         (s) =>
-          !service ||
-          s.eligibleServiceIds.length === 0 ||
-          s.eligibleServiceIds.includes(service.id),
+          (takesBookings(s) || s.id === staffId) &&
+          (!service ||
+            s.eligibleServiceIds.length === 0 ||
+            s.eligibleServiceIds.includes(service.id)),
       ),
-    [staff.data, service],
+    [staff.data, service, staffId],
   );
   const customerList = customers.data?.items ?? [];
   const selectedCustomer = customerList.find((c) => c.id === customerId) ?? chosen.data ?? null;

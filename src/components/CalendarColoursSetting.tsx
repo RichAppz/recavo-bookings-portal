@@ -29,6 +29,7 @@ import {
 } from "@/lib/calendar-settings";
 import {
   DEFAULT_PAYMENT_HEX,
+  colourByStaff,
   HEX_COLOUR,
   PAYMENT_COLOUR_KEYS,
   paymentColoursFrom,
@@ -177,6 +178,7 @@ export function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <div className="grid gap-4">
+      <ColourBySetting />
       {ROWS.map(({ key, label, hint, sample }) => {
         const bg = effective(key);
         const isDefault = form[key] === "";
@@ -348,6 +350,55 @@ export function PublicHolidaysSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** "Colour bookings by: Payment status / {staff}"; saves straight away like bank holidays. */
+function ColourBySetting() {
+  const tenant = useTenant();
+  const update = useUpdateConfiguration();
+  const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
+  const current = colourByStaff(tenant.configuration) ? "staff" : "payment";
+  const staffWord = tenant.terminology.staff.trim() || "Staff";
+
+  const change = async (value: string) => {
+    if (value === current) return;
+    try {
+      await update.mutateAsync({ calendar: { colourBy: value as "payment" | "staff" } });
+      toast.success(
+        value === "staff"
+          ? `Bookings now show each ${staffWord.toLowerCase()}'s colour`
+          : "Bookings now show payment status",
+      );
+    } catch {
+      // useUpdateConfiguration already toasts the API error.
+    }
+  };
+
+  return (
+    <div className="grid gap-2 rounded-[14px] border bg-secondary/30 p-3 dark:bg-secondary/20">
+      <div>
+        <p className="text-sm font-medium">Colour bookings by</p>
+        <p className="text-xs text-muted-foreground">
+          {current === "staff"
+            ? `Each booking uses its ${staffWord.toLowerCase()}'s colour from Team. The due pill still shows what's owed.`
+            : "Paid, part paid and unpaid, using the colours below."}
+        </p>
+      </div>
+      <Select
+        value={current}
+        onValueChange={(v) => void change(v)}
+        disabled={!canEdit || update.isPending}
+      >
+        <SelectTrigger aria-label="Colour bookings by" className="w-full sm:w-64">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="payment">Payment status</SelectItem>
+          <SelectItem value="staff">{staffWord}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

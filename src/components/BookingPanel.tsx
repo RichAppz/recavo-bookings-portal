@@ -170,6 +170,7 @@ import {
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { takesBookings } from "@/lib/team";
 import { directionsUrl as textDirectionsUrl } from "@/lib/calendar-links";
 import {
   addressText,
@@ -2930,11 +2931,13 @@ function RescheduleDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="any">Any {staffNoun.toLowerCase()}</SelectItem>
-                  {staffOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.displayName}
-                    </SelectItem>
-                  ))}
+                  {staffOptions
+                    .filter((s) => takesBookings(s) || s.id === booking.staffId)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.displayName}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

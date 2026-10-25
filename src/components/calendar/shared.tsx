@@ -4,7 +4,13 @@ import { CarFront } from "lucide-react";
 import type { Booking, LinkedRecord } from "@/lib/api/types";
 import { bookingSettlement, paymentLabel, paymentTone } from "@/lib/booking-payment";
 import { formatMoney } from "@/lib/format";
-import { duePillStyle, paymentTintStyle, type PaymentColours } from "@/lib/payment-colours";
+import {
+  duePillStyle,
+  HEX_COLOUR,
+  paymentTintStyle,
+  personTintStyle,
+  type PaymentColours,
+} from "@/lib/payment-colours";
 import type { PublicHoliday } from "@/lib/public-holidays";
 import { contiguousRuns, occupiedDaysOf } from "@/lib/working-days";
 import { cn } from "@/lib/utils";
@@ -69,10 +75,13 @@ export const isMultiDay = (b: Spanning, tz: string) => daysOf(b, tz).length > 1;
 export function blockPayment(b: Booking, colours: PaymentColours) {
   const settlement = bookingSettlement(b);
   const tone = paymentTone(settlement, b.status);
+  const personal = b.staffId ? colours.byStaff?.get(b.staffId) : undefined;
   return {
     tone,
     settlement,
-    ...paymentTintStyle(tone, colours),
+    ...(personal && HEX_COLOUR.test(personal)
+      ? personTintStyle(personal)
+      : paymentTintStyle(tone, colours)),
     label: paymentLabel(settlement, b.currency, formatMoney),
     /** "£18 due" — what the due pill says, or null when nothing is owed. */
     due:

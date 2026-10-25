@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import {
   newIdempotencyKey,
-  useAddStaffTimeOff,
   useConversations,
   useCreateBooking,
   useCustomers,
@@ -38,6 +37,8 @@ import {
   useStartPackagePurchase,
 } from "@/lib/api/hooks";
 import { customerDisplayName } from "@/lib/api/types";
+import { TimeAwayDrawer } from "@/components/team/TimeAwayDrawer";
+import { takesBookings } from "@/lib/team";
 import { formatMoney, isoDate } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -394,7 +395,7 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
           title="Add a staff member first"
           description="Someone has to run the session — add a staff member with working hours."
           step="staff_availability"
-          to="/staff"
+          to="/team"
           cta="Add staff"
           onNavigate={onClose}
         />
@@ -483,7 +484,7 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
                 <SelectValue placeholder="Choose staff" />
               </SelectTrigger>
               <SelectContent>
-                {(staff.data ?? []).map((s) => (
+                {(staff.data ?? []).filter(takesBookings).map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.displayName}
                   </SelectItem>
@@ -523,106 +524,45 @@ function GroupSessionDialog({ open, onClose }: { open: boolean; onClose: () => v
 }
 
 function BlockAvailabilityDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [staffId, setStaffId] = useState("");
-  const [date, setDate] = useState(isoDate(new Date()));
-  const [time, setTime] = useState("14:00");
-  const [duration, setDuration] = useState("60");
-  const [reason, setReason] = useState("Admin time");
   const staff = useStaffList();
-  const addTimeOff = useAddStaffTimeOff();
-  const soleStaff = useSoleStaff();
-  useEffect(() => {
-    if (open && soleStaff && !staffId) setStaffId(soleStaff.id);
-  }, [open, soleStaff, staffId]);
-  const member = (staff.data ?? []).find((s) => s.id === staffId);
+  const locations = useLocationsList();
+  const people = (staff.data ?? []).filter(takesBookings);
 
-  const gate = firstGate([
-    {
-      when: staff.isSuccess && (staff.data ?? []).length === 0,
-      gate: (
-        <SetupGate
-          icon={<Users className="size-5" />}
-          title="Add a staff member first"
-          description="Time is blocked against a staff member's working hours."
-          step="staff_availability"
-          to="/staff"
-          cta="Add staff"
-          onNavigate={onClose}
-        />
-      ),
-    },
-  ]);
+  if (staff.isSuccess && people.length === 0) {
+    return (
+      <Shell
+        open={open}
+        onClose={onClose}
+        gate={
+          <SetupGate
+            icon={<Users className="size-5" />}
+            title="Add a staff member first"
+            description="Time is blocked against a staff member's working hours."
+            step="staff_availability"
+            to="/team"
+            cta="Open Team"
+            onNavigate={onClose}
+          />
+        }
+        title="Add time away"
+        description="Holidays, blocks and training. Clients can't book them then."
+        submitLabel="Add"
+        onSubmit={async () => undefined}
+      >
+        {null}
+      </Shell>
+    );
+  }
 
   return (
-    <Shell
+    <TimeAwayDrawer
       open={open}
-      onClose={onClose}
-      gate={gate}
-      what="this block"
-      dirty={(staffId !== "" && staffId !== soleStaff?.id) || reason !== "Admin time"}
-      title="Block availability"
-      description="Stop new bookings being taken during a period."
-      submitLabel="Block time"
-      disabled={!member}
-      onSubmit={async () => {
-        if (!member) {
-          toast.error("Choose a staff member");
-          return;
-        }
-        const start = new Date(`${date}T${time}:00`);
-        const end = new Date(start.getTime() + (Number(duration) || 60) * 60_000);
-        await addTimeOff.mutateAsync({
-          staffId: member.id,
-          version: member.version,
-          start: start.toISOString(),
-          end: end.toISOString(),
-          originatingTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          reason,
-        });
-        toast.success("Availability blocked");
-      }}
-    >
-      {soleStaff ? null : (
-        <div className="grid gap-2">
-          <Label>Staff member</Label>
-          <Select value={staffId} onValueChange={setStaffId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose staff" />
-            </SelectTrigger>
-            <SelectContent>
-              {(staff.data ?? []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="grid gap-2">
-          <Label htmlFor="b-date">Date</Label>
-          <Input id="b-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="b-time">From</Label>
-          <Input id="b-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="b-duration">Minutes</Label>
-          <Input
-            id="b-duration"
-            type="number"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="b-reason">Reason</Label>
-        <Input id="b-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-      </div>
-    </Shell>
+      onOpenChange={(o) => (o ? undefined : onClose())}
+      people={people}
+      person={people.length === 1 ? people[0] : null}
+      defaultKind="block"
+      locations={(locations.data ?? []).filter((l) => l.active)}
+    />
   );
 }
 

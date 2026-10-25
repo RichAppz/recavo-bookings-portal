@@ -105,6 +105,7 @@ import { adjustmentLabel, formatAdjustment, linePriceMinor } from "@/lib/booking
 import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import { spendableUnits } from "@/lib/portal-credits";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { takesBookings } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -1623,7 +1624,7 @@ export function AddBookingModal({
                       <SelectItem value="all">
                         {scheduling === "custom" ? `Choose a ${staffLower}…` : `Any ${staffLower}`}
                       </SelectItem>
-                      {(staff.data ?? []).map((s) => (
+                      {(staff.data ?? []).filter(takesBookings).map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.displayName}
                         </SelectItem>

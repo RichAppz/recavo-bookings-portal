@@ -406,7 +406,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
           name: "time-off",
           alt: "The Time off and blocks card on a staff member's page with the ranges they are away.",
         },
-        link: { to: "/staff", label: "Open {Staff}" },
+        link: { to: "/team", label: "Open Team" },
       },
       {
         heading: "Block availability quickly",

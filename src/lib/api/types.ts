@@ -15,6 +15,7 @@ export type BankTransferInstructions = schemas["BankTransferInstructions"];
 export type Membership = schemas["Membership"];
 export type Location = schemas["Location"];
 export type Staff = schemas["Staff"];
+export type BlockedPeriod = schemas["BlockedPeriod"];
 export type CatalogueService = schemas["CatalogueService"];
 /** "Remind the client (and me) when this is due again" — e.g. a ceramic top-up every 2 years. */
 export type ServiceFollowUpRule = schemas["ServiceFollowUpRule"];

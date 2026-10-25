@@ -323,8 +323,8 @@ function Overview({
       ? [
           {
             key: "availability",
-            label: soloPlan ? "Your availability" : "Staff availability",
-            to: "/staff" as const,
+            label: soloPlan ? "Your availability" : "Team",
+            to: "/team" as const,
           },
         ]
       : []),

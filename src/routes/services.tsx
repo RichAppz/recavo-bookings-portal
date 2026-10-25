@@ -600,7 +600,7 @@ function ServiceDialog({
   const staffList = useStaffList();
   const soleStaff = useSoleStaff();
   const activeStaff = useMemo(
-    () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
+    () => (staffList.data ?? []).filter((m) => m.status !== "suspended" && m.bookable !== false),
     [staffList.data],
   );
   const [name, setName] = useState(service?.name ?? "");

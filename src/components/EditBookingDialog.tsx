@@ -82,6 +82,7 @@ import {
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { takesBookings } from "@/lib/team";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { cn } from "@/lib/utils";
@@ -338,9 +339,7 @@ export function EditBookingDialog({
   // ---- Lookups ------------------------------------------------------------------
   const serviceList = useMemo(() => services.data ?? [], [services.data]);
   const serviceById = useMemo(() => new Map(serviceList.map((s) => [s.id, s])), [serviceList]);
-  const staffList = (staff.data ?? []).filter(
-    (s) => s.status === "active" || s.id === booking.staffId,
-  );
+  const staffList = (staff.data ?? []).filter((s) => takesBookings(s) || s.id === booking.staffId);
   const locationList = (locations.data ?? []).filter(
     (l) => l.active || l.id === booking.locationId,
   );

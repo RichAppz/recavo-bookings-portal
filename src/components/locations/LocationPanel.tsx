@@ -306,7 +306,8 @@ function PanelBody({
           <SectionHeading
             action={
               <Link
-                to="/staff"
+                to="/team"
+                search={{ location: l.id }}
                 className="inline-flex items-center text-[13px] font-semibold text-primary hover:underline"
               >
                 Manage <ChevronRight className="size-3.5" aria-hidden />

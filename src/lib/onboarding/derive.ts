@@ -26,7 +26,7 @@ const STEP_META: Record<
     title: "Set your availability",
     description: "Working hours and locations so sessions can be booked.",
     required: true,
-    href: "/staff",
+    href: "/team",
   },
   service: {
     title: "Create a session",

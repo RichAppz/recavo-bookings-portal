@@ -6,7 +6,15 @@ import type { PaymentTone } from "@/lib/booking-payment";
 /** The three payment states a business can recolour. `none` shares `paid`'s colour. */
 export type PaymentColourKey = "paid" | "partial" | "unpaid";
 
-export type PaymentColours = Record<PaymentColourKey, string | null>;
+export type PaymentColours = Record<PaymentColourKey, string | null> & {
+  /** Set when the business colours bookings by person: staff id to `#rrggbb`. */
+  byStaff?: ReadonlyMap<string, string> | null;
+};
+
+/** "Colour bookings by: {staff}" (Settings › Calendar); payment status otherwise. */
+export function colourByStaff(config: BusinessConfiguration | null | undefined): boolean {
+  return config?.calendar?.colourBy === "staff";
+}
 
 export const PAYMENT_COLOUR_KEYS: PaymentColourKey[] = ["paid", "partial", "unpaid"];
 
@@ -104,6 +112,17 @@ export function paymentTintStyle(
     };
   }
   return { className: TINT_CLASSES[key], style: undefined };
+}
+
+/** A booking tinted in its person's colour, same strength as the payment tints. */
+export function personTintStyle(hex: string): { className: string; style: CSSProperties } {
+  return {
+    className: "",
+    style: {
+      backgroundColor: `color-mix(in oklab, ${hex} 16%, var(--card))`,
+      color: `color-mix(in oklab, ${hex} 55%, var(--foreground))`,
+    },
+  };
 }
 
 /** Solid swatch for a "£18 due" pill (spec §1.2): status colour behind white text. */

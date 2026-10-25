@@ -29,7 +29,7 @@ export const MENU_SECTION_OF: Readonly<Record<string, MenuSectionKey>> = {
   "/packages": "offer",
   "/offer-links": "offer",
   "/locations": "offer",
-  "/staff": "offer",
+  "/team": "offer",
   "/booking-page": "offer",
   "/payments": "money",
   "/invoices": "money",
@@ -55,8 +55,10 @@ export interface ArrangedMenu<T extends MenuEntry> {
  */
 export function arrangeMenu<T extends MenuEntry>(
   items: readonly T[],
-  favourites: readonly string[],
+  saved: readonly string[],
 ): ArrangedMenu<T> {
+  // Staff became Team; a favourite saved under the old path keeps its place.
+  const favourites = saved.map((to) => (to === "/staff" ? "/team" : to));
   const byRoute = new Map(items.map((item) => [item.to, item]));
   const starred = new Set(favourites);
   const overview = byRoute.get("/") ?? null;

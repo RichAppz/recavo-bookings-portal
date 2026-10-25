@@ -114,6 +114,13 @@ export const queryKeys = {
   staff: (businessId: string) => ["biz", businessId, "staff"] as const,
   staffMember: (businessId: string, staffId: string) =>
     ["biz", businessId, "staff", staffId] as const,
+  team: (businessId: string) => ["biz", businessId, "team"] as const,
+  teamBookability: (businessId: string, staffId: string) =>
+    ["biz", businessId, "team", "bookability", staffId] as const,
+  teamTimeAway: (businessId: string, staffId: string, range?: Record<string, unknown>) =>
+    range
+      ? (["biz", businessId, "team", "time-away", staffId, range] as const)
+      : (["biz", businessId, "team", "time-away", staffId] as const),
 
   packages: (businessId: string) => ["biz", businessId, "packages"] as const,
   package: (businessId: string, packageId: string) =>

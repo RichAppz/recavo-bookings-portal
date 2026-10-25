@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { useLocationsList, useStaffList, useSubscription } from "@/lib/api/hooks";
 import type { Location, Staff } from "@/lib/api/types";
+import { takesBookings } from "@/lib/team";
 
 /**
  * True when the plan seats one staff member (Solo). The owner *is* the team, so
  * team-management UI — the Staff menu item, the team list, invites — is noise;
- * their own availability is still edited on `/staff`, reached from setup and
+ * their own availability is still edited on `/team` ("Your availability"), and
  * the dashboard rather than the menu. Unknown plan (still loading, no
  * subscription yet) is treated as a team so nothing is hidden by mistake.
  */
@@ -29,7 +30,7 @@ export function useSoleStaff(): Staff | null {
   const staff = useStaffList();
   return useMemo(() => {
     if (!staff.isSuccess) return null;
-    const active = (staff.data ?? []).filter((s) => s.status === "active");
+    const active = (staff.data ?? []).filter(takesBookings);
     return active.length === 1 ? active[0]! : null;
   }, [staff.isSuccess, staff.data]);
 }

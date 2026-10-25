@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -91,7 +92,20 @@ export function TeamPage() {
     <SettingsPage
       title="Team"
       description="Who can sign in to this business and what they can do."
-      banner={canManage || canInvite ? null : <ReadOnlyNotice />}
+      banner={
+        <div className="grid gap-2">
+          <p
+            role="status"
+            className="flex flex-wrap items-center gap-x-2 rounded-xl bg-primary/8 px-4 py-3 text-sm"
+          >
+            Team is now one page.
+            <Link to="/team" className="font-semibold text-primary hover:underline">
+              Open Team ›
+            </Link>
+          </p>
+          {canManage || canInvite ? null : <ReadOnlyNotice />}
+        </div>
+      }
     >
       <SettingsSection
         id="team-members"

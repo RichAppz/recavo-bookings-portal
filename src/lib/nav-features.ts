@@ -51,9 +51,9 @@ export const NAV_FEATURES: {
   },
   {
     key: "staff",
-    path: "/staff",
-    label: "Staff",
-    hint: "Team members, their hours and time off.",
+    path: "/team",
+    label: "Team",
+    hint: "Your team, their hours, time away and sign-ins.",
   },
   {
     key: "messages",
