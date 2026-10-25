@@ -619,3 +619,15 @@
     height: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/* iOS zooms the page into any focused field under 16px and leaves it zoomed,
+   so on phones no field may go below that, whatever size a screen asks for.
+   Unlayered, so it outranks the Tailwind utilities. */
+@media (max-width: 639.98px) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: max(16px, 1em);
+  }
+}
