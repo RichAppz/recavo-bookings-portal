@@ -677,7 +677,9 @@ export function BookingPanel({
   const showRecordPayment = canRecordPayment && !bankPending;
 
   // Why delete is off, mirroring the API's 409s so staff see the reason before the click.
-  const hasIssuedInvoice = (invoices.data ?? []).some((inv) => inv.status !== "draft");
+  const hasIssuedInvoice = (invoices.data ?? []).some(
+    (inv) => inv.status === "issued" || inv.status === "paid",
+  );
   const deleteBlocked: string | null = !booking
     ? null
     : (settlement?.paidMinor ?? 0) > 0 || hasSucceededPayment
