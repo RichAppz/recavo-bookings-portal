@@ -751,7 +751,7 @@ function PersonRow({
 
         <span className="grid gap-0.5">
           {archived ? (
-            <span className="text-[13px] text-muted-foreground">
+            <span className="text-[13px] whitespace-nowrap text-muted-foreground">
               Removed {s.archivedAt ? shortDate(s.archivedAt) : ""}
             </span>
           ) : (
