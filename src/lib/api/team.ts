@@ -135,6 +135,8 @@ export function useTeam() {
   return useQuery({
     queryKey: queryKeys.team(businessId),
     enabled: Boolean(businessId),
+    // Services, locations and bookings elsewhere change who's bookable.
+    refetchOnMount: "always",
     queryFn: async () => {
       const res = await api.get<{ team: TeamOverview }>(base(businessId));
       return res.data.team;
