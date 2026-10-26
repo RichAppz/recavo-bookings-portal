@@ -62,6 +62,12 @@ export const queryKeys = {
   services: (businessId: string) => ["biz", businessId, "services"] as const,
   service: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId] as const,
+  /** Under `services` so any catalogue change refreshes them too. */
+  serviceCategoryOrder: (businessId: string) =>
+    ["biz", businessId, "services", "~category-order"] as const,
+  serviceUsage: (businessId: string) => ["biz", businessId, "services", "~usage"] as const,
+  upsellPairings: (businessId: string) =>
+    ["biz", businessId, "services", "~upsell-pairings"] as const,
 
   /** Consumables catalogue (automotive); the list carries `serviceIds` for "used by N services". */
   consumables: (businessId: string) => ["biz", businessId, "consumables"] as const,
@@ -219,6 +225,8 @@ export const queryKeys = {
   /** Keyed by handle, not id: resolving the handle is the point of the request. */
   publicBusiness: (handle: string) => ["public", "business", handle] as const,
   publicServices: (businessId: string) => ["public", businessId, "services"] as const,
+  publicCategoryOrder: (businessId: string) =>
+    ["public", businessId, "service-category-order"] as const,
   publicLocations: (businessId: string) => ["public", businessId, "locations"] as const,
   publicPackages: (businessId: string) => ["public", businessId, "packages"] as const,
   publicPackageLink: (businessId: string, code: string) =>

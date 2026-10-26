@@ -4217,8 +4217,10 @@ export function useUpdateConfiguration() {
       );
       return res.data.configuration;
     },
-    onSuccess: () => {
+    onSuccess: (_config, body) => {
       void qc.invalidateQueries({ queryKey: queryKeys.configuration(businessId) });
+      // Booking-rule defaults are pushed onto every service that follows them.
+      if (body.booking) void qc.invalidateQueries({ queryKey: queryKeys.services(businessId) });
       // Bank details complete the "Get paid" checklist step (RECA-522).
       invalidateOnboarding(qc, businessId);
     },
@@ -6598,18 +6600,34 @@ export function closedBusinessFromError(
 }
 
 export function usePublicServices(businessId: string | undefined) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: queryKeys.publicServices(businessId ?? ""),
     enabled: Boolean(businessId),
     queryFn: async () => {
-      const res = await api.get<{ services: PublicService[] }>(
+      const res = await api.get<{ services: PublicService[]; categoryOrder?: string[] }>(
         `/api/v1/public/businesses/${businessId}/services`,
         { public: true },
+      );
+      qc.setQueryData(
+        queryKeys.publicCategoryOrder(businessId ?? ""),
+        res.data.categoryOrder ?? [],
       );
       return res.data.services;
     },
   });
 }
+
+/** The business's category group order, filled by `usePublicServices`. */
+export function usePublicCategoryOrder(businessId: string | undefined): readonly string[] {
+  const order = useQuery({
+    queryKey: queryKeys.publicCategoryOrder(businessId ?? ""),
+    enabled: false,
+    queryFn: () => [] as string[],
+  });
+  return order.data ?? EMPTY_CATEGORY_ORDER;
+}
+const EMPTY_CATEGORY_ORDER: readonly string[] = [];
 
 export function usePublicLocations(businessId: string | undefined) {
   return useQuery({

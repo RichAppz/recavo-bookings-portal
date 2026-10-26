@@ -15,6 +15,7 @@ import {
   type AvailabilityWindow,
 } from "@/lib/availability-windows";
 import { minutesToTime, parseTimeInput, timeToMinutes } from "@/lib/format";
+import { nextFreeDay, overlappingWindows } from "@/lib/services-catalogue";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,7 @@ export function WeeklyWindowsEditor({
   error,
   businessHours,
   copy,
+  presets = [],
   className,
 }: {
   windows: AvailabilityWindow[];
@@ -55,6 +57,8 @@ export function WeeklyWindowsEditor({
   error?: string;
   businessHours?: BusinessHoursPreset;
   copy?: WeeklyWindowsCopy;
+  /** Extra one-click starting points, e.g. "Weekdays only". */
+  presets?: { label: string; windows: AvailabilityWindow[] }[];
   /** Overrides the default top rule, e.g. when nested under another section. */
   className?: string;
 }) {
@@ -80,11 +84,13 @@ export function WeeklyWindowsEditor({
     windows.length > 0 &&
     sameWindows(windows, businessHours?.windows ?? []);
 
+  const overlaps = overlappingWindows(windows);
   const addWindow = () => {
     onChange(
-      [...windows, { dayOfWeek: 1, startMinute: DEFAULT_START, endMinute: DEFAULT_END }].sort(
-        (a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinute - b.startMinute,
-      ),
+      [
+        ...windows,
+        { dayOfWeek: nextFreeDay(windows), startMinute: DEFAULT_START, endMinute: DEFAULT_END },
+      ].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinute - b.startMinute),
     );
   };
 
@@ -105,7 +111,20 @@ export function WeeklyWindowsEditor({
     <div className={cn("grid gap-2 border-t pt-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label>{text.label}</Label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {presets
+            .filter((p) => !sameWindows(windows, p.windows))
+            .map((p) => (
+              <Button
+                key={p.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange([...p.windows])}
+              >
+                {p.label}
+              </Button>
+            ))}
           {businessHours && businessHours.windows.length > 0 && !matchesBusinessHours ? (
             <Button
               type="button"
@@ -125,6 +144,11 @@ export function WeeklyWindowsEditor({
         {matchesBusinessHours ? text.matchesPreset(businessHours?.label ?? "") : text.hint}
       </p>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {overlaps.size > 0 ? (
+        <p role="alert" className="text-xs text-destructive">
+          These times overlap.
+        </p>
+      ) : null}
       {windows.length === 0 ? (
         <p className="text-xs text-muted-foreground">{text.empty}</p>
       ) : (
@@ -142,7 +166,10 @@ export function WeeklyWindowsEditor({
               // page process (WebKit) and loses focus everywhere else.
               <div
                 key={i}
-                className="grid grid-cols-[1fr_1fr_1fr_2.25rem] items-center gap-2 px-2.5 py-2"
+                className={cn(
+                  "grid grid-cols-[1fr_1fr_1fr_2.25rem] items-center gap-2 px-2.5 py-2",
+                  overlaps.has(i) && "bg-destructive/5",
+                )}
               >
                 <Select
                   value={String(row.dayOfWeek)}

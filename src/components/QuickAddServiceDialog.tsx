@@ -18,6 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { currencySymbol, serviceNoun as nounFrom } from "@/lib/services-catalogue";
+import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
 import { useCreateService } from "@/lib/api/hooks";
 import type { CatalogueService } from "@/lib/api/types";
@@ -59,9 +61,9 @@ export function QuickAddServiceDialog({
   const navigate = useNavigate();
   const createService = useCreateService();
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
-  const serviceNoun = (
-    tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
-  ).toLowerCase();
+  const words = nounFrom(tenant.terminology.service);
+  const serviceNoun = words.lower;
+  const staffLower = tenant.terminology.staff.trim().toLowerCase() || "staff member";
   const categories = useMemo(() => knownCategories(services), [services]);
   const currency = services[0]?.currency ?? tenant.business?.currency ?? "GBP";
 
@@ -110,11 +112,9 @@ export function QuickAddServiceDialog({
       const created = await createService.mutateAsync(built.body);
       onCreated(created);
       onOpenChange(false);
-      toast.success(`${created.name} added — fine-tune it later in Services`, {
-        description:
-          "It's ticked on this booking. Deposit, variants and who delivers it can be set from the Services page.",
+      toast.success(`${created.name} added and ticked on this booking`, {
         action: {
-          label: "Open Services",
+          label: `Edit in ${words.plural}`,
           onClick: () => void navigate({ to: "/services" }),
         },
       });
@@ -144,15 +144,14 @@ export function QuickAddServiceDialog({
       <DialogContent className="sm:max-w-md" data-quick-add-service="">
         <DialogHeader>
           <DialogTitle>New {serviceNoun}</DialogTitle>
-          <DialogDescription>
-            Just the essentials — it's added to the booking as soon as you save. Deposit, variants
-            and offer windows can be set later in Services.
-          </DialogDescription>
+          <DialogDescription>Just the basics. It's added to this booking.</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="qas-name">Name</Label>
+            <Label htmlFor="qas-name">
+              Name <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="qas-name"
               value={name}
@@ -167,25 +166,53 @@ export function QuickAddServiceDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="qas-category">Category</Label>
-            <Select
-              value={categoryChoice}
-              onValueChange={setCategoryChoice}
-              disabled={createService.isPending}
+            <span className="text-sm font-medium" id="qas-category-label">
+              Category
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="qas-category-label"
+              className="flex flex-wrap gap-1.5"
             >
-              <SelectTrigger id="qas-category">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_CATEGORY}>No category</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
+              {categories.map((c) => {
+                const on = categoryChoice === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    disabled={createService.isPending}
+                    onClick={() => setCategoryChoice(on ? NO_CATEGORY : c)}
+                    className={cn(
+                      "min-h-8 cursor-pointer rounded-full border px-3 text-[13px] font-semibold transition-colors",
+                      on
+                        ? "border-primary bg-primary-soft text-primary"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
                     {c}
-                  </SelectItem>
-                ))}
-                <SelectItem value={NEW_CATEGORY}>New category…</SelectItem>
-              </SelectContent>
-            </Select>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={categoryChoice === NEW_CATEGORY}
+                disabled={createService.isPending}
+                onClick={() =>
+                  setCategoryChoice(categoryChoice === NEW_CATEGORY ? NO_CATEGORY : NEW_CATEGORY)
+                }
+                className={cn(
+                  "min-h-8 cursor-pointer rounded-full border border-dashed px-3 text-[13px] font-semibold transition-colors",
+                  categoryChoice === NEW_CATEGORY
+                    ? "border-primary bg-primary-soft text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                + New
+              </button>
+            </div>
             {categoryChoice === NEW_CATEGORY ? (
               <Input
                 aria-label="New category name"
@@ -199,12 +226,12 @@ export function QuickAddServiceDialog({
             ) : null}
           </div>
 
-          {/* Stacked, not side by side: the long detailing label wraps and leaves
-              the price field floating half a line lower. */}
-          <div className="grid gap-4">
+          {/* Detailing stacks them: its long label wraps and leaves the price field
+              floating half a line lower. */}
+          <div className={cn("grid gap-4", isDetailing ? "" : "sm:grid-cols-2")}>
             <div className="grid gap-2">
               <Label htmlFor="qas-duration">
-                {isDetailing ? "How long you'll have the vehicle" : "Duration"}
+                {isDetailing ? "How long you have the vehicle" : "Length"}
               </Label>
               <div className="flex gap-2">
                 <Input
@@ -237,10 +264,9 @@ export function QuickAddServiceDialog({
               ) : null}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="qas-price">Price (£)</Label>
+              <Label htmlFor="qas-price">Price ({currencySymbol(currency)})</Label>
               <Input
                 id="qas-price"
-                className="sm:max-w-xs"
                 inputMode="decimal"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
@@ -255,9 +281,9 @@ export function QuickAddServiceDialog({
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Anyone on the team can deliver it, at any location, and it shows on your booking page.
-            No deposit until you set one.
+          <p className="rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+            Any {staffLower} can do it, at any location, and it shows on your booking page. Add a
+            deposit or options later in {words.plural}.
           </p>
         </div>
 
@@ -270,7 +296,7 @@ export function QuickAddServiceDialog({
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={createService.isPending}>
-            {createService.isPending ? "Adding…" : `Add ${serviceNoun}`}
+            {createService.isPending ? "Adding…" : "Add and use"}
           </Button>
         </DialogFooter>
       </DialogContent>

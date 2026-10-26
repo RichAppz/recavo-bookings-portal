@@ -24,6 +24,7 @@ import {
   usePortalBusinesses,
   usePortalLink,
   usePortalMe,
+  usePublicCategoryOrder,
   usePublicServices,
   useStartPublicBookingPayment,
   type PublicBookingPayment,
@@ -398,6 +399,7 @@ export function BookingFlow({
   const me = usePortalMe(signedIn ? businessId : undefined);
 
   const services = usePublicServices(businessId);
+  const categoryOrder = usePublicCategoryOrder(businessId);
   const locations = usePublicLocations(businessId);
   const packages = usePublicPackages(businessId);
   const offer = usePublicPackageLink(businessId, offerCode ?? undefined);
@@ -1036,7 +1038,7 @@ export function BookingFlow({
                 </p>
               )
             ) : (
-              groupByCategory(visibleServices).map((group) => (
+              groupByCategory(visibleServices, categoryOrder).map((group) => (
                 <div key={group.category ?? "__none"} className="space-y-3">
                   {/* Headings only when the studio has sorted its services into categories. */}
                   {hasCategories(visibleServices) ? (

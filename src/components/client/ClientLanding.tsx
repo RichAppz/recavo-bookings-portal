@@ -48,6 +48,7 @@ export function ClientLanding({
   business,
   page,
   services,
+  categoryOrder = [],
   packages,
   staff,
   locations,
@@ -74,6 +75,8 @@ export function ClientLanding({
   business: Pick<PublicBusinessProfile, "tradingName" | "slug" | "branding" | "address">;
   page: BookingPageContent;
   services: PublicService[];
+  /** The business's category group order; unlisted categories follow alphabetically. */
+  categoryOrder?: readonly string[];
   packages: PublicPackage[];
   staff: PublicStaff[];
   locations: PublicLocation[];
@@ -273,8 +276,8 @@ export function ClientLanding({
             </ClientCard>
           ) : (
             <ClientCard>
-              {hasCategories(services) && groupByCategory(services).length > 1 ? (
-                groupByCategory(services).map((group) => (
+              {hasCategories(services) && groupByCategory(services, categoryOrder).length > 1 ? (
+                groupByCategory(services, categoryOrder).map((group) => (
                   <div key={group.category ?? "other"}>
                     {group.category ? (
                       <p className="border-b border-border bg-muted/40 px-5 py-2 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -471,9 +474,9 @@ export function ClientLanding({
                 Nothing to book online just now. Check back soon.
               </p>
             </ClientCard>
-          ) : hasCategories(services) && groupByCategory(services).length > 1 ? (
+          ) : hasCategories(services) && groupByCategory(services, categoryOrder).length > 1 ? (
             <div className="space-y-4">
-              {groupByCategory(services).map((group) => (
+              {groupByCategory(services, categoryOrder).map((group) => (
                 <div key={group.category ?? "other"}>
                   {group.category ? (
                     <p className="mb-1.5 text-[13px] text-muted-foreground">{group.category}</p>

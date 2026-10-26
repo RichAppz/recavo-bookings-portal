@@ -56,6 +56,7 @@ import {
   type PublicLocation,
   usePublicPackageLink,
   usePublicPackages,
+  usePublicCategoryOrder,
   usePublicServices,
   usePublicReviews,
   usePublicStaff,
@@ -222,6 +223,7 @@ export function ClientBookingFlow({
   const submitRef = useRef<CheckoutSubmitHandle>(null);
 
   const services = usePublicServices(businessId);
+  const categoryOrder = usePublicCategoryOrder(businessId);
   const locations = usePublicLocations(businessId);
   const packages = usePublicPackages(businessId);
   const staff = usePublicStaff(businessId);
@@ -1266,6 +1268,7 @@ export function ClientBookingFlow({
             business={business}
             page={page}
             services={services.data ?? []}
+            categoryOrder={categoryOrder}
             packages={packages.data?.packages ?? []}
             staff={staff.data ?? []}
             locations={locations.data ?? []}
