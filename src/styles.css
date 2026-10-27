@@ -620,6 +620,16 @@
   }
 }
 
+/* On a desktop the staff app never scrolls the document (the page panel scrolls
+   on its own), so a trackpad swipe past the panel's end must not bounce the
+   whole window and show the background under it. Client pages keep theirs. */
+@media (min-width: 1024px) {
+  html:has([data-testid="page-panel"]),
+  html:has([data-testid="page-panel"]) body {
+    overscroll-behavior: none;
+  }
+}
+
 /* iOS zooms the page into any focused field under 16px and leaves it zoomed,
    so on phones no field may go below that, whatever size a screen asks for.
    Unlayered, so it outranks the Tailwind utilities. */

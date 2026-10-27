@@ -601,7 +601,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-background lg:flex lg:h-dvh lg:overflow-hidden">
+    <div className="min-h-screen bg-background lg:flex lg:h-dvh lg:overflow-clip">
       {tenant.businessId ? <OfflinePack /> : null}
 
       {/* Phone: a drawer over the page. */}
@@ -657,7 +657,7 @@ function ConsoleShell({ children }: { children: ReactNode }) {
         {/* The page panel: on a desktop a floating sheet that scrolls on its own
             while the menu stays put; on a phone the page itself. */}
         <div
-          className="flex min-h-0 flex-1 flex-col lg:overflow-y-auto lg:rounded-[24px] lg:border lg:border-panel-border lg:bg-panel lg:shadow-panel"
+          className="flex min-h-0 flex-1 flex-col lg:overflow-y-auto lg:overscroll-y-contain lg:rounded-[24px] lg:border lg:border-panel-border lg:bg-panel lg:shadow-panel"
           data-testid="page-panel"
         >
           <header className="pt-safe sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur lg:rounded-t-[24px] lg:bg-panel/90">
