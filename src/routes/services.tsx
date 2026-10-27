@@ -800,18 +800,20 @@ function ServicesPage() {
         {...dropProps}
         onClick={() => openEdit(s)}
         className={cn(
-          "grid min-h-16 cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/40",
+          // Narrow panels put time, who and status on a second line; the full
+          // single-line grid needs the list to be at least 64rem across.
+          "grid min-h-16 cursor-pointer grid-cols-[18px_auto_auto_minmax(0,1fr)_auto_auto_20px] items-center gap-x-3 gap-y-1.5 px-4 py-3 transition-colors hover:bg-secondary/40 @5xl:gap-y-3",
           soleStaff
-            ? "grid-cols-[18px_1.9fr_80px_100px_1fr_150px_20px]"
-            : "grid-cols-[18px_1.9fr_80px_100px_1.1fr_1fr_150px_20px]",
+            ? "[grid-template-areas:'h_n_n_n_p_t_m'_'._d_s_s_s_s_s'] @5xl:grid-cols-[18px_1.9fr_80px_100px_1fr_150px_20px] @5xl:[grid-template-areas:'h_n_d_p_s_t_m']"
+            : "[grid-template-areas:'h_n_n_n_p_t_m'_'._d_w_s_s_s_s'] @5xl:grid-cols-[18px_1.9fr_80px_100px_1.1fr_1fr_150px_20px] @5xl:[grid-template-areas:'h_n_d_p_w_s_t_m']",
           !s.active && "[&>*:not(:nth-last-child(-n+2))]:opacity-60",
           highlightId === s.id && "bg-primary-soft",
           dragOver === s.id && "shadow-[inset_0_2px_0_var(--primary)]",
           isLifted && "bg-primary-soft/60",
         )}
       >
-        {handle}
-        <div className="min-w-0">
+        <span className="[grid-area:h]">{handle}</span>
+        <div className="min-w-0 [grid-area:n]">
           <button
             type="button"
             aria-label={label}
@@ -828,13 +830,15 @@ function ServicesPage() {
             <p className="truncate text-[13px] text-muted-foreground">{s.description}</p>
           ) : null}
         </div>
-        <span className="text-sm tabular-nums">{durationLabel(s.durationMinutes)}</span>
-        <span className="grid">
+        <span className="self-start text-xs text-muted-foreground tabular-nums [grid-area:d] @5xl:self-center @5xl:text-sm @5xl:text-foreground">
+          {durationLabel(s.durationMinutes)}
+        </span>
+        <span className="grid justify-items-end text-right [grid-area:p] @5xl:justify-items-start @5xl:text-left">
           <span className="text-sm font-extrabold tabular-nums">{price.main}</span>
           {price.sub ? <span className="text-xs text-muted-foreground">{price.sub}</span> : null}
         </span>
         {soleStaff ? null : (
-          <span className="grid min-w-0 justify-items-start gap-1">
+          <span className="grid min-w-0 justify-items-start gap-1 [grid-area:w]">
             <TonePill tone={mode.tone}>{mode.label}</TonePill>
             {who ? (
               <span
@@ -850,7 +854,7 @@ function ServicesPage() {
             ) : null}
           </span>
         )}
-        <span className="grid min-w-0 justify-items-start gap-1">
+        <span className="grid min-w-0 justify-items-start gap-1 [grid-area:s]">
           <span className="flex min-w-0 flex-wrap items-center gap-1">
             {soleStaff ? <TonePill tone={mode.tone}>{mode.label}</TonePill> : null}
             <TonePill tone={s.publicVisible ? "green" : "grey"}>
@@ -859,18 +863,23 @@ function ServicesPage() {
           </span>
           {extras}
         </span>
-        <span className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <span
+          className="flex items-center justify-end gap-2 [grid-area:t]"
+          onClick={(e) => e.stopPropagation()}
+        >
           <span
             className={cn(
               "text-xs font-semibold",
-              s.active ? "text-[#1f6b41] dark:text-[#9fe3bf]" : "text-muted-foreground",
+              s.active
+                ? "hidden text-[#1f6b41] @5xl:inline dark:text-[#9fe3bf]"
+                : "text-muted-foreground",
             )}
           >
             {s.active ? "Taking bookings" : "Paused"}
           </span>
           {toggle}
         </span>
-        <span onClick={(e) => e.stopPropagation()}>
+        <span className="[grid-area:m]" onClick={(e) => e.stopPropagation()}>
           {canEdit
             ? rowMenu(
                 s,
@@ -1107,7 +1116,7 @@ function ServicesPage() {
                     <span className="font-semibold tabular-nums">{group.items.length}</span>
                   </h2>
                 ) : null}
-                <ul className="surface-card divide-y overflow-hidden">
+                <ul className="surface-card @container divide-y overflow-hidden">
                   {group.items.map((s) => renderRow(s, group))}
                 </ul>
               </section>
