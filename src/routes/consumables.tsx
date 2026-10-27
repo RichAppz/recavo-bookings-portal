@@ -5,8 +5,10 @@ import {
   ArchiveRestore,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   MoreHorizontal,
   Package,
+  PackagePlus,
   Pencil,
   Plus,
   Search,
@@ -22,7 +24,9 @@ import {
   type ConsumablePrefill,
 } from "@/components/consumables/ConsumableFormDrawer";
 import { ConsumablePanel } from "@/components/consumables/ConsumablePanel";
+import { NeedsOrdering, StockPill } from "@/components/consumables/NeedsOrdering";
 import { ItemTile } from "@/components/consumables/parts";
+import { StockDrawer, type StockKind } from "@/components/consumables/StockDrawer";
 import { MINT_TEXT, StatTile } from "@/components/waitlist/parts";
 import { EmptyState, PageHeader } from "@/components/ui-bits";
 import { TableGhost } from "@/components/ghost";
@@ -60,6 +64,7 @@ import { useIsPhone } from "@/hooks/use-media-query";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import {
   useConsumableFigures,
+  useConsumableStockOverview,
   useConsumablesForPeriod,
   useDeleteConsumable,
   useServices,
@@ -81,6 +86,7 @@ import {
   parseConsumablesSearch,
   quantityLabel,
   sortConsumables,
+  stockAdvice,
   unitCostLabel,
   type ConsumableSort,
   type ConsumablesSearch,
@@ -126,7 +132,7 @@ export const Route = createFileRoute("/consumables")({
   ),
 });
 
-const COLUMNS = "grid-cols-[1.5fr_150px_1.4fr_150px_30px]";
+const COLUMNS = "grid-cols-[1.4fr_140px_1.2fr_170px_140px_30px]";
 
 /** "this month" / "last 3 months": the period inside a sentence. */
 function periodPhrase(period: UsagePeriod): string {
@@ -163,6 +169,7 @@ function ConsumablesPage() {
 
   const list = useConsumablesForPeriod(period, { enabled: isCarDetailing });
   const figures = useConsumableFigures(period, { enabled: isCarDetailing });
+  const stockOverview = useConsumableStockOverview({ enabled: isCarDetailing });
   const services = useServices();
   const updateConsumable = useUpdateConsumable();
   const deleteConsumable = useDeleteConsumable();
@@ -171,6 +178,7 @@ function ConsumablesPage() {
   const [editing, setEditing] = useState<Consumable | null>(null);
   const [confirming, setConfirming] = useState<Consumable | null>(null);
   const [openBookingId, setOpenBookingId] = useState<string | null>(null);
+  const [stocking, setStocking] = useState<{ id: string; kind: StockKind } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
 
@@ -200,6 +208,8 @@ function ConsumablesPage() {
   const namesFor = (c: Consumable) =>
     c.serviceIds.map((id) => serviceName.get(id)).filter(Boolean) as string[];
   const opened = search.item ? (all.find((c) => c.id === search.item) ?? null) : null;
+  const stockingItem = stocking ? (all.find((c) => c.id === stocking.id) ?? null) : null;
+  const addStock = (id: string, kind: StockKind = "received") => setStocking({ id, kind });
 
   const money = (minor: number) => {
     try {
@@ -268,6 +278,12 @@ function ConsumablesPage() {
           <DropdownMenuItem onSelect={() => setEditing(c)}>
             <Pencil className="size-4" /> Edit
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => addStock(c.id, "received")}>
+            <PackagePlus className="size-4" /> Add stock
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => addStock(c.id, "counted")}>
+            <ClipboardCheck className="size-4" /> Count stock
+          </DropdownMenuItem>
           {c.status === "active" ? (
             <DropdownMenuItem onSelect={() => void setStatus(c, "archived")}>
               <Archive className="size-4" /> Archive
@@ -299,6 +315,34 @@ function ConsumablesPage() {
       </>
     ) : (
       <span className="text-sm text-muted-foreground">Not used</span>
+    );
+
+  const stockCell = (c: Consumable) =>
+    c.stock ? (
+      <>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-bold">
+            {quantityLabel(c.stock.onHand, c.unit)}
+          </span>
+          {c.stock.status !== "ok" ? <StockPill status={c.stock.status} /> : null}
+        </span>
+        <span className="truncate text-xs text-muted-foreground">
+          {stockAdvice(c.stock, c.unit)}
+        </span>
+      </>
+    ) : canEdit ? (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          addStock(c.id, "counted");
+        }}
+        className="w-fit cursor-pointer text-[13px] font-semibold text-primary hover:underline"
+      >
+        Track stock
+      </button>
+    ) : (
+      <span className="text-sm text-muted-foreground">Not tracked</span>
     );
 
   const tabs = (
@@ -490,9 +534,14 @@ function ConsumablesPage() {
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-bold">{c.name}</span>
                   {c.status === "archived" ? <TonePill tone="grey">Archived</TonePill> : null}
+                  {c.stock && c.stock.status !== "ok" ? (
+                    <StockPill status={c.stock.status} />
+                  ) : null}
                 </span>
                 <span className="truncate text-[12.5px] text-muted-foreground">
-                  {unitCostLabel(c.unitCostMinor, c.unit, c.currency)}
+                  {c.stock
+                    ? `${quantityLabel(c.stock.onHand, c.unit)} on hand`
+                    : unitCostLabel(c.unitCostMinor, c.unit, c.currency)}
                   {c.usage && c.usage.quantity > 0
                     ? ` · ${quantityLabel(c.usage.quantity, c.unit)} ${periodPhrase(period)}`
                     : ""}
@@ -507,7 +556,7 @@ function ConsumablesPage() {
   } else {
     body = (
       <div className="overflow-x-auto">
-        <div role="table" aria-label="Consumables" className="min-w-[760px] text-sm">
+        <div role="table" aria-label="Consumables" className="min-w-[900px] text-sm">
           <div
             role="row"
             className={cn(
@@ -518,6 +567,7 @@ function ConsumablesPage() {
             <span role="columnheader">Item</span>
             <span role="columnheader">Cost</span>
             <span role="columnheader">Default on</span>
+            <span role="columnheader">In stock</span>
             <span role="columnheader">Used {periodPhrase(period)}</span>
             <span role="columnheader" className="sr-only">
               Actions
@@ -572,6 +622,9 @@ function ConsumablesPage() {
                   {on.more ? (
                     <span className="text-xs text-muted-foreground">{on.more}</span>
                   ) : null}
+                </span>
+                <span role="cell" className="grid min-w-0">
+                  {stockCell(c)}
                 </span>
                 <span role="cell" className="grid min-w-0">
                   {usedCell(c)}
@@ -698,6 +751,16 @@ function ConsumablesPage() {
 
   const confirmingRefs = confirming ? referenced(confirming) : false;
 
+  const needsOrdering = stockOverview.data ? (
+    <NeedsOrdering
+      overview={stockOverview.data}
+      canEdit={canEdit}
+      onOpenItem={(id) => setSearch({ item: id })}
+      onAddStock={(id) => addStock(id)}
+      onOpenBooking={(id) => setOpenBookingId(id)}
+    />
+  ) : null;
+
   return (
     <>
       <PageHeader
@@ -715,6 +778,7 @@ function ConsumablesPage() {
           emptyCard
         ) : phone ? (
           <>
+            {needsOrdering}
             {searchBox("w-full")}
             {tabs}
             {listCard}
@@ -722,6 +786,7 @@ function ConsumablesPage() {
         ) : (
           <>
             {figureTiles}
+            {needsOrdering}
             <div className="flex flex-wrap items-center justify-between gap-3">
               {tabs}
               <div className="flex flex-wrap items-center gap-2">
@@ -767,6 +832,16 @@ function ConsumablesPage() {
         onRestore={(c) => void setStatus(c, "active")}
         onDelete={(c) => setConfirming(c)}
         onOpenBooking={(id) => setOpenBookingId(id)}
+        onStock={(c, kind) => addStock(c.id, kind)}
+      />
+
+      <StockDrawer
+        open={stocking !== null}
+        consumable={stockingItem}
+        initialKind={stocking?.kind ?? "received"}
+        onOpenChange={(open) => {
+          if (!open) setStocking(null);
+        }}
       />
 
       <ConsumableFormDrawer

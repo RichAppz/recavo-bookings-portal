@@ -128,6 +128,59 @@ export function stepQuantity(quantity: number, unit: string, direction: 1 | -1):
   return next > 0 ? next : null;
 }
 
+/** A stock count can be zero ("the shelf is empty"); otherwise the same rules as `parseQuantity`. */
+export function parseStockQuantity(input: string): number | null {
+  const cleaned = input
+    .trim()
+    .replace(",", ".")
+    .replace(/[^0-9.-]/g, "");
+  if (cleaned !== "" && Number(cleaned) === 0) return 0;
+  return parseQuantity(input);
+}
+
+/* ---------------- Stock ---------------- */
+
+export type StockStatus = "ok" | "low" | "short" | "out";
+
+type StockLike = {
+  onHand: number;
+  upcoming: number;
+  afterUpcoming: number;
+  shortBy: number;
+  reorderLevel: number | null;
+  status: StockStatus;
+};
+
+export const STOCK_STATUS_LABEL: Readonly<Record<StockStatus, string>> = {
+  ok: "In stock",
+  low: "Running low",
+  short: "Order more",
+  out: "Out of stock",
+};
+
+export const STOCK_STATUS_TONE: Readonly<Record<StockStatus, "green" | "amber" | "red">> = {
+  ok: "green",
+  low: "amber",
+  short: "red",
+  out: "red",
+};
+
+/**
+ * One line on what the shelf means for booked jobs: "Short 2 bottles for booked jobs",
+ * "1 bottle left after booked jobs, reorder at 2", "Enough for booked jobs".
+ */
+export function stockAdvice(stock: StockLike, unit: string): string {
+  if (stock.status === "short") {
+    return `Short ${quantityLabel(stock.shortBy, unit)} for booked jobs`;
+  }
+  if (stock.status === "out") return "None left";
+  const left = `${quantityLabel(stock.afterUpcoming, unit)} left after booked jobs`;
+  if (stock.status === "low" && stock.reorderLevel != null) {
+    return `${left}, reorder at ${formatQuantity(stock.reorderLevel)}`;
+  }
+  return stock.upcoming > 0 ? left : "Nothing booked needs it yet";
+}
+
 /* ---------------- Labels ---------------- */
 
 /** "1 bottle Ceramic coat", "2 pads Foam pad": quantity, unit, name. */

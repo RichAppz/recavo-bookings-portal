@@ -33,6 +33,7 @@ import {
   packUnitsFor,
   parseCost,
   parseQuantity,
+  parseStockQuantity,
   unitCode,
   unitCostFromPack,
   unitCostLabel,
@@ -41,14 +42,19 @@ import {
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
-type Field = "name" | "unit" | "unitCostMinor" | "packSize" | "packCost" | "sku" | "notes";
+type Field =
+  "name" | "unit" | "unitCostMinor" | "packSize" | "packCost" | "reorderLevel" | "sku" | "notes";
 
-const MESSAGES: Record<"name" | "unit" | "unitCostMinor" | "packSize" | "packCost", string> = {
+const MESSAGES: Record<
+  "name" | "unit" | "unitCostMinor" | "packSize" | "packCost" | "reorderLevel",
+  string
+> = {
   name: "Give it a name.",
   unit: "Pick how you count it, e.g. bottle or pad.",
   unitCostMinor: "Enter a cost like 12.50, or leave it blank.",
   packSize: "Enter how much you buy, e.g. 5.",
   packCost: "Enter what you paid, like 40.00.",
+  reorderLevel: "Enter a number like 2, or leave it blank.",
 };
 
 /** API field → form field; a pack in the wrong unit shows under the size. */
@@ -59,6 +65,7 @@ const API_FIELDS: Record<string, Field> = {
   "pack.size": "packSize",
   "pack.unit": "packSize",
   "pack.costMinor": "packCost",
+  reorderLevel: "reorderLevel",
   sku: "sku",
   notes: "notes",
 };
@@ -109,6 +116,7 @@ export function ConsumableFormDrawer({
   const [packSize, setPackSize] = useState("");
   const [packUnit, setPackUnit] = useState("");
   const [packCost, setPackCost] = useState("");
+  const [reorder, setReorder] = useState("");
   const [sku, setSku] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
@@ -128,6 +136,7 @@ export function ConsumableFormDrawer({
     setPackSize(c?.pack ? formatQuantity(c.pack.size).replace(/,/g, "") : "");
     setPackUnit(c?.pack?.unit ?? "");
     setPackCost(c?.pack ? costInput(c.pack.costMinor) : "");
+    setReorder(c?.reorderLevel != null ? formatQuantity(c.reorderLevel).replace(/,/g, "") : "");
     setSku(c?.sku ?? "");
     setNotes(c?.notes ?? "");
     setErrors({});
@@ -147,6 +156,8 @@ export function ConsumableFormDrawer({
   const packBlank = !packSize.trim() && !packCost.trim();
   const parsedPackSize = packSize.trim() ? parseQuantity(packSize) : null;
   const parsedPackCost = parseCost(packCost);
+  const parsedReorder = reorder.trim() ? parseStockQuantity(reorder) : null;
+  const reorderInvalid = reorder.trim() !== "" && parsedReorder === null;
   const packCostFrom =
     parsedPackSize !== null && typeof parsedPackCost === "number"
       ? unitCostFromPack(
@@ -177,6 +188,7 @@ export function ConsumableFormDrawer({
         next.packCost = MESSAGES.packCost;
       }
     }
+    if (reorderInvalid) next.reorderLevel = MESSAGES.reorderLevel;
     return next;
   };
   const live = tried ? validate() : {};
@@ -185,6 +197,7 @@ export function ConsumableFormDrawer({
     !name.trim() ? "a name" : null,
     !unit ? "how you count it" : null,
     nextUnitCost === "invalid" ? "a valid cost" : null,
+    reorderInvalid ? "a valid reorder level" : null,
   ].filter(Boolean) as string[];
 
   const serviceNames = useMemo(() => {
@@ -224,6 +237,7 @@ export function ConsumableFormDrawer({
       ...cost,
       sku: sku.trim() || null,
       notes: notes.trim() || null,
+      reorderLevel: parsedReorder,
     };
     try {
       if (current) {
@@ -619,6 +633,39 @@ export function ConsumableFormDrawer({
                   ? formatUnitCost(current.unitCostMinor, currency)
                   : "no cost"}
                 .
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="cf-reorder">Reorder level</Label>
+            <div className="flex items-center gap-2 sm:max-w-[50%]">
+              <Input
+                id="cf-reorder"
+                inputMode="decimal"
+                className="min-w-0 flex-1"
+                value={reorder}
+                onChange={(e) => {
+                  setReorder(e.target.value);
+                  setErrors((x) => ({ ...x, reorderLevel: undefined }));
+                }}
+                placeholder="2"
+                aria-invalid={Boolean(shown.reorderLevel)}
+                aria-describedby={["cf-reorder-help", errorId("reorderLevel")]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+              <span className="shrink-0 text-sm text-muted-foreground">
+                {unit ? unitFor(unit, parsedReorder ?? 2) : "units"}
+              </span>
+            </div>
+            <p id="cf-reorder-help" className="text-xs text-muted-foreground">
+              Optional. We&rsquo;ll flag it to order when what&rsquo;s left after booked jobs drops
+              to this. Booked jobs that need more than you have are always flagged.
+            </p>
+            {shown.reorderLevel ? (
+              <p id="cf-reorderLevel-error" className="text-xs text-destructive">
+                {shown.reorderLevel}
               </p>
             ) : null}
           </div>
