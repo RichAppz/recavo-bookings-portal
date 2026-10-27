@@ -75,7 +75,7 @@ describe("working-hours warning", () => {
         null,
         TZ,
       ),
-      "Outside Sam's usual hours (09:00–17:00). You can still book it.",
+      "Outside Sam's usual hours (09:00 to 17:00). You can still book it.",
     );
   });
 
@@ -88,7 +88,7 @@ describe("working-hours warning", () => {
         null,
         TZ,
       ),
-      "Sam doesn't usually work that day. You can still book it.",
+      "Sam doesn't usually work on Wednesday. You can still book it.",
     );
   });
 
@@ -101,7 +101,7 @@ describe("working-hours warning", () => {
         "loc_2",
         TZ,
       ),
-      "Sam doesn't usually work that day. You can still book it.",
+      "Sam doesn't usually work on Tuesday. You can still book it.",
     );
     assert.equal(
       outsideWorkingHours(

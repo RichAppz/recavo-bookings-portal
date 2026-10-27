@@ -157,9 +157,9 @@ export function timedClashNote(entries: readonly TimedEntry[], timeZone: string)
 }
 
 /**
- * "Overlaps Mini valet · Pat · Tue 10:00–11:00" — a hand-set time landing on timed
+ * "Overlaps Mini valet · Pat · 10:00 to 11:00" — a hand-set time landing on timed
  * work (or an event) the same person already has. Nothing to override: it has to
- * move. Several read as "Overlaps Mini valet · Pat · Tue 10:00–11:00 and 1 more".
+ * move. Several read as "Overlaps Mini valet · Pat · 10:00 to 11:00 and 1 more".
  */
 export function timedOverlapNote(
   entries: readonly (TimedEntry & Partial<Pick<DiaryBooking, "serviceSnapshot" | "attendees">>)[],
@@ -176,7 +176,7 @@ export function timedOverlapNote(
   const start = formatInTz(first.start, timeZone, { hour: "2-digit", minute: "2-digit" });
   const end = formatInTz(first.end, timeZone, { hour: "2-digit", minute: "2-digit" });
   const more = rest.length > 0 ? ` and ${rest.length} more` : "";
-  return `Overlaps ${what} · ${start}–${end}${more}`;
+  return `Overlaps ${what} · ${start} to ${end}${more}`;
 }
 
 /** "1-hour" / "90-minute" / "2-day" — the adjective form for the clash sentence. */
@@ -205,7 +205,7 @@ export function describeConflict(conflict: BookingConflict, timeZone: string): s
     minute: "2-digit",
   });
   const end = formatInTz(conflict.end, timeZone, { hour: "2-digit", minute: "2-digit" });
-  return `${what}${who} · ${start}–${end}`;
+  return `${what}${who} · ${start} to ${end}`;
 }
 
 /**
@@ -217,11 +217,11 @@ export function overrideCopy(newBookingAllDay: boolean): { title: string; body: 
   return newBookingAllDay
     ? {
         title: "Book the whole day anyway?",
-        body: "This day already has work on it — an all-day job, timed work or an event. Booking anyway keeps both side by side on the calendar; this job has no set time, so it fits around what is there.",
+        body: "This day already has work on it. Booking anyway keeps both side by side on the calendar; this job has no set time, so it fits around what's there.",
       }
     : {
         title: "Squeeze in as a drop-in?",
-        body: "The day is held by an all-day job. Booking as a drop-in keeps both — the short job shows under the all-day bar on the calendar.",
+        body: "The day is held by an all-day job. Booking as a drop-in keeps both; the short job shows under the all-day bar.",
       };
 }
 

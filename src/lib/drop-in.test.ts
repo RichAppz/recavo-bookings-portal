@@ -164,13 +164,13 @@ describe("timedClashNote", () => {
 
 describe("timedOverlapNote", () => {
   it("names the job or event a hand-set time lands on", () => {
-    assert.equal(timedOverlapNote([valet], TZ), "Overlaps Mini valet · Pat · 10:00–11:00");
+    assert.equal(timedOverlapNote([valet], TZ), "Overlaps Mini valet · Pat · 10:00 to 11:00");
     assert.equal(
       timedOverlapNote(
         [{ start: valet.start, end: valet.end, kind: "event", title: "Dentist" }, valet],
         TZ,
       ),
-      "Overlaps Dentist · 10:00–11:00 and 1 more",
+      "Overlaps Dentist · 10:00 to 11:00 and 1 more",
     );
     assert.equal(timedOverlapNote([], TZ), null);
   });
@@ -210,7 +210,7 @@ describe("hardClashCopy", () => {
     assert.equal(solo.title, "That time is already taken");
     assert.equal(
       solo.description,
-      "Taylor already has Mini valet · Pat · Tue 10:00–11:00. Pick a different time.",
+      "Taylor already has Mini valet · Pat · Tue 10:00 to 11:00. Pick a different time.",
     );
     const team = hardClashCopy({
       conflicts: [timedClash],
@@ -299,7 +299,7 @@ describe("describeConflict", () => {
         },
         TZ,
       ),
-      "Mini valet · Tue 10:00–11:00",
+      "Mini valet · Tue 10:00 to 11:00",
     );
     assert.equal(
       describeConflict(
@@ -315,7 +315,7 @@ describe("describeConflict", () => {
         },
         TZ,
       ),
-      "Event · Tue 10:00–11:00",
+      "Event · Tue 10:00 to 11:00",
     );
   });
 });
