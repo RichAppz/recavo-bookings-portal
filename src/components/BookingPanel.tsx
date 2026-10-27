@@ -200,6 +200,8 @@ export function BookingPanel({
   const [editOpen, setEditOpen] = useState(false);
   /** Services to pre-add when Edit opens from an add-on request. */
   const [editAddServiceIds, setEditAddServiceIds] = useState<string[]>([]);
+  /** Edit opened from "Change how it's paid": land on its Payment section. */
+  const [editFocusPayment, setEditFocusPayment] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [confirmReceived, setConfirmReceived] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -1373,7 +1375,14 @@ export function BookingPanel({
                             Mark received
                           </Button>
                           {!isFinal ? (
-                            <Button size="sm" variant="ghost" onClick={() => setEditOpen(true)}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditFocusPayment(true);
+                                setEditOpen(true);
+                              }}
+                            >
                               Change how it's paid
                             </Button>
                           ) : null}
@@ -1772,13 +1781,16 @@ export function BookingPanel({
         <EditBookingDialog
           booking={booking}
           addServiceIds={editAddServiceIds}
+          focusPayment={editFocusPayment}
           onClose={() => {
             setEditOpen(false);
             setEditAddServiceIds([]);
+            setEditFocusPayment(false);
           }}
           onReschedule={() => {
             setEditOpen(false);
             setEditAddServiceIds([]);
+            setEditFocusPayment(false);
             setRescheduleOpen(true);
           }}
         />
