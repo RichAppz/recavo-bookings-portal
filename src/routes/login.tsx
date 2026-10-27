@@ -5,20 +5,21 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner";
 import { AppleButton, AuthDivider, AuthShell, GoogleButton } from "@/components/AuthShell";
 import { CustomerAuthLayout } from "@/components/CustomerAuthLayout";
-import { EmailCodeSignIn } from "@/components/EmailCodeSignIn";
+import { EmailCodeSignIn, type EmailCodeStep } from "@/components/EmailCodeSignIn";
 import { AuthChromeGhost } from "@/components/ghost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { useSaasPurchasesAllowed } from "@/hooks/use-native-app";
+import { usePublicBusiness } from "@/lib/api/hooks";
 import { useAuth, type SocialSignInOutcome } from "@/lib/auth/auth-store";
+import { recallCameFrom, type CameFrom } from "@/lib/auth/came-from";
+import { EMAIL_CODE_LENGTH as CODE_LENGTH } from "@/lib/auth/email-code";
 import { stashPendingReferral } from "@/lib/auth/pending-referral";
 import { settleSocialSignIn } from "@/lib/auth/social-sign-in";
-import { isCustomerHost } from "@/lib/hosts";
+import { isCustomerHost, staffUrlFor } from "@/lib/hosts";
 
-/** Must match the Supabase project's "OTP Length" auth setting (currently 8). */
-const CODE_LENGTH = 8;
 const RESEND_SECONDS = 30;
 
 /**
@@ -37,6 +38,8 @@ function isEmailNotConfirmed(err: unknown): boolean {
 const searchSchema = z.object({
   redirect: z.string().optional(),
   ref: z.string().optional(),
+  /** Booking-page slug the client came from (set by emails), for "Back to {business}". */
+  from: z.string().optional(),
   email: z.string().optional(),
 });
 
@@ -96,7 +99,9 @@ function LoginPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || customer === null) return;
-    void navigate({ to: postLoginPath(redirect, customer) });
+    // Replace rather than push: Back from the first page should not land on a
+    // sign-in form that immediately bounces the user forward again.
+    void navigate({ to: postLoginPath(redirect, customer), replace: true });
   }, [status, redirect, navigate, customer]);
 
   if (customer === null) {
@@ -111,12 +116,72 @@ function LoginPage() {
  * day, keep passwords where password managers and MFA earn their place.
  */
 function CustomerLogin() {
+  const { from } = Route.useSearch();
+  const [step, setStep] = useState<EmailCodeStep>("email");
+  const [email, setEmail] = useState("");
+  // Remounting is how the code step goes back: the form keeps the address.
+  const [attempt, setAttempt] = useState(0);
+  const back = () => {
+    setStep("email");
+    setAttempt((n) => n + 1);
+  };
+
+  // "Back to {business}" needs a business: the one named in the link (an email's
+  // ?from=), or the booking page this tab was on. Read after mount; the server
+  // render has neither the tab's storage nor the hostname.
+  const [cameFrom, setCameFrom] = useState<CameFrom | null>(null);
+  const [businessLogin, setBusinessLogin] = useState<string | null>(null);
+  useEffect(() => {
+    setCameFrom(recallCameFrom());
+    setBusinessLogin(staffUrlFor(`${window.location.origin}/login`));
+  }, []);
+  const fromSlug = from?.trim() || null;
+  const fromBusiness = usePublicBusiness(
+    fromSlug && fromSlug !== cameFrom?.slug ? fromSlug : undefined,
+  );
+  const backTo = fromSlug
+    ? fromBusiness.data
+      ? { label: `Back to ${fromBusiness.data.tradingName}`, href: `/${fromBusiness.data.slug}` }
+      : cameFrom && cameFrom.slug === fromSlug
+        ? { label: `Back to ${cameFrom.name}`, href: `/${cameFrom.slug}` }
+        : null
+    : cameFrom
+      ? { label: `Back to ${cameFrom.name}`, href: `/${cameFrom.slug}` }
+      : null;
+
   return (
     <CustomerAuthLayout
-      title="Your sessions and credits"
-      subtitle="Sign in with your email to see what you've booked, use your credits and buy more."
+      title={step === "code" ? "Check your email" : "All your bookings in one place"}
+      subtitle={
+        step === "code"
+          ? undefined
+          : "Appointments, credits and receipts from every business you book with."
+      }
+      onBack={step === "code" ? back : undefined}
+      backTo={backTo}
+      showBusinesses={step === "email"}
+      footer={
+        businessLogin ? (
+          <span>
+            Running a business?{" "}
+            <a
+              href={businessLogin}
+              className="font-semibold text-[#15171c] underline underline-offset-4"
+            >
+              Business login
+            </a>
+          </span>
+        ) : null
+      }
     >
-      <EmailCodeSignIn />
+      <EmailCodeSignIn
+        key={attempt}
+        defaultEmail={email}
+        onStepChange={(next, address) => {
+          setStep(next);
+          if (address) setEmail(address);
+        }}
+      />
     </CustomerAuthLayout>
   );
 }

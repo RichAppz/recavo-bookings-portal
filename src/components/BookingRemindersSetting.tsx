@@ -46,7 +46,14 @@ const ISSUE_TEXT: Record<RowIssue, string> = {
  * 0020): whether a reminder actually goes by text is settled at send time from the
  * credit balance, so the editor just says what that balance is.
  */
-export function BookingRemindersSetting({ className }: { className?: string }) {
+export function BookingRemindersSetting({
+  className,
+  hideHeader = false,
+}: {
+  className?: string;
+  /** In a drawer whose title already says "Reminders", skip the card header. */
+  hideHeader?: boolean;
+}) {
   const tenant = useTenant();
   const update = useUpdateConfiguration();
   const smsCredits = useSmsCreditsSummary();
@@ -114,7 +121,9 @@ export function BookingRemindersSetting({ className }: { className?: string }) {
 
   return (
     <section className={cn("rounded-xl border p-4 sm:p-5", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div
+        className={cn("flex flex-wrap items-start justify-between gap-4", hideHeader && "hidden")}
+      >
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <BellRing className="size-5" />

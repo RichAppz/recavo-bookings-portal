@@ -14,7 +14,7 @@ import { isImpersonating } from "@/lib/auth/impersonation";
  */
 const KEY = "recavo.query-cache";
 /** Part of the persister's `buster`; anything saved under another version is discarded. */
-export const CACHE_VERSION = "1";
+export const CACHE_VERSION = "2";
 
 export const PERSIST_MAX_AGE_MS = OFFLINE_CACHE_MAX_AGE_MS;
 /** Longest the app will wait for the saved cache before starting without it. */
@@ -54,6 +54,8 @@ export const queryPersister: Persister = {
   },
   async removeClient() {
     if (!hasIndexedDb()) return;
+    // The admin's own saved cache isn't the one a support session is looking at.
+    if (isImpersonating()) return;
     try {
       await del(KEY);
     } catch {

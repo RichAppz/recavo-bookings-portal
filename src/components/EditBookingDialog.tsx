@@ -82,6 +82,7 @@ import {
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { takesBookings } from "@/lib/team";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { cn } from "@/lib/utils";
@@ -218,6 +219,9 @@ export function EditBookingDialog({
     booking.paymentMethod === "bank_transfer" &&
     paidMinor === 0;
   const paymentEditable = (booking.status === "confirmed" || bankPending) && !credit;
+  // An attended job is a record: it can be corrected here, but it is never moved for
+  // the client (the API refuses a reschedule), so that hand-off is hidden.
+  const done = booking.status === "completed";
   // The job's length is its line items, not start → end: a 3-day job that skips a
   // weekend is 3 days, and the API lays it over working days again after an edit.
   const currentMinutes = bookingJobMinutes(booking);
@@ -335,9 +339,7 @@ export function EditBookingDialog({
   // ---- Lookups ------------------------------------------------------------------
   const serviceList = useMemo(() => services.data ?? [], [services.data]);
   const serviceById = useMemo(() => new Map(serviceList.map((s) => [s.id, s])), [serviceList]);
-  const staffList = (staff.data ?? []).filter(
-    (s) => s.status === "active" || s.id === booking.staffId,
-  );
+  const staffList = (staff.data ?? []).filter((s) => takesBookings(s) || s.id === booking.staffId);
   const locationList = (locations.data ?? []).filter(
     (l) => l.active || l.id === booking.locationId,
   );
@@ -1009,14 +1011,16 @@ export function EditBookingDialog({
                   >
                     <Pencil className="size-4" /> {whenOpen ? "Undo" : "Fix date"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => guard(onReschedule)}
-                  >
-                    <CalendarClock className="size-4" /> Reschedule
-                  </Button>
+                  {done ? null : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => guard(onReschedule)}
+                    >
+                      <CalendarClock className="size-4" /> Reschedule
+                    </Button>
+                  )}
                 </div>
               </div>
               {whenOpen ? (
@@ -1039,7 +1043,7 @@ export function EditBookingDialog({
                             // Keep the span whole when the first day passes the last.
                             if (e.target.value > whenLastDay) setWhenLastDay(e.target.value);
                           }}
-                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                         />
                       </div>
                       <div className="grid gap-1">
@@ -1053,7 +1057,7 @@ export function EditBookingDialog({
                           value={whenLastDay}
                           onChange={(e) => setWhenLastDay(e.target.value)}
                           aria-invalid={whenInvalid}
-                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                          className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm aria-invalid:border-destructive"
                         />
                       </div>
                     </div>
@@ -1065,14 +1069,14 @@ export function EditBookingDialog({
                         aria-label="Date"
                         value={whenDate}
                         onChange={(e) => setWhenDate(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                        className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                       />
                       <input
                         type="time"
                         aria-label="Start time"
                         value={whenTime}
                         onChange={(e) => setWhenTime(e.target.value)}
-                        className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                        className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                       />
                     </div>
                   )}
@@ -1085,7 +1089,9 @@ export function EditBookingDialog({
                 </div>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Reschedule tells the client; editing here just corrects the diary.
+                  {done
+                    ? "The job is done, so a date fix only corrects the record."
+                    : "Reschedule tells the client; editing here just corrects the diary."}
                 </p>
               )}
             </div>

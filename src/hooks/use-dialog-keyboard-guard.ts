@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { modalDialogOpen } from "@/lib/modal-dialog-open";
 
 const OPEN_LAYER = '[role="dialog"][data-state="open"], [data-radix-popper-content-wrapper]';
 
@@ -17,9 +18,8 @@ const OPEN_LAYER = '[role="dialog"][data-state="open"], [data-radix-popper-conte
 export function useDialogKeyboardGuard(): void {
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const dialogOpen = () => document.querySelector(OPEN_LAYER) !== null;
     const settle = () => {
-      if (!dialogOpen()) return;
+      if (!modalDialogOpen(document)) return;
       const vv = window.visualViewport;
       // Never while the keyboard is up: iOS scrolled on purpose to show the field.
       const keyboardClosed = !vv || vv.height >= window.innerHeight - 1;

@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
+import { keepOpenForToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
@@ -29,8 +30,64 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+const PHONE_QUERY = "(max-width: 639.98px)";
+
+function subscribeToPhone(onChange: () => void) {
+  const mql = window.matchMedia(PHONE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+/** Read straight from the window so a dialog open on first paint doesn't flash in sideways. */
+function useIsPhoneDialog(): boolean {
+  return React.useSyncExternalStore(
+    subscribeToPhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+}
+
 /**
- * Dialogs render as a right-hand side drawer over the content (mobile: full width).
+ * The phone sheet's grab handle and close disc, kept at the top while the form
+ * scrolls. A zero-height sticky strip, pulled out to the sheet's edges by reading
+ * the padding it sits in, since consumers may change that padding.
+ */
+function PhoneSheetChrome({ children }: { children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = React.useState({ top: 0, left: 0, right: 0, gap: 0 });
+  React.useLayoutEffect(() => {
+    const parent = ref.current?.parentElement;
+    if (!parent) return;
+    const style = getComputedStyle(parent);
+    setEdge({
+      top: parseFloat(style.paddingTop) || 0,
+      left: parseFloat(style.paddingLeft) || 0,
+      right: parseFloat(style.paddingRight) || 0,
+      gap: parseFloat(style.rowGap) || 0,
+    });
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none sticky top-0 z-20 h-0 shrink-0"
+      // Sticky offsets are measured inside the scroller's padding.
+      style={{
+        top: -edge.top,
+        marginTop: -edge.top,
+        marginLeft: -edge.left,
+        marginRight: -edge.right,
+        marginBottom: edge.top - edge.gap,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Dialogs render as a right-hand side drawer over the content. Phones get the iOS
+ * sheet presentation instead: up from the bottom, stopping short of the top so the
+ * page shows behind it, with a grab handle (the same as ui/sheet.tsx).
  * `overflow-x-hidden`: `overflow-y-auto` alone makes the x-axis `auto` too, so any
  * child wider than the sheet (a long word, an input row that can't shrink) turned
  * into a sideways scroll on phones. Popovers and selects are portalled, so nothing
@@ -42,32 +99,64 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
+>(({ className, children, onInteractOutside, ...props }, ref) => {
+  const phone = useIsPhoneDialog();
+  // tailwind-merge doesn't know `p-0` overrides the custom `px-safe-*` utilities,
+  // so a consumer that pads its own header, body and footer would get both.
+  const flush = /(^|\s)p-0(\s|$)/.test(className ?? "");
+  // A finger-sized square (44px on phones, 36px with a pointer) around the glyph.
+  // On phones the glyph sits in a grey disc, the way iOS draws a sheet's close
+  // control, and the header drops below it (see DialogHeader).
+  const close = (
+    <DialogPrimitive.Close
       className={cn(
-        "no-scrollbar fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto border-l bg-background px-safe-6 pt-safe-6 pb-safe-12 shadow-xl sm:pb-6 outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-        className,
+        "pointer-events-auto absolute right-safe-2 flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors focus:outline-none focus-visible:bg-accent focus-visible:text-foreground disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground",
+        phone ? "top-2" : "top-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
       )}
-      {...props}
     >
-      {children}
-      {/* A finger-sized square (44px on phones, 36px with a pointer) around the
-          glyph; the bare 16px icon it replaces was the only thing you could hit.
-          On phones the glyph sits in a grey disc, the way iOS draws a sheet's
-          close control, and the header drops below it (see DialogHeader). */}
-      <DialogPrimitive.Close className="absolute right-safe-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex size-11 cursor-pointer items-center justify-center rounded-md text-muted-foreground ring-offset-background transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none max-sm:active:opacity-70 sm:size-9 sm:hover:bg-accent sm:hover:text-foreground">
-        <span className="flex size-8 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
-          <X className="size-4.5 sm:size-4" />
-        </span>
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/70 sm:size-auto sm:rounded-none sm:bg-transparent sm:text-inherit">
+        <X className="size-5 sm:size-[18px]" />
+      </span>
+      <span className="sr-only">Close</span>
+    </DialogPrimitive.Close>
+  );
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        onInteractOutside={(e) => {
+          keepOpenForToast(e);
+          onInteractOutside?.(e);
+        }}
+        className={cn(
+          "no-scrollbar fixed z-50 flex w-full max-w-full flex-col gap-5 overflow-x-hidden overflow-y-auto bg-background pb-safe-12 shadow-xl sm:pb-6 outline-none transition ease-in-out sm:max-w-md sm:rounded-none",
+          !flush && "px-safe-4 sm:px-safe-6",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
+          phone
+            ? "inset-x-0 bottom-0 top-sheet-peek rounded-t-3xl border-t pt-6 has-[[data-dialog-footer]]:pb-0 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
+            : "inset-y-0 right-0 h-full border-l pt-safe-6 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+          className,
+        )}
+        {...props}
+      >
+        {phone ? (
+          <PhoneSheetChrome>
+            {/* A bar for the form to scroll under, the height of the space above the title. */}
+            <span aria-hidden className="absolute inset-x-0 top-0 h-14 bg-background" />
+            <span
+              aria-hidden
+              className="absolute top-2 left-1/2 h-1.5 w-10 -translate-x-1/2 rounded-full bg-border"
+            />
+            {close}
+          </PhoneSheetChrome>
+        ) : null}
+        {children}
+        {phone ? null : close}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 /**
@@ -89,12 +178,22 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 DialogHeader.displayName = "DialogHeader";
 
-/* Phones: actions stack full width at iOS button height, primary on top. */
+/*
+ * Phones: actions stack full width at iOS button height, primary on top, and stay
+ * pinned to the bottom of the sheet while the form scrolls behind them. The sheet
+ * drops its own bottom padding when it has a footer (see DialogContent) so the
+ * footer can sit flush and carry the home-indicator inset itself. A plain-text
+ * Cancel on the bottom row is shorter and sits closer to the edge, since its
+ * label alone (no filled button) already floats in the middle of its tap area.
+ */
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-dialog-footer=""
     className={cn(
       "mt-auto flex shrink-0 flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0",
+      "max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-4 max-sm:bg-background max-sm:px-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
       "max-sm:[&>a]:h-12 max-sm:[&>a]:rounded-xl max-sm:[&>a]:text-base max-sm:[&>button]:h-12 max-sm:[&>button]:rounded-xl max-sm:[&>button]:text-base",
+      "max-sm:[&>button[data-variant=ghost]]:h-10 max-sm:has-[>button[data-variant=ghost]:first-child]:pb-[max(0.25rem,env(safe-area-inset-bottom))]",
       className,
     )}
     {...props}

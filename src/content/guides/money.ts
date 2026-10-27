@@ -36,7 +36,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Record what you took",
-        body: "Click **Record payment**. The amount defaults to what's outstanding — change it for a part payment — and pick **how it was paid**: *Cash*, *Bank transfer*, *Card (taken elsewhere)* for your own machine, or *Other*. The booking updates straight away; record the rest later if they're paying in stages.",
+        body: "Click **Record payment**. The amount defaults to what's outstanding — change it for a part payment, or enter more if they've added a tip and the extra is recorded as a tip — and pick **how it was paid**: *Cash*, *Bank transfer*, *Card* for your own machine, or *Other*. The booking updates straight away; record the rest later if they're paying in stages.",
         image: {
           name: "record-payment",
           alt: "The Record a payment dialog with the amount pre-filled and a How was it paid dropdown.",
@@ -48,7 +48,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Where it ends up",
-        body: "Payments you record appear on the booking's Payments tab and on the client's **Payments** tab, and count towards what's outstanding. Card payments taken through Stripe are listed under **Payments** in the sidebar with their receipts and refunds.",
+        body: "Payments you record appear on the booking's Payments tab and on the client's **Money** tab, and count towards what's outstanding. They also appear under **Payments** in the sidebar, next to card payments, with their receipts and refunds. **Record a payment** at the top of Payments logs one without opening the booking.",
         link: { to: "/payments", label: "Open Payments" },
       },
     ],
@@ -97,7 +97,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Everything in one place",
-        body: "**Payments** in the sidebar lists every payment — card, transfer and recorded — with its status, receipt and a **Refund** action for card payments. The totals at the top cover the range you've chosen, and **Reports** breaks them down by method.",
+        body: "**Payments** in the sidebar lists every payment (card, card machine, cash, bank transfer and other) with its status. Click one to see what happened, the Stripe fee, the receipt and **Refund**. The totals at the top cover the period you've chosen, **Owed** lists bookings still waiting for money with **Remind** and **Mark paid**, and **Reports** breaks takings down by method.",
         image: {
           name: "payments-page",
           alt: "The Payments page with totals for the period and a table of payments by date, client, amount and status.",
@@ -135,12 +135,12 @@ export const MONEY_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Turn invoicing on",
-        body: "Invoicing is included on Growth and an add-on on other plans — switch it on under **Settings → Billing**. Then in **Settings → Payments**, set your **number prefix**, **payment terms** (days until due) and a **footer note**. **Invoice automatically when a job is completed** issues and emails one every time a {booking} is marked attended.",
+        body: "Invoicing is included on Growth and an add-on on other plans — switch it on under **Settings → Get paid** (or **Settings → RECAVO plan**). Then, on the same **Get paid** page, set your **number prefix**, **payment terms** (days until due) and a **footer note**. **Invoice automatically when a job is completed** issues and emails one every time a {booking} is marked attended.",
         image: {
           name: "invoicing-settings",
           alt: "The Invoicing settings with the automatic invoicing switch, number prefix, payment terms and footer note.",
         },
-        link: { to: "/settings", search: { tab: "payments" }, label: "Open Payments settings" },
+        link: { to: "/settings/get-paid", label: "Open Get paid" },
       },
       {
         heading: "Raise one by hand",
@@ -189,10 +189,20 @@ export const MONEY_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Pick a range",
-        body: "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Bookings**, **Attendance rate** and **Occupancy rate** — cover that range and compare it with the period before.",
+        body: {
+          personal_training:
+            "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Bookings**, **Attendance rate** and **Occupancy rate** — cover that range and compare it with the period before.",
+          car_detailing:
+            "Open **Reports** and set **From** and **To**. The four cards — **Revenue**, **Jobs**, **Completion rate** and **Average job value** — cover that range and compare it with the period before.",
+        },
         image: {
           name: "reports",
-          alt: "The Reports page with a date range and cards for revenue, bookings, attendance rate and occupancy rate.",
+          alt: {
+            personal_training:
+              "The Reports page with a date range and cards for revenue, bookings, attendance rate and occupancy rate.",
+            car_detailing:
+              "The Reports page with a date range and cards for revenue, jobs, completion rate and average job value.",
+          },
         },
         link: { to: "/reports", label: "Open Reports" },
       },
@@ -202,7 +212,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
           personal_training:
             "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Attendance** counts attended, no-show and cancelled sessions, **Occupancy** compares seats booked with capacity, and **Packages and credits** totals what you've sold and how many credits were used.",
           car_detailing:
-            "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Attendance** counts completed, no-show and cancelled jobs, and **Occupancy** compares bay time booked with what was available.",
+            "**How you were paid** splits card payments taken through RECAVO from your own machine, cash and transfers. **Revenue breakdown** shows net, refunded and disputed. **Job outcomes** counts completed, no-show and cancelled jobs, and **Packages and credits** totals what you've sold and how many credits were used.",
         },
         image: {
           name: "reports-detail",

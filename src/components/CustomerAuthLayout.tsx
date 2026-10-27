@@ -1,115 +1,126 @@
 import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-import { CalendarCheck, Check, ShieldCheck } from "lucide-react";
-import { BrandMark } from "@/components/AuthShell";
-const HIGHLIGHTS = [
-  "Every studio you train at, under one login",
-  "See what you've booked and what you've already paid for",
-  "Buy more sessions and keep your receipts",
-];
-
-const STEPS = [
-  { step: "1", label: "Give us your email" },
-  { step: "2", label: "We send a code" },
-  { step: "3", label: "You're in" },
-];
+import { ChevronLeft } from "lucide-react";
+import { ACCOUNT_PALETTE } from "@/lib/account-palette";
+import { useFixedTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 /**
- * The frame for pages a customer meets before they are signed in.
+ * The frame for pages a client meets before they are signed in.
  *
- * Same two-panel shape as {@link AuthShell} so the two front doors of the
- * product feel like one product, but the left panel sells something different.
- * A studio owner arriving at the staff login is being asked to buy software; a
- * customer here has already paid for sessions and is trying to reach them, so
- * the panel reassures rather than pitches, and spends its lower half explaining
- * the passwordless sign-in — which is the one thing on this page likely to be
- * unfamiliar.
+ * One RECAVO account spans every business a client books with, so this is the
+ * neutral RECAVO look rather than a business theme: a small wordmark, one white
+ * card on the warm page background, black pill buttons. It stays light whatever
+ * the phone's own setting, like the account it leads to, and must never read as
+ * the business login (no dark split screen, no marketing panel). On a phone the
+ * card dissolves into the page and a round back button sits where the wordmark
+ * was.
  */
 export function CustomerAuthLayout({
   title,
   subtitle,
   children,
   footer,
+  onBack,
+  backTo,
+  showBusinesses = false,
 }: {
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle?: string | undefined;
   readonly children: ReactNode;
   readonly footer?: ReactNode;
+  /** The code step's way back to the email field. */
+  readonly onBack?: (() => void) | undefined;
+  /** "Back to {business}" when the client came here from a booking page. */
+  readonly backTo?: { readonly label: string; readonly href: string } | null | undefined;
+  /** The overlapping initials that say "every business you book with". */
+  readonly showBusinesses?: boolean;
 }) {
+  useFixedTheme("light");
+
   return (
-    <div className="grid min-h-screen grid-cols-1 overflow-x-clip bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden overflow-hidden bg-sidebar px-12 py-14 lg:flex lg:flex-col lg:justify-between">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 -left-24 size-[26rem] rounded-full bg-sidebar-primary/25 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-0 -bottom-40 size-[24rem] rounded-full bg-sidebar-primary/10 blur-3xl"
-        />
+    <div
+      className="relative flex min-h-screen flex-col overflow-x-clip bg-[var(--account-bg)] text-[#15171c] antialiased"
+      style={ACCOUNT_PALETTE}
+    >
+      {/* Phone: the back link takes the left and the wordmark steps aside to the
+          right; with no link the wordmark is centred. Desktop: wordmark centred,
+          link pinned left of it. */}
+      <header className="pt-safe px-safe-5 relative flex h-[88px] shrink-0 items-center sm:h-[104px] sm:justify-center">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="absolute top-[max(env(safe-area-inset-top),1.25rem)] left-5 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--account-line)] bg-white sm:hidden"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        ) : backTo ? (
+          <a
+            href={backTo.href}
+            className="-ml-1.5 flex h-12 min-w-0 flex-1 items-center gap-1 pr-3 text-[15px] font-semibold sm:absolute sm:top-1/2 sm:left-6 sm:ml-0 sm:max-w-[40%] sm:flex-none sm:-translate-y-1/2"
+          >
+            <ChevronLeft className="h-5 w-5 shrink-0" />
+            <span className="truncate">{backTo.label}</span>
+          </a>
+        ) : null}
+        <span
+          className={cn(
+            "text-[15px] font-extrabold tracking-tight",
+            backTo && !onBack ? "ml-auto sm:ml-0" : "mx-auto sm:mx-0",
+          )}
+        >
+          RECAVO
+        </span>
+      </header>
 
-        <Link to="/" className="relative">
-          <BrandMark tone="dark" />
-        </Link>
-
-        <div className="relative max-w-md">
-          <p className="inline-flex items-center gap-2 rounded-full border border-sidebar-border bg-sidebar-accent px-3 py-1 text-xs font-medium text-sidebar-accent-foreground">
-            <CalendarCheck className="size-3.5 text-sidebar-primary" />
-            Your training account
-          </p>
-          <h2 className="mt-6 text-4xl leading-[1.1] font-semibold tracking-tight text-sidebar-foreground">
-            Your sessions, wherever you train.
-          </h2>
-          <ul className="mt-8 space-y-3">
-            {HIGHLIGHTS.map((item) => (
-              <li key={item} className="flex items-start gap-3 text-sm text-sidebar-foreground/80">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/20 text-sidebar-primary">
-                  <Check className="size-3" strokeWidth={3} />
-                </span>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative border-t border-sidebar-border pt-6">
-          <p className="text-xs font-semibold tracking-[0.14em] text-sidebar-foreground/50 uppercase">
-            No password needed
-          </p>
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            {STEPS.map((item) => (
-              <div key={item.step}>
-                <span className="flex size-7 items-center justify-center rounded-full bg-sidebar-primary/20 text-xs font-semibold text-sidebar-primary">
-                  {item.step}
-                </span>
-                <p className="mt-2 text-xs text-sidebar-foreground/70">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      <main className="pt-safe-8 pb-safe-8 px-safe-5 sm:px-safe-10 flex flex-col">
-        <div className="flex items-center">
-          <Link to="/" className="lg:invisible">
-            <BrandMark tone="light" />
-          </Link>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center py-10">
-          <div className="w-full max-w-[26rem]">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
-            <div className="mt-8">{children}</div>
-            {footer ? <div className="mt-8 text-sm text-muted-foreground">{footer}</div> : null}
-          </div>
-        </div>
-
-        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5" />
-          Protected by RECAVO — your connection is encrypted end to end.
-        </p>
+      <main className="px-safe-5 flex flex-1 flex-col items-center pb-10">
+        <section className="w-full max-w-[400px] sm:rounded-[28px] sm:border sm:border-[var(--account-line)] sm:bg-white sm:p-8 sm:shadow-[0_8px_30px_rgba(21,23,28,0.05)]">
+          {showBusinesses ? <BusinessInitials /> : null}
+          <h1 className="text-[32px] leading-[1.1] font-bold tracking-tight sm:text-[26px]">
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className="mt-3 text-[17px] leading-relaxed text-[var(--account-muted)] sm:text-[15px]">
+              {subtitle}
+            </p>
+          ) : null}
+          <div className="mt-8">{children}</div>
+        </section>
+        {footer ? (
+          <div className="mt-8 text-center text-[14px] text-[var(--account-muted)]">{footer}</div>
+        ) : null}
       </main>
+    </div>
+  );
+}
+
+/** Illustrative only: not the client's real businesses, which are unknown before sign-in. */
+const SAMPLE_BUSINESSES = [
+  { initials: "NS", bg: "#dcfce7", fg: "#166534" },
+  { initials: "PP", bg: "#e0e7ff", fg: "#3730a3" },
+  { initials: "LB", bg: "#fef3c7", fg: "#92400e" },
+  { initials: "CD", bg: "#fce7f3", fg: "#9d174d" },
+];
+
+function BusinessInitials() {
+  return (
+    <div className="mb-7 flex items-center" aria-hidden>
+      {SAMPLE_BUSINESSES.map((b, i) => (
+        <span
+          key={b.initials}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-bold ring-[3px] ring-[var(--account-bg)] sm:ring-white"
+          style={{ background: b.bg, color: b.fg, marginLeft: i === 0 ? 0 : -10 }}
+        >
+          {b.initials}
+        </span>
+      ))}
+      <span
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-[var(--account-line)] bg-white text-[12px] font-bold text-[var(--account-muted)] ring-[3px] ring-[var(--account-bg)] sm:ring-white"
+        style={{ marginLeft: -10 }}
+      >
+        +
+      </span>
     </div>
   );
 }

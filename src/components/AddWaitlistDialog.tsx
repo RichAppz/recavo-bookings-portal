@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { AddClientDialog } from "@/components/QuickActions";
+import { NumberPlate } from "@/components/vehicles/NumberPlate";
+import { useVehicleFields } from "@/components/vehicles/use-vehicles-data";
+import { DayToggles, TimeOfDayButtons } from "@/components/waitlist/parts";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { takesBookings } from "@/lib/team";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -21,12 +19,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsPhone } from "@/hooks/use-media-query";
 import {
   useCreateWaitlistEntry,
   useCustomer,
   useCustomerLinkedRecords,
+  useCustomerWaitlist,
   useCustomers,
   useLinkedRecordDefinition,
   useLocationsList,
@@ -38,7 +45,8 @@ import {
 import type { WaitlistEntry, WaitlistTimeOfDay } from "@/lib/api/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
-import { TIME_OF_DAY_LABELS, WEEKDAYS } from "@/lib/waitlist";
+import { registrationOf, vehicleTitle } from "@/lib/vehicles";
+import { dayDate, describePreferences, displayPhone, shortDate } from "@/lib/waitlist";
 
 export type WaitlistDialogDefaults = {
   customerId?: string;
@@ -48,11 +56,17 @@ export type WaitlistDialogDefaults = {
   staffId?: string;
   /** `YYYY-MM-DD` the client wanted — becomes the start of their preferred window. */
   from?: string;
+  /** Opened from "Add to waitlist instead" on Add booking: say what was copied. */
+  copiedFromBooking?: boolean;
 };
 
+type Field = "customer" | "service" | "to";
+
 /**
- * Add a client to the waitlist, or edit an open entry. Who + what are fixed once an
- * entry exists (the API keys "one open entry" on them); everything else can change.
+ * Add a client to the waitlist, or edit an open entry, in a right-hand drawer (full
+ * screen on a phone). Who + what are fixed once an entry exists (the API keys "one open
+ * entry" on them); everything else can change. If they're already waiting for that
+ * service the drawer says so and offers their entry instead of a second one.
  */
 export function AddWaitlistDialog({
   open,
@@ -60,6 +74,7 @@ export function AddWaitlistDialog({
   defaults,
   entry,
   onSaved,
+  onOpenExisting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,11 +82,14 @@ export function AddWaitlistDialog({
   /** Edit mode: the entry to change. */
   entry?: WaitlistEntry | null;
   onSaved?: (entry: WaitlistEntry) => void;
+  /** "Open Sam's entry" on the duplicate box. Defaults to the Waitlist page. */
+  onOpenExisting?: (entry: WaitlistEntry) => void;
 }) {
   const tenant = useTenant();
+  const phone = useIsPhone();
+  const navigate = useNavigate();
   const editing = Boolean(entry);
   const [customerId, setCustomerId] = useState("");
-  /** "+" beside the client picker: add someone new without leaving the half-filled form. */
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [serviceId, setServiceId] = useState("");
   const [variantId, setVariantId] = useState("none");
@@ -84,20 +102,24 @@ export function AddWaitlistDialog({
   const [timeOfDay, setTimeOfDay] = useState<WaitlistTimeOfDay>("any");
   const [highPriority, setHighPriority] = useState(false);
   const [notes, setNotes] = useState("");
+  const [notifyClient, setNotifyClient] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
 
   const services = useServices();
   const locations = useLocationsList();
   const staff = useStaffList();
   const customers = useCustomers();
   const definition = useLinkedRecordDefinition();
+  const { fields } = useVehicleFields();
   const records = useCustomerLinkedRecords(customerId || undefined);
   const chosen = useCustomer(customerId || undefined);
+  const theirs = useCustomerWaitlist(!editing && customerId ? customerId : undefined);
   const create = useCreateWaitlistEntry();
   const update = useUpdateWaitlistEntry();
 
-  // Reset to the defaults (or the entry) each time the dialog opens.
   useEffect(() => {
     if (!open) return;
+    setErrors({});
     if (entry) {
       setCustomerId(entry.customerId);
       setServiceId(entry.serviceId);
@@ -111,6 +133,7 @@ export function AddWaitlistDialog({
       setTimeOfDay(entry.preferences.timeOfDay);
       setHighPriority(entry.priority === "high");
       setNotes(entry.notes ?? "");
+      setNotifyClient(false);
       return;
     }
     setCustomerId(defaults?.customerId ?? "");
@@ -130,6 +153,7 @@ export function AddWaitlistDialog({
     setTimeOfDay("any");
     setHighPriority(false);
     setNotes("");
+    setNotifyClient(false);
   }, [open, entry, defaults, tenant.currentLocationId]);
 
   const serviceList = useMemo(
@@ -142,11 +166,12 @@ export function AddWaitlistDialog({
     () =>
       (staff.data ?? []).filter(
         (s) =>
-          !service ||
-          s.eligibleServiceIds.length === 0 ||
-          s.eligibleServiceIds.includes(service.id),
+          (takesBookings(s) || s.id === staffId) &&
+          (!service ||
+            s.eligibleServiceIds.length === 0 ||
+            s.eligibleServiceIds.includes(service.id)),
       ),
-    [staff.data, service],
+    [staff.data, service, staffId],
   );
   const customerList = customers.data?.items ?? [];
   const selectedCustomer = customerList.find((c) => c.id === customerId) ?? chosen.data ?? null;
@@ -156,16 +181,53 @@ export function AddWaitlistDialog({
     (r) => r.status === "active" || r.id === linkedRecordId,
   );
   const staffNoun = tenant.terminology.staff.trim() || "Staff";
+  const serviceNoun = (
+    tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
+  ).toLowerCase();
+  const clientName = selectedCustomer
+    ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Client"
+    : "";
+  const clientFirst = selectedCustomer?.firstName?.trim() || "them";
 
-  const toggleDay = (value: number) =>
-    setDays((d) => (d.includes(value) ? d.filter((x) => x !== value) : [...d, value].sort()));
+  const duplicate = useMemo(
+    () =>
+      !editing && serviceId
+        ? ((theirs.data ?? []).find((e) => e.serviceId === serviceId && e.status === "waiting") ??
+          null)
+        : null,
+    [editing, serviceId, theirs.data],
+  );
+
+  const missing = (): { field: Field; message: string; label: string } | null => {
+    if (!customerId)
+      return { field: "customer", message: "Pick a client.", label: "Pick a client" };
+    if (!serviceId)
+      return {
+        field: "service",
+        message: `Pick a ${serviceNoun}.`,
+        label: `Pick a ${serviceNoun}`,
+      };
+    if (from && to && to < from)
+      return { field: "to", message: "Until can't be before From.", label: "Fix the dates" };
+    return null;
+  };
+  const need = missing();
 
   const busy = create.isPending || update.isPending;
 
+  const openExisting = (e: WaitlistEntry) => {
+    onOpenChange(false);
+    if (onOpenExisting) onOpenExisting(e);
+    else void navigate({ to: "/waitlist", search: { entry: e.id } });
+  };
+
   const submit = async () => {
-    if (!customerId) return toast.error("Choose a client");
-    if (!serviceId) return toast.error("Choose a service");
-    if (from && to && to < from) return toast.error("The window can't end before it starts");
+    if (duplicate) return openExisting(duplicate);
+    if (need) {
+      setErrors({ [need.field]: need.message });
+      document.getElementById(`wl-${need.field}`)?.focus();
+      return;
+    }
     const shared: Omit<WaitlistEntryInput, "customerId" | "serviceId"> = {
       variantId: variantId === "none" ? null : variantId,
       linkedRecordId: linkedRecordId === "none" ? null : linkedRecordId,
@@ -175,7 +237,7 @@ export function AddWaitlistDialog({
       preferences: {
         from: from || null,
         to: to || null,
-        days: days.length > 0 ? days : null,
+        days: days.length > 0 && days.length < 7 ? days : null,
         timeOfDay,
       },
       notes: notes.trim() || null,
@@ -184,13 +246,20 @@ export function AddWaitlistDialog({
     try {
       const saved = entry
         ? await update.mutateAsync({ entryId: entry.id, patch: shared })
-        : await create.mutateAsync({ customerId, serviceId, ...shared });
-      const who = saved.customer?.firstName ?? "Client";
-      toast.success(entry ? "Waitlist entry updated" : `${who} added to the waitlist`, {
-        description: entry
-          ? undefined
-          : `You'll be nudged when a ${saved.service?.name ?? "matching"} slot frees up.`,
-      });
+        : await create.mutateAsync({
+            customerId,
+            serviceId,
+            ...shared,
+            ...(notifyClient ? { notifyClient: true } : {}),
+          });
+      if (entry) {
+        toast.success("Waitlist entry updated");
+      } else {
+        const who = saved.customer?.firstName ?? "Client";
+        toast.success(`${who} added to the waitlist`, {
+          description: `We'll show you when a ${saved.service?.name ?? serviceNoun} slot fits.`,
+        });
+      }
       onSaved?.(saved);
       onOpenChange(false);
     } catch {
@@ -198,69 +267,114 @@ export function AddWaitlistDialog({
     }
   };
 
+  const primary = busy
+    ? "Saving…"
+    : duplicate
+      ? `Open ${clientFirst}'s entry`
+      : editing
+        ? "Save changes"
+        : (need?.label ?? "Add to waitlist");
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit waitlist entry" : "Add to waitlist"}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={(o) => (busy ? undefined : onOpenChange(o))}>
+      <SheetContent
+        side="right"
+        className={cn("flex w-full flex-col gap-0 p-0", phone ? "max-w-none" : "sm:max-w-[480px]")}
+      >
+        <SheetHeader className="border-b px-4 sm:px-6 pt-6 pb-4 text-left">
+          <SheetTitle className="text-[22px] font-extrabold tracking-tight">
+            {editing ? "Edit waitlist entry" : "Add to waitlist"}
+          </SheetTitle>
+          <SheetDescription>
             {editing
               ? "Change when and where they can do it. Who and what stay the same."
-              : "Couldn't find them a slot? Note who wants what and roughly when — you'll be nudged when a cancellation frees matching time."}
-          </DialogDescription>
-        </DialogHeader>
+              : "Note who wants what and roughly when. We'll show you who fits when a slot frees."}
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="grid gap-4 **:min-w-0">
-          <div className="grid gap-2">
-            <Label>Client</Label>
-            {editing ? (
-              <p className="rounded-md border bg-secondary/40 px-3 py-2 text-sm">
-                {selectedCustomer
-                  ? [selectedCustomer.firstName, selectedCustomer.lastName]
-                      .filter(Boolean)
-                      .join(" ")
-                  : "Client"}
-              </p>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <CustomerSearchPicker
-                    value={selectedCustomer}
-                    suggestions={customerList}
-                    placeholder="Choose or search for a client"
-                    onSelect={(c) => {
-                      setCustomerId(c.id);
+        <form
+          id="waitlist-form"
+          noValidate
+          className="no-scrollbar grid min-h-0 flex-1 content-start gap-6 overflow-y-auto px-4 sm:px-6 py-5 **:min-w-0"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          {!editing && defaults?.copiedFromBooking && defaults.from ? (
+            <p className="rounded-xl bg-secondary/70 px-3.5 py-2.5 text-[13px] text-muted-foreground">
+              Nothing free on {dayDate(defaults.from)}, so we&rsquo;ve copied the details from the
+              booking.
+            </p>
+          ) : null}
+
+          <Section title="Who" required>
+            {selectedCustomer ? (
+              <div className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5">
+                <Initials name={clientName} />
+                <div className="grid min-w-0 flex-1">
+                  <span className="truncate text-sm font-bold">{clientName}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {displayPhone(selectedCustomer.phoneDisplay) ??
+                      selectedCustomer.emailDisplay ??
+                      ""}
+                  </span>
+                </div>
+                {editing ? null : (
+                  <button
+                    type="button"
+                    className="shrink-0 cursor-pointer text-[13px] font-bold text-primary"
+                    onClick={() => {
+                      setCustomerId("");
                       setLinkedRecordId("none");
                     }}
-                  />
-                </div>
-                <Button
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-2" id="wl-customer" tabIndex={-1}>
+                <CustomerSearchPicker
+                  value={null}
+                  suggestions={customerList}
+                  placeholder="Search for a client"
+                  onSelect={(c) => {
+                    setCustomerId(c.id);
+                    setLinkedRecordId("none");
+                    setErrors((e) => ({ ...e, customer: undefined }));
+                  }}
+                />
+                <button
                   type="button"
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0"
                   onClick={() => setAddClientOpen(true)}
-                  aria-label="Add a new client"
-                  title="Add a new client"
+                  className="inline-flex w-fit cursor-pointer items-center gap-1 text-[13px] font-bold text-primary"
                 >
-                  <Plus className="size-4" />
-                </Button>
+                  <Plus className="size-3.5" /> New client
+                </button>
               </div>
             )}
-          </div>
+            <FieldError message={errors.customer} id="wl-customer-error" />
+          </Section>
 
-          <div className="grid gap-2">
-            <Label>Service</Label>
+          <Section title="What" required>
             <Select
               value={serviceId}
+              disabled={editing}
               onValueChange={(v) => {
                 setServiceId(v);
                 setVariantId("none");
+                setErrors((e) => ({ ...e, service: undefined }));
               }}
-              disabled={editing}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a service" />
+              <SelectTrigger
+                id="wl-service"
+                className="h-11 w-full"
+                aria-label={serviceNoun}
+                aria-invalid={errors.service ? true : undefined}
+                aria-describedby={errors.service ? "wl-service-error" : undefined}
+              >
+                <SelectValue placeholder={`Pick a ${serviceNoun}`} />
               </SelectTrigger>
               <SelectContent>
                 {serviceList.map((s) => (
@@ -270,13 +384,10 @@ export function AddWaitlistDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {service && service.variants.length > 0 ? (
-            <div className="grid gap-2">
-              <Label>Option</Label>
+            <FieldError message={errors.service} id="wl-service-error" />
+            {service && service.variants.length > 0 ? (
               <Select value={variantId} onValueChange={setVariantId}>
-                <SelectTrigger>
+                <SelectTrigger className="h-11 w-full" aria-label="Option">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -288,171 +399,258 @@ export function AddWaitlistDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          ) : null}
-
-          {hasRecords && customerId && activeRecords.length > 0 ? (
-            <div className="grid gap-2">
-              <Label>{recordTerm}</Label>
+            ) : null}
+            {hasRecords && customerId && activeRecords.length > 0 ? (
               <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
-                <SelectTrigger>
+                <SelectTrigger className="h-11 w-full" aria-label={recordTerm}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Not specified</SelectItem>
-                  {activeRecords.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.displayLabel}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="none">{recordTerm}: not specified</SelectItem>
+                  {activeRecords.map((r) => {
+                    const plate = registrationOf(r.values, fields);
+                    return (
+                      <SelectItem key={r.id} value={r.id}>
+                        <span className="flex items-center gap-2">
+                          {plate ? <NumberPlate registration={plate} size="small" /> : null}
+                          {vehicleTitle(r, fields)}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+            ) : null}
+            {duplicate ? (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-xl bg-[#fdf0dc] px-3.5 py-3 text-[#5c3800] dark:bg-[rgba(233,146,57,0.16)] dark:text-[#f3d2a8]"
+              >
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <div className="grid min-w-0 flex-1 gap-0.5 text-[13px]">
+                  <span className="font-bold">
+                    {clientFirst} is already waiting for{" "}
+                    {/^[aeiou]/i.test(duplicate.service?.name ?? "") ? "an" : "a"}{" "}
+                    {duplicate.service?.name ?? serviceNoun}.
+                  </span>
+                  <span>
+                    Added {shortDate(duplicate.createdAt.slice(0, 10))} ·{" "}
+                    {describePreferences(duplicate.preferences)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 cursor-pointer text-[13px] font-bold underline underline-offset-2"
+                  onClick={() => openExisting(duplicate)}
+                >
+                  Open it
+                </button>
+              </div>
+            ) : null}
+          </Section>
+
+          {locationList.length > 1 || staffList.length > 1 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {locationList.length > 1 ? (
+                <Section title="Where">
+                  <Select value={locationId} onValueChange={setLocationId}>
+                    <SelectTrigger className="h-11 w-full" aria-label="Where">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Anywhere</SelectItem>
+                      {locationList.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Section>
+              ) : null}
+              {staffList.length > 1 ? (
+                <Section title={staffNoun}>
+                  <Select value={staffId} onValueChange={setStaffId}>
+                    <SelectTrigger className="h-11 w-full" aria-label={staffNoun}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Anyone</SelectItem>
+                      {staffList.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.displayName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Section>
+              ) : null}
             </div>
           ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {locationList.length > 1 ? (
-              <div className="grid gap-2">
-                <Label>Where</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Anywhere</SelectItem>
-                    {locationList.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            {staffList.length > 1 ? (
-              <div className="grid gap-2">
-                <Label>{staffNoun}</Label>
-                <Select value={staffId} onValueChange={setStaffId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Anyone</SelectItem>
-                    {staffList.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Roughly when</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">From</span>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-              </div>
-              <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Until</span>
+          <Section title="When">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                From
                 <Input
                   type="date"
-                  value={to}
-                  min={from || undefined}
-                  onChange={(e) => setTo(e.target.value)}
+                  className="h-11"
+                  value={from}
+                  onChange={(e) => {
+                    setFrom(e.target.value);
+                    setErrors((er) => ({ ...er, to: undefined }));
+                  }}
                 />
-              </div>
+              </label>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Until
+                <Input
+                  id="wl-to"
+                  type="date"
+                  className={cn("h-11", errors.to && "border-destructive")}
+                  value={to}
+                  aria-invalid={errors.to ? true : undefined}
+                  aria-describedby={errors.to ? "wl-to-error" : undefined}
+                  onChange={(e) => {
+                    setTo(e.target.value);
+                    setErrors((er) => ({ ...er, to: undefined }));
+                  }}
+                />
+              </label>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Leave both blank for "as soon as possible".
+            {errors.to ? (
+              <FieldError message={errors.to} id="wl-to-error" />
+            ) : !from && !to ? (
+              <p className="text-xs text-muted-foreground">
+                Leave both blank for as soon as possible.
+              </p>
+            ) : null}
+            <p className="mt-2 text-[13px] font-bold">
+              Days they can do{" "}
+              <span className="font-normal text-muted-foreground">· none means any day</span>
             </p>
+            <DayToggles value={days} onChange={setDays} short={phone} />
+            <p className="mt-2 text-[13px] font-bold">Time of day</p>
+            <TimeOfDayButtons value={timeOfDay} onChange={setTimeOfDay} />
+          </Section>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3">
+            <div className="grid">
+              <Label htmlFor="wl-priority" className="text-sm font-bold">
+                High priority
+              </Label>
+              <span className="text-xs text-muted-foreground">Shown first when a slot frees.</span>
+            </div>
+            <Switch id="wl-priority" checked={highPriority} onCheckedChange={setHighPriority} />
           </div>
 
-          <div className="grid gap-2">
-            <Label>Days they can do</Label>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Days of the week">
-              {WEEKDAYS.map((d) => {
-                const on = days.includes(d.value);
-                return (
-                  <button
-                    key={d.value}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleDay(d.value)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-sm transition-colors",
-                      on
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "bg-background text-muted-foreground hover:bg-secondary",
-                    )}
-                  >
-                    {d.short}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">None selected means any day.</p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Time of day</Label>
-              <Select value={timeOfDay} onValueChange={(v) => setTimeOfDay(v as WaitlistTimeOfDay)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TIME_OF_DAY_LABELS) as WaitlistTimeOfDay[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {TIME_OF_DAY_LABELS[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-3 sm:mt-6">
-              <div>
-                <p className="text-sm font-medium">High priority</p>
-                <p className="text-xs text-muted-foreground">Shown first when a slot frees</p>
-              </div>
-              <Switch checked={highPriority} onCheckedChange={setHighPriority} />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="wl-notes">Notes</Label>
+          <Section title="Notes" optional>
             <Textarea
               id="wl-notes"
+              aria-label="Notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Prefers a text · needs the car back by 3pm · …"
-              rows={2}
+              placeholder="Prefers a text. Needs the car back by 3pm."
+              rows={3}
               maxLength={2000}
             />
-          </div>
-        </div>
+          </Section>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+          {editing ? null : (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3">
+              <Checkbox
+                checked={notifyClient}
+                onCheckedChange={(v) => setNotifyClient(v === true)}
+                className="mt-0.5"
+              />
+              <span className="grid gap-0.5">
+                <span className="text-sm font-bold">Let the client know</span>
+                <span className="text-xs text-muted-foreground">
+                  Send {selectedCustomer ? clientFirst : "them"} a text or email to say
+                  they&rsquo;re on the list.
+                </span>
+              </span>
+            </label>
+          )}
+        </form>
+
+        <footer className="flex gap-2 border-t px-4 sm:px-6 py-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            className="max-sm:hidden"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={busy}>
-            {busy ? "Saving…" : editing ? "Save changes" : "Add to waitlist"}
+          <Button
+            type="submit"
+            form="waitlist-form"
+            className="max-sm:h-12 max-sm:flex-1"
+            disabled={busy}
+          >
+            {primary}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-      {/* Stacks over this dialog; the new client is selected on save. */}
+        </footer>
+      </SheetContent>
       <AddClientDialog
         open={open && addClientOpen}
         onClose={() => setAddClientOpen(false)}
         onCreated={(c) => {
           setCustomerId(c.id);
           setLinkedRecordId("none");
+          setErrors((e) => ({ ...e, customer: undefined }));
         }}
       />
-    </Dialog>
+    </Sheet>
+  );
+}
+
+function Section({
+  title,
+  required,
+  optional,
+  children,
+}: {
+  title: string;
+  required?: boolean;
+  optional?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-[13px] font-extrabold">
+        {title}
+        {required ? <span className="text-destructive"> *</span> : null}
+        {optional ? <span className="font-normal text-muted-foreground"> (optional)</span> : null}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function FieldError({ message, id }: { message?: string; id: string }) {
+  return message ? (
+    <p id={id} role="alert" className="text-xs text-destructive">
+      {message}
+    </p>
+  ) : null;
+}
+
+function Initials({ name }: { name: string }) {
+  const letters = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
+  return (
+    <span
+      aria-hidden
+      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-extrabold text-primary"
+    >
+      {letters || "?"}
+    </span>
   );
 }

@@ -61,6 +61,7 @@ import {
   type LinkedRecordOwnership,
 } from "@/lib/api/types";
 import { ukDate } from "@/lib/format";
+import { mileageLabel } from "@/lib/linked-record-summary";
 import {
   UNSUPPORTED_FIELD_TYPES,
   buildQuickAddRecord,
@@ -562,7 +563,8 @@ export function summariseValues(
     if (UNSUPPORTED_FIELD_TYPES.has(f.dataType)) continue;
     const v = values[f.fieldKey];
     if (v === undefined || v === null || v === "") continue;
-    parts.push(`${f.label}: ${String(v)}`);
+    const text = f.fieldKey === "mileage" ? (mileageLabel(v) ?? String(v)) : String(v);
+    parts.push(`${f.label}: ${text}`);
   }
   return parts.join(" · ");
 }

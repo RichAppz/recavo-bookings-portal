@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { useVisualViewport } from "@/hooks/use-visual-viewport";
+import { keepOpenForToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +27,7 @@ const BottomSheetTitle = DialogPrimitive.Title;
 const BottomSheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+>(({ className, children, onInteractOutside, ...props }, ref) => {
   const viewport = useVisualViewport();
   return (
     <DialogPrimitive.Portal>
@@ -34,11 +35,15 @@ const BottomSheetContent = React.forwardRef<
       <div
         data-bottom-sheet-viewport=""
         // Taps in the gap above the panel fall through to the overlay and dismiss.
-        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex h-dvh flex-col justify-end pt-10"
+        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex h-dvh flex-col justify-end pt-[max(2.5rem,calc(env(safe-area-inset-top,0px)+0.75rem))]"
         style={viewport ? { top: viewport.offsetTop, height: viewport.height } : undefined}
       >
         <DialogPrimitive.Content
           ref={ref}
+          onInteractOutside={(e) => {
+            keepOpenForToast(e);
+            onInteractOutside?.(e);
+          }}
           className={cn(
             "pointer-events-auto safe-spacer-bottom px-safe flex max-h-full w-full flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-xl outline-none",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",

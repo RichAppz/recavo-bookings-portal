@@ -8,10 +8,12 @@ import {
   useBusinessFile,
   useBusinessId,
   useFileDownloadUrl,
+  useOwnerFiles,
   uploadFileViaIntent,
   type FileOwner,
 } from "@/lib/api/hooks";
 import type { FileResource } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function formatBytes(bytes: number): string {
@@ -22,13 +24,23 @@ function formatBytes(bytes: number): string {
 
 type AttachedFile = { name: string; file: FileResource };
 
+/** The API keeps no original file name, so earlier uploads are named by their type. */
+function fileNameOf(file: FileResource): string {
+  const type = file.mediaType.toLowerCase();
+  if (type === "application/pdf") return "PDF document";
+  if (type.startsWith("image/")) return "Photo";
+  if (type.startsWith("video/")) return "Video";
+  if (type.includes("word") || type.includes("document")) return "Document";
+  if (type.includes("sheet") || type.includes("excel") || type === "text/csv") return "Spreadsheet";
+  return "File";
+}
+
 /**
  * Reusable file attachments panel (RECA-504): upload via signed intent, with
  * progress, and download via a freshly-issued signed URL per click.
  *
- * The API has no "list files by owner" endpoint, so attachments uploaded in
- * a previous session aren't shown on reload — only what's been uploaded in
- * the current session. This is a known API gap, not a client bug.
+ * With `listExisting`, earlier uploads are listed from the owner's file list;
+ * without it only this session's uploads show.
  */
 export function FileAttachments({
   ownerType,
@@ -38,6 +50,9 @@ export function FileAttachments({
   canUpload = true,
   accept,
   maxSizeBytes = 25 * 1024 * 1024,
+  listExisting = false,
+  uploaderName,
+  hideHeader = false,
 }: {
   ownerType: FileOwner["ownerType"];
   ownerId: string;
@@ -47,10 +62,22 @@ export function FileAttachments({
   canUpload?: boolean;
   accept?: string;
   maxSizeBytes?: number;
+  listExisting?: boolean;
+  /** "Uploaded by {name} · 12 Oct" under each file. */
+  uploaderName?: (actorId: string) => string | null;
+  /** The caller renders its own heading; the upload button still shows. */
+  hideHeader?: boolean;
 }) {
   const businessId = useBusinessId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [sessionAttachments, setAttachments] = useState<AttachedFile[]>([]);
+  const existing = useOwnerFiles(listExisting ? { ownerType, ownerId } : undefined);
+  const attachments: AttachedFile[] = [
+    ...sessionAttachments,
+    ...(existing.data ?? [])
+      .filter((f) => f.status !== "deleted" && !sessionAttachments.some((a) => a.file.id === f.id))
+      .map((f) => ({ name: fileNameOf(f), file: f })),
+  ];
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -91,11 +118,20 @@ export function FileAttachments({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3",
+          hideHeader && !canUpload && "hidden",
+        )}
+      >
+        {hideHeader ? (
+          <span />
+        ) : (
+          <div>
+            <p className="text-sm font-medium">{title}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
+          </div>
+        )}
         {canUpload ? (
           <>
             <input
@@ -139,7 +175,9 @@ export function FileAttachments({
         </p>
       ) : null}
 
-      {attachments.length === 0 && !uploading ? (
+      {listExisting && existing.isLoading ? (
+        <div className="h-12 animate-pulse rounded-xl bg-secondary" />
+      ) : attachments.length === 0 && !uploading ? (
         <EmptyState
           icon={<FileText className="size-6" />}
           title="No files uploaded yet"
@@ -152,7 +190,12 @@ export function FileAttachments({
       ) : (
         <ul className="divide-y rounded-xl border">
           {attachments.map((a) => (
-            <FileRow key={a.file.id} name={a.name} initialFile={a.file} />
+            <FileRow
+              key={a.file.id}
+              name={a.name}
+              initialFile={a.file}
+              uploadedBy={uploaderName ? uploaderName(a.file.createdBy) : undefined}
+            />
           ))}
         </ul>
       )}
@@ -160,7 +203,16 @@ export function FileAttachments({
   );
 }
 
-function FileRow({ name, initialFile }: { name: string; initialFile: FileResource }) {
+function FileRow({
+  name,
+  initialFile,
+  uploadedBy,
+}: {
+  name: string;
+  initialFile: FileResource;
+  /** Undefined hides the line; null means the uploader isn't known. */
+  uploadedBy?: string | null;
+}) {
   const fileQuery = useBusinessFile(initialFile.id);
   const downloadUrl = useFileDownloadUrl();
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -232,7 +284,15 @@ function FileRow({ name, initialFile }: { name: string; initialFile: FileResourc
       <FileText className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{name}</p>
-        <p className="text-xs text-muted-foreground">{formatBytes(initialFile.sizeBytes)}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatBytes(initialFile.sizeBytes)}
+          {uploadedBy !== undefined
+            ? ` · Uploaded${uploadedBy ? ` by ${uploadedBy}` : ""} · ${new Intl.DateTimeFormat(
+                "en-GB",
+                { day: "numeric", month: "short" },
+              ).format(new Date(initialFile.createdAt))}`
+            : null}
+        </p>
         {downloadError ? <p className="mt-1 text-xs text-destructive">{downloadError}</p> : null}
       </div>
       {status}

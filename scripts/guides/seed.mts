@@ -156,8 +156,41 @@ type Plan = {
   customers: CustomerPlan[];
   bookings: BookingPlan[];
   waitlist?: { customer: number; service: string; notes: string };
+  /** More waiting entries so the Waitlist page has priority, days and a spread of windows. */
+  waitlistMore?: {
+    customer: number;
+    service: string;
+    notes: string | null;
+    fromDay: number | null;
+    toDay: number | null;
+    days: number[] | null;
+    timeOfDay: "any" | "morning" | "afternoon" | "evening";
+    priority: "normal" | "high";
+  }[];
   event?: { staff: number; title: string; day: number; from: string; to: string };
   invoiceFor?: number;
+  /**
+   * Repeat reminders and the past jobs behind them, so the Reminders page has clients
+   * overdue, due soon, booked again, snoozed and dismissed. The jobs are booked weeks
+   * back and marked attended; the API schedules each reminder itself.
+   */
+  reminders?: {
+    rules: { service: string; intervalMonths: number; leadDays: number; label: string }[];
+    history: {
+      day: number;
+      service: string;
+      customer: number;
+      staff: number;
+      then?: "snooze" | "dismiss";
+    }[];
+  };
+  /** Businesses this one referred, written to the local database (Referrals page). */
+  referrals?: {
+    name: string;
+    vertical: Vertical;
+    daysAgo: number;
+    state: "trial" | "lapsed" | "paying" | "rewarded";
+  }[];
   bankTransfer: { accountName: string; sortCode: string; accountNumber: string };
   support?: { subject: string; body: string };
   cancellationPolicy: string;
@@ -469,8 +502,36 @@ const PT: Plan = {
     service: "Personal training session",
     notes: "Any weekday morning before work",
   },
+  waitlistMore: [
+    {
+      customer: 2,
+      service: "Personal training session",
+      notes: "Back from holiday, keen to restart",
+      fromDay: 2,
+      toDay: 14,
+      days: [6, 7],
+      timeOfDay: "morning",
+      priority: "high",
+    },
+    {
+      customer: 4,
+      service: "Nutrition consultation",
+      notes: null,
+      fromDay: null,
+      toDay: null,
+      days: null,
+      timeOfDay: "evening",
+      priority: "normal",
+    },
+  ],
   event: { staff: 0, title: "Level 3 CPD workshop", day: 5, from: "09:00", to: "13:00" },
   invoiceFor: 3,
+  referrals: [
+    { name: "Core Strength Studio", vertical: "personal_training", daysAgo: 64, state: "rewarded" },
+    { name: "Shine & Co Detailing", vertical: "car_detailing", daysAgo: 30, state: "paying" },
+    { name: "Northside Pilates", vertical: "personal_training", daysAgo: 6, state: "trial" },
+    { name: "Elite Mobile Valeting", vertical: "car_detailing", daysAgo: 40, state: "lapsed" },
+  ],
   bankTransfer: {
     accountName: "Peak Performance PT Ltd",
     sortCode: "040004",
@@ -876,7 +937,54 @@ const AUTO: Plan = {
     },
   ],
   waitlist: { customer: 6, service: "Ceramic coating", notes: "Any Saturday in the next month" },
+  waitlistMore: [
+    {
+      customer: 2,
+      service: "Full valet",
+      notes: "Selling the car, needs it done before the viewing",
+      fromDay: 1,
+      toDay: 10,
+      days: [1, 2, 3, 4, 5],
+      timeOfDay: "any",
+      priority: "high",
+    },
+    {
+      customer: 4,
+      service: "Paint correction",
+      notes: null,
+      fromDay: 7,
+      toDay: null,
+      days: [6, 7],
+      timeOfDay: "morning",
+      priority: "normal",
+    },
+  ],
   event: { staff: 1, title: "Van MOT", day: 5, from: "08:00", to: "10:00" },
+  reminders: {
+    rules: [
+      { service: "Maintenance wash", intervalMonths: 1, leadDays: 7, label: "Maintenance wash" },
+      { service: "Full valet", intervalMonths: 3, leadDays: 14, label: "Full valet" },
+      {
+        service: "Interior deep clean",
+        intervalMonths: 6,
+        leadDays: 14,
+        label: "Interior refresh",
+      },
+    ],
+    // Clients and services chosen around the diary above: a later job for the same
+    // client and service answers an earlier one ("Booked again"), so the overdue and
+    // due-soon ones are for clients with nothing of that kind booked since.
+    history: [
+      { day: -45, service: "Maintenance wash", customer: 3, staff: 1 },
+      { day: -36, service: "Maintenance wash", customer: 2, staff: 0, then: "snooze" },
+      { day: -40, service: "Maintenance wash", customer: 1, staff: 1 },
+      { day: -80, service: "Full valet", customer: 4, staff: 0 },
+      { day: -95, service: "Full valet", customer: 5, staff: 1 },
+      { day: -100, service: "Full valet", customer: 0, staff: 0 },
+      { day: -170, service: "Interior deep clean", customer: 6, staff: 1 },
+      { day: -175, service: "Interior deep clean", customer: 3, staff: 0, then: "dismiss" },
+    ],
+  },
   invoiceFor: 2,
   bankTransfer: {
     accountName: "Prestige Auto Care Ltd",
@@ -1387,6 +1495,29 @@ async function seed(plan: Plan): Promise<void> {
       });
       log("waitlist", "1 entry");
     }
+    for (const extra of plan.waitlistMore ?? []) {
+      const customer = customers[extra.customer]!;
+      const serviceId = services.get(extra.service)!.id;
+      const theirs = await api.get<{ entries: { serviceId: string; status: string }[] }>(
+        `${B}/waitlist`,
+        { customerId: customer.id, status: "waiting" },
+      );
+      if (theirs.entries.some((e) => e.serviceId === serviceId)) continue;
+      await api.post(`${B}/waitlist`, {
+        customerId: customer.id,
+        serviceId,
+        locationId: null,
+        preferences: {
+          from: extra.fromDay === null ? null : addDays(today, extra.fromDay),
+          to: extra.toDay === null ? null : addDays(today, extra.toDay),
+          days: extra.days,
+          timeOfDay: extra.timeOfDay,
+        },
+        notes: extra.notes,
+        priority: extra.priority,
+      });
+      log("waitlist", `${extra.service} for client ${extra.customer}`);
+    }
   }
 
   // Event (calendar block)
@@ -1476,7 +1607,202 @@ async function seed(plan: Plan): Promise<void> {
     log("conversation", `skipped (${(err as Error).message.slice(0, 80)})`);
   }
 
+  if (plan.reminders) {
+    await seedReminders(api, B, plan.reminders, { services, customers, vehicles, staff, location });
+  }
+  if (plan.referrals) {
+    const me = await api.get<{ user: { id: string } }>("/api/v1/me");
+    log("referrals", seedReferrals(business.id, me.user.id, plan.referrals));
+  }
+
   console.log(`  ✓ ${plan.tradingName} ready`);
+}
+
+async function seedReminders(
+  api: Api,
+  B: string,
+  plan: NonNullable<Plan["reminders"]>,
+  ctx: {
+    services: Map<string, Service>;
+    customers: Customer[];
+    vehicles: (LinkedRecord | null)[];
+    staff: Staff[];
+    location: Location;
+  },
+): Promise<void> {
+  let ruled = 0;
+  for (const r of plan.rules) {
+    const svc = ctx.services.get(r.service)!;
+    const fresh = (
+      await api.get<{ service: Service & { followUp: unknown } }>(`${B}/services/${svc.id}`)
+    ).service;
+    if (fresh.followUp) continue;
+    await api.patch(
+      `${B}/services/${svc.id}`,
+      { followUp: { intervalMonths: r.intervalMonths, leadDays: r.leadDays, label: r.label } },
+      { ifMatch: fresh.version },
+    );
+    ruled += 1;
+  }
+  log("reminder rules", ruled > 0 ? `${ruled} added` : "already set");
+
+  // The history sits before the main diary (which starts 8 days back), so it is laid
+  // down once, like the diary, by looking for anything in that window first.
+  const today = todayIso();
+  const earliest = Math.min(...plan.history.map((h) => h.day));
+  const existing = await api.get<{ bookings: Booking[] }>(`${B}/bookings`, {
+    from: at(addDays(today, earliest - 3), "00:00"),
+    to: at(addDays(today, -9), "00:00"),
+    limit: "200",
+  });
+  type Laid = { booking: Booking; then?: "snooze" | "dismiss" };
+  const made: Laid[] = [];
+  const dayOf = (h: (typeof plan.history)[number]) => {
+    const date = addDays(today, h.day);
+    return weekday(date) === 7 ? addDays(date, 1) : date;
+  };
+  if (existing.bookings.length > 0) {
+    // Already laid down: find the jobs again so the snooze and dismiss still apply.
+    const laid = existing.bookings as (Booking & { leadCustomerId: string })[];
+    for (const h of plan.history) {
+      const start = at(dayOf(h), "09:00");
+      const hit = laid.find(
+        (b) =>
+          b.leadCustomerId === ctx.customers[h.customer]!.id &&
+          new Date(b.start).getTime() === new Date(start).getTime(),
+      );
+      if (hit) made.push({ booking: hit, then: h.then });
+    }
+    log("reminder history", `${made.length} past jobs already laid down`);
+  } else {
+    for (const h of plan.history) {
+      const svc = ctx.services.get(h.service)!;
+      const start = at(dayOf(h), "09:00");
+      try {
+        let booking = (
+          await api.post<{ booking: Booking }>(`${B}/bookings`, {
+            serviceId: svc.id,
+            locationId: ctx.location.id,
+            staffId: ctx.staff[h.staff]!.id,
+            start,
+            end: plusMinutes(start, svc.durationMinutes),
+            leadCustomerId: ctx.customers[h.customer]!.id,
+            linkedRecordId: ctx.vehicles[h.customer]?.id ?? null,
+            paymentMethod: "pay_later",
+            notifyCustomer: false,
+            source: "staff",
+          })
+        ).booking;
+        // A past job is done once it's paid; mark it attended only if it isn't yet.
+        booking = (
+          await api.post<{ booking: Booking }>(`${B}/bookings/${booking.id}/record-payment`, {
+            method: "card",
+          })
+        ).booking;
+        if (booking.status !== "completed") {
+          booking = (
+            await api.post<{ booking: Booking }>(`${B}/bookings/${booking.id}/attendance`, {
+              attended: true,
+            })
+          ).booking;
+        }
+        made.push({ booking, then: h.then });
+      } catch (err) {
+        log(
+          `reminder job ${h.service} d${h.day}`,
+          `FAILED ${(err as Error).message.slice(0, 120)}`,
+        );
+      }
+    }
+    log("reminder history", `${made.length} past jobs`);
+  }
+
+  // A finished job schedules its reminder through the outbox a moment later.
+  type Row = { id: string; status: string; snoozedUntil: string | null };
+  for (const m of made.filter((x) => x.then)) {
+    let followUp = null as Row | null;
+    for (let i = 0; i < 30 && !followUp; i++) {
+      const list = await api.get<{ followUps: Row[] }>(`${B}/follow-ups`, {
+        bookingId: m.booking.id,
+      });
+      followUp = list.followUps[0] ?? null;
+      if (!followUp) await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (!followUp) {
+      log(`reminder ${m.then}`, `skipped (not scheduled for ${m.booking.reference})`);
+      continue;
+    }
+    if (m.then === "snooze" ? followUp.snoozedUntil : followUp.status === "dismissed") continue;
+    await api.patch(
+      `${B}/follow-ups/${followUp.id}`,
+      m.then === "snooze"
+        ? { action: "snooze", until: at(addDays(today, 10), "09:00") }
+        : { action: "dismiss" },
+    );
+    log(`reminder ${m.then}`, m.booking.reference);
+  }
+}
+
+/**
+ * Referred businesses for the Referrals page. A referral is recorded when a business
+ * signs up with the code, which a seed can't do through the API, so the fictional
+ * businesses, their subscriptions and the attributions go straight into the local
+ * database (owner role), keyed on the trading name so re-running adds nothing.
+ */
+function seedReferrals(
+  referrerId: string,
+  referrerOwnerId: string,
+  referrals: NonNullable<Plan["referrals"]>,
+): string {
+  const url = env.GUIDES_DATABASE_URL;
+  if (!url) return "skipped (GUIDES_DATABASE_URL not set)";
+  if (!/localhost|127\.0\.0\.1/.test(url)) return "skipped (GUIDES_DATABASE_URL is not local)";
+  const TRIAL_DAYS = 14;
+  const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
+  const statements = referrals.map((r) => {
+    const slug = r.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const signedUp = `now() - interval '${r.daysAgo} days'`;
+    const trialEnd = `${signedUp} + interval '${TRIAL_DAYS} days'`;
+    const paid = r.state === "paying" || r.state === "rewarded";
+    const attribution = {
+      trial: { status: "attributed", extra: "" },
+      lapsed: { status: "attributed", extra: "" },
+      paying: { status: "reward_pending", extra: `converted_at = ${trialEnd},` },
+      rewarded: {
+        status: "rewarded",
+        extra: `converted_at = ${trialEnd}, rewarded_at = ${trialEnd} + interval '2 days', reward_kind = 'coupon_once',`,
+      },
+    }[r.state];
+    return `
+      WITH b AS (
+        INSERT INTO businesses (id, slug, legal_name, trading_name, industry_template_key, status, created_at)
+        SELECT gen_random_uuid(), ${q(`guides-ref-${slug}`)}, ${q(`${r.name} Ltd`)}, ${q(r.name)}, ${q(r.vertical)},
+               ${q(paid ? "active" : "trial")}, ${signedUp}
+        WHERE NOT EXISTS (SELECT 1 FROM businesses WHERE slug = ${q(`guides-ref-${slug}`)})
+        RETURNING id
+      ), s AS (
+        INSERT INTO business_saas_subscriptions (id, business_id, plan_id, status, access_state, trial_end, created_at)
+        SELECT gen_random_uuid(), b.id, p.id, ${q(paid ? "active" : "trialing")}, ${q(paid ? "entitled" : "trial")},
+               ${trialEnd}, ${signedUp}
+        FROM b, saas_plans p WHERE p.code = 'business_month'
+      )
+      INSERT INTO referral_attributions
+        (id, referrer_business_id, referee_business_id, code, referrer_owner_user_id, referee_owner_user_id, status, created_at)
+      SELECT gen_random_uuid(), ${q(referrerId)}, b.id, rc.code, ${q(referrerOwnerId)}, ${q(`guides-ref-owner-${slug}`)},
+             ${q(attribution.status)}, ${signedUp}
+      FROM b, referral_codes rc WHERE rc.business_id = ${q(referrerId)};
+      UPDATE referral_attributions SET ${attribution.extra} updated_at = now()
+      WHERE referee_business_id = (SELECT id FROM businesses WHERE slug = ${q(`guides-ref-${slug}`)})
+        AND ${attribution.extra ? "converted_at IS NULL" : "false"};`;
+  });
+  const result = spawnSync(
+    "psql",
+    [url, "-v", "ON_ERROR_STOP=1", "-Atc", `BEGIN; ${statements.join("\n")} COMMIT;`],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) return `failed (${result.stderr.trim()})`;
+  const added = (result.stdout.match(/INSERT 0 1/g) ?? []).length;
+  return added > 0 ? `${added} referred businesses` : "already present";
 }
 
 /**

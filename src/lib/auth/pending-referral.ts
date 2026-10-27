@@ -6,27 +6,17 @@
  */
 const KEY = "recavo.pendingReferral";
 
-/** Crockford-ish alphabet: no 0/O/1/I. Matches the API referral code helper. */
-const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-/** Strip hyphens/spaces and upper-case. Returns null when the shape is wrong. */
-export function normaliseReferralCode(raw: string): string | null {
-  const compact = raw.replace(/[-\s]/g, "").toUpperCase();
-  if (compact.length !== 8) return null;
-  for (const ch of compact) {
-    if (!ALPHABET.includes(ch)) return null;
-  }
-  return compact;
-}
-
+/**
+ * As it was shared: a minted code keeps its hyphen (ABCD-EFGH), one a business chose has
+ * none (SHINECARS). No hyphen is added, since "SPARKLES" is a word and not "SPAR-KLES";
+ * the API ignores hyphens anyway.
+ */
 export function displayReferralCode(code: string): string {
-  const compact = code.replace(/[-\s]/g, "").toUpperCase();
-  if (compact.length !== 8) return code.trim();
-  return `${compact.slice(0, 4)}-${compact.slice(4)}`;
+  return code.replace(/\s/g, "").toUpperCase();
 }
 
 export function stashPendingReferral(raw: string): void {
-  const normalised = normaliseReferralCode(raw) ?? raw.replace(/[-\s]/g, "").toUpperCase().trim();
+  const normalised = displayReferralCode(raw);
   if (!normalised) {
     clearPendingReferral();
     return;

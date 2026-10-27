@@ -1,6 +1,45 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describeFieldErrors, parseProblemDetails } from "./errors.ts";
+import { ApiError, describeApiError, describeFieldErrors, parseProblemDetails } from "./errors.ts";
+
+describe("describeApiError", () => {
+  it("says plainly when the API is behind the portal", () => {
+    // What the staging API returned when the portal shipped before its endpoints.
+    const err = parseProblemDetails(
+      { title: "The resource was not found", status: 404, detail: "Route not found" },
+      404,
+      "01a14051-ed3b-79a1-b9d2-40eb33169450",
+    );
+    assert.equal(
+      describeApiError(err),
+      "This part of RECAVO isn't switched on for this server yet. Ref: 01a14051-ed3b-79a1-b9d2-40eb33169450",
+    );
+  });
+
+  it("prefers the detail, then field errors, then the title", () => {
+    assert.equal(
+      describeApiError(
+        new ApiError({ status: 403, title: "Forbidden", detail: "Not your business" }),
+      ),
+      "Not your business",
+    );
+    assert.equal(
+      describeApiError(
+        new ApiError({
+          status: 400,
+          title: "Bad request",
+          fieldErrors: [{ field: "linkedRecordId", code: "REQUIRED" }],
+        }),
+      ),
+      "Vehicle or record is missing",
+    );
+    assert.equal(describeApiError(new ApiError({ status: 500, title: "Oops" })), "Oops");
+  });
+
+  it("falls back for anything that is not an API problem", () => {
+    assert.equal(describeApiError(new Error("boom"), "Try again"), "Try again");
+  });
+});
 
 describe("describeFieldErrors", () => {
   it("uses the API's own sentence when it sent one", () => {

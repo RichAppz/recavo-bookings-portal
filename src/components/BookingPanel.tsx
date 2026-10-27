@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Ban,
   BellRing,
   CarFront,
   Pencil,
+  Check,
   CheckCircle2,
   CloudOff,
   ChevronRight,
   CreditCard,
+  Hourglass,
   Landmark,
+  Link2 as LinkIcon,
   Mail,
   MessageSquare,
   MessageSquareText,
@@ -18,10 +21,13 @@ import {
   Repeat,
   Send,
   Sparkles,
+  StickyNote,
   Trash2,
+  UserX,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { deliveryFailure } from "@/lib/delivery-errors";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -61,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusPill } from "@/components/BookingStatusPill";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
@@ -70,11 +77,15 @@ import { BookingConsumablesSection } from "@/components/BookingConsumables";
 import { BookingFollowUpDetail } from "@/components/BookingFollowUpDetail";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { useBookingUpsellOffer, useDeclineUpsellOffer } from "@/lib/api/upsells";
+import { useWaitlistEntryForBooking } from "@/lib/api/hooks";
 import { BookingRemindersDrawer, type ReminderRow } from "@/components/BookingRemindersDrawer";
-import { useBookingInvoices } from "@/lib/api/invoices";
+import { useBookingInvoices, type Invoice } from "@/lib/api/invoices";
+import { invoiceForMessage } from "@/lib/invoice-history";
+import { PERMISSIONS } from "@/lib/permissions";
 import { BookingMessageHistoryRow } from "@/components/BookingMessageHistoryRow";
 import { TableGhost } from "@/components/ghost";
 import { useQueryClient } from "@tanstack/react-query";
+import { ClosureOverrideDialog } from "@/components/ClosureOverrideDialog";
 import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import {
   useAvailability,
@@ -84,10 +95,12 @@ import {
   useBusinessId,
   useBookingHistory,
   useBookingPayments,
+  useBookingSettlements,
   useCustomer,
   useDeleteBooking,
   useLinkedRecord,
   useLocationsList,
+  useResources,
   useResendBookingMessage,
   useSendBookingReminder,
   useSendPaymentReminder,
@@ -104,7 +117,7 @@ import {
 import { useOnline } from "@/lib/offline/network";
 import { toastQueued, useBookingQueued, useOutbox } from "@/lib/offline/outbox";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
-import type { BookingConflict } from "@/lib/api/errors";
+import { closedLocationMessage, type BookingConflict } from "@/lib/api/errors";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
 import {
   allDayHolds,
@@ -119,6 +132,7 @@ import {
   type Booking,
   type BookingHistoryEntry,
   type Staff,
+  Location,
 } from "@/lib/api/types";
 import {
   balanceDueLabel,
@@ -126,6 +140,12 @@ import {
   bookingSettlement,
   isSettledPaymentState,
 } from "@/lib/booking-payment";
+import {
+  bookingMoneyLines,
+  ledgerBehind,
+  recordedDirectionLabel,
+  settlementMethodLabel,
+} from "@/lib/booking-money";
 import { adjustmentLabel, bookingPriceBreakdown, formatAdjustment } from "@/lib/booking-price";
 import { saasPurchasesAllowedInApp } from "@/lib/native";
 import { emptySlotsMessage } from "@/lib/availability-windows";
@@ -150,7 +170,16 @@ import {
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
+import { takesBookings } from "@/lib/team";
+import { directionsUrl as textDirectionsUrl } from "@/lib/calendar-links";
+import {
+  addressText,
+  directionsUrl as locationDirectionsUrl,
+  kindOf,
+  resourceWords,
+} from "@/lib/locations";
 import { useTenant } from "@/lib/tenant/tenant-context";
+import { remindersAvailable } from "@/lib/service-reminders";
 import { isMessageHistoryEntry } from "@/lib/message-history";
 import {
   formatWorkingSpan,
@@ -169,7 +198,14 @@ import {
 } from "@/lib/booking-reminders";
 import { describeBookingChange, summariseBookingChanges } from "@/lib/booking-changes";
 import { describeClientLift } from "@/lib/client-lift";
+import { bookingNotes, bookingNotesLabel, hasBookingNotes } from "@/lib/booking-notes";
+import { unmarkedPast } from "@/lib/bookings-list";
 import { cn } from "@/lib/utils";
+import { NumberPlate } from "@/components/vehicles/NumberPlate";
+import { useVehicleFields } from "@/components/vehicles/use-vehicles-data";
+import { registrationOf, vehicleTitle } from "@/lib/vehicles";
+
+const NOTES_SECTION_ID = "booking-panel-notes";
 
 const FINAL_BOOKING_STATUSES = new Set<string>([
   "cancelled_by_customer",
@@ -183,9 +219,12 @@ const FINAL_BOOKING_STATUSES = new Set<string>([
 export function BookingPanel({
   bookingId,
   onClose,
+  reschedule = false,
 }: {
   bookingId: string | null;
   onClose: () => void;
+  /** Open straight onto Reschedule (Messages → Move). */
+  reschedule?: boolean;
 }) {
   const tenant = useTenant();
   const businessId = useBusinessId();
@@ -197,6 +236,9 @@ export function BookingPanel({
   const [cancelNotify, setCancelNotify] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  useEffect(() => {
+    if (bookingId && reschedule) setRescheduleOpen(true);
+  }, [bookingId, reschedule]);
   const [editOpen, setEditOpen] = useState(false);
   /** Services to pre-add when Edit opens from an add-on request. */
   const [editAddServiceIds, setEditAddServiceIds] = useState<string[]>([]);
@@ -213,6 +255,10 @@ export function BookingPanel({
   // The add-on offer emailed after this (staff-made) booking, if any (upsells).
   const upsellOffer = useBookingUpsellOffer(bookingId ?? undefined);
   const declineUpsell = useDeclineUpsellOffer();
+  const fromWaitlist = useWaitlistEntryForBooking(
+    bookingId ?? undefined,
+    tenant.can(PERMISSIONS.BOOKING_READ_ALL),
+  );
   const staffList = useStaffList();
   const soleStaff = useSoleStaff();
   const soleLocation = useSoleLocation();
@@ -238,19 +284,37 @@ export function BookingPanel({
 
   const booking = bookingQuery.data;
   const customer = useCustomer(booking?.leadCustomerId);
+  const navigate = useNavigate();
   // The vehicle (or other linked record) on the job — resolves even after archive (RECA-90).
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
+  const { fields: recordFields } = useVehicleFields();
+  const linkedRecordReg = linkedRecord.data
+    ? registrationOf(linkedRecord.data.values, recordFields)
+    : null;
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
+  // Cash / bank / terminal money staff recorded by hand lives in the settlement ledger,
+  // not in `payments`; the Payments tab lists both.
+  const settlements = useBookingSettlements(booking?.id, booking?.paidMinor);
+  const moneyLines = bookingMoneyLines(payments.data, settlements.data);
+  const ledgerCatchingUp = ledgerBehind(settlements.data, booking?.paidMinor);
   // Same query the Payments tab uses, so this costs nothing extra.
   const invoices = useBookingInvoices(booking?.id);
+  const resources = useResources();
 
   if (!bookingId) return null;
 
   const timezone = booking?.timezone || tenant.business?.defaultTimezone || "Europe/London";
   const trainer = staffList.data?.find((s) => s.id === booking?.staffId);
   const location = locations.data?.find((l) => l.id === booking?.locationId);
+  const resource = booking?.resourceId
+    ? resources.data?.find((r) => r.id === booking.resourceId)
+    : undefined;
+  const resourceLabel = resourceWords(tenant.business?.industryTemplateKey).one;
+  const where = whereRow(location, booking?.clientAddress ?? null);
   const isFinal = booking ? FINAL_BOOKING_STATUSES.has(booking.status) : false;
+  // Attended jobs are still corrected as a record; Move and Cancel stay off for them.
+  const editLocked = isFinal && booking?.status !== "completed";
   // Pay-by-bank bookings sit in awaiting_payment with no expiry until staff either
   // mark the money received or cancel (RECA-522).
   const bankPending =
@@ -260,6 +324,7 @@ export function BookingPanel({
   );
   // Deposit / balance view (RECA-523): outstanding = price − paid across every channel.
   const settlement = booking ? bookingSettlement(booking) : null;
+  const notes = bookingNotes(booking ?? {});
   // Each service at what it was booked at (with its list), the whole-job discount or
   // adjustment (if any) and the total (RECA-532). The list total differs from
   // priceMinor only when staff priced a service or the job differently.
@@ -354,6 +419,28 @@ export function BookingPanel({
             ? closedReminderReason(booking.status)
             : reminderRoute.blocked;
 
+  const refusalToast = (title: string, detail: string) => {
+    const failed = deliveryFailure(
+      detail,
+      customer.data ? customerDisplayName(customer.data) : null,
+    );
+    const clientId = booking?.leadCustomerId;
+    toast.error(title, {
+      description: failed?.message ?? detail,
+      ...(failed?.checkProfile && clientId
+        ? {
+            action: {
+              label: "Open client",
+              onClick: () => {
+                onClose();
+                void navigate({ to: "/clients/$clientId", params: { clientId } });
+              },
+            },
+          }
+        : {}),
+    });
+  };
+
   const remindBooking = async () => {
     if (!booking) return;
     try {
@@ -365,7 +452,7 @@ export function BookingPanel({
     } catch (err) {
       // 409 = not live / already started / sent minutes ago; 422 = no email / send failed.
       if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
-        toast.error("Booking reminder not sent", { description: err.detail });
+        refusalToast("Booking reminder not sent", err.detail);
         return;
       }
       toastApiError(err);
@@ -408,7 +495,7 @@ export function BookingPanel({
       // 409 = sent a few minutes ago; 422 = nothing outstanding / no email / send failed.
       // Both carry a plain-English detail from the API, so show that as the headline.
       if (err instanceof ApiError && (err.status === 409 || err.status === 422) && err.detail) {
-        toast.error("Payment reminder not sent", { description: err.detail });
+        refusalToast("Payment reminder not sent", err.detail);
         return;
       }
       toastApiError(err);
@@ -420,6 +507,11 @@ export function BookingPanel({
     const tb = new Date(historyTimestamp(b) ?? 0).getTime();
     return tb - ta;
   });
+  // Messages about this booking that never got there: the History tab says so and
+  // the state notice offers the resend.
+  const failedMessages = historyEntries.filter(
+    (e) => isMessageHistoryEntry(e) && e.status === "failed",
+  ).length;
   // Has the client ever heard about this booking? Drives the cancel dialog's default:
   // no point sending a cancellation for a job they were never told about. Until the
   // history loads, assume they were (the safer default).
@@ -571,11 +663,10 @@ export function BookingPanel({
   const attendanceMarked =
     booking?.attendanceStatus === "attended" || booking?.attendanceStatus === "no_show";
   // Detailers don't tick people in — the car either turned up or it didn't — so
-  // their row is just "No-show", and it goes once the job is marked attended.
+  // they get no attendance row at all; a no-show is marked from the ⋯ menu (as it
+  // is for everyone). Once an answer is in, the status pill carries it.
   const noShowOnly = tenant.business?.industryTemplateKey === "car_detailing";
-  const showAttendance =
-    (booking?.status === "confirmed" || attendanceMarked) &&
-    !(noShowOnly && booking?.attendanceStatus === "attended");
+  const showAttendance = booking?.status === "confirmed" && !attendanceMarked && !noShowOnly;
   const attendanceLocked = attendanceMarked || booking?.status !== "confirmed";
   // Footer actions: a pending bank transfer is "confirmed" by marking the money
   // received; anything else not yet live gets a plain Confirm.
@@ -587,7 +678,9 @@ export function BookingPanel({
   const showRecordPayment = canRecordPayment && !bankPending;
 
   // Why delete is off, mirroring the API's 409s so staff see the reason before the click.
-  const hasIssuedInvoice = (invoices.data ?? []).some((inv) => inv.status !== "draft");
+  const hasIssuedInvoice = (invoices.data ?? []).some(
+    (inv) => inv.status === "issued" || inv.status === "paid",
+  );
   const deleteBlocked: string | null = !booking
     ? null
     : (settlement?.paidMinor ?? 0) > 0 || hasSucceededPayment
@@ -725,6 +818,99 @@ export function BookingPanel({
     setConfirmCancel(true);
   };
 
+  /** "£18 due" on the Payments tab while money is owed on a live booking. */
+  const paymentsWarning =
+    booking &&
+    settlement &&
+    !isFinal &&
+    settlement.outstandingMinor > 0 &&
+    settlement.state !== "free" &&
+    settlement.state !== "credit"
+      ? `${formatMoney(settlement.outstandingMinor, booking.currency, { compact: true })} due`
+      : null;
+
+  /**
+   * Spec §5.2 state notice. One thing at a time, most pressing first: a hold about
+   * to lapse, a bank transfer to watch for, a message that bounced, then money owed.
+   */
+  const stateNotice: {
+    /** What the notice is about, so the pill row below doesn't say it again. */
+    topic: "bank" | "hold" | "messages" | "done" | "money";
+    title: string;
+    body: string;
+    action?: { label: string; onClick: () => void };
+  } | null = (() => {
+    if (!booking || !settlement) return null;
+    const owed = formatMoney(settlement.outstandingMinor, booking.currency, { compact: true });
+    if (bankPending) {
+      return {
+        topic: "bank",
+        title: "Waiting for a bank transfer.",
+        body: `The booking is confirmed once ${owed} lands — mark it received below.`,
+      };
+    }
+    if (booking.status === "held" || booking.status === "awaiting_payment") {
+      return {
+        topic: "hold",
+        title: "Waiting for payment.",
+        body: booking.holdExpiresAt
+          ? `The slot is held until ${formatInTz(booking.holdExpiresAt, timezone, { hour: "2-digit", minute: "2-digit" })}, then released.`
+          : "The slot is held until the client pays.",
+      };
+    }
+    // A detailer's job is marked done by taking the money as the keys go back; one paid
+    // up front has nothing left to take, so once it has finished it would sit under
+    // Needs action for ever with nothing to press (owner: "can't work out what they
+    // need attention for"). Say so, and offer the one click. Trainers get the footer's
+    // "Did they turn up?" row instead, so this would only repeat it for them. It
+    // outranks a bounced message: a reminder about a job that is over is moot.
+    if (noShowOnly && unmarkedPast(booking, new Date())) {
+      return {
+        topic: "done",
+        title: "Finished, but not marked done.",
+        body:
+          settlement.state === "unpaid" ||
+          settlement.state === "part_paid" ||
+          settlement.state === "deposit_paid"
+            ? "Recording the payment marks it done, or mark it done now."
+            : "Marking it done counts the job and starts its reminders.",
+        action: {
+          label: "Mark as done",
+          onClick: () => void run(attendanceAction, { attended: true }),
+        },
+      };
+    }
+    if (failedMessages > 0 && !isFinal) {
+      return {
+        topic: "messages",
+        title:
+          failedMessages === 1
+            ? "A message didn't send."
+            : `${failedMessages} messages didn't send.`,
+        body: "See History for why.",
+        action: { label: "Resend", onClick: () => setRemindersOpen(true) },
+      };
+    }
+    if (!isFinal && settlement.state === "unpaid") {
+      return { topic: "money", title: `${owed} due.`, body: "The client hasn't paid yet." };
+    }
+    if (!isFinal && (settlement.state === "deposit_paid" || settlement.state === "part_paid")) {
+      return {
+        topic: "money",
+        title: `${owed} still ${balanceDueLabel(settlement)}.`,
+        body: settlement.state === "deposit_paid" ? "The deposit is in." : "Part of it is paid.",
+      };
+    }
+    return null;
+  })();
+  // The money pills restate the notice when it is about money (or a hold / bank
+  // transfer, which are money too), so they only show when the notice is about
+  // something else or there is no notice — one message per thing (owner request).
+  const noticeCoversMoney =
+    stateNotice?.topic === "money" ||
+    stateNotice?.topic === "hold" ||
+    stateNotice?.topic === "bank";
+
   const submitDelete = async () => {
     if (!booking) return;
     try {
@@ -783,19 +969,44 @@ export function BookingPanel({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-[2px]" onClick={onClose} />
-      <aside className="pt-safe pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card">
-        <header className="flex items-start justify-between gap-3 border-b p-5">
+      <div className="fixed inset-0 z-50 bg-[rgba(8,10,14,0.28)]" onClick={onClose} />
+      {/* Phones get the bottom-sheet presentation the Sheet drawers use (ui/sheet.tsx). */}
+      <aside className="pb-safe px-safe fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l bg-card shadow-[-16px_0_40px_rgba(0,0,0,0.12)] sm:pt-safe max-sm:top-sheet-peek max-sm:inset-x-0 max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-t-3xl max-sm:border-t max-sm:border-l-0 max-sm:shadow-[0_-16px_40px_rgba(0,0,0,0.18)] max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300">
+        <span
+          aria-hidden
+          className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border sm:hidden"
+        />
+        {/* Spec §5.2: status pill and reference on the top row with the menu and close;
+            the service as the title; when and where under it. */}
+        <header className="flex items-start justify-between gap-3 border-b p-4 sm:p-5">
           {bookingQuery.isLoading || !booking ? (
             <div className="w-full">
               <TableGhost rows={3} />
             </div>
           ) : (
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">{booking.reference}</p>
-              <h2 className="mt-1 text-lg font-semibold">{booking.serviceSnapshot.name}</h2>
-              <p className="text-sm text-muted-foreground">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill booking={booking} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(booking.reference)
+                      .then(() => toast.success("Reference copied"))
+                      .catch(() => toast.error("Couldn't copy the reference"));
+                  }}
+                  className="cursor-pointer text-[12.5px] text-muted-foreground tabular-nums underline-offset-2 hover:underline"
+                  title="Copy reference"
+                >
+                  {booking.reference}
+                </button>
+              </div>
+              <h2 className="mt-2 text-2xl leading-tight font-extrabold tracking-[-0.02em]">
+                {booking.serviceSnapshot.name}
+              </h2>
+              <p className="mt-1 text-[14.5px] text-muted-foreground">
                 {formatBookingWhen(booking, timezone)}
+                {location ? ` · ${location.name}` : ""}
               </p>
             </div>
           )}
@@ -810,9 +1021,11 @@ export function BookingPanel({
                 <DropdownMenuContent align="end" className="w-64">
                   {/* Edit covers what (services, price, who, where, vehicle, notes)
                       and, via its "Reschedule" hand-off, when — so it's the single
-                      entry point. Final bookings are a record, so it locks. */}
+                      entry point. An attended job stays editable as a record (what was
+                      actually done, the price, a note); cancelled, no-show and expired
+                      bookings lock. */}
                   <DropdownMenuItem
-                    disabled={isFinal}
+                    disabled={editLocked}
                     onSelect={() => {
                       setEditAddServiceIds([]);
                       setEditOpen(true);
@@ -820,11 +1033,26 @@ export function BookingPanel({
                   >
                     <Pencil className="size-4" /> Edit booking
                   </DropdownMenuItem>
+                  <DropdownMenuItem disabled={isFinal} onSelect={() => setRescheduleOpen(true)}>
+                    <Repeat className="size-4" /> Move
+                  </DropdownMenuItem>
                   {isFinal ? (
                     <p className="px-2 pb-1.5 text-xs text-muted-foreground">
                       {editLockedReason(booking.status)}
                     </p>
                   ) : null}
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const url = new URL("/bookings", window.location.origin);
+                      url.searchParams.set("booking", booking.id);
+                      void navigator.clipboard
+                        .writeText(url.toString())
+                        .then(() => toast.success("Link to this booking copied"))
+                        .catch(() => toast.error("Couldn't copy the link"));
+                    }}
+                  >
+                    <LinkIcon className="size-4" /> Copy link
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {/* Every message staff can send — booking reminder, payment reminder,
                       resend by email / text — lives in one drawer beside the panel, so
@@ -838,6 +1066,18 @@ export function BookingPanel({
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  {/* No-show is the exception, not the everyday answer, so it sits here
+                      with the other rare actions rather than in the footer (owner
+                      request). Only offered while the job is live and unmarked — the
+                      API never moves a booking back. */}
+                  {booking.status === "confirmed" && !attendanceMarked ? (
+                    <DropdownMenuItem
+                      disabled={attendanceAction.isPending}
+                      onSelect={() => void run(attendanceAction, { attended: false })}
+                    >
+                      <UserX className="size-4" /> Mark as no-show
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem disabled={isFinal} onSelect={openCancel}>
                     <Ban className="size-4" /> Cancel booking
                   </DropdownMenuItem>
@@ -855,14 +1095,20 @@ export function BookingPanel({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close panel">
-              <X className="size-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10 rounded-full bg-muted text-foreground/70 sm:size-9 sm:rounded-md sm:bg-transparent sm:text-inherit [&_svg]:size-5 sm:[&_svg]:size-[18px]"
+              onClick={onClose}
+              aria-label="Close panel"
+            >
+              <X />
             </Button>
           </div>
         </header>
 
         {bookingQuery.isError ? (
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-4 sm:p-5">
             <p className="text-sm text-destructive">
               {bookingQuery.error instanceof Error
                 ? bookingQuery.error.message
@@ -870,7 +1116,7 @@ export function BookingPanel({
             </p>
           </div>
         ) : !booking ? (
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-4 sm:p-5">
             {online ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
             ) : (
@@ -888,12 +1134,30 @@ export function BookingPanel({
           </div>
         ) : (
           <>
-            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-5 pb-12 sm:pb-5">
-              <div className="flex flex-wrap gap-2">
-                <StatusBadge status={booking.status} />
+            <div className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 sm:p-5 pb-12 sm:pb-5">
+              {/* Spec §5.2 state notice: what is going on, in plain words, only when
+                  there is something to know. */}
+              {stateNotice ? (
+                <div className="rounded-xl bg-cal-deposit-bg px-3.5 py-3 text-[13.5px] text-cal-deposit-fg">
+                  <span className="font-bold">{stateNotice.title}</span> {stateNotice.body}
+                  {stateNotice.action ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={stateNotice.action.onClick}
+                        className="cursor-pointer font-bold underline underline-offset-2"
+                      >
+                        {stateNotice.action.label}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2 empty:hidden">
                 {/* Only once marked: an "Unknown" pill before then just restates the
                     untouched attendance row in the footer. */}
-                {attendanceMarked ? <StatusBadge status={booking.attendanceStatus} /> : null}
                 {queuedChange ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground"
@@ -927,20 +1191,42 @@ export function BookingPanel({
                     Lift needed
                   </span>
                 ) : null}
-                {settlement?.state === "deposit_paid" || settlement?.state === "part_paid" ? (
+                {/* Notes sit at the foot of Details, so flag them up here and jump to
+                    them on tap — otherwise "park round the back" is read at the kerb. */}
+                {hasBookingNotes(notes) ? (
+                  <button
+                    type="button"
+                    data-testid="booking-notes-pill"
+                    onClick={() => {
+                      setTab("details");
+                      requestAnimationFrame(() => {
+                        document
+                          .getElementById(NOTES_SECTION_ID)
+                          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/15"
+                    title="Show the notes"
+                  >
+                    <StickyNote className="size-3" aria-hidden />
+                    {bookingNotesLabel(notes)}
+                  </button>
+                ) : null}
+                {settlement?.state === "paid" ? (
+                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
+                    Paid in full
+                  </span>
+                ) : noticeCoversMoney ? null : settlement?.state === "deposit_paid" ||
+                  settlement?.state === "part_paid" ? (
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     {settlement.state === "deposit_paid" ? "Deposit paid" : "Part paid"} ·{" "}
                     {formatMoney(settlement.outstandingMinor, booking.currency)}{" "}
                     {balanceDueLabel(settlement)}
                   </span>
-                ) : settlement?.state === "paid" ? (
-                  <span className="inline-flex items-center rounded-full bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success-foreground">
-                    Paid in full
-                  </span>
                 ) : bookingNeedsPayment(booking, payments.data ?? []) && !bankPending ? (
                   <StatusBadge status="payment_due" />
                 ) : null}
-                {bankPending ? (
+                {bankPending && !noticeCoversMoney ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning-foreground">
                     <Landmark className="size-3" />
                     Waiting for bank transfer
@@ -948,6 +1234,18 @@ export function BookingPanel({
                   </span>
                 ) : null}
               </div>
+
+              {fromWaitlist.data ? (
+                <Link
+                  to="/waitlist"
+                  search={{ tab: "booked", entry: fromWaitlist.data.id }}
+                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  <Hourglass className="size-4" aria-hidden />
+                  From the waitlist
+                  <ChevronRight className="size-4" aria-hidden />
+                </Link>
+              ) : null}
 
               {upsellOffer.data?.status === "requested" && upsellOffer.data.requested.length > 0 ? (
                 <div className="rounded-xl border border-primary/40 bg-primary-soft p-3 text-sm">
@@ -968,7 +1266,7 @@ export function BookingPanel({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      disabled={isFinal}
+                      disabled={editLocked}
                       onClick={() => {
                         setEditAddServiceIds(upsellOffer.data!.requested.map((r) => r.serviceId));
                         setEditOpen(true);
@@ -993,15 +1291,26 @@ export function BookingPanel({
               ) : null}
 
               <Tabs value={tab} onValueChange={setTab}>
+                {/* Tabs carry a warning when something inside needs a look (spec §5.2). */}
                 <TabsList className="w-full">
                   <TabsTrigger value="details" className="flex-1">
                     Details
                   </TabsTrigger>
-                  <TabsTrigger value="history" className="flex-1">
-                    History
-                  </TabsTrigger>
-                  <TabsTrigger value="payments" className="flex-1">
+                  <TabsTrigger value="payments" className="flex-1 gap-1.5">
                     Payments
+                    {paymentsWarning ? (
+                      <span className="text-[11px] font-extrabold text-cal-deposit tabular-nums">
+                        {paymentsWarning}
+                      </span>
+                    ) : null}
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="flex-1 gap-1.5">
+                    History
+                    {failedMessages > 0 ? (
+                      <span className="text-[11px] font-extrabold text-cal-unpaid tabular-nums">
+                        {failedMessages} failed
+                      </span>
+                    ) : null}
                   </TabsTrigger>
                 </TabsList>
 
@@ -1083,6 +1392,31 @@ export function BookingPanel({
                     {soleLocation ? null : (
                       <Detail label="Location" value={location?.name ?? "—"} />
                     )}
+                    {resource ? (
+                      <Detail
+                        label={resourceLabel.charAt(0).toUpperCase() + resourceLabel.slice(1)}
+                        value={resource.name}
+                      />
+                    ) : null}
+                    {where ? (
+                      <Detail
+                        className="col-span-2"
+                        label={where.label}
+                        value={where.text}
+                        action={
+                          where.href ? (
+                            <a
+                              href={where.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-semibold text-primary underline-offset-4 hover:underline"
+                            >
+                              Directions
+                            </a>
+                          ) : undefined
+                        }
+                      />
+                    ) : null}
                     {booking.linkedRecordId ? (
                       <div>
                         <dt className="text-xs text-muted-foreground">
@@ -1096,20 +1430,35 @@ export function BookingPanel({
                             params={{ clientId: booking.leadCustomerId }}
                             search={{ tab: "linked", record: booking.linkedRecordId }}
                             onClick={onClose}
-                            className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline"
+                            className="inline-flex max-w-full items-center gap-1.5 underline-offset-4 hover:text-primary hover:underline"
                           >
-                            {linkedRecord.data?.displayLabel ?? "…"}
+                            {linkedRecordReg ? (
+                              <>
+                                <NumberPlate
+                                  registration={linkedRecordReg}
+                                  size="small"
+                                  className="shrink-0"
+                                />
+                                <span className="truncate">
+                                  {vehicleTitle(linkedRecord.data!, recordFields)}
+                                </span>
+                              </>
+                            ) : (
+                              (linkedRecord.data?.displayLabel ?? "…")
+                            )}
                             <ChevronRight className="size-3.5 text-muted-foreground" />
                           </Link>
                         </dd>
                       </div>
                     ) : null}
                     {/* "Next top-up due": follow-ups this job scheduled, once it is done. */}
-                    <BookingFollowUpDetail
-                      bookingId={booking.id}
-                      timezone={timezone}
-                      onNavigate={onClose}
-                    />
+                    {remindersAvailable(tenant.business?.industryTemplateKey) ? (
+                      <BookingFollowUpDetail
+                        bookingId={booking.id}
+                        timezone={timezone}
+                        onNavigate={onClose}
+                      />
+                    ) : null}
                     {booking.clientLift ? (
                       <Detail
                         label="Lift"
@@ -1298,17 +1647,33 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {booking.notesInternal ? (
-                    <div>
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        Internal notes
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">{booking.notesInternal}</p>
+                  {hasBookingNotes(notes) ? (
+                    <div id={NOTES_SECTION_ID} className="scroll-mt-4 space-y-4">
+                      {notes.customer ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Note from the client
+                          </p>
+                          <p className="mt-2 rounded-xl border border-primary/30 bg-primary-soft p-3 text-sm whitespace-pre-wrap">
+                            {notes.customer}
+                          </p>
+                        </div>
+                      ) : null}
+                      {notes.internal ? (
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                            Internal notes
+                          </p>
+                          <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
+                            {notes.internal}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
-                  {/* Materials the job used (automotive only; renders nothing elsewhere). Staff eyes only. */}
-                  <BookingConsumablesSection bookingId={booking.id} />
+                  {/* Materials the job used (detailing only, unless hidden from the menu). Staff eyes only. */}
+                  <BookingConsumablesSection booking={booking} plate={linkedRecordReg} />
                 </TabsContent>
 
                 <TabsContent value="history">
@@ -1329,6 +1694,10 @@ export function BookingPanel({
                           entry={entry}
                           timezone={timezone}
                           booking={booking}
+                          invoices={
+                            tenant.can(PERMISSIONS.INVOICE_READ) ? invoices.data : undefined
+                          }
+                          onOpenInvoice={onClose}
                         />
                       ))}
                     </ul>
@@ -1344,7 +1713,11 @@ export function BookingPanel({
                     <div className="rounded-xl border p-3">
                       <p className="text-xs text-muted-foreground">
                         Paid in full — {formatMoney(settlement.paidMinor, booking.currency)}{" "}
-                        received.
+                        received
+                        {(booking.tipMinor ?? 0) > 0
+                          ? `, plus a ${formatMoney(booking.tipMinor ?? 0, booking.currency)} tip`
+                          : ""}
+                        .
                       </p>
                     </div>
                   ) : bankPending && settlement ? (
@@ -1437,45 +1810,84 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
-                  {payments.isLoading ? (
+                  {payments.isLoading || settlements.isLoading ? (
                     <TableGhost rows={3} />
-                  ) : payments.isError ? (
+                  ) : payments.isError && settlements.isError ? (
                     <p className="text-xs text-destructive">Couldn't load payments.</p>
-                  ) : (payments.data ?? []).length === 0 ? (
-                    <EmptyState
-                      title="No payments yet"
-                      description="Payments taken for this booking will appear here."
-                    />
+                  ) : moneyLines.length === 0 ? (
+                    ledgerCatchingUp ? (
+                      // The booking already counts the money; the ledger lists it a
+                      // moment later and the query is re-asking in the background.
+                      <TableGhost rows={1} />
+                    ) : (
+                      <EmptyState
+                        title="No payments yet"
+                        description="Card payments and any you record by hand will appear here."
+                      />
+                    )
                   ) : (
-                    <ul className="divide-y rounded-xl border">
-                      {payments.data!.map((p) => (
-                        <li key={p.id} className="flex items-center justify-between gap-3 p-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">
-                              {formatMoney(p.amountMinor, p.currency)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatInTz(p.createdAt, timezone, {
-                                dateStyle: "medium",
-                                timeStyle: "short",
-                              })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <StatusBadge status={p.state} />
-                            {p.receiptUrl ? (
-                              <a
-                                href={p.receiptUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-medium text-primary underline"
-                              >
-                                Receipt
-                              </a>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
+                    <ul className="divide-y rounded-xl border" data-testid="booking-money">
+                      {moneyLines.map((line) =>
+                        line.kind === "payment" ? (
+                          <li key={line.id} className="flex items-center justify-between gap-3 p-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.payment.amountMinor, line.payment.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Card ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={line.payment.state} />
+                              {line.payment.receiptUrl ? (
+                                <a
+                                  href={line.payment.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-medium text-primary underline"
+                                >
+                                  Receipt
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ) : (
+                          <li
+                            key={line.id}
+                            className="flex items-center justify-between gap-3 p-3"
+                            data-testid="recorded-payment"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {formatMoney(line.amountMinor, line.currency)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {settlementMethodLabel(line.method)} ·{" "}
+                                {formatInTz(line.at, timezone, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                                line.direction === "payment" ||
+                                  line.direction === "dispute_reversal"
+                                  ? "bg-success-soft text-success"
+                                  : "bg-secondary text-secondary-foreground",
+                              )}
+                            >
+                              {recordedDirectionLabel(line.direction)}
+                            </span>
+                          </li>
+                        ),
+                      )}
                     </ul>
                   )}
 
@@ -1496,53 +1908,25 @@ export function BookingPanel({
             {showAttendance || showConfirm || showRecordPayment ? (
               <footer className="flex min-w-0 flex-col gap-2 border-t p-4">
                 {showAttendance ? (
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-3 py-2">
-                    <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      Attendance
+                  // Spec §5.2 footer: "Did they turn up?" — the everyday answer is one
+                  // button; a no-show is the exception and lives in the ⋯ menu. The API
+                  // only moves a confirmed booking forward, so the row goes once answered.
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-[13px] font-bold text-muted-foreground">
+                      Did they turn up?
                     </span>
-                    <div className="flex flex-1 items-center justify-end gap-4">
-                      {noShowOnly ? null : (
-                        <label
-                          className={cn(
-                            "flex items-center gap-2 text-sm",
-                            attendanceLocked ? "cursor-default" : "cursor-pointer",
-                          )}
-                        >
-                          <Checkbox
-                            checked={booking.attendanceStatus === "attended"}
-                            disabled={attendanceLocked || attendanceAction.isPending}
-                            aria-label="Attended"
-                            onCheckedChange={(v) => {
-                              if (v === true) void run(attendanceAction, { attended: true });
-                            }}
-                          />
-                          Attended
-                        </label>
-                      )}
-                      <label
-                        className={cn(
-                          "flex items-center gap-2 text-sm",
-                          attendanceLocked ? "cursor-default" : "cursor-pointer",
-                        )}
+                    <div className="flex flex-1 items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 border-cal-paid/40 text-cal-paid-fg hover:bg-cal-paid-bg"
+                        disabled={attendanceLocked || attendanceAction.isPending}
+                        aria-label="Attended"
+                        onClick={() => void run(attendanceAction, { attended: true })}
                       >
-                        <Checkbox
-                          checked={booking.attendanceStatus === "no_show"}
-                          disabled={attendanceLocked || attendanceAction.isPending}
-                          aria-label="No-show"
-                          onCheckedChange={(v) => {
-                            if (v === true) void run(attendanceAction, { attended: false });
-                          }}
-                        />
-                        No-show
-                      </label>
+                        <Check className="size-4" aria-hidden /> Attended
+                      </Button>
                     </div>
-                    {attendanceMarked ? (
-                      <p className="basis-full text-xs text-muted-foreground">
-                        {noShowOnly
-                          ? "A no-show is final once marked."
-                          : "Attendance is final once marked."}
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
                 {bankPending ? (
@@ -1724,31 +2108,55 @@ export function BookingPanel({
           outstandingMinor={settlement.outstandingMinor}
           depositOwedMinor={recordIntent === "deposit" ? depositOwedMinor : undefined}
           pending={busy === "payment"}
-          onSubmit={async (amountMinor, method) => {
+          onSubmit={async (amountMinor, method, tipMinor) => {
             setBusy("payment");
+            const tipNote = tipMinor > 0 ? ` + ${formatMoney(tipMinor, booking.currency)} tip` : "";
+            // The API completes a started job the moment it is paid in full (see
+            // recordPayment); mirror that so the panel doesn't flash "Attended" late.
+            const settlesStartedJob =
+              amountMinor > 0 &&
+              amountMinor >= settlement.outstandingMinor &&
+              booking.status === "confirmed" &&
+              new Date(booking.start).getTime() <= Date.now();
             try {
               const outcome = await outbox({
-                label: `Recorded ${formatMoney(amountMinor, booking.currency)} from ${customerName}`,
+                label: `Recorded ${formatMoney(amountMinor, booking.currency)}${tipNote} from ${customerName}`,
                 path: `/api/v1/businesses/${businessId}/bookings/${booking.id}/record-payment`,
-                body: { amountMinor, method },
+                body: { amountMinor, method, ...(tipMinor > 0 ? { tipMinor } : {}) },
                 invalidate: bookingKeys(booking.id),
                 booking: {
                   businessId,
                   bookingId: booking.id,
-                  patch: { paidMinor: (booking.paidMinor ?? 0) + amountMinor },
+                  patch: {
+                    paidMinor: (booking.paidMinor ?? 0) + amountMinor,
+                    ...(tipMinor > 0 ? { tipMinor: (booking.tipMinor ?? 0) + tipMinor } : {}),
+                    ...(settlesStartedJob
+                      ? { attendanceStatus: "attended" as const, status: "completed" as const }
+                      : {}),
+                  },
                 },
               });
               if (outcome.queued) {
-                toastQueued(`Recorded ${formatMoney(amountMinor, booking.currency)}`);
+                toastQueued(`Recorded ${formatMoney(amountMinor, booking.currency)}${tipNote}`);
                 setRecordOpen(false);
                 return;
               }
+              if (settlesStartedJob) {
+                // Completing the job may issue an invoice a moment later (ADR 0019 §7).
+                for (const delay of [1500, 4000]) {
+                  setTimeout(() => {
+                    void qc.invalidateQueries({ queryKey: queryKeys.invoicesAll(businessId) });
+                  }, delay);
+                }
+              }
               toast.success(
-                amountMinor >= settlement.outstandingMinor
-                  ? "Payment recorded — paid in full"
-                  : recordIntent === "deposit" && amountMinor >= depositOwedMinor
-                    ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
-                    : `Recorded ${formatMoney(amountMinor, booking.currency)}`,
+                (settlesStartedJob
+                  ? "Paid in full — job marked done"
+                  : amountMinor >= settlement.outstandingMinor
+                    ? "Payment recorded — paid in full"
+                    : recordIntent === "deposit" && amountMinor >= depositOwedMinor
+                      ? `Deposit of ${formatMoney(amountMinor, booking.currency)} recorded`
+                      : `Recorded ${formatMoney(amountMinor, booking.currency)}`) + tipNote,
               );
               setRecordOpen(false);
             } catch (err) {
@@ -1857,6 +2265,24 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
+/** Where the job happens: the premises address, or the client's for a mobile job. */
+function whereRow(
+  location: Location | undefined,
+  clientAddress: string | null,
+): { label: string; text: string; href: string | null } | null {
+  if (!location) return null;
+  if (kindOf(location) === "mobile") {
+    return {
+      label: "Client's address",
+      text: clientAddress ?? "Not given yet",
+      href: clientAddress ? textDirectionsUrl(clientAddress) : null,
+    };
+  }
+  const text = addressText(location.address);
+  if (!text || !location.address) return null;
+  return { label: "Where", text, href: locationDirectionsUrl(location.address) };
+}
+
 function Detail({
   label,
   value,
@@ -1930,11 +2356,14 @@ function closedReminderReason(status: string): string {
   }
 }
 
-/** Why "Edit booking" is off: the booking has reached a final state and is now a record. */
+/**
+ * Why the booking can't be changed: it has reached a final state and is now a record.
+ * An attended job keeps Edit (to correct the record) but can't be moved or cancelled.
+ */
 function editLockedReason(status: string): string {
   switch (status) {
     case "completed":
-      return "Marked as attended — it can't be edited now.";
+      return "Marked as attended — edit it to correct the record, but it can't be moved.";
     case "no_show":
       return "Marked as a no-show — it can't be edited now.";
     case "expired":
@@ -1967,14 +2396,26 @@ function HistoryRow({
   entry,
   timezone,
   booking,
+  invoices,
+  onOpenInvoice,
 }: {
   entry: BookingHistoryEntry;
   timezone: string;
   booking: Pick<Booking, "allDay">;
+  /** The booking's invoices, when the viewer may read them — lets an invoice email open it. */
+  invoices: Invoice[] | undefined;
+  onOpenInvoice: () => void;
 }) {
   // Messages sent about the booking (confirmation, reminders…) with delivery status.
   if (isMessageHistoryEntry(entry)) {
-    return <BookingMessageHistoryRow entry={entry} timezone={timezone} />;
+    return (
+      <BookingMessageHistoryRow
+        entry={entry}
+        timezone={timezone}
+        invoice={invoiceForMessage(entry, invoices)}
+        onOpenInvoice={onOpenInvoice}
+      />
+    );
   }
   if (entry.kind === "amended") {
     return <AmendedHistoryRow entry={entry} timezone={timezone} />;
@@ -2040,13 +2481,14 @@ function AmendedHistoryRow({ entry, timezone }: { entry: BookingHistoryEntry; ti
 const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
   { value: "bank_transfer", label: "Bank transfer" },
-  { value: "card", label: "Card (taken elsewhere)" },
+  { value: "card", label: "Card" },
   { value: "other", label: "Other" },
 ];
 
 /**
  * Staff log money received outside the platform — the balance after a deposit,
- * or a partial payment. Defaults to settling the full outstanding amount.
+ * or a partial payment. Defaults to settling the full outstanding amount; anything
+ * entered over it is recorded as a tip, kept apart from the balance.
  */
 function RecordPaymentDialog({
   open,
@@ -2066,7 +2508,7 @@ function RecordPaymentDialog({
   /** Set when opened via "Deposit taken": presets the amount and rewords the copy. */
   depositOwedMinor?: number;
   pending: boolean;
-  onSubmit: (amountMinor: number, method: RecordPaymentMethod) => Promise<void>;
+  onSubmit: (amountMinor: number, method: RecordPaymentMethod, tipMinor: number) => Promise<void>;
 }) {
   const forDeposit = depositOwedMinor != null && depositOwedMinor > 0;
   const presetMinor = forDeposit ? depositOwedMinor : outstandingMinor;
@@ -2094,13 +2536,17 @@ function RecordPaymentDialog({
       setError("Enter an amount above zero");
       return;
     }
-    if (minor > outstandingMinor) {
-      setError(`That's more than the ${formatMoney(outstandingMinor, currency)} outstanding`);
-      return;
-    }
     setError(null);
-    await onSubmit(minor, method);
+    const paidMinor = Math.min(minor, outstandingMinor);
+    await onSubmit(paidMinor, method, minor - paidMinor);
   };
+
+  let tipMinor = 0;
+  try {
+    tipMinor = Math.max(0, parseMoneyToMinor(amount) - outstandingMinor);
+  } catch {
+    tipMinor = 0;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2124,6 +2570,15 @@ function RecordPaymentDialog({
               aria-invalid={Boolean(error)}
             />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {tipMinor > 0 && !error ? (
+              <p className="text-xs text-muted-foreground">
+                {formatMoney(outstandingMinor, currency)} settles the booking and the extra{" "}
+                <span className="font-medium text-foreground">
+                  {formatMoney(tipMinor, currency)}
+                </span>{" "}
+                is recorded as a tip.
+              </p>
+            ) : null}
             {parseFloat(amount) * 100 < outstandingMinor && !error ? (
               <button
                 type="button"
@@ -2223,9 +2678,14 @@ function RescheduleDialog({
     conflicts: BookingConflict[];
     body: Record<string, unknown>;
   } | null>(null);
+  const [closedPrompt, setClosedPrompt] = useState<{
+    message: string;
+    body: Record<string, unknown>;
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
+      setClosedPrompt(null);
       setStaffId(booking.staffId);
       setDate(isoDateInTz(booking.start, timezone));
       setSlotStart(null);
@@ -2359,7 +2819,10 @@ function RescheduleDialog({
       onOpenChange(false);
       return true;
     } catch (err) {
-      if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
+      const closed = closedLocationMessage(err);
+      if (closed && body.closureOverride !== true) {
+        setClosedPrompt({ message: closed, body });
+      } else if (err instanceof ApiError && err.isOverridableConflict && body.dropIn !== true) {
         setOverride({ conflicts: err.conflicts, body });
       } else if (err instanceof ApiError && err.code === "BOOKING_CONFLICT") {
         if (mode === "custom") {
@@ -2419,6 +2882,13 @@ function RescheduleDialog({
     if (ok) setOverride(null);
   };
 
+  const confirmClosed = async () => {
+    if (!closedPrompt) return;
+    const body = { ...closedPrompt.body, closureOverride: true };
+    setClosedPrompt(null);
+    await move(body);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -2461,11 +2931,13 @@ function RescheduleDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="any">Any {staffNoun.toLowerCase()}</SelectItem>
-                  {staffOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.displayName}
-                    </SelectItem>
-                  ))}
+                  {staffOptions
+                    .filter((s) => takesBookings(s) || s.id === booking.staffId)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.displayName}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2487,7 +2959,7 @@ function RescheduleDialog({
                     // Keep an overridden span whole when the first day passes the last.
                     if (lastDay !== null && e.target.value > lastDay) setLastDay(e.target.value);
                   }}
-                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                  className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                 />
                 {mode === "custom" && !booking.allDay ? (
                   <input
@@ -2495,7 +2967,7 @@ function RescheduleDialog({
                     aria-label="Start time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring"
+                    className="flex h-9 w-28 shrink-0 rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm"
                   />
                 ) : null}
               </div>
@@ -2526,7 +2998,7 @@ function RescheduleDialog({
                       value={effectiveLastDay}
                       onChange={(e) => setLastDay(e.target.value)}
                       aria-invalid={lastDayInvalid}
-                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring aria-invalid:border-destructive"
+                      className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm aria-invalid:border-destructive"
                     />
                   </div>
                 </div>
@@ -2704,6 +3176,15 @@ function RescheduleDialog({
         timezone={timezone}
         busy={rescheduleAction.isPending}
         onConfirm={() => void confirmOverride()}
+      />
+      <ClosureOverrideDialog
+        message={closedPrompt?.message ?? null}
+        onOpenChange={(next) => {
+          if (!next && !rescheduleAction.isPending) setClosedPrompt(null);
+        }}
+        busy={rescheduleAction.isPending}
+        confirmLabel="Move anyway"
+        onConfirm={() => void confirmClosed()}
       />
     </Dialog>
   );

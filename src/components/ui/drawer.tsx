@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 
+import { keepOpenForToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 const Drawer = ({
@@ -32,11 +33,15 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onInteractOutside, ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
+      onInteractOutside={(e) => {
+        keepOpenForToast(e);
+        onInteractOutside?.(e);
+      }}
       className={cn(
         "pb-safe px-safe fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
         className,

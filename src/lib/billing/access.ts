@@ -77,6 +77,56 @@ export function subscriptionManagedHere(
   return surface === "web" ? provider === "stripe" : provider === store;
 }
 
+/**
+ * A Stripe subscription whose renewal didn't go through (grace or locked out).
+ * The way back in is paying the open invoice, never a new Checkout: the API
+ * refuses one while this row is live. Store subscriptions are the store's to
+ * chase, so they never count.
+ */
+export function isPaymentFailed(
+  subscription: (SubscriptionLike & ProviderLike) | null | undefined,
+): boolean {
+  if (!subscription || isStoreBilled(subscription)) return false;
+  return subscription.status === "past_due" || subscription.status === "unpaid";
+}
+
+export type BillingNavAlert = {
+  /** `grace`: still working, deadline ahead. `locked`: the workspace is read-only. */
+  level: "grace" | "locked";
+  /** ISO deadline while in grace, when the API knows it. */
+  graceEndsAt: string | null;
+  /** Whether paying from this surface is possible (Stripe, managed here). */
+  payableHere: boolean;
+};
+
+/**
+ * What the sidebar should warn about when the subscription's payment is in
+ * trouble. Grace and a lock-out both qualify, whoever bills; a store-billed
+ * subscription is the store's to chase so it is never "payable here". Nothing
+ * for a healthy, trialling, ended or missing subscription.
+ */
+export function billingNavAlert(
+  subscription:
+    (SubscriptionLike & ProviderLike & { graceEndsAt?: string | null }) | null | undefined,
+  surface: "web" | "store" | "none",
+  store: "apple" | "google" | undefined = nativeStore(),
+): BillingNavAlert | null {
+  if (!subscription) return null;
+  const access = subscriptionAccessState(subscription);
+  const failed = isPaymentFailed(subscription);
+  if (access !== "grace" && access !== "restricted" && !failed) return null;
+  // `restricted` without a failed payment (e.g. paused) is still a lock-out;
+  // a failed payment that has not restricted anything yet still works.
+  const level: BillingNavAlert["level"] = access === "restricted" ? "locked" : "grace";
+  return {
+    level,
+    graceEndsAt: level === "grace" ? (subscription.graceEndsAt ?? null) : null,
+    payableHere:
+      subscriptionProvider(subscription) === "stripe" &&
+      subscriptionManagedHere(subscription, surface, store),
+  };
+}
+
 export function isBillingPath(pathname: string): boolean {
   return pathname === "/billing" || pathname.startsWith("/billing/");
 }

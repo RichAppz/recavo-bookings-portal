@@ -14,6 +14,8 @@ export type BookingChangeLike = {
   currency?: string;
   end?: string;
   allDay?: boolean;
+  /** Consumables: "Used as planned" confirmed the seeded list without changing it. */
+  asPlanned?: boolean;
 };
 
 type Ref = { id?: string; label?: string | null } | null | undefined;
@@ -89,6 +91,7 @@ export function describeBookingChange(
       return `Duration: ${formatDuration(Number(change.from ?? 0))} → ${formatDuration(Number(change.to ?? 0))}`;
     // Materials recorded against the job (automotive). Staff-only; the client was not told.
     case "consumables":
+      if (change.asPlanned) return "Consumables confirmed as planned";
       return `Consumables: ${list(change.from)} → ${list(change.to)}`;
     case "clientLift":
       return describeClientLiftChange(change.from, change.to);
@@ -148,7 +151,11 @@ export function summariseBookingChanges(
   const fields = new Set(changes.map((c) => c.field));
   if (fields.size === 0) return "Booking edited";
   if (fields.size === 1 && fields.has("notesInternal")) return "Internal note edited";
-  if (fields.size === 1 && fields.has("consumables")) return "Consumables updated";
+  if (fields.size === 1 && fields.has("consumables")) {
+    return changes.every((c) => c.asPlanned)
+      ? "Consumables confirmed as planned"
+      : "Consumables updated";
+  }
   if (fields.size === 1 && fields.has("clientLift")) return "Lift edited";
   // A quiet fix to the diary (reschedule with `correction: true`): the client was not
   // told, unlike a reschedule, so the headline says so rather than "moved".

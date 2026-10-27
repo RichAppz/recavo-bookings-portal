@@ -6,7 +6,15 @@ import type { PaymentTone } from "@/lib/booking-payment";
 /** The three payment states a business can recolour. `none` shares `paid`'s colour. */
 export type PaymentColourKey = "paid" | "partial" | "unpaid";
 
-export type PaymentColours = Record<PaymentColourKey, string | null>;
+export type PaymentColours = Record<PaymentColourKey, string | null> & {
+  /** Set when the business colours bookings by person: staff id to `#rrggbb`. */
+  byStaff?: ReadonlyMap<string, string> | null;
+};
+
+/** "Colour bookings by: {staff}" (Settings › Calendar); payment status otherwise. */
+export function colourByStaff(config: BusinessConfiguration | null | undefined): boolean {
+  return config?.calendar?.colourBy === "staff";
+}
 
 export const PAYMENT_COLOUR_KEYS: PaymentColourKey[] = ["paid", "partial", "unpaid"];
 
@@ -73,6 +81,64 @@ export function paymentBarStyle(
     return { className: "", style: { backgroundColor: custom, color: readableTextOn(custom) } };
   }
   return { className: DEFAULT_CLASSES[key].bar, style: undefined };
+}
+
+const TINT_CLASSES: Record<PaymentColourKey, string> = {
+  paid: "bg-cal-paid-bg text-cal-paid-fg",
+  partial: "bg-cal-deposit-bg text-cal-deposit-fg",
+  unpaid: "bg-cal-unpaid-bg text-cal-unpaid-fg",
+};
+
+/**
+ * Calendar redesign (spec §1.2): a block is a soft tint of its status colour with
+ * dark text, not a solid bar. Defaults are theme tokens so they follow light/dark;
+ * a business override derives both from the chosen hex — fill at ~16% over the
+ * card and text mixed towards the theme's foreground so it stays readable in both
+ * modes.
+ */
+export function paymentTintStyle(
+  tone: PaymentTone,
+  colours: PaymentColours,
+): { className: string; style: CSSProperties | undefined } {
+  const key = toneToColourKey(tone);
+  const custom = colours[key];
+  if (custom && HEX_COLOUR.test(custom)) {
+    return {
+      className: "",
+      style: {
+        backgroundColor: `color-mix(in oklab, ${custom} 16%, var(--card))`,
+        color: `color-mix(in oklab, ${custom} 55%, var(--foreground))`,
+      },
+    };
+  }
+  return { className: TINT_CLASSES[key], style: undefined };
+}
+
+/** A booking tinted in its person's colour, same strength as the payment tints. */
+export function personTintStyle(hex: string): { className: string; style: CSSProperties } {
+  return {
+    className: "",
+    style: {
+      backgroundColor: `color-mix(in oklab, ${hex} 16%, var(--card))`,
+      color: `color-mix(in oklab, ${hex} 55%, var(--foreground))`,
+    },
+  };
+}
+
+/** Solid swatch for a "£18 due" pill (spec §1.2): status colour behind white text. */
+export function duePillStyle(
+  tone: PaymentTone,
+  colours: PaymentColours,
+): { className: string; style: CSSProperties | undefined } {
+  const key = toneToColourKey(tone);
+  const custom = colours[key];
+  if (custom && HEX_COLOUR.test(custom)) {
+    return { className: "text-white", style: { backgroundColor: custom } };
+  }
+  return {
+    className: key === "unpaid" ? "bg-cal-unpaid text-white" : "bg-cal-deposit text-white",
+    style: undefined,
+  };
 }
 
 /** Class + inline style for a legend dot in `tone`. */

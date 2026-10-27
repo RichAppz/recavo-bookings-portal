@@ -15,9 +15,10 @@
  *  - Google Fonts are cached so type doesn't fall back offline.
  *  - API calls are never cached here: TanStack Query owns data (and its auth).
  *
- * Updates: a new deploy installs a new worker that waits until the page asks it
- * to take over (see src/lib/offline/service-worker.ts), so a session is never
- * half old bundle, half new.
+ * Updates: a new deploy installs a new worker that waits until the old one has
+ * no tabs left, so a session is never half old bundle, half new. There is no
+ * reload prompt (see src/lib/offline/service-worker.ts); the SKIP_WAITING
+ * message is kept for tooling and tests.
  */
 import { clientsClaim } from "workbox-core";
 import { ExpirationPlugin } from "workbox-expiration";
@@ -110,6 +111,77 @@ registerRoute(
     plugins: [new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 })],
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Web Push (src/lib/push). The API sends a JSON payload shaped like PushMessage:
+// { title, body, link, businessId, notificationId, tag }. We show it, and on click
+// hand the data to an open tab (or open one) so the page can navigate in-app.
+
+/** Must match PUSH_OPEN_MESSAGE in src/lib/push/push-support.ts. */
+const PUSH_OPEN_MESSAGE = "recavo:push-open";
+
+type PushPayload = {
+  title?: string;
+  body?: string;
+  link?: string | null;
+  businessId?: string | null;
+  notificationId?: string | null;
+  tag?: string | null;
+};
+
+function safeLink(link: unknown): string | null {
+  return typeof link === "string" && link.startsWith("/") && !link.startsWith("//") ? link : null;
+}
+
+self.addEventListener("push", (event) => {
+  let payload: PushPayload = {};
+  try {
+    payload = (event.data?.json() as PushPayload) ?? {};
+  } catch {
+    payload = { body: event.data?.text() ?? "" };
+  }
+  const data = {
+    link: safeLink(payload.link),
+    businessId: payload.businessId ?? null,
+    notificationId: payload.notificationId ?? null,
+  };
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "RECAVO", {
+      body: payload.body || "",
+      icon: "/apple-touch-icon.png",
+      data,
+      ...(payload.tag ? { tag: payload.tag, renotify: true } : {}),
+    } as NotificationOptions),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = (event.notification.data ?? {}) as {
+    link?: string | null;
+    businessId?: string | null;
+    notificationId?: string | null;
+  };
+  const target = `${self.location.origin}${data.link ?? "/"}`;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const existing = windows.find((c) => c.url.startsWith(self.location.origin));
+      if (existing) {
+        await existing.focus();
+        existing.postMessage({ type: PUSH_OPEN_MESSAGE, data });
+        return;
+      }
+      // No tab open: the page boots from the link itself; businessId/notificationId
+      // ride along in the hash so PushBootstrap can still switch and mark read.
+      const params = new URLSearchParams();
+      if (data.businessId) params.set("businessId", data.businessId);
+      if (data.notificationId) params.set("notificationId", data.notificationId);
+      const extra = params.toString();
+      await self.clients.openWindow(extra ? `${target}#push=${encodeURIComponent(extra)}` : target);
+    })(),
+  );
+});
 
 /** Only seen if the shell was never cached (first ever visit happened offline). */
 const OFFLINE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
