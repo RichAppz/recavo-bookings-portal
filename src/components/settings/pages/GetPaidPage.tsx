@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { CreditCard, Landmark } from "lucide-react";
+import { CreditCard, Landmark, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { BankTransferSetting } from "@/components/BankTransferSetting";
-import { ConnectRejectedNotice } from "@/components/ConnectRejectedNotice";
 import { InvoicingSetting } from "@/components/InvoicingSetting";
-import { PaymentsHoldNotice } from "@/components/PaymentsHoldNotice";
+import { PaymentsProblemCard, usePaymentsSetup } from "@/components/payments/PaymentsSetup";
 import {
   GroupedBlock,
   ReadOnlyNotice,
@@ -19,9 +19,12 @@ import {
   useConnectAccount,
   useConnectLoginLink,
   usePaymentsHold,
+  useStartConnectOnboarding,
+  useSyncConnectAccount,
 } from "@/lib/api/hooks";
 import type { ConnectAccount } from "@/lib/api/types";
-import { connectRejection } from "@/lib/connect-rejection";
+import { connectOnboardingWorthRetrying } from "@/lib/connect-rejection";
+import { openHostedFlow } from "@/lib/native";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Can, useTenant } from "@/lib/tenant/tenant-context";
 
@@ -46,7 +49,9 @@ export function GetPaidPage() {
   const connect = useConnectAccount();
   const hold = usePaymentsHold().data ?? null;
   const loginLink = useConnectLoginLink();
-  const rejection = connectRejection(connect.data);
+  const startOnboarding = useStartConnectOnboarding();
+  const syncConnect = useSyncConnectAccount();
+  const setup = usePaymentsSetup();
   const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
   // Never getting Stripe (RECAVO decision) and nothing connected: no Stripe section at all.
   const hideStripe = stripeHidden(hold) && !connect.isLoading && !connect.data;
@@ -60,6 +65,16 @@ export function GetPaidPage() {
     const url = await loginLink.mutateAsync();
     window.open(url, "_blank", "noopener,noreferrer");
   };
+  const startStripe = async () => {
+    const result = await startOnboarding.mutateAsync();
+    if (result.onboardingUrl) void openHostedFlow(result.onboardingUrl);
+    else toast.success("Onboarding started");
+  };
+  const canOnboard = !hold && connectOnboardingWorthRetrying(connect.data);
+  const problemCard =
+    setup.problem && setup.problem !== "none" ? (
+      <PaymentsProblemCard setup={setup} context="settings" />
+    ) : null;
 
   return (
     <SettingsPage
@@ -78,9 +93,10 @@ export function GetPaidPage() {
         </>
       }
       banner={
-        nothingReady || !canEdit ? (
+        nothingReady || !canEdit || problemCard ? (
           <div className="grid gap-3">
             {!canEdit ? <ReadOnlyNotice /> : null}
+            {problemCard}
             {nothingReady ? (
               <SettingsBanner title="No way to get paid yet">
                 {hideStripe
@@ -107,8 +123,6 @@ export function GetPaidPage() {
           help="Stripe takes the card and pays out to your bank. RECAVO never stores your bank details and takes no cut of each payment."
           aside={connect.isLoading ? null : connectPill(connect.data, Boolean(hold))}
         >
-          {hold ? <PaymentsHoldNotice hold={hold} /> : null}
-          {rejection ? <ConnectRejectedNotice rejection={rejection} /> : null}
           <GroupedBlock>
             <div className="flex flex-wrap items-center gap-4 px-4 py-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -130,18 +144,29 @@ export function GetPaidPage() {
                     : "Not connected. Set up takes a few minutes."}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {!connect.data ? (
-                  hold ? null : (
-                    <Can permission={PERMISSIONS.CONNECT_MANAGE}>
-                      <Button asChild size="sm">
-                        <Link to="/payments">Set up</Link>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Can permission={PERMISSIONS.CONNECT_MANAGE}>
+                  {!connect.data || connect.data.onboardingState === "not_started" ? (
+                    canOnboard ? (
+                      <Button
+                        size="sm"
+                        disabled={startOnboarding.isPending}
+                        onClick={() => void startStripe()}
+                      >
+                        {connect.data ? "Finish set up" : "Connect Stripe"}
                       </Button>
-                    </Can>
-                  )
-                ) : (
-                  <Can permission={PERMISSIONS.CONNECT_MANAGE}>
-                    {connect.data.onboardingState !== "not_started" ? (
+                    ) : null
+                  ) : (
+                    <>
+                      {connect.data.onboardingState !== "complete" && canOnboard ? (
+                        <Button
+                          size="sm"
+                          disabled={startOnboarding.isPending}
+                          onClick={() => void startStripe()}
+                        >
+                          Finish in Stripe
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="outline"
@@ -151,16 +176,47 @@ export function GetPaidPage() {
                         <Landmark className="size-4" aria-hidden />
                         {connect.data.payoutsEnabled ? "Manage payouts" : "Open Stripe"}
                       </Button>
-                    ) : (
-                      <Button asChild size="sm">
-                        <Link to="/payments">Finish set up</Link>
-                      </Button>
-                    )}
-                  </Can>
-                )}
+                    </>
+                  )}
+                  {connect.data ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={syncConnect.isPending}
+                      onClick={async () => {
+                        await syncConnect.mutateAsync();
+                        toast.success("Account synced");
+                      }}
+                    >
+                      <RotateCcw className="size-4" aria-hidden /> Sync account
+                    </Button>
+                  ) : null}
+                </Can>
               </div>
             </div>
           </GroupedBlock>
+          {setup.requirements.length > 0 && !setup.rejection ? (
+            <div className="text-[13px] text-muted-foreground">
+              <p>Stripe still needs:</p>
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {setup.requirements.map((label) => (
+                  <li
+                    key={label}
+                    className="rounded-full border px-2.5 py-0.5 text-xs font-semibold text-foreground"
+                  >
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {connect.data?.payoutsEnabled ? (
+            <p className="text-[13px] text-muted-foreground">
+              Payouts are automatic. Stripe pays your available balance to your bank on a rolling
+              schedule. Use Manage payouts to see your balance and payout history, change your bank
+              account or take an instant payout.
+            </p>
+          ) : null}
           <p className="text-[13px] text-muted-foreground">
             Stripe takes <span className="text-foreground">1.5% + 20p</span> on UK cards,{" "}
             <span className="text-foreground">2.5% + 20p</span> on EEA cards and{" "}

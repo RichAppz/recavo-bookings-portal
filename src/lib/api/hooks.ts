@@ -664,13 +664,20 @@ export function useRecordBookingPayment() {
   return useMutation({
     mutationFn: createIdempotentMutationFn<
       Booking,
-      { bookingId: string; amountMinor?: number; method: RecordPaymentMethod }
+      {
+        bookingId: string;
+        amountMinor?: number;
+        method: RecordPaymentMethod;
+        /** Staff-only note shown on the Payments page. */
+        note?: string | null;
+      }
     >(async (vars, idempotencyKey) => {
       const res = await api.post<{ booking: Booking }>(
         `/api/v1/businesses/${businessId}/bookings/${vars.bookingId}/record-payment`,
         {
           ...(vars.amountMinor != null ? { amountMinor: vars.amountMinor } : {}),
           method: vars.method,
+          ...(vars.note?.trim() ? { note: vars.note.trim() } : {}),
         },
         { idempotencyKey },
       );
@@ -678,6 +685,7 @@ export function useRecordBookingPayment() {
     }),
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
       void qc.invalidateQueries({ queryKey: queryKeys.booking(businessId, vars.bookingId) });
       void qc.invalidateQueries({
         queryKey: queryKeys.bookingHistory(businessId, vars.bookingId),

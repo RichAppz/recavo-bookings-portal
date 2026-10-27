@@ -48,7 +48,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Where it ends up",
-        body: "Payments you record appear on the booking's Payments tab and on the client's **Money** tab, and count towards what's outstanding. Card payments taken through Stripe are listed under **Payments** in the sidebar with their receipts and refunds.",
+        body: "Payments you record appear on the booking's Payments tab and on the client's **Money** tab, and count towards what's outstanding. They also appear under **Payments** in the sidebar, next to card payments, with their receipts and refunds. **Record a payment** at the top of Payments logs one without opening the booking.",
         link: { to: "/payments", label: "Open Payments" },
       },
     ],
@@ -97,7 +97,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Everything in one place",
-        body: "**Payments** in the sidebar lists every payment — card, transfer and recorded — with its status, receipt and a **Refund** action for card payments. The totals at the top cover the range you've chosen, and **Reports** breaks them down by method.",
+        body: "**Payments** in the sidebar lists every payment (card, card machine, cash, bank transfer and other) with its status. Click one to see what happened, the Stripe fee, the receipt and **Refund**. The totals at the top cover the period you've chosen, **Owed** lists bookings still waiting for money with **Remind** and **Mark paid**, and **Reports** breaks takings down by method.",
         image: {
           name: "payments-page",
           alt: "The Payments page with totals for the period and a table of payments by date, client, amount and status.",

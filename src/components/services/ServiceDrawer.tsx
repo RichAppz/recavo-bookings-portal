@@ -4,6 +4,7 @@ import { AlertTriangle, Lock, MoreHorizontal, Plus, Sparkles, X } from "lucide-r
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/MoneyInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1977,45 +1978,6 @@ function Field({
       ) : help ? (
         <p className="text-xs text-muted-foreground">{help}</p>
       ) : null}
-    </div>
-  );
-}
-
-function MoneyInput({
-  id,
-  symbol,
-  value,
-  onChange,
-  placeholder,
-  invalid,
-  ariaLabel,
-}: {
-  id?: string;
-  symbol: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  invalid?: boolean;
-  ariaLabel?: string;
-}) {
-  return (
-    <div className="relative">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
-      >
-        {symbol}
-      </span>
-      <Input
-        id={id}
-        inputMode="decimal"
-        aria-label={ariaLabel}
-        value={value}
-        placeholder={placeholder}
-        aria-invalid={invalid || undefined}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ paddingLeft: `${Math.max(1.75, 0.75 + symbol.length * 0.6)}rem` }}
-      />
     </div>
   );
 }

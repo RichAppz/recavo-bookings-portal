@@ -148,6 +148,9 @@ export const queryKeys = {
     ["biz", businessId, "payments", paymentId] as const,
   paymentReceipt: (businessId: string, paymentId: string) =>
     ["biz", businessId, "payments", paymentId, "receipt"] as const,
+  paymentsActivity: (businessId: string, from: string, to: string) =>
+    ["biz", businessId, "payments", "~activity", from, to] as const,
+  paymentsOwed: (businessId: string) => ["biz", businessId, "payments", "~owed"] as const,
   connectAccount: (businessId: string) => ["biz", businessId, "connect"] as const,
 
   /** Prefix for every invoice list — invalidate after any invoice write. */

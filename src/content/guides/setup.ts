@@ -284,12 +284,12 @@ export const SETUP_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Connect your payout account",
-        body: "Open **Payments** in the sidebar. Under **Payout account**, click **Connect Stripe** and follow Stripe's steps — your business details, the bank account payouts go to, and an ID check. Stripe handles the card details and payouts; RECAVO never sees or stores them.",
+        body: "Go to **Settings → Get paid**. Under **Card payments**, click **Connect Stripe** and follow Stripe's steps: your business details, the bank account payouts go to, and an ID check. Stripe handles the card details and payouts; RECAVO never sees or stores them. Anything Stripe still needs is listed there in plain English, with **Finish in Stripe**.",
         image: {
           name: "payout-account",
-          alt: "The Payments page with the Payout account card inviting you to connect Stripe.",
+          alt: "Settings, Get paid, with the Card payments section inviting you to connect Stripe.",
         },
-        link: { to: "/payments", label: "Open Payments" },
+        link: { to: "/settings/get-paid", label: "Open Get paid" },
       },
       {
         heading: "Turn online payment on",

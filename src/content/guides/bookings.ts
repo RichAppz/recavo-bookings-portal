@@ -284,7 +284,7 @@ export const BOOKING_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Refund a card payment",
-        body: "Refunds go back the way the money came. Open **Payments** in the sidebar, find the payment and click **Refund** — full or partial. Stripe returns it to the client's card within a few days and the booking shows the refund. Cash and bank transfers you hand back yourself; record a note on the client if you want a trail.",
+        body: "Refunds go back the way the money came. Open **Payments** in the sidebar, click the payment and choose **Refund**, full or part, with a reason and an optional staff note. Stripe returns card payments to the client's card within a few days and the booking shows the refund. Cash and bank transfers you hand back yourself, then use **Refund** on that payment to record it so the totals stay right.",
         image: {
           name: "refunds",
           alt: "The Payments page listing card payments with their status and a Refund action on each.",

@@ -35,7 +35,7 @@ const STEPS = [
   {
     title: "5. Payments",
     to: "/payments",
-    body: "Gross and net revenue, failed payments, and issuing refunds through Stripe Connect.",
+    body: "Every payment however it was paid, what you keep after refunds and fees, what is still owed, refunds and disputes.",
   },
   {
     title: "6. Reports",

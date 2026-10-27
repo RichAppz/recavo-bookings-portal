@@ -24,7 +24,7 @@ function ConnectReturnPage() {
       // Stripe sends users here whether or not they finished, so ask Stripe for the
       // account state rather than treating the redirect as proof of completion.
       await sync.mutateAsync().catch(() => null);
-      await navigate({ to: "/payments" });
+      await navigate({ to: "/settings/$page", params: { page: "get-paid" } });
     })();
   }, [sync, navigate]);
 
@@ -36,7 +36,9 @@ function ConnectReturnPage() {
         description="We’re confirming what Stripe sent back. This only takes a moment."
         action={
           <Button variant="outline" asChild>
-            <Link to="/payments">Go to payments</Link>
+            <Link to="/settings/$page" params={{ page: "get-paid" }}>
+              Go to Get paid
+            </Link>
           </Button>
         }
       />
