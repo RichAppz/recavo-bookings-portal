@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useBookingWords } from "@/lib/booking-words";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ export function ArchiveServiceDialog({
 }) {
   const upcoming = usage?.upcomingBookingCount ?? 0;
   const past = Math.max(0, (usage?.bookingCount ?? 0) - upcoming);
+  const bw = useBookingWords();
   return (
     <Dialog open={service !== null} onOpenChange={(o) => (!o ? onCancel() : undefined)}>
       <DialogContent className="sm:max-w-[460px]">
@@ -41,8 +43,8 @@ export function ArchiveServiceDialog({
           <DialogDescription>
             It stops taking bookings and moves to Archived.{" "}
             {usage
-              ? `The ${past} past and ${upcoming} upcoming bookings keep their details. `
-              : "Its bookings keep their details. "}
+              ? `The ${past} past and ${upcoming} upcoming ${bw.plural} keep their details. `
+              : `Its ${bw.plural} keep their details. `}
             You can restore it any time.
           </DialogDescription>
         </DialogHeader>

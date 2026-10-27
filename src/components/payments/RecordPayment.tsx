@@ -46,6 +46,7 @@ import { dayLabel, expectedMethod, type OwedRow } from "@/lib/payments-page";
 import { currencySymbol } from "@/lib/services-catalogue";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { cn } from "@/lib/utils";
+import { useBookingWords } from "@/lib/booking-words";
 
 const RECORD_METHODS: { value: RecordPaymentMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -185,6 +186,7 @@ export function MarkPaidDialog({
   onClose: () => void;
 }) {
   const ids = useId();
+  const words = useBookingWords();
   const { save, pending } = useSavePayment();
   const [method, setMethod] = useState<RecordPaymentMethod>("cash");
   const [amount, setAmount] = useState("");
@@ -220,7 +222,7 @@ export function MarkPaidDialog({
           <div className="grid gap-4">
             {candidate.awaitingTransfer ? (
               <p className="rounded-lg bg-secondary/60 p-3 text-sm">
-                This confirms the booking and tells{" "}
+                This confirms the {words.lower} and tells{" "}
                 {row.customer?.name?.split(" ")[0] ?? "the client"} their bank transfer arrived.
               </p>
             ) : (
@@ -302,6 +304,7 @@ export function RecordPaymentDrawer({
   onClose: () => void;
 }) {
   const ids = useId();
+  const words = useBookingWords();
   const { save, pending } = useSavePayment();
   const [search, setSearch] = useState("");
   const debounced = useDebouncedValue(search.trim(), 250);
@@ -455,13 +458,13 @@ export function RecordPaymentDrawer({
 
           {client ? (
             <fieldset className="grid gap-1.5">
-              <legend className="mb-1.5 text-sm font-medium">Booking</legend>
+              <legend className="mb-1.5 text-sm font-medium">{words.one}</legend>
               {clientBookings.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading bookings…</p>
+                <p className="text-sm text-muted-foreground">Loading {words.plural}…</p>
               ) : candidates.length === 0 ? (
                 <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-                  {client.name} has no bookings waiting for money. Payments are recorded against a
-                  booking, so add the booking first.
+                  {client.name} has no {words.plural} waiting for money. Payments are recorded
+                  against a {words.lower}, so add the {words.lower} first.
                 </p>
               ) : (
                 <div role="radiogroup" className="grid gap-2">
@@ -500,7 +503,7 @@ export function RecordPaymentDrawer({
             <>
               {picked.awaitingTransfer ? (
                 <p className="rounded-lg bg-secondary/60 p-3 text-sm">
-                  This confirms the booking and tells {client?.name.split(" ")[0]} their bank
+                  This confirms the {words.lower} and tells {client?.name.split(" ")[0]} their bank
                   transfer arrived.
                 </p>
               ) : (

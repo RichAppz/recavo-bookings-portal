@@ -24,7 +24,7 @@ import { useCardRefund, useRecordManualRefund } from "@/lib/api/payments-activit
 import { formatMoney } from "@/lib/format";
 import {
   METHOD_LABELS,
-  REFUND_REASONS,
+  refundReasons,
   clientName,
   refundableMinor,
   shortDate,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/payments-page";
 import { currencySymbol } from "@/lib/services-catalogue";
 import { useIsPhone } from "@/hooks/use-media-query";
+import { useBookingWords } from "@/lib/booking-words";
 import { cn } from "@/lib/utils";
 
 const MANUAL_METHODS = ["cash", "bank_transfer", "card_manual", "other"] as const;
@@ -72,12 +73,13 @@ export function RefundDrawer({
 }) {
   const phone = useIsPhone();
   const ids = useId();
+  const reasons = refundReasons(useBookingWords().lower);
   const manual = row ? row.method !== "card_online" : false;
   const cardRefund = useCardRefund();
   const manualRefund = useRecordManualRefund();
   const [mode, setMode] = useState<"full" | "part">("full");
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState<string>(REFUND_REASONS[0].code);
+  const [reason, setReason] = useState<string>(reasons[0].code);
   const [note, setNote] = useState("");
   const [method, setMethod] = useState<ManualMethod>("cash");
   const [touched, setTouched] = useState(false);
@@ -87,7 +89,7 @@ export function RefundDrawer({
     if (!row) return;
     setMode("full");
     setAmount("");
-    setReason(REFUND_REASONS[0].code);
+    setReason("requested_by_customer");
     setNote("");
     setTouched(false);
     setServerError(null);
@@ -256,7 +258,7 @@ export function RefundDrawer({
               aria-labelledby={`${ids}-why`}
               className="flex flex-wrap gap-1.5"
             >
-              {REFUND_REASONS.map((r) => (
+              {reasons.map((r) => (
                 <button
                   key={r.code}
                   type="button"

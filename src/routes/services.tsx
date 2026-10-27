@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useBookingWords } from "@/lib/booking-words";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import {
@@ -145,6 +146,7 @@ function ServicesPage() {
   const phone = useIsPhone();
   const { lower, plural, pluralLower } = serviceNoun(tenant.terminology.service);
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
+  const bw = useBookingWords();
   const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
   const canMoney = tenant.can(PERMISSIONS.PAYMENT_READ);
   const search = Route.useSearch();
@@ -307,7 +309,7 @@ function ServicesPage() {
       toast.success(`${s.name} is taking bookings`);
       return;
     }
-    toast.success(`${s.name} paused. Existing bookings stay.`, {
+    toast.success(`${s.name} paused. Existing ${bw.plural} stay.`, {
       duration: 6000,
       action: {
         label: "Undo",
@@ -578,7 +580,7 @@ function ServicesPage() {
             className="flex-col items-start gap-0"
           >
             Archive
-            <span className="text-xs text-muted-foreground">Keeps past bookings</span>
+            <span className="text-xs text-muted-foreground">Keeps past {bw.plural}</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!deletable}
@@ -1163,7 +1165,7 @@ function ServicesPage() {
                             day: "numeric",
                             month: "short",
                           })}{" "}
-                          · {past} past {past === 1 ? "booking" : "bookings"}
+                          · {past} past {past === 1 ? bw.lower : bw.plural}
                         </p>
                       </button>
                       {canEdit ? (

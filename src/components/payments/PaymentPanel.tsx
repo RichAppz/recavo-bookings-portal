@@ -33,6 +33,7 @@ import {
   type ActivityRow,
 } from "@/lib/payments-page";
 import { useIsPhone } from "@/hooks/use-media-query";
+import { useBookingWords, type BookingWords } from "@/lib/booking-words";
 import { cn } from "@/lib/utils";
 import { FactLine, PaymentStatusPill, signedMoney } from "./PaymentBits";
 
@@ -66,7 +67,7 @@ type TimelineEntry = {
   amountTone?: "red";
 };
 
-function timeline(row: ActivityRow, timeZone: string): TimelineEntry[] {
+function timeline(row: ActivityRow, timeZone: string, words: BookingWords): TimelineEntry[] {
   const money = (minor: number) => formatMoney(minor, row.currency);
   const out: TimelineEntry[] = [];
   const stamp = shortStamp(row.at, timeZone);
@@ -109,7 +110,7 @@ function timeline(row: ActivityRow, timeZone: string): TimelineEntry[] {
   }
   for (const r of [...row.refunds].sort((a, b) => a.at.localeCompare(b.at))) {
     const by = r.by?.name ? ` by ${r.by.name}` : "";
-    const reason = refundReasonLabel(r.reasonCode);
+    const reason = refundReasonLabel(r.reasonCode, words.lower);
     const manual = r.method !== "card_online";
     out.push({
       key: `refund-${r.id}`,
@@ -148,7 +149,7 @@ function timeline(row: ActivityRow, timeZone: string): TimelineEntry[] {
       out.push({
         key: "evidence",
         tone: "grey",
-        title: "Booking details sent to Stripe",
+        title: `${words.one} details sent to Stripe`,
         lines: [shortDate(d.evidenceSentAt, timeZone)],
       });
     }
@@ -236,6 +237,7 @@ function PanelBody({
   onRefund: (row: ActivityRow) => void;
 }) {
   const tenant = useTenant();
+  const words = useBookingWords();
   const money = (minor: number) => formatMoney(minor, row.currency);
   const disputed = row.status === "disputed" || Boolean(row.dispute);
   const openDispute = disputeIsOpen(row);
@@ -278,7 +280,7 @@ function PanelBody({
 
         <Section title="What happened">
           <ol className="space-y-3">
-            {timeline(row, timeZone).map((e) => (
+            {timeline(row, timeZone, words).map((e) => (
               <li key={e.key} className="flex gap-3">
                 <span
                   className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", DOT[e.tone])}
@@ -356,12 +358,13 @@ function PanelBody({
 }
 
 function OpenTarget({ row, primary }: { row: ActivityRow; primary?: boolean }) {
+  const words = useBookingWords();
   const cls = primary ? "h-11 sm:h-10" : undefined;
   if (row.booking) {
     return (
       <Button asChild variant={primary ? "default" : "outline"} className={cls}>
         <Link to="/bookings" search={{ booking: row.booking.id }}>
-          Open booking
+          Open {words.lower}
         </Link>
       </Button>
     );
@@ -447,6 +450,7 @@ function ReceiptSection({ row }: { row: ActivityRow }) {
 }
 
 function DisputeBody({ row, timeZone }: { row: ActivityRow; timeZone: string }) {
+  const words = useBookingWords();
   const d = row.dispute;
   const name = clientName(row);
   const amount = d?.amountMinor ?? row.amountMinor;
@@ -524,11 +528,15 @@ function DisputeBody({ row, timeZone }: { row: ActivityRow; timeZone: string }) 
           {[
             [
               "Gather your proof",
-              `Booking confirmation, the before and after photos, and any messages with ${name}.`,
+              words.detailing
+                ? `${words.one} confirmation, the before and after photos, and any messages with ${name}.`
+                : `${words.one} confirmation, attendance, and any messages with ${name}.`,
             ],
             [
               `Respond in Stripe${dueText ? ` by ${dueText}` : ""}`,
-              "We've added the booking details for you. Add the photos and a short note.",
+              `We've added the ${words.lower} details for you. Add ${
+                words.detailing ? "the photos" : "anything else you have"
+              } and a short note.`,
             ],
             [
               "The bank decides",
@@ -553,6 +561,7 @@ function DisputeBody({ row, timeZone }: { row: ActivityRow; timeZone: string }) 
 
 function DisputeActions({ row }: { row: ActivityRow }) {
   const tenant = useTenant();
+  const words = useBookingWords();
   const accept = useAcceptDispute();
   const evidence = useSendDisputeEvidence();
   const loginLink = useConnectLoginLink();
@@ -572,7 +581,7 @@ function DisputeActions({ row }: { row: ActivityRow }) {
     try {
       await evidence.mutateAsync(paymentId);
     } catch {
-      toast.error("We couldn't add the booking details. Add them in Stripe.");
+      toast.error(`We couldn't add the ${words.lower} details. Add them in Stripe.`);
     }
     try {
       const url = await loginLink.mutateAsync();

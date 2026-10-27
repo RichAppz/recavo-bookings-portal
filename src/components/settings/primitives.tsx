@@ -456,11 +456,14 @@ export function PrefixField({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="grid gap-1.5">
-      <div className="flex gap-2">
+    <div className="grid min-w-0 gap-1.5">
+      <div className="flex min-w-0 gap-2">
         <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <span className="flex shrink-0 items-center border-r bg-secondary px-3 text-sm text-muted-foreground select-none">
-            {prefix}
+          <span
+            title={prefix}
+            className="flex min-w-0 max-w-[60%] items-center border-r bg-secondary px-3 text-sm text-muted-foreground select-none"
+          >
+            <span className="truncate">{prefix}</span>
           </span>
           <input
             id={id}
@@ -481,7 +484,7 @@ export function PrefixField({
         <p
           id={`${id}-status`}
           className={cn(
-            "text-xs",
+            "text-xs [overflow-wrap:anywhere]",
             statusTone === "muted" && "text-muted-foreground",
             statusTone === "warning" && "text-warning-foreground dark:text-amber",
             statusTone === "error" && "text-destructive",

@@ -56,6 +56,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useIsPhone } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+import { useBookingWords, type BookingWords } from "@/lib/booking-words";
 import {
   DEFAULT_PERIOD,
   METHOD_LABELS,
@@ -623,6 +624,7 @@ function DisputeBanner({
 type Figs = ReturnType<typeof paymentFigures>;
 
 function Figures({ figures, currency }: { figures: Figs; currency: string }) {
+  const words = useBookingWords();
   const money = (minor: number) => formatMoney(minor, currency);
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const tiles: {
@@ -654,7 +656,7 @@ function Figures({ figures, currency }: { figures: Figs; currency: string }) {
     {
       label: "Owed",
       value: money(figures.owedMinor),
-      sub: plural(figures.owedCount, "booking not paid", "bookings not paid"),
+      sub: plural(figures.owedCount, `${words.lower} not paid`, `${words.plural} not paid`),
       tone: "owed",
     },
   ];
@@ -1284,6 +1286,7 @@ function ActivityList({
   onOpen: (id: string) => void;
   onPage: (p: number) => void;
 }) {
+  const words = useBookingWords();
   const now = new Date();
   if (total === 0) {
     if (anyFilter) {
@@ -1390,7 +1393,7 @@ function ActivityList({
       <ul className="divide-y">
         {rows.map((r) => {
           const what = whatFor(r, timeZone, now);
-          const line = statusLine(r, timeZone, now);
+          const line = statusLine(r, timeZone, now, words.lower);
           return (
             <li key={r.id}>
               <Link
@@ -1480,8 +1483,8 @@ function OwedActions({
   );
 }
 
-const OWED_FOOTER =
-  "Bookings that have happened or are booked to pay by bank transfer, and haven't been paid yet.";
+const owedFooter = (w: BookingWords) =>
+  `${w.Plural} that have happened or are booked to pay by bank transfer, and haven't been paid yet.`;
 
 function OwedList({
   rows,
@@ -1508,12 +1511,13 @@ function OwedList({
   onMarkPaid: (r: OwedRow) => void;
   onPage: (p: number) => void;
 }) {
+  const words = useBookingWords();
   const now = new Date();
   if (total === 0) {
     return filtered ? (
       <EmptyCard
         title="Nothing owed for this search"
-        body="Clear the search to see every booking still waiting for money."
+        body={`Clear the search to see every ${words.lower} still waiting for money.`}
         action={
           <Button variant="outline" onClick={onClear}>
             Clear filters
@@ -1523,7 +1527,7 @@ function OwedList({
     ) : (
       <EmptyCard
         title="Nothing owed"
-        body="Every booking that's happened is paid, and no bank transfers are waiting."
+        body={`Every ${words.lower} that's happened is paid, and no bank transfers are waiting.`}
       />
     );
   }
@@ -1562,7 +1566,7 @@ function OwedList({
             </li>
           ))}
         </ul>
-        <Pager page={page} pages={pages} total={total} footer={OWED_FOOTER} onPage={onPage} />
+        <Pager page={page} pages={pages} total={total} footer={owedFooter(words)} onPage={onPage} />
       </div>
     );
   }
@@ -1577,7 +1581,7 @@ function OwedList({
         )}
         aria-hidden
       >
-        <span>Booking</span>
+        <span>{words.one}</span>
         <span>Client</span>
         <span>Expecting</span>
         <span>Owed</span>
@@ -1620,7 +1624,7 @@ function OwedList({
           </li>
         ))}
       </ul>
-      <Pager page={page} pages={pages} total={total} footer={OWED_FOOTER} onPage={onPage} />
+      <Pager page={page} pages={pages} total={total} footer={owedFooter(words)} onPage={onPage} />
     </div>
   );
 }

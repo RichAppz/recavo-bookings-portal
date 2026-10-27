@@ -162,25 +162,36 @@ export const STATUS_TONES: Record<PaymentStatus, StatusTone> = {
   disputed: "red",
 };
 
-/** Refund reasons as chips. Codes are what the API (and Stripe) take. */
-export const REFUND_REASONS = [
-  { code: "requested_by_customer", label: "Client asked" },
-  { code: "duplicate", label: "Charged twice" },
-  { code: "service_not_provided", label: "Job not done" },
-  { code: "other", label: "Other" },
-] as const;
+const capitalise = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
-const REFUND_REASON_WORDS: Record<string, string> = {
-  requested_by_customer: "Requested by client",
-  duplicate: "Charged twice",
-  service_not_provided: "Job not done",
-  fraudulent: "Fraudulent",
-  other: "Other",
-};
+/**
+ * Refund reasons as chips. Codes are what the API (and Stripe) take; "not done"
+ * names the business's own word for a booking ("Job not done", "Session not done").
+ */
+export function refundReasons(bookingNoun = "job") {
+  return [
+    { code: "requested_by_customer", label: "Client asked" },
+    { code: "duplicate", label: "Charged twice" },
+    { code: "service_not_provided", label: `${capitalise(bookingNoun)} not done` },
+    { code: "other", label: "Other" },
+  ] as const;
+}
 
-export function refundReasonLabel(code: string | null | undefined): string | null {
+export const REFUND_REASONS = refundReasons();
+
+export function refundReasonLabel(
+  code: string | null | undefined,
+  bookingNoun = "job",
+): string | null {
   if (!code) return null;
-  return REFUND_REASON_WORDS[code] ?? code.replace(/_/g, " ");
+  const words: Record<string, string> = {
+    requested_by_customer: "Requested by client",
+    duplicate: "Charged twice",
+    service_not_provided: `${capitalise(bookingNoun)} not done`,
+    fraudulent: "Fraudulent",
+    other: "Other",
+  };
+  return words[code] ?? code.replace(/_/g, " ");
 }
 
 const DISPUTE_REASONS: Record<string, string> = {
@@ -413,7 +424,12 @@ export function latestRefund(row: ActivityRow): ActivityRefund | null {
 }
 
 /** The small line under a status pill. */
-export function statusLine(row: ActivityRow, timeZone: string, now: Date): string | null {
+export function statusLine(
+  row: ActivityRow,
+  timeZone: string,
+  now: Date,
+  bookingNoun = "job",
+): string | null {
   switch (row.status) {
     case "succeeded":
       if (row.source === "manual") {
@@ -430,7 +446,7 @@ export function statusLine(row: ActivityRow, timeZone: string, now: Date): strin
       return last ? `Refunded ${shortDate(last.at, timeZone, now)}` : null;
     }
     case "refunded":
-      return refundReasonLabel(latestRefund(row)?.reasonCode);
+      return refundReasonLabel(latestRefund(row)?.reasonCode, bookingNoun);
     case "disputed": {
       const d = row.dispute;
       if (d?.status === "lost") return "Dispute lost";

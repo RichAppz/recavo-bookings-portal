@@ -11,6 +11,8 @@ import {
   paymentFigures,
   paymentsCsv,
   periodRange,
+  refundReasonLabel,
+  refundReasons,
   requirementLabels,
   rowAriaLabel,
   statusLine,
@@ -268,4 +270,11 @@ test("Stripe requirement keys read as plain English", () => {
       "1 other detail",
     ],
   );
+});
+
+test("refund wording uses the business's word for a booking", () => {
+  assert.equal(refundReasons("session")[2].label, "Session not done");
+  assert.equal(refundReasons()[2].label, "Job not done");
+  assert.equal(refundReasonLabel("service_not_provided", "session"), "Session not done");
+  assert.equal(refundReasonLabel("requested_by_customer"), "Requested by client");
 });

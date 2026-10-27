@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useBookingWords } from "@/lib/booking-words";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Lock, MoreHorizontal, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -292,6 +293,7 @@ export function ServiceDrawer({
   const { noun, lower, pluralLower } = serviceNoun(tenant.terminology.service);
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
   const currency = service?.currency || tenant.business?.currency || "GBP";
+  const bw = useBookingWords();
   const symbol = currencySymbol(currency);
   const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
   const staffWord = tenant.terminology.staff.trim() || "Staff";
@@ -1450,7 +1452,7 @@ export function ServiceDrawer({
                       <p className="text-xs text-destructive">{err("locationIds")}</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        Staff can still book it elsewhere after a warning.
+                        Your team can still book it elsewhere after a warning.
                       </p>
                     )}
                   </div>
@@ -1552,7 +1554,7 @@ export function ServiceDrawer({
                 }
               >
                 <RuleRow
-                  label="Time between bookings"
+                  label={`Time between ${bw.plural}`}
                   help="Set up and clear down"
                   changed={
                     draft.rules.bufferBeforeMinutes !== null ||
@@ -1699,8 +1701,8 @@ export function ServiceDrawer({
                   <div className="grid gap-2" id="s-consumables" tabIndex={-1}>
                     <span className="text-sm font-semibold">Consumables used</span>
                     <p className="text-xs text-muted-foreground">
-                      What one job usually uses. Every new job starts with this list, and you can
-                      change it on the day.
+                      What one {bw.lower} usually uses. Every new {bw.lower} starts with this list,
+                      and you can change it on the day.
                     </p>
                     {serviceUsageLines.isLoading || consumableCatalogue.isLoading ? (
                       <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
@@ -1734,7 +1736,7 @@ export function ServiceDrawer({
                 <SwitchRow
                   id="s-active"
                   title="Taking bookings"
-                  help="Off pauses it everywhere. Existing bookings stay."
+                  help={`Off pauses it everywhere. Existing ${bw.plural} stay.`}
                   checked={draft.active}
                   onChange={(v) => set({ active: v })}
                 />
