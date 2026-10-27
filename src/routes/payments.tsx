@@ -953,7 +953,9 @@ function ToggleChip({
       onClick={onClick}
       className={cn(
         "inline-flex min-h-11 items-center rounded-full border px-4 text-[13.5px] font-semibold",
-        on ? "border-foreground bg-foreground text-background" : "text-foreground",
+        on
+          ? "border-foreground bg-foreground text-background"
+          : "border-foreground/15 bg-secondary/50 text-foreground",
       )}
     >
       {children}
@@ -1045,7 +1047,10 @@ function FilterSheet({
           <fieldset>
             <legend className="mb-2 text-sm font-bold">When</legend>
             <div className="flex flex-wrap gap-2">
-              {SHEET_PERIODS.map((p) => (
+              {(SHEET_PERIODS.includes(period)
+                ? SHEET_PERIODS
+                : [...SHEET_PERIODS.slice(0, -1), period, "custom" as const]
+              ).map((p) => (
                 <ToggleChip key={p} on={draftPeriod === p} onClick={() => setDraftPeriod(p)}>
                   {PERIOD_LABELS[p]}
                 </ToggleChip>
