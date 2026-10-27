@@ -49,6 +49,8 @@ import type {
   ConsumablePack,
   ConsumableActivity,
   ConsumableFigures,
+  ConsumableStockMovement,
+  ConsumableStockOverview,
   ConsumableUsagePeriod,
   ConsumableUsageInput,
   ConsumableUsageLine,
@@ -1179,6 +1181,7 @@ export function useCreateConsumable() {
       pack?: ConsumablePack | null;
       sku?: string | null;
       notes?: string | null;
+      reorderLevel?: number | null;
     }) => {
       const res = await api.post<{ consumable: Consumable }>(
         `/api/v1/businesses/${businessId}/consumables`,
@@ -1212,6 +1215,7 @@ export function useUpdateConsumable() {
         pack?: ConsumablePack | null;
         sku?: string | null;
         notes?: string | null;
+        reorderLevel?: number | null;
         status?: "active" | "archived";
       };
     }) => {
@@ -1250,6 +1254,89 @@ export function useDeleteConsumable() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Tracked items that are short, out or low, and the booked jobs they'd leave short. */
+export function useConsumableStockOverview(opts: { enabled?: boolean } = {}) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.consumableStockOverview(businessId),
+    enabled: Boolean(businessId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ stock: ConsumableStockOverview }>(
+        `/api/v1/businesses/${businessId}/consumables/stock`,
+      );
+      return res.data.stock;
+    },
+  });
+}
+
+/** Deliveries and stock counts for one consumable, newest first. */
+export function useConsumableStockHistory(
+  consumableId: string | undefined,
+  opts: { enabled?: boolean } = {},
+) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.consumableStockHistory(businessId, consumableId ?? ""),
+    enabled: Boolean(businessId && consumableId) && opts.enabled !== false,
+    queryFn: async () => {
+      const res = await api.get<{ movements: ConsumableStockMovement[] }>(
+        `/api/v1/businesses/${businessId}/consumables/${consumableId}/stock`,
+      );
+      return res.data.movements;
+    },
+  });
+}
+
+/**
+ * A delivery came in ("received") or the shelf was counted ("counted"). Refreshes the
+ * catalogue, the overview and every booking's shortfall. Errors are left to the caller.
+ */
+export function useRecordConsumableStock() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      consumableId: string;
+      body: {
+        kind: "received" | "counted";
+        quantity: number;
+        costMinor?: number | null;
+        note?: string | null;
+      };
+    }) => {
+      const res = await api.post<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables/${vars.consumableId}/stock`,
+        vars.body,
+        { idempotencyKey: newIdempotencyKey() },
+      );
+      return res.data.consumable;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+    },
+  });
+}
+
+/** Stop tracking: deliveries and counts are removed and the item reads "Not tracked". */
+export function useStopTrackingConsumableStock() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (consumableId: string) => {
+      const res = await api.delete<{ consumable: Consumable }>(
+        `/api/v1/businesses/${businessId}/consumables/${consumableId}/stock`,
+      );
+      return res.data.consumable;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.consumables(businessId) });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
     },
     onError: (err) => toastApiError(err),
   });

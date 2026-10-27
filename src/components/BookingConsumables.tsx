@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
-import { MoreHorizontal, Package, X } from "lucide-react";
+import { AlertTriangle, MoreHorizontal, Package, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { TONE_PILL } from "@/components/client-profile/parts";
 import { ConsumableFormDrawer } from "@/components/consumables/ConsumableFormDrawer";
 import { ConsumablePicker, Stepper } from "@/components/consumables/parts";
 import { useConsumablesOn } from "@/components/consumables/use-consumables-on";
@@ -115,6 +117,7 @@ export function BookingConsumablesSection({
     goingAhead;
   const uncosted = items.filter((l) => l.unitCostMinor == null).length;
   const total = usage.data?.estimatedCostMinor ?? null;
+  const shortfalls = usage.data?.stockShortfalls ?? [];
 
   return (
     <section className="grid gap-2.5 **:min-w-0" aria-label="Consumables">
@@ -155,6 +158,25 @@ export function BookingConsumablesSection({
         </div>
       ) : (
         <>
+          {shortfalls.length > 0 ? (
+            <div
+              role="status"
+              className={cn("flex items-start gap-2.5 rounded-xl px-3.5 py-2.5", TONE_PILL.red)}
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p className="text-[13px]">
+                <span className="font-extrabold">Not enough in stock for this job.</span> Short{" "}
+                {summariseUsage(
+                  shortfalls.map((s) => ({ name: s.name, unit: s.unit, quantity: s.short })),
+                )}{" "}
+                once earlier jobs have theirs. Order before{" "}
+                {jobDay(booking.start, booking.timezone)}.{" "}
+                <Link to="/consumables" className="font-bold underline underline-offset-2">
+                  What to order
+                </Link>
+              </p>
+            </div>
+          ) : null}
           {showPlanned ? (
             <div
               className={cn(
@@ -260,10 +282,19 @@ export function ServiceDefaultsHint({ serviceIds }: { serviceIds: readonly strin
   const on = useConsumablesOn();
   const canMoney = tenant.can(PERMISSIONS.PAYMENT_READ);
   const results = useServicesConsumables(on ? serviceIds : []);
+  const catalogue = useConsumables({ enabled: on && serviceIds.length > 0 });
   const [expanded, setExpanded] = useState(false);
   // A handful of short lists; merging on render is cheaper than memoising them.
   const merged = mergeUsage(results.map((r) => r.data ?? []));
   if (!on || merged.length === 0) return null;
+  const stockById = new Map((catalogue.data ?? []).map((c) => [c.id, c.stock]));
+  // A new job is the latest claim on the shelf, so it gets what's left after booked jobs.
+  const short = merged.flatMap((l) => {
+    const stock = stockById.get(l.consumableId);
+    if (!stock) return [];
+    const missing = Math.round((l.quantity - Math.max(0, stock.afterUpcoming)) * 1000) / 1000;
+    return missing > 0 ? [{ name: l.name, unit: l.unit, quantity: missing }] : [];
+  });
   const estimate = canMoney ? estimateMaterialsCost(merged) : null;
   const currency = merged[0]?.currency ?? tenant.business?.currency ?? "GBP";
   return (
@@ -287,6 +318,12 @@ export function ServiceDefaultsHint({ serviceIds }: { serviceIds: readonly strin
           {expanded ? "Hide" : "View"}
         </button>
       </div>
+      {short.length > 0 ? (
+        <p className={cn("flex items-start gap-2.5 text-xs font-semibold", AMBER_TEXT)}>
+          <AlertTriangle className="mt-px size-4 shrink-0" aria-hidden />
+          <span>Not enough in stock after jobs already booked: short {summariseUsage(short)}.</span>
+        </p>
+      ) : null}
       {expanded ? (
         <ul className="grid gap-1 pl-[26px] text-xs text-muted-foreground">
           {merged.map((l) => (
