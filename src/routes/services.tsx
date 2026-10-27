@@ -617,29 +617,51 @@ function ServicesPage() {
     const isLifted = lifted?.kind === "service" && lifted.id === s.id;
     const label = rowAriaLabel(s, { isDetailing, who: who?.text ?? null });
 
-    const extras = (
-      <>
-        {where ? <Chip>{where}</Chip> : null}
-        {isDetailing && reminders > 0 ? (
-          <Chip>
-            <BellRing className="size-3" /> {reminders} {reminders === 1 ? "reminder" : "reminders"}
-          </Chip>
-        ) : null}
-        {consumablesOn && consumableCount > 0 ? (
-          <Chip title="Materials this service uses by default. For your records only.">
-            <Package className="size-3" />
-            {canMoney && materials != null
-              ? formatMoney(materials, s.currency, { compact: true })
-              : `${consumableCount} ${consumableCount === 1 ? "consumable" : "consumables"}`}
-          </Chip>
-        ) : null}
-        {isDetailing && addOns > 0 ? (
-          <Chip>
-            + {addOns} {addOns === 1 ? "add-on" : "add-ons"}
-          </Chip>
-        ) : null}
-      </>
-    );
+    const facts: { key: string; text: string; icon?: React.ReactNode; grow?: boolean }[] = [
+      ...(where ? [{ key: "where", text: where, grow: true }] : []),
+      ...(isDetailing && reminders > 0
+        ? [
+            {
+              key: "reminders",
+              text: `${reminders} ${reminders === 1 ? "reminder" : "reminders"}`,
+              icon: <BellRing className="size-3" aria-hidden />,
+            },
+          ]
+        : []),
+      ...(consumablesOn && consumableCount > 0
+        ? [
+            {
+              key: "materials",
+              text:
+                canMoney && materials != null
+                  ? `${formatMoney(materials, s.currency, { compact: true })} materials`
+                  : `${consumableCount} ${consumableCount === 1 ? "consumable" : "consumables"}`,
+              icon: <Package className="size-3" aria-hidden />,
+            },
+          ]
+        : []),
+      ...(isDetailing && addOns > 0
+        ? [{ key: "addons", text: `${addOns} ${addOns === 1 ? "add-on" : "add-ons"}` }]
+        : []),
+    ];
+    const extras =
+      facts.length > 0 ? (
+        <span
+          className="flex max-w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+          title={facts.map((f) => f.text).join(" · ")}
+        >
+          {facts.map((f, i) => (
+            <span
+              key={f.key}
+              className={cn("flex items-center gap-1", f.grow ? "min-w-0" : "shrink-0")}
+            >
+              {i > 0 ? <span aria-hidden>·</span> : null}
+              {f.icon}
+              <span className={f.grow ? "truncate" : undefined}>{f.text}</span>
+            </span>
+          ))}
+        </span>
+      ) : null;
 
     const handle = canReorder ? (
       <span
@@ -828,11 +850,13 @@ function ServicesPage() {
             ) : null}
           </span>
         )}
-        <span className="flex min-w-0 flex-wrap items-center gap-1">
-          {soleStaff ? <TonePill tone={mode.tone}>{mode.label}</TonePill> : null}
-          <TonePill tone={s.publicVisible ? "green" : "grey"}>
-            {s.publicVisible ? "On booking page" : "Offer links only"}
-          </TonePill>
+        <span className="grid min-w-0 justify-items-start gap-1">
+          <span className="flex min-w-0 flex-wrap items-center gap-1">
+            {soleStaff ? <TonePill tone={mode.tone}>{mode.label}</TonePill> : null}
+            <TonePill tone={s.publicVisible ? "green" : "grey"}>
+              {s.publicVisible ? "On booking page" : "Offer links only"}
+            </TonePill>
+          </span>
           {extras}
         </span>
         <span className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -1219,17 +1243,6 @@ function ServicesPage() {
         onConfirm={() => deleting && void confirmDelete(deleting)}
       />
     </>
-  );
-}
-
-function Chip({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <span
-      title={title}
-      className="inline-flex h-[22px] items-center gap-1 rounded-full border px-2 text-[11.5px] font-semibold whitespace-nowrap text-muted-foreground"
-    >
-      {children}
-    </span>
   );
 }
 
