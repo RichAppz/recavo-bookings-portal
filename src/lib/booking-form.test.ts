@@ -679,7 +679,7 @@ describe("addBookingBlockers", () => {
 });
 
 describe("addBookingDirty", () => {
-  const untouched = {
+  const untouched: Parameters<typeof addBookingDirty>[0] = {
     customerId: "",
     defaultCustomerId: "",
     serviceId: "",

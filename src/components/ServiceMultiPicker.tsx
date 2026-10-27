@@ -24,6 +24,8 @@ import {
 import { useIsPhone } from "@/hooks/use-media-query";
 import type { CatalogueService } from "@/lib/api/types";
 import { linePriceMinor } from "@/lib/booking-price";
+import { MINUTES_PER_DAY } from "@/lib/booking-duration";
+import { bookingWords, currencySymbol, moneyShort } from "@/lib/booking-form";
 import { formatDuration, formatMoney } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/permissions";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
@@ -50,6 +52,7 @@ export function ServiceMultiPicker({
   pairingPrices,
   linePrices,
   onLinePriceChange,
+  creditRow = false,
 }: {
   services: CatalogueService[];
   value: PickedService[];
@@ -71,6 +74,8 @@ export function ServiceMultiPicker({
    * without a variant is quoted at that price, as the API will charge it.
    */
   pairingPrices?: ReadonlyMap<string, number>;
+  /** Paid with a package credit: the row shows "1 credit" instead of a price. */
+  creditRow?: boolean;
 }) {
   const tenant = useTenant();
   // On a phone the list is a bottom sheet rather than a popover: a popover anchored
@@ -84,9 +89,8 @@ export function ServiceMultiPicker({
   const canAddService = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   // "Session" for PT, "service" for detailing — same trimming as the Services page.
-  const serviceNoun = (
-    tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
-  ).toLowerCase();
+  const words = bookingWords(tenant.terminology);
+  const serviceNoun = words.service;
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const byId = new Map(services.map((s) => [s.id, s]));
   const picked = value.filter((p) => byId.has(p.serviceId));
@@ -111,7 +115,7 @@ export function ServiceMultiPicker({
       return;
     }
     if (s.bookingMode !== "individual") {
-      setNudge(`${s.name} is booked on its own, so it replaced the other services.`);
+      setNudge(`${s.name} is booked on its own, so it replaced the other ${words.services}.`);
       onChange([{ serviceId: s.id, variantId: null }]);
       return;
     }
@@ -156,6 +160,7 @@ export function ServiceMultiPicker({
     return sum + (v?.durationMinutes ?? s.durationMinutes);
   }, 0);
   const currency = picked[0] ? byId.get(picked[0].serviceId)!.currency : "GBP";
+  const allDayAlone = picked.length === 1 && canAdd && minutes >= MINUTES_PER_DAY;
 
   const triggerText =
     picked.length === 0
@@ -196,11 +201,15 @@ export function ServiceMultiPicker({
       className={cn("min-h-0 flex-1", isPhone && "h-auto")}
       data-svc-picker-body=""
     >
-      <CommandInput placeholder="Search services…" value={search} onValueChange={setSearch} />
+      <CommandInput
+        placeholder={`Search ${words.services}…`}
+        value={search}
+        onValueChange={setSearch}
+      />
       {/* The one part that scrolls; the search box above and footer below stay put. */}
       <CommandList className={cn("min-h-0 flex-1", isPhone && "max-h-none")}>
         {matches.length === 0 ? (
-          <p className="py-6 text-center text-sm">No services match.</p>
+          <p className="py-6 text-center text-sm">No {words.services} match.</p>
         ) : (
           groupByCategory(matches).map((group) => (
             <CommandGroup
@@ -325,7 +334,7 @@ export function ServiceMultiPicker({
         <div className="flex items-center justify-between border-t px-3 py-2">
           <span className="text-xs text-muted-foreground">
             {picked.length === 0
-              ? "Tick every service in this job."
+              ? `Tick every ${words.service} in this ${words.booking}.`
               : `${picked.length} picked · ${formatMoney(total, currency)}`}
           </span>
           <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
@@ -394,21 +403,34 @@ export function ServiceMultiPicker({
       )}
 
       {picked.length > 0 ? (
-        <ul className="grid gap-1.5" aria-label="Selected services">
+        <ul className="grid divide-y rounded-[14px] border bg-card" aria-label="Selected services">
           {picked.map((p, idx) => {
             const s = byId.get(p.serviceId)!;
             const v = p.variantId ? s.variants.find((x) => x.id === p.variantId) : undefined;
+            const meta = [formatDuration(v?.durationMinutes ?? s.durationMinutes), v?.name]
+              .filter(Boolean)
+              .join(" · ");
             return (
               <li
                 key={p.serviceId}
-                className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2.5"
               >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.name}</span>
-                {idx === 0 && picked.length > 1 ? (
-                  <Badge variant="secondary" className="text-[10px]">
-                    Main
-                  </Badge>
-                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-[14.5px] font-bold">{s.name}</span>
+                    {idx === 0 && picked.length > 1 ? (
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        Main
+                      </Badge>
+                    ) : null}
+                    {creditRow ? (
+                      <Badge className="shrink-0 bg-primary-soft text-[10px] text-primary hover:bg-primary-soft">
+                        Credit
+                      </Badge>
+                    ) : null}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{meta}</p>
+                </div>
                 {s.variants.length > 0 ? (
                   <Select
                     value={p.variantId ?? "none"}
@@ -417,7 +439,7 @@ export function ServiceMultiPicker({
                     {/* On a phone the variant drops to its own full-width line under the
                         name/price/remove row; beside them it left the name a few letters. */}
                     <SelectTrigger
-                      className="order-last h-8 basis-full sm:order-none sm:w-40 sm:basis-auto"
+                      className="order-last h-9 basis-full sm:order-none sm:w-36 sm:basis-auto"
                       aria-label={`${s.name} variant`}
                     >
                       <SelectValue />
@@ -438,7 +460,9 @@ export function ServiceMultiPicker({
                     </SelectContent>
                   </Select>
                 ) : null}
-                {onLinePriceChange ? (
+                {creditRow ? (
+                  <span className="text-sm font-semibold">1 credit</span>
+                ) : onLinePriceChange ? (
                   // Editable: the price this service is charged at on this job. It is sent
                   // as this line's own price — a cheaper or dearer service, not a discount —
                   // and shows with the list struck through; clearing puts the list back.
@@ -453,22 +477,30 @@ export function ServiceMultiPicker({
                             {formatMoney(listMinor, s.currency)}
                           </span>
                         ) : null}
-                        <Input
-                          inputMode="decimal"
-                          className="h-8 w-24 text-right text-xs tabular-nums"
-                          aria-label={`${s.name} price`}
-                          aria-invalid={typedMinor === null}
-                          value={typed ?? (listMinor / 100).toFixed(2)}
-                          onFocus={(e) => e.currentTarget.select()}
-                          onChange={(e) => onLinePriceChange(p.serviceId, e.target.value)}
-                          onBlur={(e) => {
-                            // Emptied, or typed back to list: the row is untouched again.
-                            const minor = linePriceMinor(e.target.value);
-                            if (e.target.value.trim() === "" || minor === listMinor) {
-                              onLinePriceChange(p.serviceId, null);
-                            }
-                          }}
-                        />
+                        <span className="relative">
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-xs text-muted-foreground"
+                          >
+                            {currencySymbol(s.currency)}
+                          </span>
+                          <Input
+                            inputMode="decimal"
+                            className="h-9 w-24 rounded-[10px] pl-6 text-right text-sm tabular-nums aria-invalid:border-destructive"
+                            aria-label={`${s.name} price`}
+                            aria-invalid={typedMinor === null}
+                            value={typed ?? (listMinor / 100).toFixed(2)}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => onLinePriceChange(p.serviceId, e.target.value)}
+                            onBlur={(e) => {
+                              // Emptied, or typed back to list: the row is untouched again.
+                              const minor = linePriceMinor(e.target.value);
+                              if (e.target.value.trim() === "" || minor === listMinor) {
+                                onLinePriceChange(p.serviceId, null);
+                              }
+                            }}
+                          />
+                        </span>
                       </span>
                     );
                   })()
@@ -486,7 +518,7 @@ export function ServiceMultiPicker({
                   type="button"
                   onClick={() => toggle(s)}
                   aria-label={`Remove ${s.name}`}
-                  className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  className="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground sm:size-8"
                 >
                   <X className="size-4" />
                 </button>
@@ -512,10 +544,12 @@ export function ServiceMultiPicker({
         </button>
       ) : null}
 
-      {nudge || picked.length > 1 ? (
+      {nudge || picked.length > 1 || allDayAlone ? (
         <p className="text-xs text-muted-foreground">
           {nudge ??
-            `${picked.length} services · ${formatMoney(total, currency)} · ${formatDuration(minutes)}. Booked back to back; the server confirms the final price and end time.`}
+            (picked.length > 1
+              ? `${picked.length} ${words.services} · ${creditRow ? "1 credit" : moneyShort(total, currency)} · ${formatDuration(minutes)}, booked back to back.`
+              : `${byId.get(picked[0]!.serviceId)!.name} is an all-day job. Add more and they're booked back to back.`)}
         </p>
       ) : null}
     </div>

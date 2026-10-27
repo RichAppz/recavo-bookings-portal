@@ -158,7 +158,8 @@ async function pickService(ctx: ShotContext, name: string): Promise<void> {
     .filter({ hasText: /Choose services/i })
     .first()
     .click();
-  await ctx.page.getByPlaceholder(/Search services/i).fill(name);
+  // "Search sessions…" / "Search services…": the placeholder follows the business's words.
+  await ctx.page.locator("[data-svc-picker-body] input").first().fill(name);
   await ctx.page
     .getByRole("option", { name: new RegExp(name) })
     .first()
