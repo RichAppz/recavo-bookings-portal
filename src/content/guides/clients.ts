@@ -157,7 +157,7 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Book with a credit",
-        body: "When you book a client who has credits for that session, choose **Use package credit** as the payment method — the booking is marked as paid with a credit and one credit is held. The credit is used when the session is attended, and returned if it's cancelled inside your cancellation window. Clients booking online with credits are offered the same choice.",
+        body: "When you book a client who has credits for that session, choose **Package credit** as the payment method — the booking is marked as paid with a credit and one credit is held. The credit is used when the session is attended, and returned if it's cancelled inside your cancellation window. Clients booking online with credits are offered the same choice.",
         link: { to: "/calendar", label: "Open Calendar" },
       },
       {
