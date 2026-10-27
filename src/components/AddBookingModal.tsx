@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import {
   CustomerSearchPicker,
   type LinkedRecordField,
@@ -16,6 +15,24 @@ import { AddClientDialog } from "@/components/QuickActions";
 import { DiscardChangesDialog } from "@/components/DiscardChangesDialog";
 import { DropInConfirmDialog } from "@/components/DropInConfirmDialog";
 import { ClientLiftFields } from "@/components/ClientLiftFields";
+import { CustomerAvatar } from "@/components/CustomerAvatar";
+import {
+  ChannelBoxes,
+  ChoiceCards,
+  DayStrip,
+  FIELD,
+  FooterSummary,
+  FormSection,
+  LinkButton,
+  ModeChip,
+  MoneyInput,
+  Segmented,
+  Strip,
+  WaitingLine,
+  radioGroupKeys,
+  type ChoiceOption,
+  type SectionState,
+} from "@/components/booking-form/parts";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,8 +51,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BankTransferPanel } from "@/components/BankTransferPanel";
 import type { BankTransferInstructions } from "@/lib/api/types";
@@ -57,9 +72,41 @@ import {
 import { ApiError, toastApiError } from "@/lib/api";
 import type { BookingConflict } from "@/lib/api/errors";
 import { customerDisplayName } from "@/lib/api/types";
-import { emptySlotsMessage } from "@/lib/availability-windows";
-import { formatAllDayDuration } from "@/lib/booking-duration";
+import { isoDayOfWeekFromIsoDate, sessionOfferedOnDay } from "@/lib/availability-windows";
+import { formatAllDayDuration, MINUTES_PER_DAY } from "@/lib/booking-duration";
 import { configuredDepositMinor } from "@/lib/booking-payment";
+import {
+  ADD_SECTIONS,
+  addBookingBlockers,
+  addBookingDirty,
+  addDeposit,
+  addFooterSummary,
+  addNotifyHint,
+  bookingWords,
+  contactBlocks,
+  currencySymbol,
+  dayLabel,
+  defaultPaymentMethod,
+  isRememberedMethod,
+  jobPrice,
+  moneyInputValue,
+  moneyShort,
+  NOTIFY_PREFS,
+  notifyPrefFrom,
+  notifyTicks,
+  PAYMENT_METHOD_NAMES,
+  priceError,
+  priceMode,
+  priceModeLabel,
+  reachableChannels,
+  REMEMBERED_METHODS,
+  slotSummary,
+  timeRange,
+  type AddSection,
+  type NotifyPref,
+  type PaymentMethod,
+  type RememberedMethod,
+} from "@/lib/booking-form";
 import { clientLiftFromDraft, EMPTY_LIFT_DRAFT, type ClientLiftDraft } from "@/lib/client-lift";
 import {
   allDayHolds,
@@ -73,15 +120,12 @@ import {
   type TimedEntry,
 } from "@/lib/drop-in";
 import {
-  formatDuration,
   formatDurationLong,
   formatInTz,
   formatMoney,
   isoDateInTz,
-  parseMoneyToMinor,
   spansDays,
   timeInTz,
-  todayLabelInTz,
   zonedDateTimeToIso,
 } from "@/lib/format";
 import { outsideWorkingHours } from "@/lib/working-hours";
@@ -93,36 +137,28 @@ import {
   scheduleFor,
   type WorkingLayout,
 } from "@/lib/working-days";
+import { adjustmentLabel, formatAdjustment } from "@/lib/booking-price";
+import { discountLabel, type Discount } from "@/lib/discount";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { useStoredState } from "@/lib/use-stored-state";
 import { useSmsCreditsSummary } from "@/lib/billing/sms-credits";
-import { adjustmentLabel, formatAdjustment, linePriceMinor } from "@/lib/booking-price";
-import { discountLabel, discountOffMinor, type Discount } from "@/lib/discount";
 import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-/** Remembered choice of confirmation channels; "on"/"off" are the pre-tick-box values. */
-const NOTIFY_PREFS = ["email", "sms", "both", "none", "on", "off"] as const;
-type NotifyPref = (typeof NOTIFY_PREFS)[number];
+const DATE_INPUT = cn(
+  FIELD,
+  "flex w-full border border-input px-3 py-1 text-sm outline-none focus:border-ring",
+);
 
-/**
- * How the money is handled. `none` = request payment up front (the confirmation is a
- * payment request); `pay_later` = pay after the job (plain confirmation, staff send a
- * payment reminder or take it in person later); `credit` / `bank_transfer` as named.
- */
-type PaymentMethod = "none" | "credit" | "bank_transfer" | "pay_later";
-/**
- * Choices worth remembering per business so the form opens on what was used last.
- * Package credit is left out: it depends on the client, not the business's habits.
- */
-const REMEMBERED_METHODS = ["none", "pay_later", "bank_transfer"] as const;
-type RememberedMethod = (typeof REMEMBERED_METHODS)[number];
-const isRemembered = (m: PaymentMethod): m is RememberedMethod =>
-  (REMEMBERED_METHODS as readonly string[]).includes(m);
-
-const DATE_INPUT =
-  "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus:border-ring";
+const SECTION_IDS: Record<AddSection, string> = {
+  client: "add-booking-client",
+  services: "add-booking-services",
+  when: "add-booking-when",
+  price: "add-booking-price",
+  payment: "add-booking-payment",
+  notes: "add-booking-notes",
+};
 
 /** Sits at the end of the slot grid: books the whole day (or days, for a long job). */
 function AllDayTile({ onPick }: { onPick: () => void }) {
@@ -130,8 +166,8 @@ function AllDayTile({ onPick }: { onPick: () => void }) {
     <button
       type="button"
       onClick={onPick}
-      className="rounded-lg border border-dashed py-2 text-xs font-medium transition-colors hover:bg-secondary"
-      title="Block the whole day — the client sees the date rather than a time"
+      className="min-h-11 cursor-pointer rounded-[10px] border border-dashed py-2 text-xs font-medium transition-colors hover:bg-secondary sm:min-h-0"
+      title="Block the whole day; the client sees the date rather than a time"
     >
       All day
     </button>
@@ -191,6 +227,7 @@ export function AddBookingModal({
   // Every date and time staff type here is the business's wall clock — what the
   // calendar draws and what the API lays the job out in — never the device's.
   const timezone = tenant.business?.defaultTimezone ?? "Europe/London";
+  const words = bookingWords(tenant.terminology);
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [serviceId, setServiceId] = useState("");
   const [variantId, setVariantId] = useState<string>("none");
@@ -226,6 +263,11 @@ export function AddBookingModal({
   // "10% off" / "£10 off" the list price. Typing a price clears it and vice versa,
   // so there's only ever one reason the total differs from the list.
   const [discount, setDiscount] = useState<Discount | null>(null);
+  // Set by a click on Create while something is missing: from then on the sections
+  // still in the way show an amber number.
+  const [showMissing, setShowMissing] = useState(false);
+  // "Change" on the chosen client swaps the card back to the search, opened.
+  const [changingClient, setChangingClient] = useState(false);
 
   // Defaults come from wherever the modal was opened (a calendar day, a client's
   // profile) and differ between opens, so apply them each time it opens.
@@ -266,28 +308,25 @@ export function AddBookingModal({
     [...REMEMBERED_METHODS, "unset"],
   );
   const bankTransferEnabled = tenant.configuration?.bankTransfer?.enabled === true;
-  // Bank transfer may have been switched off since it was last used.
-  const defaultMethod: PaymentMethod =
-    lastMethod === "unset"
-      ? isCarDetailing
-        ? "pay_later"
-        : "none"
-      : lastMethod === "bank_transfer" && !bankTransferEnabled
-        ? "none"
-        : lastMethod;
+  const defaultMethod: PaymentMethod = defaultPaymentMethod({
+    lastMethod,
+    isCarDetailing,
+    bankTransferEnabled,
+  });
   const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>(defaultMethod);
+  // Staff picked a method themselves (the discard check counts that, not the default).
+  const [paymentTouched, setPaymentTouched] = useState(false);
   const setPaymentMethod = (next: PaymentMethod) => {
     setPaymentMethodState(next);
-    if (isRemembered(next)) setLastMethod(next);
+    if (isRememberedMethod(next)) setLastMethod(next);
   };
   // The remembered choice can arrive after mount (its storage key needs the business,
   // which loads asynchronously), so keep the closed form in step with it.
   useEffect(() => {
     if (!open) setPaymentMethodState(defaultMethod);
   }, [open, defaultMethod]);
-  // "Use package credit" only makes sense for a business that sells packages, and
-  // only for a client who actually holds credit. Hidden (not disabled) otherwise: a
-  // detailer with no packages should never see the option at all.
+  // Package credit is offered to a business that sells packages; it can only be chosen
+  // for a client who actually holds credit. A detailer with no packages never sees it.
   const packages = usePackages();
   const customerCredits = useCustomerCredits(customerId || undefined);
   const noPackages = packages.isSuccess && packages.data.length === 0;
@@ -296,8 +335,12 @@ export function AddBookingModal({
     customerCredits.isSuccess &&
     !customerCredits.data.some((c) => c.balance.available > 0);
   const creditOffered = !noPackages && !noCredit;
-  // Never leave the form on a hidden option: fall back to the remembered up-front /
-  // after-the-job choice, which is always available.
+  const creditsLeft =
+    customerId && customerCredits.isSuccess
+      ? customerCredits.data.reduce((sum, c) => sum + Math.max(0, c.balance.available), 0)
+      : null;
+  // Never leave the form on an option that can't be used: fall back to the remembered
+  // up-front / after-the-job choice, which is always available.
   useEffect(() => {
     if (paymentMethod === "credit" && !creditOffered) setPaymentMethodState(defaultMethod);
   }, [paymentMethod, creditOffered, defaultMethod]);
@@ -318,13 +361,9 @@ export function AddBookingModal({
     NOTIFY_PREFS,
   );
   const smsCredits = useSmsCreditsSummary();
-  const wantsEmail = notifyPref === "email" || notifyPref === "both" || notifyPref === "on";
-  const wantsSms = notifyPref === "sms" || notifyPref === "both";
-  const setChannel = (channel: "email" | "sms", on: boolean) => {
-    const email = channel === "email" ? on : wantsEmail;
-    const sms = channel === "sms" ? on : wantsSms;
-    setNotifyPref(email && sms ? "both" : email ? "email" : sms ? "sms" : "none");
-  };
+  const ticks = notifyTicks(notifyPref);
+  const setChannel = (channel: "email" | "sms", on: boolean) =>
+    setNotifyPref(notifyPrefFrom({ ...ticks, [channel]: on }));
   const [submitting, setSubmitting] = useState(false);
   // Account details + reference from a pay-by-bank 201, read out to the customer
   // before closing (RECA-522).
@@ -373,45 +412,12 @@ export function AddBookingModal({
   const chosenCustomer = useCustomer(customerId || undefined);
   const selectedCustomer =
     customerList.find((c) => c.id === customerId) ?? chosenCustomer.data ?? null;
-  // A box is greyed out (not silently ignored) when that channel can't reach the
-  // client, so staff see why before they hit Create rather than in the history later.
-  const emailBlocked = selectedCustomer
-    ? selectedCustomer.emailDisplay || selectedCustomer.emailNormalised
-      ? null
-      : "no email address on file"
+  const firstName = selectedCustomer
+    ? selectedCustomer.firstName?.trim() || customerDisplayName(selectedCustomer)
     : null;
-  const smsBlocked = selectedCustomer
-    ? !(selectedCustomer.phoneDisplay || selectedCustomer.phoneNormalised)
-      ? "no mobile number on file"
-      : selectedCustomer.contactPreferences.operationalNotifications === false
-        ? "they've turned off text messages"
-        : smsCredits.level === "empty"
-          ? "you have no text credits left"
-          : null
-    : null;
-  const notifyChannels: ("email" | "sms")[] = [
-    ...(wantsEmail && !emailBlocked ? (["email"] as const) : []),
-    ...(wantsSms && !smsBlocked ? (["sms"] as const) : []),
-  ];
-  const notifyHint = (() => {
-    const blocked = [
-      emailBlocked ? `Email is off: ${emailBlocked}.` : null,
-      smsBlocked ? `Text is off: ${smsBlocked}.` : null,
-    ].filter(Boolean);
-    if (notifyChannels.length === 0) {
-      return [
-        "Nothing is sent now. Use Resend on the booking when they're ready to hear from you.",
-        ...blocked,
-      ].join(" ");
-    }
-    const by =
-      notifyChannels.length === 2
-        ? "email and text"
-        : notifyChannels[0] === "sms"
-          ? "text"
-          : "email";
-    return [`Goes out by ${by} as soon as the booking is created.`, ...blocked].join(" ");
-  })();
+  const blocks = contactBlocks(selectedCustomer, smsCredits.level === "empty");
+  const notifyChannels = reachableChannels(ticks, blocks);
+  const notifyHint = addNotifyHint(notifyChannels, blocks);
   const catalogueLoading = services.isLoading || locations.isLoading || customers.isLoading;
   const noServices = services.isSuccess && serviceList.length === 0;
   const noLocations = locations.isSuccess && locationList.length === 0;
@@ -447,15 +453,16 @@ export function AddBookingModal({
   const recordTerm = tenant.terminology.linkedRecord;
   const recordTermLower = recordTerm.toLowerCase();
   // Short: it shares a line with Cancel / More details / Add and is truncated.
-  const quickAddHint = "Saved with the booking.";
+  const quickAddHint = "✓ Saved with the booking";
   const activeRecords = (customerRecords.data ?? []).filter((r) => r.status === "active");
   // Vertical-aware nouns: "Trainer"/"Session" for PT, "Detailer"/"Service" for detailing.
-  const staffNoun = tenant.terminology.staff.trim() || "Staff";
-  const staffLower = staffNoun.toLowerCase();
-  const serviceNoun = (
-    tenant.terminology.service.replace(/\s+type$/i, "").trim() || "Service"
-  ).toLowerCase();
+  const staffNoun = words.Staff;
+  const staffLower = words.staff;
+  const serviceNoun = words.service;
   const service = serviceList.find((s) => s.id === serviceId);
+  const currency = service?.currency ?? "GBP";
+  const symbol = currencySymbol(currency);
+  const money = (minor: number) => formatMoney(minor, currency);
   // The API rejects a missing linkedRecordId when either flag is on, so mirror
   // that here rather than letting the submit bounce.
   const recordRequired =
@@ -517,6 +524,7 @@ export function AddBookingModal({
   const dayStart = dayStartIso ? new Date(dayStartIso) : new Date(NaN);
   const validDate = !Number.isNaN(dayStart.getTime());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const todayIsoDate = isoDateInTz(new Date().toISOString(), timezone);
 
   const availability = useAvailability({
     serviceId: serviceId || undefined,
@@ -599,52 +607,45 @@ export function AddBookingModal({
       : 0);
   const rolledTotalMinor = primaryMinor + additionalTotalMinor;
 
-  // Per-row prices: each row is charged at what staff typed (when valid), else list;
-  // their sum is the booking total those edits imply.
-  const lineTotalMinor = picked.reduce((sum, p, idx) => {
-    const typed = linePriceMinor(linePrices[p.serviceId]);
-    if (typeof typed === "number") return sum + typed;
-    return sum + (idx === 0 ? primaryMinor : additionalListMinor(p));
-  }, 0);
-  const linePricesTouched = picked.some((p) => linePrices[p.serviceId] !== undefined);
-  const lineInvalid = picked.some((p) => linePriceMinor(linePrices[p.serviceId]) === null);
-
   // Whole-job price (RECA-532): every service keeps its list price and the API records
   // the difference as a discount (or price adjustment) line, so any total from zero up
   // is valid. Row prices are the other route: the lines themselves change.
-  const discountMinor = discount ? discountOffMinor(rolledTotalMinor, discount) : null;
-  const discountInvalid =
-    discount !== null && discount.value.trim() !== "" && discountMinor === null;
-  const priceOverridden = priceInput !== null || discountMinor !== null || linePricesTouched;
-  const overridePriceMinor: number | null = (() => {
-    if (priceInput !== null) {
-      try {
-        const minor = parseMoneyToMinor(priceInput);
-        return minor >= 0 ? minor : null;
-      } catch {
-        return null;
-      }
-    }
-    if (discountMinor !== null) return rolledTotalMinor - discountMinor;
-    if (linePricesTouched) return lineInvalid ? null : lineTotalMinor;
-    return null;
-  })();
-  const priceInvalid = (priceOverridden && overridePriceMinor === null) || discountInvalid;
-  const effectiveTotalMinor = overridePriceMinor ?? rolledTotalMinor;
-  const priceChanged = overridePriceMinor !== null && overridePriceMinor !== rolledTotalMinor;
+  const price = jobPrice({
+    rolledTotalMinor,
+    priceInput,
+    discount,
+    rows: picked.map((p, idx) => ({
+      typed: linePrices[p.serviceId],
+      listMinor: idx === 0 ? primaryMinor : additionalListMinor(p),
+    })),
+  });
+  const {
+    discountMinor,
+    discountInvalid,
+    lineInvalid,
+    linePricesTouched,
+    linesRepriced,
+    priceOverridden,
+    overridePriceMinor,
+    priceInvalid,
+    effectiveTotalMinor,
+    priceChanged,
+  } = price;
   // Row prices go to the API per line (`servicePriceMinor` for the primary,
   // `additionalServices[].priceMinor` for the rest); a typed total / discount goes as
   // the job's `priceMinor`. Never both — one clears the other above.
-  const typedLinePrice = (serviceId: string, listMinor: number): number | undefined => {
-    const typed = linePriceMinor(linePrices[serviceId]);
-    return typeof typed === "number" && typed !== listMinor ? typed : undefined;
+  const typedLinePrice = (id: string, listMinor: number): number | undefined => {
+    const typed = picked.some((p) => p.serviceId === id) ? linePrices[id] : undefined;
+    if (typed === undefined) return undefined;
+    const rows = jobPrice({
+      rolledTotalMinor: 0,
+      priceInput: null,
+      discount: null,
+      rows: [{ typed, listMinor }],
+    });
+    return rows.linesRepriced ? rows.lineTotalMinor : undefined;
   };
   const primaryLinePrice = service ? typedLinePrice(service.id, primaryMinor) : undefined;
-  // Rows priced away from list — the total may still equal the list (£+10 here, £−10
-  // there), so this is not the same as the total having changed.
-  const linesRepriced =
-    primaryLinePrice !== undefined ||
-    additional.some((a) => typedLinePrice(a.serviceId, additionalListMinor(a)) !== undefined);
   const sendJobPrice = priceChanged && !linePricesTouched;
 
   // Catalogue length of the whole job — the default end when staff set the time.
@@ -735,7 +736,8 @@ export function AddBookingModal({
     const layout = layoutExplicitWindow(start, end, workingSchedule, timezone, { allDay });
     return { start, end, minutes: layout.minutes, layout };
   }, [scheduling, allDay, date, startTime, endDate, endTime, workingSchedule, timezone]);
-  const customSpan = customWindow ? formatWorkingSpan(customWindow.layout, timezone) : null;
+  // "Thu 24 to Mon 28 Sept · 3 working days".
+  const customSpan = customWindow ? formatWorkingSpan(customWindow.layout, timezone, " to ") : null;
 
   // "All day" from the slot grid: one tap instead of switching tabs and ticking
   // the box. The end-date effect above fills in the last day from the job length.
@@ -835,6 +837,9 @@ export function AddBookingModal({
     [allDay, scheduling, customWindow, diaryBookings, diaryEvents, customStaffId, customerList],
   );
   const overlapNote = timedOverlapNote(timedOverlaps, timezone);
+  const overlapCopy = overlapNote
+    ? `${overlapNote}. Pick a different time${soleStaff ? "" : ` or another ${staffLower}`}.`
+    : null;
   // A "yes" to sharing the day is about *this* day, this person and this kind of
   // booking; change any of them and it is asked again. (The last day is not in the
   // list: it follows the start on its own when the kind changes, and `sendDropIn`
@@ -878,55 +883,45 @@ export function AddBookingModal({
     ],
     effectiveTotalMinor,
   );
-  const depositOverridden = depositInput !== null;
   // Credit settles by entitlement, never money. Every other method can take a deposit —
   // including pay after the job, where it secures the date and the balance follows.
   const depositApplies = paymentMethod !== "credit";
-  const depositMinor: number | null = (() => {
-    if (!depositApplies) return null;
-    if (!depositOverridden) return defaultDepositMinor;
-    if (!depositInput.trim()) return null;
-    try {
-      const minor = parseMoneyToMinor(depositInput);
-      return minor > 0 && minor < effectiveTotalMinor ? minor : null;
-    } catch {
-      return null;
-    }
-  })();
-  const depositInvalid =
-    depositOverridden &&
-    depositInput.trim() !== "" &&
-    (() => {
-      try {
-        const minor = parseMoneyToMinor(depositInput);
-        return minor < 0 || minor >= effectiveTotalMinor;
-      } catch {
-        return true;
-      }
-    })();
+  const deposit = addDeposit({
+    depositInput,
+    defaultDepositMinor,
+    totalMinor: effectiveTotalMinor,
+    applies: depositApplies,
+  });
+  const depositOverridden = deposit.overridden;
+  const depositMinor = deposit.minor;
+  const depositInvalid = deposit.invalid;
 
-  // Everything still standing between the form and a booking, in the order the
-  // fields appear. The Create button stays clickable while this is non-empty so
-  // a click can say what's missing instead of silently doing nothing.
-  const blockers: string[] = [];
-  if (!customerId) blockers.push("Choose a client");
-  if (!service) blockers.push("Choose a service");
-  if (recordRequired && linkedRecordId === "none" && !quickAddPending)
-    blockers.push(`Choose a ${recordTermLower}`);
-  if (!locationId) blockers.push("Choose a location");
-  if (service) {
-    if (scheduling === "slot") {
-      if (!selectedSlot)
-        blockers.push(slots.length > 0 ? "Pick a time slot" : "Pick a date with an available slot");
-    } else {
-      if (!customStaffId) blockers.push(`Choose a ${staffLower}`);
-      if (!customWindow)
-        blockers.push(allDay ? "Set the first and last day" : "Set a start and end time");
-    }
-    if (priceInvalid) blockers.push("Check the price");
-    if (depositInvalid) blockers.push("Check the deposit");
-  }
+  const vehicleMissing = recordRequired && linkedRecordId === "none" && !quickAddPending;
+  const blockerList = addBookingBlockers({
+    words,
+    hasClient: Boolean(customerId),
+    hasService: Boolean(service),
+    vehicleMissing,
+    hasLocation: Boolean(locationId),
+    scheduling,
+    hasSlot: Boolean(selectedSlot),
+    slotsAvailable: slots.length > 0,
+    hasCustomStaff: Boolean(customStaffId),
+    hasCustomWindow: Boolean(customWindow),
+    allDay,
+    clash: Boolean(overlapNote),
+    priceInvalid,
+    depositInvalid,
+  });
+  const blockers = blockerList.map((b) => b.label);
   const blocked = blockers.length > 0;
+  const blockedSections = new Set(blockerList.map((b) => b.section));
+  const sectionState = (key: AddSection, complete: boolean): SectionState =>
+    showMissing && blockedSections.has(key) ? "attention" : complete ? "complete" : "idle";
+  const scrollToSection = (key: AddSection) =>
+    document
+      .getElementById(SECTION_IDS[key])
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const handleConflict = (conflicts: readonly BookingConflict[]) => {
     if (scheduling === "custom") {
@@ -957,7 +952,7 @@ export function AddBookingModal({
       return;
     }
     toast.error("That slot was just taken", {
-      description: "Availability has been refreshed — pick another time.",
+      description: "Times have been refreshed. Pick another time.",
     });
     setSlotKey(null);
     void availability.refetch();
@@ -972,6 +967,7 @@ export function AddBookingModal({
     setLocationId("");
     setSlotKey(null);
     setPaymentMethodState(defaultMethod);
+    setPaymentTouched(false);
     setDepositInput(null);
     setPriceInput(null);
     setDiscount(null);
@@ -985,6 +981,8 @@ export function AddBookingModal({
     setLift(EMPTY_LIFT_DRAFT);
     setAdditional([]);
     setBankResult(null);
+    setShowMissing(false);
+    setChangingClient(false);
   };
 
   // Sends the booking; a 409 the API marks overridable (only all-day jobs in the way
@@ -996,11 +994,11 @@ export function AddBookingModal({
       if (bankTransfer) {
         // Keep the dialog open on the details so staff can read them out.
         setBankResult(bankTransfer);
-        toast.success("Booking reserved — awaiting bank transfer");
+        toast.success("Booking reserved, awaiting bank transfer");
         return true;
       }
       toast.success(
-        notifyChannels.length > 0 ? "Booking created" : "Booking created — client not notified",
+        notifyChannels.length > 0 ? "Booking created" : "Booking created. Client not notified.",
       );
       reset();
       onOpenChange(false);
@@ -1031,6 +1029,10 @@ export function AddBookingModal({
   };
 
   const submit = async () => {
+    if (blockerList.length > 0) {
+      setShowMissing(true);
+      scrollToSection(blockerList[0]!.section);
+    }
     // Several gaps at once: list them all rather than revealing one per click.
     // A single gap falls through to the specific message for it below.
     if (blockers.length > 1) {
@@ -1046,13 +1048,13 @@ export function AddBookingModal({
       return;
     }
     if (!customerId || !service || !locationId) {
-      toast.error(blockers[0] ?? "Choose a client, service and location");
+      toast.error(blockers[0] ?? `Choose a client, ${serviceNoun} and location`);
       return;
     }
     if (scheduling === "slot" && !selectedSlot) {
       toast.error("Pick a time slot", {
         description:
-          slots.length > 0 ? undefined : "No availability on this date — try another day.",
+          slots.length > 0 ? undefined : "No availability on this date. Try another day.",
       });
       return;
     }
@@ -1064,36 +1066,38 @@ export function AddBookingModal({
       });
       return;
     }
+    if (scheduling === "custom" && overlapCopy) {
+      toast.error("Pick a free time", { description: overlapCopy });
+      return;
+    }
     if (priceInvalid) {
       toast.error("Check the price", {
-        description: lineInvalid
-          ? "One of the service prices isn't an amount — fix it, or clear it to use the list price."
-          : "Enter an amount, or reset to the list price.",
+        description: priceError(price, discount, money(rolledTotalMinor), words),
       });
       return;
     }
 
     if (depositInvalid) {
       toast.error("Check the deposit", {
-        description: "It must be less than the total — clear it to take the full amount.",
+        description: "It must be less than the total. Clear it for no deposit.",
       });
       return;
     }
 
-    if (recordRequired && linkedRecordId === "none" && !quickAddPending) {
+    if (vehicleMissing) {
       toast.error(`Choose a ${recordTermLower}`, {
-        description: `This service needs a ${recordTermLower} on the booking.`,
+        description: `This ${serviceNoun} needs a ${recordTermLower} on the booking.`,
       });
       return;
     }
 
     if (additional.length > 0) {
       if (paymentMethod === "credit") {
-        toast.error("Multi-service jobs can't be paid with package credit");
+        toast.error(`Multi-${serviceNoun} jobs can't be paid with package credit`);
         return;
       }
       if (!isIndividual) {
-        toast.error("Only individual services can bundle extra services");
+        toast.error(`Only 1-to-1 ${words.services} can bundle extra ${words.services}`);
         return;
       }
       const currencies = new Set([
@@ -1101,7 +1105,7 @@ export function AddBookingModal({
         ...additional.map((a) => serviceById.get(a.serviceId)?.currency).filter(Boolean),
       ]);
       if (currencies.size > 1) {
-        toast.error("All services on a job must share the same currency");
+        toast.error(`All ${words.services} on a job must share the same currency`);
         return;
       }
     }
@@ -1181,19 +1185,26 @@ export function AddBookingModal({
   };
 
   // Anything a person typed or picked themselves counts as work worth protecting;
-  // the defaults the form filled in on their behalf (location, staff, date) do not.
-  const dirty =
-    customerId !== (defaultCustomerId ?? "") ||
-    serviceId !== (defaultServiceId ?? "") ||
-    additional.length > 0 ||
-    slotKey !== null ||
-    notes.trim() !== "" ||
-    lift.needed ||
-    priceInput !== null ||
-    discount !== null ||
-    Object.keys(linePrices).length > 0 ||
-    depositInput !== null ||
-    paymentMethod !== "none";
+  // the defaults the form filled in on their behalf (location, staff, date, the
+  // default payment method) do not.
+  const dirty = addBookingDirty({
+    customerId,
+    defaultCustomerId: defaultCustomerId ?? "",
+    serviceId,
+    defaultServiceId: defaultServiceId ?? "",
+    additionalCount: additional.length,
+    linkedRecordId,
+    defaultLinkedRecordId: defaultLinkedRecordId ?? "none",
+    quickAddPending,
+    slotPicked: slotKey !== null,
+    notes,
+    liftNeeded: lift.needed,
+    priceInput,
+    discount,
+    linePriceCount: Object.keys(linePrices).length,
+    depositInput,
+    paymentTouched,
+  });
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Esc, the backdrop and the close cross all land here. A half-filled form asks
   // first; an untouched one (or the bank-transfer receipt) closes straight away.
@@ -1205,6 +1216,132 @@ export function AddBookingModal({
     reset();
     onOpenChange(false);
   };
+
+  const pickClient = (c: { id: string }) => {
+    setCustomerId(c.id);
+    // A record belongs to one client, so it can't survive a client change.
+    setLinkedRecordId("none");
+    setQuickAddOpen(false);
+    setChangingClient(false);
+  };
+
+  // ---- Footer summary ----------------------------------------------------------------
+  const hhmm = (iso: string, tz: string) => timeInTz(iso, tz);
+  const whenSummary = (() => {
+    if (!service) return null;
+    if (scheduling === "slot") {
+      if (!selectedSlot) return null;
+      const tz = selectedSlot.displayTimezone || timezone;
+      const day = dayLabel(isoDateInTz(selectedSlot.start, tz));
+      return spansDays(selectedSlot.start, selectedSlot.end, tz)
+        ? `${day} · drop-off ${hhmm(selectedSlot.start, tz)}`
+        : `${day} · ${timeRange(selectedSlot.start, selectedSlot.end, tz)}`;
+    }
+    if (!customWindow) return null;
+    if (allDay) {
+      return endDate !== date ? `${dayLabel(date)} to ${dayLabel(endDate)}` : dayLabel(date);
+    }
+    return spansDays(customWindow.start, customWindow.end, timezone)
+      ? `${dayLabel(date)} ${hhmm(customWindow.start, timezone)} to ${dayLabel(endDate)} ${hhmm(customWindow.end, timezone)}`
+      : `${dayLabel(date)} · ${timeRange(customWindow.start, customWindow.end, timezone)}`;
+  })();
+  const footer = addFooterSummary({
+    blockers: blockers.length,
+    clientName: selectedCustomer ? customerDisplayName(selectedCustomer) : null,
+    when: whenSummary,
+    serviceCount: picked.length,
+    words,
+    totalMinor: effectiveTotalMinor,
+    depositMinor: paymentMethod === "credit" ? null : depositMinor,
+    currency,
+    credit: paymentMethod === "credit",
+  });
+
+  // ---- Payment options -----------------------------------------------------------------
+  const paymentOptions: ChoiceOption<PaymentMethod>[] = [
+    {
+      value: "none",
+      label: PAYMENT_METHOD_NAMES.none,
+      line: "The confirmation is a payment request.",
+    },
+    {
+      value: "pay_later",
+      label: PAYMENT_METHOD_NAMES.pay_later,
+      line: "Plain confirmation. Take payment when it's done.",
+    },
+    ...(noPackages
+      ? []
+      : [
+          {
+            value: "credit" as const,
+            label: PAYMENT_METHOD_NAMES.credit,
+            line: noCredit
+              ? `No credits on ${firstName ?? "the client"}'s account`
+              : additional.length > 0
+                ? `Only one ${serviceNoun} can be paid with a credit`
+                : creditsLeft !== null
+                  ? `${creditsLeft} ${creditsLeft === 1 ? "credit" : "credits"} left · covers one ${serviceNoun} only`
+                  : `Covers one ${serviceNoun} only`,
+            disabled: noCredit || additional.length > 0,
+          },
+        ]),
+    ...(bankTransferEnabled
+      ? [
+          {
+            value: "bank_transfer" as const,
+            label: PAYMENT_METHOD_NAMES.bank_transfer,
+            line:
+              effectiveTotalMinor <= 0
+                ? `Not for ${symbol}0 bookings`
+                : "Reserved until the transfer arrives. You'll get the details to read out.",
+            disabled: effectiveTotalMinor <= 0,
+          },
+        ]
+      : []),
+  ];
+
+  const mode = priceMode(price);
+  const priceHelp = (() => {
+    const list = money(rolledTotalMinor);
+    switch (mode) {
+      case "per_service":
+        return `Each ${serviceNoun} is booked at its row price, with the ${list} list total beside it. Nothing is recorded as a discount.`;
+      case "discount":
+        return `${discountLabel(discount!, money)} · −${money(discountMinor!)}. The ${words.services} stay at list and the discount shows as its own line.`;
+      case "whole_job":
+        return `Adjusted from the ${list} list price. The ${words.services} stay at list and the ${formatAdjustment(
+          effectiveTotalMinor - rolledTotalMinor,
+          money,
+        )} shows as a ${adjustmentLabel(effectiveTotalMinor - rolledTotalMinor).toLowerCase()} line.`;
+      case "list":
+        return `Type a total, a discount, or a price on a ${serviceNoun} row. Only one applies at a time.`;
+    }
+  })();
+
+  const waitlistLink = (label: string) =>
+    onNoAvailability && validDate && customerId && serviceId ? (
+      <p className="text-xs text-muted-foreground">
+        {label}
+        <button
+          type="button"
+          className="cursor-pointer font-medium text-primary underline underline-offset-4"
+          onClick={() =>
+            onNoAvailability({
+              customerId,
+              serviceId,
+              ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
+              ...(locationId ? { locationId } : {}),
+              ...(staffId !== "all" ? { staffId } : {}),
+              date,
+            })
+          }
+        >
+          Add to waitlist instead
+        </button>
+      </p>
+    ) : null;
+
+  const slotTz = (s: { displayTimezone?: string | null }) => s.displayTimezone || timezone;
 
   return (
     <Dialog
@@ -1224,21 +1361,24 @@ export function AddBookingModal({
           onOpenChange(false);
         }}
       />
-      <DialogContent className="sm:max-w-lg">
+      {/* The header and footer stay put; only the body between them scrolls. */}
+      <DialogContent className="overflow-hidden sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>{bankResult ? "Awaiting bank transfer" : "Add booking"}</DialogTitle>
           <DialogDescription>
             {bankResult
-              ? "The booking is reserved. Read these details out to the customer — they've been emailed too."
+              ? "The booking is reserved. Read these details out to the customer; they've been emailed too."
               : setupBlocked
-                ? "Finish a quick bit of setup first — then you can take bookings."
-                : "Pick the client and service, choose a time, and the booking is confirmed straight away."}
+                ? "Finish a quick bit of setup first, then you can take bookings."
+                : "Pick the client and service, choose a time, and it's confirmed straight away."}
           </DialogDescription>
         </DialogHeader>
 
         {bankResult ? (
           <>
-            <BankTransferPanel details={bankResult} />
+            <div className="no-scrollbar -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+              <BankTransferPanel details={bankResult} audience="staff" />
+            </div>
             <DialogFooter>
               <Button
                 onClick={() => {
@@ -1250,162 +1390,238 @@ export function AddBookingModal({
               </Button>
             </DialogFooter>
           </>
-        ) : catalogueLoading ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Checking setup…</p>
-        ) : noServices ? (
-          <SetupGate
-            icon={<Layers className="size-5" />}
-            title={`Create a ${serviceNoun} first`}
-            description="Bookings need something clients can book — duration, price and who can deliver it."
-            step="service"
-            to="/services"
-            search={{ create: true }}
-            cta={`Create ${serviceNoun}`}
-            onNavigate={() => onOpenChange(false)}
-          />
-        ) : noLocations ? (
-          <SetupGate
-            icon={<MapPin className="size-5" />}
-            title="Add a location first"
-            description="Pick where this booking happens — your premises, a mobile visit, or a service area."
-            step="location"
-            to="/locations"
-            cta="Add location"
-            onNavigate={() => onOpenChange(false)}
-          />
-        ) : noClients ? (
-          <SetupGate
-            icon={<UserRound className="size-5" />}
-            title="Add a client first"
-            description="Every booking needs a client on the books."
-            step="client"
-            to="/clients"
-            cta="Add client"
-            onNavigate={() => onOpenChange(false)}
-            onAction={() => setAddClientOpen(true)}
-          />
-        ) : (
-          // Nothing in here may be wider than the sheet. Every grid/flex item defaults to
-          // `min-width: auto`, so a long client name, vehicle label or service name in a
-          // nowrap trigger used to grow the row, then the grid, then the sheet itself,
-          // which scrolled sideways on phones. `truncate` alone can't stop that (it doesn't
-          // change intrinsic size); `min-w-0` on every descendant does, and the explicit
-          // 0-minimum column keeps the root from growing past its container too.
-          <div className="grid min-w-0 grid-cols-1 gap-4 **:min-w-0">
-            <div className="grid gap-2">
-              <Label>Client</Label>
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <CustomerSearchPicker
-                    value={selectedCustomer}
-                    suggestions={customerList}
-                    placeholder="Choose or search for a client"
-                    onSelect={(c) => {
-                      setCustomerId(c.id);
-                      // A record belongs to one client, so it can't survive a client change.
-                      setLinkedRecordId("none");
-                      setQuickAddOpen(false);
-                    }}
-                  />
+        ) : catalogueLoading || setupBlocked ? (
+          <>
+            <div className="no-scrollbar -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+              {catalogueLoading ? (
+                <div className="grid gap-6" aria-busy="true" aria-label="Loading">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <div key={i} className="grid gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="size-[22px] animate-pulse rounded-full bg-muted" />
+                        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                      </div>
+                      <div className="h-[42px] animate-pulse rounded-[10px] bg-muted" />
+                    </div>
+                  ))}
                 </div>
-                {/* New walk-in? Add them here without leaving the half-filled form. */}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0"
-                  onClick={() => setAddClientOpen(true)}
-                  aria-label="Add a new client"
-                  title="Add a new client"
-                >
-                  <Plus className="size-4" />
-                </Button>
-              </div>
+              ) : noServices ? (
+                <SetupGate
+                  icon={<Layers className="size-5" />}
+                  title={`Create a ${serviceNoun} first`}
+                  description="Bookings need something clients can book: duration, price and who can deliver it."
+                  step="service"
+                  to="/services"
+                  search={{ create: true }}
+                  cta={`Create ${serviceNoun}`}
+                  onNavigate={() => onOpenChange(false)}
+                />
+              ) : noLocations ? (
+                <SetupGate
+                  icon={<MapPin className="size-5" />}
+                  title="Add a location first"
+                  description={`Add where you work, or the area you cover, so we know where this ${words.booking} happens.`}
+                  step="location"
+                  to="/locations"
+                  cta="Add location"
+                  onNavigate={() => onOpenChange(false)}
+                />
+              ) : (
+                <SetupGate
+                  icon={<UserRound className="size-5" />}
+                  title="Add a client first"
+                  description="Every booking needs a client on the books."
+                  step="client"
+                  to="/clients"
+                  cta="Add client"
+                  onNavigate={() => onOpenChange(false)}
+                  onAction={() => setAddClientOpen(true)}
+                />
+              )}
             </div>
-
-            {hasLinkedRecords && customerId ? (
-              <div className="grid gap-2">
-                <Label>
-                  {recordTerm}
-                  {recordRequired ? <span className="text-destructive"> *</span> : null}
-                </Label>
-                {customerRecords.isSuccess && activeRecords.length === 0 ? (
-                  <QuickAddLinkedRecord
-                    key={customerId}
-                    customerId={customerId}
-                    fields={recordFields}
-                    term={recordTerm}
-                    handleRef={quickAdd}
-                    onInputChange={onQuickAddInput}
-                    inputHint={quickAddHint}
-                    onAdded={(record) => {
-                      setLinkedRecordId(record.id);
-                      toast.success(`${recordTerm} added`, {
-                        description: `${record.displayLabel} is on this booking. Add more details from the client's profile whenever you like.`,
-                      });
-                    }}
-                  />
-                ) : quickAddOpen ? (
-                  <QuickAddLinkedRecord
-                    key={customerId}
-                    customerId={customerId}
-                    fields={recordFields}
-                    term={recordTerm}
-                    handleRef={quickAdd}
-                    onInputChange={onQuickAddInput}
-                    inputHint={quickAddHint}
-                    autoFocus
-                    onCancel={() => setQuickAddOpen(false)}
-                    onAdded={(record) => {
-                      setLinkedRecordId(record.id);
-                      setQuickAddOpen(false);
-                      toast.success(`${recordTerm} added`, {
-                        description: `${record.displayLabel} is on this booking.`,
-                      });
-                    }}
-                  />
-                ) : (
-                  <div className="flex gap-2">
-                    <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
-                      <SelectTrigger className="flex-1">
-                        <SelectValue
-                          placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {recordRequired ? null : (
-                          <SelectItem value="none">No {recordTermLower}</SelectItem>
-                        )}
-                        {activeRecords.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {r.displayLabel}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+            <DialogFooter>
+              <Button variant="ghost" onClick={requestClose}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            {/* Nothing in here may be wider than the sheet. Every grid/flex item defaults
+                to `min-width: auto`, so a long client name, vehicle label or service name
+                in a nowrap trigger used to grow the row, then the grid, then the sheet
+                itself, which scrolled sideways on phones. `truncate` alone can't stop that
+                (it doesn't change intrinsic size); `min-w-0` on every descendant does, and
+                the explicit 0-minimum column keeps the root from growing past its
+                container too. */}
+            <div className="no-scrollbar -mx-1 grid min-h-0 min-w-0 flex-1 grid-cols-1 content-start gap-7 overflow-y-auto px-1 pb-2 **:min-w-0">
+              <FormSection
+                id={SECTION_IDS.client}
+                number={ADD_SECTIONS.client}
+                title="Client"
+                state={sectionState("client", Boolean(customerId) && !vehicleMissing)}
+              >
+                {selectedCustomer && !changingClient ? (
+                  <div className="flex items-center gap-3 rounded-[14px] border bg-card px-3 py-2.5">
+                    <CustomerAvatar customer={selectedCustomer} size={38} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">
+                        {customerDisplayName(selectedCustomer)}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[
+                          selectedCustomer.phoneDisplay || selectedCustomer.emailDisplay,
+                          hasLinkedRecords && customerRecords.isSuccess
+                            ? `${activeRecords.length} ${activeRecords.length === 1 ? words.vehicle : words.vehicles}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
+                      size="sm"
                       className="shrink-0"
-                      onClick={() => setQuickAddOpen(true)}
-                      aria-label={`Add another ${recordTermLower}`}
+                      onClick={() => setChangingClient(true)}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CustomerSearchPicker
+                        value={selectedCustomer}
+                        suggestions={customerList}
+                        placeholder="Choose or search for a client"
+                        phoneSheet
+                        defaultOpen={changingClient}
+                        onOpenChange={(o) => {
+                          if (!o) setChangingClient(false);
+                        }}
+                        onSelect={pickClient}
+                      />
+                    </div>
+                    {/* New walk-in? Add them here without leaving the half-filled form. */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-[42px] shrink-0"
+                      onClick={() => setAddClientOpen(true)}
+                      aria-label="Add a new client"
+                      title="Add a new client"
                     >
                       <Plus className="size-4" />
-                      Add
                     </Button>
                   </div>
                 )}
-              </div>
-            ) : null}
 
-            {/* Once the car is in, does the client need running somewhere? */}
-            {isCarDetailing && customerId ? (
-              <ClientLiftFields value={lift} onChange={setLift} idPrefix="booking" />
-            ) : null}
+                {hasLinkedRecords && customerId ? (
+                  <div className="grid gap-2">
+                    <Label>
+                      {recordTerm}
+                      {recordRequired ? <span className="text-destructive"> *</span> : null}
+                    </Label>
+                    {customerRecords.isSuccess && activeRecords.length === 0 ? (
+                      <>
+                        {firstName ? (
+                          <p className="text-xs text-muted-foreground">
+                            {firstName} has no {words.vehicles} yet
+                          </p>
+                        ) : null}
+                        <QuickAddLinkedRecord
+                          key={customerId}
+                          customerId={customerId}
+                          fields={recordFields}
+                          term={recordTerm}
+                          handleRef={quickAdd}
+                          onInputChange={onQuickAddInput}
+                          inputHint={quickAddHint}
+                          onAdded={(record) => {
+                            setLinkedRecordId(record.id);
+                            toast.success(`${recordTerm} added`, {
+                              description: `${record.displayLabel} is on this booking. Add more details from the client's profile whenever you like.`,
+                            });
+                          }}
+                        />
+                      </>
+                    ) : quickAddOpen ? (
+                      <QuickAddLinkedRecord
+                        key={customerId}
+                        customerId={customerId}
+                        fields={recordFields}
+                        term={recordTerm}
+                        handleRef={quickAdd}
+                        onInputChange={onQuickAddInput}
+                        inputHint={quickAddHint}
+                        autoFocus
+                        onCancel={() => setQuickAddOpen(false)}
+                        onAdded={(record) => {
+                          setLinkedRecordId(record.id);
+                          setQuickAddOpen(false);
+                          toast.success(`${recordTerm} added`, {
+                            description: `${record.displayLabel} is on this booking. Add more details from the client's profile whenever you like.`,
+                          });
+                        }}
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <Select value={linkedRecordId} onValueChange={setLinkedRecordId}>
+                          <SelectTrigger className={cn(FIELD, "flex-1")}>
+                            <SelectValue
+                              placeholder={recordRequired ? `Choose a ${recordTermLower}` : "None"}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {recordRequired ? null : (
+                              <SelectItem value="none">No {recordTermLower}</SelectItem>
+                            )}
+                            {activeRecords.map((r) => (
+                              <SelectItem key={r.id} value={r.id}>
+                                {r.displayLabel}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-[42px] shrink-0"
+                          onClick={() => setQuickAddOpen(true)}
+                          aria-label={`Add another ${recordTermLower}`}
+                        >
+                          <Plus className="size-4" />
+                          Add
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2 sm:col-span-2">
-                <Label>Services</Label>
+                {/* Once the car is in, does the client need running somewhere? */}
+                {isCarDetailing && customerId ? (
+                  <ClientLiftFields
+                    value={lift}
+                    onChange={setLift}
+                    idPrefix="booking"
+                    clientFirstName={firstName}
+                  />
+                ) : null}
+              </FormSection>
+
+              <FormSection
+                id={SECTION_IDS.services}
+                number={ADD_SECTIONS.services}
+                title={
+                  picked.length > 0
+                    ? `${picked.length} ${picked.length === 1 ? words.Service : words.Services}`
+                    : words.Services
+                }
+                state={sectionState("services", Boolean(service))}
+              >
                 <ServiceMultiPicker
                   services={serviceList}
                   value={picked}
@@ -1414,9 +1630,10 @@ export function AddBookingModal({
                   linePrices={linePrices}
                   onLinePriceChange={setLinePrice}
                   multi={!service || multiAllowed}
+                  creditRow={paymentMethod === "credit"}
                   singleReason={
                     paymentMethod === "credit"
-                      ? "Paying with a credit covers one service, so this replaced the other."
+                      ? `Paying with a credit covers one ${serviceNoun}, so this replaced the other.`
                       : undefined
                   }
                 />
@@ -1430,7 +1647,7 @@ export function AddBookingModal({
                         onClick={() =>
                           setPicked([...picked, { serviceId: u.upsellServiceId, variantId: null }])
                         }
-                        className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-secondary"
+                        className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-secondary"
                       >
                         <Plus className="size-3" />
                         {u.service?.name}
@@ -1447,732 +1664,706 @@ export function AddBookingModal({
                 {isCarDetailing && picked.length > 0 ? (
                   <ServiceDefaultsHint serviceIds={picked.map((p) => p.serviceId)} />
                 ) : null}
-              </div>
-              {/* One location is picked for them above; nothing to ask. */}
-              {soleLocation ? null : (
-                <div className="grid gap-2">
-                  <Label>Location</Label>
-                  <Select
-                    value={locationId}
-                    onValueChange={(v) => {
-                      setLocationId(v);
-                      setSlotKey(null);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {locationList.map((l) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          {l.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {soleStaff ? null : (
-                <div className="grid gap-2">
-                  <Label>{staffNoun}</Label>
-                  <Select
-                    value={staffId}
-                    onValueChange={(v) => {
-                      setStaffId(v);
-                      setSlotKey(null);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">
-                        {scheduling === "custom" ? `Choose a ${staffLower}…` : `Any ${staffLower}`}
-                      </SelectItem>
-                      {(staff.data ?? []).map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {scheduling === "custom" && !customStaffId ? (
-                    <p className="text-xs text-destructive">
-                      A set time needs a {staffLower} to do the work.
-                    </p>
-                  ) : null}
-                </div>
-              )}
-              {scheduling === "slot" ? (
-                <div className="grid gap-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Label htmlFor="booking-date">Date</Label>
-                    <span className="text-xs text-muted-foreground">
-                      Today {todayLabelInTz(timezone)}
-                    </span>
+              </FormSection>
+
+              <FormSection
+                id={SECTION_IDS.when}
+                number={ADD_SECTIONS.when}
+                title="When"
+                state={sectionState("when", Boolean(service) && !blockedSections.has("when"))}
+              >
+                {soleLocation && soleStaff ? null : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {/* One location is picked for them; nothing to ask. */}
+                    {soleLocation ? null : (
+                      <div className="grid gap-2">
+                        <Label>Location</Label>
+                        <Select
+                          value={locationId}
+                          onValueChange={(v) => {
+                            setLocationId(v);
+                            setSlotKey(null);
+                          }}
+                        >
+                          <SelectTrigger className={FIELD}>
+                            <SelectValue placeholder="Choose a location" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {locationList.map((l) => (
+                              <SelectItem key={l.id} value={l.id}>
+                                {l.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {soleStaff ? null : (
+                      <div className="grid gap-2">
+                        <Label>{staffNoun}</Label>
+                        <Select
+                          value={staffId}
+                          onValueChange={(v) => {
+                            setStaffId(v);
+                            setSlotKey(null);
+                          }}
+                        >
+                          <SelectTrigger className={FIELD}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              {scheduling === "custom"
+                                ? `Choose a ${staffLower}…`
+                                : `Any ${staffLower}`}
+                            </SelectItem>
+                            {(staff.data ?? []).map((s) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {scheduling === "custom" && !customStaffId ? (
+                          <p className="text-xs text-destructive">
+                            A set time needs a {staffLower} to do the work.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                  <input
-                    id="booking-date"
-                    type="date"
+                )}
+
+                <div className="grid gap-2">
+                  <Label id="add-booking-date-label">
+                    {scheduling === "custom" ? (allDay ? "First day" : "Date") : "Date"}
+                  </Label>
+                  <DayStrip
                     value={date}
-                    onChange={(e) => {
-                      setDate(e.target.value);
+                    todayIsoDate={todayIsoDate}
+                    label={scheduling === "custom" && allDay ? "First day" : "Date"}
+                    onChange={(d) => {
+                      setDate(d);
                       setSlotKey(null);
                     }}
-                    className={DATE_INPUT}
                   />
                 </div>
-              ) : null}
-            </div>
 
-            {service ? (
-              <div className="grid gap-3 rounded-xl border p-3">
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label htmlFor="booking-price">Price (£)</Label>
-                    {priceOverridden ? (
-                      <button
-                        type="button"
-                        className="text-xs text-primary underline-offset-4 hover:underline"
-                        onClick={() => {
-                          setPriceInput(null);
-                          setDiscount(null);
-                          setLinePrices({});
-                        }}
-                      >
-                        List {formatMoney(rolledTotalMinor, service.currency)} · reset
-                      </button>
-                    ) : null}
-                  </div>
-                  <Input
-                    id="booking-price"
-                    inputMode="decimal"
-                    value={
-                      priceInput !== null
-                        ? priceInput
-                        : ((overridePriceMinor ?? rolledTotalMinor) / 100).toFixed(2)
-                    }
-                    onChange={(e) => {
-                      setPriceInput(e.target.value);
-                      setDiscount(null);
-                      setLinePrices({});
-                    }}
-                    aria-invalid={priceInvalid}
-                  />
-                  {/* Discount: a percentage or a fixed amount off the list price. Sets the
-                      same override as typing a price, just worked out for you. */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Label htmlFor="booking-discount" className="text-xs text-muted-foreground">
-                      Discount
-                    </Label>
-                    <Input
-                      id="booking-discount"
-                      inputMode="decimal"
-                      placeholder="0"
-                      className="h-8 w-20"
-                      value={discount?.value ?? ""}
-                      onChange={(e) => {
-                        setPriceInput(null);
-                        setLinePrices({});
-                        setDiscount(
-                          e.target.value.trim() === ""
-                            ? null
-                            : { mode: discount?.mode ?? "percent", value: e.target.value },
-                        );
-                      }}
-                      aria-invalid={discountInvalid}
-                    />
-                    <Tabs
-                      value={discount?.mode ?? "percent"}
-                      onValueChange={(mode) => {
-                        setPriceInput(null);
-                        setLinePrices({});
-                        setDiscount({
-                          mode: mode as Discount["mode"],
-                          value: discount?.value ?? "",
-                        });
-                      }}
-                    >
-                      <TabsList className="h-8">
-                        <TabsTrigger value="percent" className="px-2.5 text-xs">
-                          % off
-                        </TabsTrigger>
-                        <TabsTrigger value="amount" className="px-2.5 text-xs">
-                          £ off
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                    {discountMinor !== null && overridePriceMinor !== null ? (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {discountLabel(discount!, (m) => formatMoney(m, service.currency))} · −
-                        {formatMoney(discountMinor, service.currency)}
-                      </span>
-                    ) : null}
-                  </div>
-                  {priceInvalid ? (
-                    <p className="text-xs text-destructive">
-                      {discountInvalid
-                        ? discount!.mode === "percent"
-                          ? "Enter a percentage between 0 and 100."
-                          : `Enter an amount up to ${formatMoney(rolledTotalMinor, service.currency)}.`
-                        : lineInvalid
-                          ? "One of the service prices isn't an amount — fix it, or clear it to use the list price."
-                          : "Enter an amount, or reset to the list price."}
-                    </p>
-                  ) : linesRepriced ? (
-                    <p className="text-xs text-muted-foreground">
-                      Priced per service — each is booked at the price shown on its row, with the{" "}
-                      {formatMoney(rolledTotalMinor, service.currency)} list total beside it.
-                      Nothing is recorded as a discount.
-                    </p>
-                  ) : priceChanged ? (
-                    <p className="text-xs text-muted-foreground">
-                      Adjusted from the {formatMoney(rolledTotalMinor, service.currency)} list price
-                      — the services stay at list and the{" "}
-                      {formatAdjustment(effectiveTotalMinor - rolledTotalMinor, (m) =>
-                        formatMoney(m, service.currency),
-                      )}{" "}
-                      shows as a{" "}
-                      {adjustmentLabel(effectiveTotalMinor - rolledTotalMinor).toLowerCase()} line.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Label>Time</Label>
-                  <Tabs
-                    value={scheduling}
-                    onValueChange={(v) => {
-                      setScheduling(v as typeof scheduling);
-                      setSlotKey(null);
-                      setEndTouched(false);
-                    }}
-                  >
-                    <TabsList className="h-8">
-                      <TabsTrigger value="slot" className="text-xs">
-                        Pick a slot
-                      </TabsTrigger>
-                      <TabsTrigger value="custom" className="text-xs">
-                        Set the time
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-
-                {scheduling === "custom" ? (
-                  <div className="grid gap-3">
-                    {/* Whole day or a specific time is the first choice, not a checkbox
-                        tucked under the dates: people didn't spot that unticking
-                        "All day" is how you get a start time. */}
+                {!service ? (
+                  <WaitingLine>Choose a {serviceNoun} to see times.</WaitingLine>
+                ) : (
+                  <>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div
-                        role="radiogroup"
-                        aria-label="Whole day or a specific time"
-                        className="inline-flex rounded-lg border p-0.5 text-xs font-medium"
-                      >
-                        {(
-                          [
-                            [true, "All day"],
-                            [false, "Pick a time"],
-                          ] as const
-                        ).map(([value, label]) => (
-                          <button
-                            key={label}
-                            type="button"
-                            role="radio"
-                            aria-checked={allDay === value}
-                            onClick={() => {
-                              setAllDay(value);
+                      <Label>Time</Label>
+                      <Segmented
+                        label="How to set the time"
+                        value={scheduling}
+                        onChange={(v) => {
+                          setScheduling(v);
+                          setSlotKey(null);
+                          setEndTouched(false);
+                        }}
+                        options={[
+                          { value: "slot", label: "Pick a slot" },
+                          { value: "custom", label: "Set the time" },
+                        ]}
+                      />
+                    </div>
+
+                    {scheduling === "custom" ? (
+                      <div className="grid gap-3">
+                        {/* Whole day or a specific time is the first choice, not a checkbox
+                            tucked under the dates: people didn't spot that unticking
+                            "All day" is how you get a start time. */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Segmented
+                            label="Whole day or a specific time"
+                            value={allDay ? "all-day" : "time"}
+                            onChange={(v) => {
+                              setAllDay(v === "all-day");
                               setEndTouched(false);
                             }}
+                            options={[
+                              { value: "all-day", label: "All day" },
+                              { value: "time", label: "Pick a time" },
+                            ]}
+                          />
+                          <span
                             className={cn(
-                              "rounded-md px-3 py-1.5 transition-colors",
-                              allDay === value
-                                ? "bg-primary text-primary-foreground"
-                                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                              "text-xs tabular-nums",
+                              customWindow ? "text-muted-foreground" : "text-destructive",
                             )}
                           >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs tabular-nums",
-                          customWindow ? "text-muted-foreground" : "text-destructive",
-                        )}
-                      >
-                        {/* All day blocks the diary, it doesn't change the service: a 2-hour
-                            coating booked all day is "All day · 2 hrs", never "1 day". */}
-                        {customWindow
-                          ? allDay
-                            ? formatAllDayDuration(catalogueDurationMinutes, customWindow.minutes)
-                            : `Duration: ${formatDurationLong(customWindow.minutes)}`
-                          : "The end must come after the start."}
-                      </span>
-                    </div>
-                    <div className="grid gap-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor="booking-start-date">Start</Label>
-                        <div className="flex gap-2">
-                          <input
-                            id="booking-start-date"
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
-                          />
-                          {allDay ? null : (
-                            <input
-                              type="time"
-                              aria-label="Start time"
-                              value={startTime}
-                              onChange={(e) => setStartTime(e.target.value)}
-                              className={cn(DATE_INPUT, "w-28 shrink-0")}
-                            />
-                          )}
+                            {/* All day blocks the diary, it doesn't change the service: a
+                                2-hour coating booked all day is "All day · 2 hrs", never "1 day". */}
+                            {customWindow
+                              ? allDay
+                                ? formatAllDayDuration(
+                                    catalogueDurationMinutes,
+                                    customWindow.minutes,
+                                  )
+                                : `Duration: ${formatDurationLong(customWindow.minutes)}`
+                              : "The end must come after the start."}
+                          </span>
                         </div>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="booking-end-date">{allDay ? "Last day" : "End"}</Label>
-                        <div className="flex gap-2">
-                          <input
-                            id="booking-end-date"
-                            type="date"
-                            value={endDate}
-                            min={date}
-                            onChange={(e) => {
-                              setEndDate(e.target.value);
-                              setEndTouched(true);
-                            }}
-                            className={cn(DATE_INPUT, "min-w-0 flex-1")}
-                          />
-                          {allDay ? null : (
-                            <input
-                              type="time"
-                              aria-label="End time"
-                              value={endTime}
-                              onChange={(e) => {
-                                setEndTime(e.target.value);
-                                setEndTouched(true);
-                              }}
-                              className={cn(DATE_INPUT, "w-28 shrink-0")}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {customSpan ? (
-                      <p className="text-xs text-muted-foreground">
-                        {/* "Thu 24 – Mon 28 Sept · 3 working days": the days the job runs
-                            on; the weekend in between stays free. */}
-                        {`Runs ${customSpan}${
-                          customWindow && customWindow.layout.segments.length > 1
-                            ? `; the ${customStaff?.displayName ?? staffLower} is free on the days between.`
-                            : "."
-                        }`}
-                      </p>
-                    ) : null}
-                    {allDay ? (
-                      <p className="text-xs text-muted-foreground">
-                        {`Blocks ${customStaff?.displayName ?? `the ${staffLower}`} for the whole ${
-                          customWindow && customWindow.minutes > 1440 ? "days" : "day"
-                        }; the client sees the ${
-                          customWindow && customWindow.minutes > 1440 ? "dates" : "date"
-                        } rather than a time.`}
-                      </p>
-                    ) : null}
-                    {hoursWarning ? (
-                      <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
-                        {hoursWarning}
-                      </p>
-                    ) : null}
-                    {/* Timed on timed (or on an event) cannot be overridden — the API
-                        would refuse it — so flag it while the time is being set. */}
-                    {overlapNote ? (
-                      <p className="rounded-md bg-destructive-soft px-3 py-2 text-xs text-destructive">
-                        {overlapNote} — pick a different time
-                        {soleStaff ? "" : ` or another ${staffLower}`}.
-                      </p>
-                    ) : null}
-                    {/* The mirror of a drop-in: an all-day job landing on a day that
-                        already has timed work or an event. Staff say so explicitly; the
-                        request then carries dropIn and the API lets the two share the day. */}
-                    {allDay && timedNote ? (
-                      dropIn ? (
-                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
-                          {timedNote}. Booking anyway — both stay on the calendar.{" "}
-                          <button
-                            type="button"
-                            className="underline underline-offset-4"
-                            onClick={() => setDropIn(false)}
-                          >
-                            Undo
-                          </button>
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
-                          <span>{timedNote} — book anyway?</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => setDropIn(true)}
-                          >
-                            Book anyway
-                          </Button>
-                        </div>
-                      )
-                    ) : null}
-                    {holds.length > 0 && !quietDropIn ? (
-                      dropIn ? (
-                        <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
-                          {holdNote}.{" "}
-                          {allDay
-                            ? "Booked as a drop-in on the same day — no set time."
-                            : "Booked as a drop-in alongside it."}{" "}
-                          <button
-                            type="button"
-                            className="underline underline-offset-4"
-                            onClick={() => setDropIn(false)}
-                          >
-                            Undo
-                          </button>
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
-                          <span>{holdNote}.</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => setDropIn(true)}
-                          >
-                            Squeeze in a drop-in
-                          </Button>
-                        </div>
-                      )
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {!serviceId || !locationId ? (
-                      <p className="text-xs text-muted-foreground">
-                        Choose a service and location to see availability.
-                      </p>
-                    ) : availability.isLoading ? (
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {Array.from({ length: 6 }, (_, i) => (
-                          <div key={i} className="h-9 animate-pulse rounded-md bg-primary/10" />
-                        ))}
-                      </div>
-                    ) : slots.length === 0 ? (
-                      <div className="grid gap-2">
-                        {/* Held by all-day work: say so, and offer to squeeze the job in
-                            beside it. Picking that re-quotes the day ignoring the hold
-                            (timed jobs and events still block). */}
-                        {holds.length > 0 && !dropIn && !pickedHeldDay ? (
-                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/60 px-3 py-2 text-xs">
-                            <span className="text-muted-foreground">
-                              {holdNote}. Squeeze in a drop-in?
-                            </span>
-                            <span className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={pickAllDayDropIn}
-                              >
-                                Any time that day
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                                onClick={() => setDropIn(true)}
-                              >
-                                Pick a time
-                              </Button>
-                            </span>
+                        {allDay ? (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-2">
+                              <Label className="text-xs text-muted-foreground">First day</Label>
+                              <p className="flex h-[42px] items-center text-sm font-medium">
+                                {validDate ? dayLabel(date) : "Pick a date above"}
+                              </p>
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="booking-end-date">Last day</Label>
+                              <input
+                                id="booking-end-date"
+                                type="date"
+                                value={endDate}
+                                min={date}
+                                onChange={(e) => {
+                                  setEndDate(e.target.value);
+                                  setEndTouched(true);
+                                }}
+                                className={DATE_INPUT}
+                              />
+                            </div>
                           </div>
-                        ) : pickedHeldDay ? (
-                          <p className="text-xs text-muted-foreground">
-                            No free times left this day — try another day.
-                          </p>
-                        ) : dropIn ? (
-                          <p className="text-xs text-muted-foreground">
-                            {`No room for a drop-in${customStaff ? ` for ${customStaff.displayName}` : ""} — timed work, an event or working hours are in the way. `}
-                            <button
-                              type="button"
-                              className="text-primary underline underline-offset-4"
-                              onClick={() => setDropIn(false)}
-                            >
-                              Undo
-                            </button>
-                          </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground">
-                            {validDate
-                              ? emptySlotsMessage(service?.availabilityWindows, date)
-                              : "Pick a date to see available times."}
-                          </p>
-                        )}
-                        {validDate ? (
-                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                            <AllDayTile onPick={pickAllDay} />
+                          <div className="grid gap-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="grid gap-2">
+                                <Label htmlFor="booking-start-time">Start time</Label>
+                                <input
+                                  id="booking-start-time"
+                                  type="time"
+                                  aria-label="Start time"
+                                  value={startTime}
+                                  onChange={(e) => setStartTime(e.target.value)}
+                                  className={DATE_INPUT}
+                                />
+                              </div>
+                              <div className="grid gap-2">
+                                <Label htmlFor="booking-end-time">End time</Label>
+                                <input
+                                  id="booking-end-time"
+                                  type="time"
+                                  aria-label="End time"
+                                  value={endTime}
+                                  onChange={(e) => {
+                                    setEndTime(e.target.value);
+                                    setEndTouched(true);
+                                  }}
+                                  className={DATE_INPUT}
+                                />
+                              </div>
+                            </div>
+                            {/* The end date only matters past midnight or for a long job;
+                                it also shows while the end is before the start so it can
+                                be put right. */}
+                            {endDate !== date ||
+                            catalogueDurationMinutes >= MINUTES_PER_DAY ||
+                            !customWindow ? (
+                              <div className="grid gap-2">
+                                <Label htmlFor="booking-end-date">End date</Label>
+                                <input
+                                  id="booking-end-date"
+                                  type="date"
+                                  value={endDate}
+                                  min={date}
+                                  onChange={(e) => {
+                                    setEndDate(e.target.value);
+                                    setEndTouched(true);
+                                  }}
+                                  className={DATE_INPUT}
+                                />
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
-                        {/* Nothing suits: capture them instead of losing the enquiry. */}
-                        {onNoAvailability &&
-                        validDate &&
-                        customerId &&
-                        serviceId &&
-                        (!dropIn || pickedHeldDay) ? (
+                        )}
+                        {customSpan ? (
                           <p className="text-xs text-muted-foreground">
-                            Can't find a time?{" "}
-                            <button
-                              type="button"
-                              className="font-medium text-primary underline underline-offset-4"
-                              onClick={() =>
-                                onNoAvailability({
-                                  customerId,
-                                  serviceId,
-                                  ...(linkedRecordId !== "none" ? { linkedRecordId } : {}),
-                                  ...(locationId ? { locationId } : {}),
-                                  ...(staffId !== "all" ? { staffId } : {}),
-                                  date,
-                                })
+                            {/* The days the job runs on; the weekend in between stays free. */}
+                            {`Runs ${customSpan}${
+                              customWindow && customWindow.layout.segments.length > 1
+                                ? `; the ${customStaff?.displayName ?? staffLower} is free on the days between.`
+                                : "."
+                            }`}
+                          </p>
+                        ) : null}
+                        {allDay ? (
+                          <p className="text-xs text-muted-foreground">
+                            {`Blocks ${customStaff?.displayName ?? `the ${staffLower}`} for the whole ${
+                              customWindow && customWindow.minutes > 1440 ? "days" : "day"
+                            }; the client sees the ${
+                              customWindow && customWindow.minutes > 1440 ? "dates" : "date"
+                            } rather than a time.`}
+                          </p>
+                        ) : null}
+                        {hoursWarning ? <Strip tone="amber">{hoursWarning}</Strip> : null}
+                        {/* Timed on timed (or on an event) cannot be overridden — the API
+                            would refuse it — so flag it while the time is being set. */}
+                        {overlapCopy ? (
+                          <Strip tone="red" id="add-booking-clash">
+                            {overlapCopy}
+                          </Strip>
+                        ) : null}
+                        {/* The mirror of a drop-in: an all-day job landing on a day that
+                            already has timed work or an event. Staff say so explicitly; the
+                            request then carries dropIn and the API lets the two share the day. */}
+                        {allDay && timedNote ? (
+                          dropIn ? (
+                            <Strip
+                              tone="blue"
+                              action={
+                                <LinkButton onClick={() => setDropIn(false)}>Undo</LinkButton>
                               }
                             >
-                              Add to waitlist instead
-                            </button>
-                          </p>
+                              {timedNote}. Booking anyway; both stay on the calendar.
+                            </Strip>
+                          ) : (
+                            <Strip
+                              tone="amber"
+                              action={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs"
+                                  onClick={() => setDropIn(true)}
+                                >
+                                  Book anyway
+                                </Button>
+                              }
+                            >
+                              {timedNote}. Book anyway?
+                            </Strip>
+                          )
+                        ) : null}
+                        {holds.length > 0 && !quietDropIn ? (
+                          dropIn ? (
+                            <Strip
+                              tone="blue"
+                              action={
+                                <LinkButton onClick={() => setDropIn(false)}>Undo</LinkButton>
+                              }
+                            >
+                              {holdNote}.{" "}
+                              {allDay
+                                ? "Booked as a drop-in on the same day, no set time."
+                                : "Booked as a drop-in alongside it."}
+                            </Strip>
+                          ) : (
+                            <Strip
+                              tone="amber"
+                              action={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs"
+                                  onClick={() => setDropIn(true)}
+                                >
+                                  Squeeze in a drop-in
+                                </Button>
+                              }
+                            >
+                              {holdNote}.
+                            </Strip>
+                          )
                         ) : null}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {slots.map((s) => {
-                          const key = `${s.start}:${s.staffId}`;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => setSlotKey(key)}
-                              className={`rounded-lg border py-2 text-xs tabular-nums transition-colors ${
-                                key === slotKey
-                                  ? "border-primary bg-primary-soft text-primary"
-                                  : "hover:bg-secondary"
-                              }`}
-                              title={
-                                s.remainingCapacity > 1
-                                  ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
-                                  : formatMoney(s.priceMinor, s.currency)
-                              }
-                            >
-                              {formatInTz(s.start, s.displayTimezone || timezone, {
+                      <div className="grid gap-3">
+                        {!serviceId || !locationId ? (
+                          <WaitingLine>
+                            Choose a {serviceNoun} and location to see times.
+                          </WaitingLine>
+                        ) : !validDate ? (
+                          <WaitingLine>Pick a date to see times.</WaitingLine>
+                        ) : availability.isLoading ? (
+                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-busy="true">
+                            {Array.from({ length: 6 }, (_, i) => (
+                              <div
+                                key={i}
+                                className="h-11 animate-pulse rounded-[10px] bg-primary/10 sm:h-9"
+                              />
+                            ))}
+                          </div>
+                        ) : slots.length === 0 ? (
+                          <div className="grid gap-3">
+                            {/* Held by all-day work: say so, and offer to squeeze the job in
+                                beside it. Picking that re-quotes the day ignoring the hold
+                                (timed jobs and events still block). */}
+                            {holds.length > 0 && !dropIn && !pickedHeldDay ? (
+                              <Strip
+                                tone="amber"
+                                action={
+                                  <>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-8 text-xs"
+                                      onClick={pickAllDayDropIn}
+                                    >
+                                      Any time that day
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 text-xs"
+                                      onClick={() => setDropIn(true)}
+                                    >
+                                      Pick a time
+                                    </Button>
+                                  </>
+                                }
+                              >
+                                {holdNote}. Squeeze in a drop-in?
+                              </Strip>
+                            ) : pickedHeldDay ? (
+                              <Strip tone="amber">
+                                No free times left this day. Try another day.
+                              </Strip>
+                            ) : dropIn ? (
+                              <Strip
+                                tone="amber"
+                                action={
+                                  <LinkButton onClick={() => setDropIn(false)}>Undo</LinkButton>
+                                }
+                              >
+                                {`No room for a drop-in${customStaff ? ` for ${customStaff.displayName}` : ""}. Timed work, an event or working hours are in the way.`}
+                              </Strip>
+                            ) : (
+                              <Strip tone="amber">
+                                <span className="block font-semibold">
+                                  No availability on {dayLabel(date)}
+                                </span>
+                                <span className="block">
+                                  {service.availabilityWindows &&
+                                  service.availabilityWindows.length > 0 &&
+                                  !sessionOfferedOnDay(
+                                    service.availabilityWindows,
+                                    isoDayOfWeekFromIsoDate(date),
+                                  )
+                                    ? `This ${serviceNoun} isn't offered on that day.`
+                                    : "Try another day, or block the whole day."}
+                                </span>
+                              </Strip>
+                            )}
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              <AllDayTile onPick={pickAllDay} />
+                            </div>
+                            {/* Nothing suits: capture them instead of losing the enquiry. */}
+                            {!dropIn || pickedHeldDay ? waitlistLink("Can't find a time? ") : null}
+                          </div>
+                        ) : (
+                          <div
+                            role="radiogroup"
+                            aria-label="Times"
+                            {...radioGroupKeys}
+                            className="grid grid-cols-3 gap-2 sm:grid-cols-4"
+                          >
+                            {slots.map((s, i) => {
+                              const key = `${s.start}:${s.staffId}`;
+                              const on = key === slotKey;
+                              const time = formatInTz(s.start, slotTz(s), {
                                 hour: "2-digit",
                                 minute: "2-digit",
-                              })}
-                            </button>
-                          );
-                        })}
-                        <AllDayTile onPick={pickAllDay} />
+                              });
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={on}
+                                  tabIndex={on || (!selectedSlot && i === 0) ? 0 : -1}
+                                  aria-label={`${time}, ${moneyShort(s.priceMinor, s.currency)}, ends ${timeInTz(s.end, slotTz(s))}`}
+                                  onClick={() => setSlotKey(key)}
+                                  className={cn(
+                                    "min-h-11 cursor-pointer rounded-[10px] border py-2 text-xs tabular-nums transition-colors sm:min-h-0",
+                                    on
+                                      ? "border-primary bg-primary-soft font-semibold text-primary"
+                                      : "bg-card hover:bg-secondary",
+                                  )}
+                                  title={
+                                    s.remainingCapacity > 1
+                                      ? `${s.remainingCapacity} places · ${formatMoney(s.priceMinor, s.currency)}`
+                                      : formatMoney(s.priceMinor, s.currency)
+                                  }
+                                >
+                                  {time}
+                                </button>
+                              );
+                            })}
+                            <AllDayTile onPick={pickAllDay} />
+                          </div>
+                        )}
+                        {dropIn && !quietDropIn && slots.length > 0 ? (
+                          <Strip
+                            tone="blue"
+                            action={<LinkButton onClick={() => setDropIn(false)}>Undo</LinkButton>}
+                          >
+                            {holds.length > 0 ? `${holdNote}. ` : ""}
+                            Times shown are for a drop-in alongside the all-day job.
+                          </Strip>
+                        ) : null}
+                        {selectedSlot ? (
+                          <p className="text-xs text-muted-foreground">
+                            {slotSummary({
+                              slot: selectedSlot,
+                              timeZone: slotTz(selectedSlot),
+                              multiDay: spansDays(
+                                selectedSlot.start,
+                                selectedSlot.end,
+                                slotTz(selectedSlot),
+                              ),
+                              capacity:
+                                service.bookingMode !== "individual" ? service.capacityMax : null,
+                              stepMinutes: STAFF_SLOT_STEP_MINUTES,
+                            })}
+                          </p>
+                        ) : null}
                       </div>
                     )}
-                    {scheduling === "slot" && dropIn && !quietDropIn && slots.length > 0 ? (
-                      <p className="rounded-md bg-primary-soft px-3 py-2 text-xs text-primary">
-                        {holds.length > 0 ? `${holdNote}. ` : ""}
-                        Times shown are for a drop-in alongside the all-day job.{" "}
-                        <button
-                          type="button"
-                          className="underline underline-offset-4"
-                          onClick={() => setDropIn(false)}
-                        >
-                          Undo
-                        </button>
+                  </>
+                )}
+              </FormSection>
+
+              <FormSection
+                id={SECTION_IDS.price}
+                number={ADD_SECTIONS.price}
+                title="Price"
+                state={sectionState("price", Boolean(service) && !priceInvalid)}
+                aside={
+                  service && paymentMethod !== "credit" && priceOverridden ? (
+                    <LinkButton
+                      onClick={() => {
+                        setPriceInput(null);
+                        setDiscount(null);
+                        setLinePrices({});
+                      }}
+                    >
+                      List {money(rolledTotalMinor)} · reset
+                    </LinkButton>
+                  ) : null
+                }
+              >
+                {!service ? (
+                  <WaitingLine>The price shows once a {serviceNoun} is picked.</WaitingLine>
+                ) : paymentMethod === "credit" ? (
+                  <WaitingLine>
+                    Settled by a package credit. No money is taken, so price and deposit are hidden.
+                  </WaitingLine>
+                ) : (
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-price">Total</Label>
+                        <MoneyInput
+                          id="booking-price"
+                          symbol={symbol}
+                          value={
+                            priceInput !== null
+                              ? priceInput
+                              : moneyInputValue(overridePriceMinor ?? rolledTotalMinor)
+                          }
+                          onValueChange={(v) => {
+                            setPriceInput(v);
+                            setDiscount(null);
+                            setLinePrices({});
+                          }}
+                          aria-invalid={priceInvalid && !discountInvalid && !lineInvalid}
+                          aria-describedby="booking-price-help"
+                        />
+                      </div>
+                      {/* Discount: a percentage or a fixed amount off the list price. Sets
+                          the same override as typing a price, just worked out for you. */}
+                      <div className="grid gap-2">
+                        <Label htmlFor="booking-discount">Discount</Label>
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            id="booking-discount"
+                            inputMode="decimal"
+                            placeholder="0"
+                            className={cn(FIELD, "w-16 aria-invalid:border-destructive")}
+                            value={discount?.value ?? ""}
+                            onChange={(e) => {
+                              setPriceInput(null);
+                              setLinePrices({});
+                              setDiscount(
+                                e.target.value.trim() === ""
+                                  ? null
+                                  : { mode: discount?.mode ?? "percent", value: e.target.value },
+                              );
+                            }}
+                            aria-invalid={discountInvalid}
+                          />
+                          <Segmented
+                            label="Discount as"
+                            value={discount?.mode ?? "percent"}
+                            onChange={(m) => {
+                              setPriceInput(null);
+                              setLinePrices({});
+                              setDiscount({ mode: m, value: discount?.value ?? "" });
+                            }}
+                            options={[
+                              { value: "percent", label: "% off" },
+                              { value: "amount", label: `${symbol} off` },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    {discountMinor !== null && overridePriceMinor !== null ? (
+                      <p className="text-right text-xs text-muted-foreground tabular-nums">
+                        {discountLabel(discount!, money)} · −{money(discountMinor)}
                       </p>
                     ) : null}
-                    {selectedSlot &&
-                    spansDays(
-                      selectedSlot.start,
-                      selectedSlot.end,
-                      selectedSlot.displayTimezone || timezone,
-                    ) ? (
-                      <p className="text-xs text-muted-foreground">
-                        Drop-off{" "}
-                        {formatInTz(selectedSlot.start, selectedSlot.displayTimezone || timezone, {
-                          weekday: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                        {" · "}ready{" "}
-                        {formatInTz(selectedSlot.end, selectedSlot.displayTimezone || timezone, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    ) : null}
-                    {selectedSlot ? (
-                      <p className="text-xs text-muted-foreground">
-                        Quote {formatMoney(selectedSlot.priceMinor, selectedSlot.currency)}
-                        {selectedSlot.remainingCapacity > 1
-                          ? ` · ${selectedSlot.remainingCapacity} places left`
-                          : ""}
-                        {selectedSlot.slotToken ? " · slot token attached" : ""}
-                      </p>
-                    ) : null}
+                    <div id="booking-price-help" className="flex items-start gap-2">
+                      {priceInvalid ? (
+                        <p className="text-xs text-destructive">
+                          {priceError(price, discount, money(rolledTotalMinor), words)}
+                        </p>
+                      ) : (
+                        <>
+                          <ModeChip>{priceModeLabel(mode, words)}</ModeChip>
+                          <p className="text-xs text-muted-foreground">{priceHelp}</p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
-              </div>
-            ) : null}
+              </FormSection>
 
-            <div className="grid gap-2">
-              <Label>Payment method</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={(v) => {
-                  const next = v as typeof paymentMethod;
-                  if (next === "credit") setAdditional([]);
-                  setPaymentMethod(next);
-                }}
+              <FormSection
+                id={SECTION_IDS.payment}
+                number={ADD_SECTIONS.payment}
+                title="Payment"
+                state={sectionState("payment", Boolean(service) && !depositInvalid)}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pay_later">Pay after the job</SelectItem>
-                  <SelectItem value="none">Pay up front</SelectItem>
-                  {creditOffered ? (
-                    <SelectItem value="credit" disabled={additional.length > 0}>
-                      Package credit
-                    </SelectItem>
-                  ) : null}
-                  {bankTransferEnabled ? (
-                    <SelectItem value="bank_transfer" disabled={effectiveTotalMinor <= 0}>
-                      Bank transfer
-                    </SelectItem>
-                  ) : null}
-                </SelectContent>
-              </Select>
-              {paymentMethod === "bank_transfer" ? (
-                <p className="text-xs text-muted-foreground">
-                  You'll get the account details to read out; they're emailed too.
-                </p>
-              ) : null}
-            </div>
+                {!service ? (
+                  <WaitingLine>The price shows once a {serviceNoun} is picked.</WaitingLine>
+                ) : (
+                  <>
+                    <ChoiceCards
+                      label="Payment method"
+                      value={paymentMethod}
+                      options={paymentOptions}
+                      onChange={(next) => {
+                        if (next === "credit") setAdditional([]);
+                        setPaymentMethod(next);
+                        setPaymentTouched(true);
+                      }}
+                    />
+                    {paymentMethod === "credit" && creditsLeft !== null && firstName ? (
+                      <p className="text-xs text-muted-foreground">
+                        {firstName} has {Math.max(0, creditsLeft - 1)}{" "}
+                        {creditsLeft - 1 === 1 ? "credit" : "credits"} left after this.
+                      </p>
+                    ) : null}
+                    {depositApplies && effectiveTotalMinor > 0 ? (
+                      <div className="grid gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor="booking-deposit">Deposit to secure it</Label>
+                          {depositOverridden ? (
+                            <LinkButton onClick={() => setDepositInput(null)}>
+                              Use {serviceNoun} default
+                            </LinkButton>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <MoneyInput
+                            id="booking-deposit"
+                            className="w-[140px]"
+                            symbol={symbol}
+                            placeholder="0.00"
+                            value={
+                              depositOverridden
+                                ? (depositInput ?? "")
+                                : defaultDepositMinor != null
+                                  ? moneyInputValue(defaultDepositMinor)
+                                  : ""
+                            }
+                            onValueChange={setDepositInput}
+                            aria-invalid={depositInvalid}
+                            aria-describedby="booking-deposit-help"
+                          />
+                          <p
+                            id="booking-deposit-help"
+                            className={cn(
+                              "min-w-0 flex-1 basis-40 text-xs",
+                              depositInvalid ? "text-destructive" : "text-muted-foreground",
+                            )}
+                          >
+                            {depositInvalid
+                              ? `Must be under ${money(effectiveTotalMinor)}, or clear it for no deposit.`
+                              : depositMinor != null
+                                ? `${money(depositMinor)} now · ${money(effectiveTotalMinor - depositMinor)} ${paymentMethod === "pay_later" ? "after the job" : "later"}`
+                                : "No deposit"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </FormSection>
 
-            {service && depositApplies && effectiveTotalMinor > 0 ? (
-              <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="booking-deposit">Deposit to secure (£)</Label>
-                  {depositOverridden ? (
-                    <button
-                      type="button"
-                      className="text-xs text-primary underline-offset-4 hover:underline"
-                      onClick={() => setDepositInput(null)}
-                    >
-                      Use {serviceNoun.toLowerCase()} default
-                    </button>
-                  ) : null}
+              <FormSection
+                id={SECTION_IDS.notes}
+                number={ADD_SECTIONS.notes}
+                title="Notes and confirmation"
+                state="idle"
+              >
+                <div className="grid gap-2">
+                  <Label htmlFor="booking-notes">Internal notes</Label>
+                  <Textarea
+                    id="booking-notes"
+                    placeholder="Visible to staff only"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
                 </div>
-                <Input
-                  id="booking-deposit"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={
-                    depositOverridden
-                      ? depositInput
-                      : defaultDepositMinor != null
-                        ? String(defaultDepositMinor / 100)
-                        : ""
-                  }
-                  onChange={(e) => setDepositInput(e.target.value)}
-                  aria-invalid={depositInvalid}
+                <ChannelBoxes
+                  title={`Send confirmation to ${firstName ?? "client"}`}
+                  ariaPrefix="Send confirmation"
+                  ticks={ticks}
+                  blocks={blocks}
+                  onChange={setChannel}
+                  hint={notifyHint}
                 />
-                <p
-                  className={`text-xs ${depositInvalid ? "text-destructive" : "text-muted-foreground"}`}
-                >
-                  {depositInvalid
-                    ? `Must be under ${formatMoney(effectiveTotalMinor, service.currency)}, or clear it for no deposit.`
-                    : depositMinor != null
-                      ? `${formatMoney(depositMinor, service.currency)} now · ${formatMoney(effectiveTotalMinor - depositMinor, service.currency)} ${paymentMethod === "pay_later" ? "after the job" : "later"}`
-                      : "No deposit"}
-                </p>
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <Label htmlFor="booking-notes">Internal notes</Label>
-              <Textarea
-                id="booking-notes"
-                placeholder="Visible to staff only"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+                {waitlistLink("")}
+              </FormSection>
             </div>
 
-            <fieldset className="grid gap-2 rounded-lg border p-3">
-              <legend className="text-sm font-medium">Send confirmation to client</legend>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                <label
-                  className={cn(
-                    "flex items-center gap-2 text-sm",
-                    emailBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
-                  )}
-                >
-                  <Checkbox
-                    checked={wantsEmail && !emailBlocked}
-                    disabled={Boolean(emailBlocked)}
-                    onCheckedChange={(checked) => setChannel("email", checked === true)}
-                    aria-label="Send confirmation by email"
-                  />
-                  Email
-                </label>
-                <label
-                  className={cn(
-                    "flex items-center gap-2 text-sm",
-                    smsBlocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer",
-                  )}
-                >
-                  <Checkbox
-                    checked={wantsSms && !smsBlocked}
-                    disabled={Boolean(smsBlocked)}
-                    onCheckedChange={(checked) => setChannel("sms", checked === true)}
-                    aria-label="Send confirmation by text message"
-                  />
-                  Text message
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground">{notifyHint}</p>
-            </fieldset>
-          </div>
-        )}
-
-        {bankResult ? null : (
-          <DialogFooter>
-            <Button variant="ghost" onClick={requestClose}>
-              {setupBlocked || catalogueLoading ? "Close" : "Cancel"}
-            </Button>
-            {setupBlocked || catalogueLoading ? null : (
+            <ul id="add-booking-missing" className="sr-only">
+              {blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+            <DialogFooter className="items-stretch gap-3 max-sm:flex-col sm:items-center sm:gap-2">
+              <FooterSummary main={footer.main} sub={footer.sub} attention={footer.attention} />
+              <Button variant="ghost" onClick={requestClose} className="max-sm:hidden">
+                Cancel
+              </Button>
               <Button
                 onClick={submit}
                 // Looks disabled while something is missing but stays clickable, so
                 // the click can explain what's left rather than doing nothing.
                 disabled={submitting}
                 aria-disabled={submitting || blocked}
+                aria-describedby={
+                  cn(blocked && "add-booking-missing", overlapCopy && "add-booking-clash") ||
+                  undefined
+                }
                 className={cn(blocked && !submitting && "opacity-50")}
                 title={blocked ? blockers.join(" · ") : undefined}
               >
                 {submitting ? "Creating…" : "Create booking"}
               </Button>
-            )}
-          </DialogFooter>
+            </DialogFooter>
+          </>
         )}
       </DialogContent>
       {/* The API said the only things in the way can share the day: ask, then re-send. */}
@@ -2195,6 +2386,7 @@ export function AddBookingModal({
           setCustomerId(c.id);
           setLinkedRecordId("none");
           setQuickAddOpen(false);
+          setChangingClient(false);
         }}
       />
     </Dialog>
