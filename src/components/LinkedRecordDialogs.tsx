@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { DialogTrigger } from "@radix-ui/react-dialog";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
@@ -13,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -42,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsPhone } from "@/hooks/use-media-query";
 import { ApiError, queryKeys, toastApiError } from "@/lib/api";
 import {
   useCreateCustomerLinkedRecord,
@@ -113,26 +116,104 @@ export function CustomerSearchPicker({
   const candidates = pool.filter((c) => c.id !== excludeCustomerId);
   const hasSuggestions = (suggestions?.length ?? 0) > 0;
 
+  const isPhone = useIsPhone();
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+
+  const trigger = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={pickerOpen}
+      className="w-full justify-between bg-field font-normal hover:bg-field"
+    >
+      <span className={cn("truncate", !value && "text-muted-foreground")}>
+        {value ? customerDisplayName(value) : placeholder}
+      </span>
+      <ChevronDown className="size-4 shrink-0 opacity-50" />
+    </Button>
+  );
+
+  // The search and list, shared by the popover and the phone sheet.
+  const body = (
+    <Command
+      shouldFilter={false}
+      // Finger, not mouse: don't move the highlight on pointer-move (a tap fires one
+      // first), so a row can't shift under the finger before the tap lands.
+      disablePointerSelection={isPhone}
+      className={cn("min-h-0 flex-1", isPhone && "h-auto")}
+    >
+      <CommandInput
+        placeholder="Search clients by name, email or phone…"
+        value={search}
+        onValueChange={setSearch}
+      />
+      <CommandList className={cn("min-h-0 flex-1", isPhone && "max-h-none")}>
+        {!searching && !hasSuggestions ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">
+            Type at least 2 characters to search.
+          </p>
+        ) : searching && results.isLoading ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">Searching…</p>
+        ) : candidates.length === 0 ? (
+          <CommandEmpty>No clients match.</CommandEmpty>
+        ) : (
+          <CommandGroup>
+            {candidates.map((c) => (
+              <CommandItem
+                key={c.id}
+                value={c.id}
+                className={cn(isPhone && "min-h-12 px-3 py-2.5 active:bg-accent")}
+                onSelect={() => {
+                  onSelect(c);
+                  setPickerOpen(false);
+                }}
+              >
+                <Check className={cn("size-4", value?.id === c.id ? "opacity-100" : "opacity-0")} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{customerDisplayName(c)}</p>
+                  {c.emailDisplay ? (
+                    <p className="truncate text-xs text-muted-foreground">{c.emailDisplay}</p>
+                  ) : null}
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+      </CommandList>
+    </Command>
+  );
+
+  // Phones get a bottom sheet that rides above the keyboard. A popover there has no
+  // room below the field once the keyboard is up, flips above it and pins itself
+  // under the status bar.
+  if (isPhone) {
+    return (
+      <BottomSheet open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+        <BottomSheetContent
+          ref={sheetRef}
+          aria-describedby={undefined}
+          // Don't drop into the search box: on a phone that raises the keyboard over
+          // half the list before anything's been read. Tapping it still works.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            sheetRef.current?.focus();
+          }}
+        >
+          <BottomSheetTitle className="sr-only">{placeholder}</BottomSheetTitle>
+          {body}
+        </BottomSheetContent>
+      </BottomSheet>
+    );
+  }
+
   // `modal` so the list gets its own scroll-lock shard: without it the hosting
   // Dialog's lock swallows touch scrolling in the portalled popover on iOS.
   return (
     <Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={pickerOpen}
-          className="w-full justify-between font-normal"
-        >
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value ? customerDisplayName(value) : placeholder}
-          </span>
-          <ChevronDown className="size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       {/* Capped at the room Radix has on whichever side it opens, so a list that flips
-          above a low trigger stays fully on screen and scrolls inside, rather than
-          running off the top the way the services picker did on phones. */}
+          above a low trigger stays fully on screen and scrolls inside. */}
       <PopoverContent
         className="flex max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) flex-col p-0"
         align="start"
@@ -140,47 +221,7 @@ export function CustomerSearchPicker({
         sticky="always"
         collisionPadding={12}
       >
-        <Command shouldFilter={false} className="min-h-0 flex-1">
-          <CommandInput
-            placeholder="Search clients by name, email or phone…"
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList className="min-h-0 flex-1">
-            {!searching && !hasSuggestions ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground">
-                Type at least 2 characters to search.
-              </p>
-            ) : searching && results.isLoading ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground">Searching…</p>
-            ) : candidates.length === 0 ? (
-              <CommandEmpty>No clients match.</CommandEmpty>
-            ) : (
-              <CommandGroup>
-                {candidates.map((c) => (
-                  <CommandItem
-                    key={c.id}
-                    value={c.id}
-                    onSelect={() => {
-                      onSelect(c);
-                      setPickerOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn("size-4", value?.id === c.id ? "opacity-100" : "opacity-0")}
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm">{customerDisplayName(c)}</p>
-                      {c.emailDisplay ? (
-                        <p className="truncate text-xs text-muted-foreground">{c.emailDisplay}</p>
-                      ) : null}
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
+        {body}
       </PopoverContent>
     </Popover>
   );
