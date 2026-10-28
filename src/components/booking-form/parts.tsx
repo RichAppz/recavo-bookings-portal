@@ -15,8 +15,8 @@ import {
 import { isoDate, parseIso, parseMoneyToMinor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** Inputs in both booking forms: 42px high, 10px radius, filled. */
-export const FIELD = "h-[42px] rounded-[10px] bg-card";
+/** Inputs in both booking forms: 42px high, 10px radius, with the field fill. */
+export const FIELD = "h-[42px] rounded-[10px] bg-field";
 
 export type SectionState = "idle" | "attention" | "complete";
 

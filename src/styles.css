@@ -48,6 +48,8 @@
   --color-destructive-soft: var(--destructive-soft);
   --color-border: var(--border);
   --color-input: var(--input);
+  /* Fill of text fields and select boxes. */
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
   --color-chart-1: var(--chart-1);
@@ -111,6 +113,7 @@
   --border: oklch(0.9 0.006 250);
   --input: oklch(0.86 0.008 250);
   --ring: oklch(0.62 0.114 178);
+  --field: var(--card);
   --chart-1: oklch(0.62 0.114 178);
   --chart-2: oklch(0.68 0.11 210);
   --chart-3: oklch(0.735 0.145 62);
