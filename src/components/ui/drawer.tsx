@@ -43,7 +43,7 @@ const DrawerContent = React.forwardRef<
         onInteractOutside?.(e);
       }}
       className={cn(
-        "pb-safe px-safe fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+        "pb-safe px-safe fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-card",
         className,
       )}
       {...props}

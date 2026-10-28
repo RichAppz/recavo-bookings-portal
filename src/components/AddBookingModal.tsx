@@ -129,7 +129,7 @@ const isRemembered = (m: PaymentMethod): m is RememberedMethod =>
   (REMEMBERED_METHODS as readonly string[]).includes(m);
 
 const DATE_INPUT =
-  "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-base outline-none focus:border-ring md:text-sm";
+  "flex h-9 w-full rounded-md border border-input bg-field px-3 py-1 text-base outline-none focus:border-ring md:text-sm";
 
 /** Sits at the end of the slot grid: books the whole day (or days, for a long job). */
 function AllDayTile({ onPick }: { onPick: () => void }) {

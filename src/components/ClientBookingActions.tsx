@@ -512,7 +512,7 @@ function MoveRequest({
           rows={2}
           maxLength={500}
           placeholder="e.g. Any evening next week, or Saturday morning"
-          className="w-full resize-none rounded-2xl border border-input bg-card px-4 py-3 text-[16px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+          className="w-full resize-none rounded-2xl border border-input bg-field px-4 py-3 text-[16px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
         />
       </label>
       <label className="mt-3 block">
@@ -522,7 +522,7 @@ function MoveRequest({
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           maxLength={500}
-          className="w-full resize-none rounded-2xl border border-input bg-card px-4 py-3 text-[16px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+          className="w-full resize-none rounded-2xl border border-input bg-field px-4 py-3 text-[16px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
         />
       </label>
       <PrimaryButton
