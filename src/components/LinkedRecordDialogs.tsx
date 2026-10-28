@@ -124,7 +124,7 @@ export function CustomerSearchPicker({
       variant="outline"
       role="combobox"
       aria-expanded={pickerOpen}
-      className="w-full justify-between font-normal"
+      className="w-full justify-between bg-field font-normal hover:bg-field"
     >
       <span className={cn("truncate", !value && "text-muted-foreground")}>
         {value ? customerDisplayName(value) : placeholder}
