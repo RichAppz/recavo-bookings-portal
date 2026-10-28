@@ -477,7 +477,6 @@ function Composer({ onDone }: { onDone: () => void }) {
               type="datetime-local"
               value={scheduleAt}
               onChange={(e) => setScheduleAt(e.target.value)}
-              className="bg-background"
             />
           </div>
         ) : null}

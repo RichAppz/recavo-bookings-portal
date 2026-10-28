@@ -256,7 +256,7 @@ export function ClientDetails({
               maxLength={500}
               placeholder="Injuries, goals, access needs"
               className={cn(
-                "w-full resize-none rounded-[var(--radius)] border border-input bg-card px-4 py-3 text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30",
+                "w-full resize-none rounded-[var(--radius)] border border-input bg-field px-4 py-3 text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-2 focus:ring-primary/30",
                 desktop ? "text-[15px]" : "text-[17px]",
               )}
             />
