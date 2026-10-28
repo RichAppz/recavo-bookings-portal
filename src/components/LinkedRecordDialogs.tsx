@@ -33,6 +33,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DialogTrigger } from "@radix-ui/react-dialog";
+import { BottomSheet, BottomSheetContent, BottomSheetTitle } from "@/components/ui/bottom-sheet";
+import { useIsPhone } from "@/hooks/use-media-query";
 import {
   Select,
   SelectContent,
@@ -85,6 +88,9 @@ export function CustomerSearchPicker({
   excludeCustomerId,
   suggestions,
   placeholder = "Search for a client…",
+  defaultOpen = false,
+  onOpenChange,
+  phoneSheet = false,
 }: {
   value: Customer | null;
   onSelect: (customer: Customer) => void;
@@ -93,8 +99,19 @@ export function CustomerSearchPicker({
   /** Shown before typing, and filtered locally on a single character. */
   suggestions?: Customer[];
   placeholder?: string;
+  /** Open the list on mount, e.g. after "Change" on a chosen client. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** On a phone, open as a bottom sheet rather than a popover (the booking forms). */
+  phoneSheet?: boolean;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const isPhone = useIsPhone();
+  const sheet = phoneSheet && isPhone;
+  const [pickerOpen, setPickerOpenState] = useState(defaultOpen);
+  const setPickerOpen = (open: boolean) => {
+    setPickerOpenState(open);
+    onOpenChange?.(open);
+  };
   const [search, setSearch] = useState("");
   const term = search.trim();
   const searching = term.length > 1;
@@ -112,23 +129,81 @@ export function CustomerSearchPicker({
   const candidates = pool.filter((c) => c.id !== excludeCustomerId);
   const hasSuggestions = (suggestions?.length ?? 0) > 0;
 
+  const trigger = (
+    <Button
+      variant="outline"
+      role="combobox"
+      aria-expanded={pickerOpen}
+      className="w-full justify-between font-normal"
+    >
+      <span className={cn("truncate", !value && "text-muted-foreground")}>
+        {value ? customerDisplayName(value) : placeholder}
+      </span>
+      <ChevronDown className="size-4 shrink-0 opacity-50" />
+    </Button>
+  );
+  const list = (
+    <Command shouldFilter={false} className={cn("min-h-0 flex-1", sheet && "h-auto")}>
+      <CommandInput
+        placeholder="Search clients by name, email or phone…"
+        value={search}
+        onValueChange={setSearch}
+      />
+      <CommandList className={cn("min-h-0 flex-1", sheet && "max-h-none")}>
+        {!searching && !hasSuggestions ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">
+            Type at least 2 characters to search.
+          </p>
+        ) : searching && results.isLoading ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">Searching…</p>
+        ) : candidates.length === 0 ? (
+          <CommandEmpty>No clients match.</CommandEmpty>
+        ) : (
+          <CommandGroup>
+            {candidates.map((c) => (
+              <CommandItem
+                key={c.id}
+                value={c.id}
+                className={cn(sheet && "min-h-12")}
+                onSelect={() => {
+                  onSelect(c);
+                  setPickerOpen(false);
+                }}
+              >
+                <Check className={cn("size-4", value?.id === c.id ? "opacity-100" : "opacity-0")} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{customerDisplayName(c)}</p>
+                  {c.emailDisplay || c.phoneDisplay ? (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.emailDisplay || c.phoneDisplay}
+                    </p>
+                  ) : null}
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+      </CommandList>
+    </Command>
+  );
+
+  if (sheet) {
+    return (
+      <BottomSheet open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+        <BottomSheetContent aria-describedby={undefined}>
+          <BottomSheetTitle className="sr-only">{placeholder}</BottomSheetTitle>
+          {list}
+        </BottomSheetContent>
+      </BottomSheet>
+    );
+  }
+
   // `modal` so the list gets its own scroll-lock shard: without it the hosting
   // Dialog's lock swallows touch scrolling in the portalled popover on iOS.
   return (
     <Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={pickerOpen}
-          className="w-full justify-between font-normal"
-        >
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value ? customerDisplayName(value) : placeholder}
-          </span>
-          <ChevronDown className="size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       {/* Capped at the room Radix has on whichever side it opens, so a list that flips
           above a low trigger stays fully on screen and scrolls inside, rather than
           running off the top the way the services picker did on phones. */}
@@ -139,47 +214,7 @@ export function CustomerSearchPicker({
         sticky="always"
         collisionPadding={12}
       >
-        <Command shouldFilter={false} className="min-h-0 flex-1">
-          <CommandInput
-            placeholder="Search clients by name, email or phone…"
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList className="min-h-0 flex-1">
-            {!searching && !hasSuggestions ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground">
-                Type at least 2 characters to search.
-              </p>
-            ) : searching && results.isLoading ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground">Searching…</p>
-            ) : candidates.length === 0 ? (
-              <CommandEmpty>No clients match.</CommandEmpty>
-            ) : (
-              <CommandGroup>
-                {candidates.map((c) => (
-                  <CommandItem
-                    key={c.id}
-                    value={c.id}
-                    onSelect={() => {
-                      onSelect(c);
-                      setPickerOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn("size-4", value?.id === c.id ? "opacity-100" : "opacity-0")}
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm">{customerDisplayName(c)}</p>
-                      {c.emailDisplay ? (
-                        <p className="truncate text-xs text-muted-foreground">{c.emailDisplay}</p>
-                      ) : null}
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
+        {list}
       </PopoverContent>
     </Popover>
   );
@@ -899,7 +934,7 @@ export function QuickAddLinkedRecord({
     hasInput && inputHint
       ? inputHint
       : requiredLabels.length === 0
-        ? "Nothing's required — add what you know, the rest later."
+        ? "Nothing's required. Add what you know, the rest later."
         : `Only the ${requiredLabels.join(" and ")} is needed now.`;
 
   return (

@@ -11,13 +11,20 @@ import { formatMoney } from "@/lib/format";
  * payment. Shown to customers on the public confirmation screen and to staff
  * after booking with the bank-transfer method.
  */
-export function BankTransferPanel({ details }: { details: BankTransferInstructions }) {
+export function BankTransferPanel({
+  details,
+  audience = "customer",
+}: {
+  details: BankTransferInstructions;
+  /** Staff read the details out, so the closing line speaks for the business. */
+  audience?: "customer" | "staff";
+}) {
   const copyReference = async () => {
     try {
       await navigator.clipboard.writeText(details.reference);
       toast.success("Reference copied");
     } catch {
-      toast.error("Couldn't copy — please note it down");
+      toast.error("Couldn't copy. Please note it down.");
     }
   };
   const row = (label: string, value: string, mono = true) => (
@@ -38,7 +45,7 @@ export function BankTransferPanel({ details }: { details: BankTransferInstructio
       </dl>
       <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
         <p className="text-xs font-medium tracking-wide text-warning-foreground uppercase">
-          Payment reference — you must use this
+          Payment reference · you must use this
         </p>
         <div className="mt-1 flex items-center justify-between gap-3">
           <p className="font-mono text-lg font-semibold">{details.reference}</p>
@@ -47,7 +54,9 @@ export function BankTransferPanel({ details }: { details: BankTransferInstructio
           </Button>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Without it the business can't match your payment to this booking.
+          {audience === "staff"
+            ? "Without it we can't match the payment to this booking."
+            : "Without it the business can't match your payment to this booking."}
         </p>
       </div>
     </div>

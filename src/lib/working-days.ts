@@ -282,7 +282,12 @@ export function contiguousRuns(cols: number[]): { startCol: number; endCol: numb
  * continuous span (an older booking, or no schedule to skip) says "3 days" — every
  * calendar day in it is worked.
  */
-export function formatWorkingSpan(item: Spanning, timeZone: string): string | null {
+export function formatWorkingSpan(
+  item: Spanning,
+  timeZone: string,
+  /** Between the first and last day; the booking forms write "Thu 24 to Mon 28 Sept". */
+  joiner = " – ",
+): string | null {
   const days = occupiedDaysOf(item, timeZone);
   if (days.length < 2) return null;
   const noun = segmentsOf(item).length > 1 ? "working days" : "days";
@@ -299,7 +304,7 @@ export function formatWorkingSpan(item: Spanning, timeZone: string): string | nu
     ...(sameMonth ? {} : { month: "short" }),
   });
   const right = fmt(last, { weekday: "short", day: "numeric", month: "short" });
-  return `${left} – ${right} · ${days.length} ${noun}`;
+  return `${left}${joiner}${right} · ${days.length} ${noun}`;
 }
 
 // ---- Zone arithmetic (no library: Intl only) ---------------------------------------

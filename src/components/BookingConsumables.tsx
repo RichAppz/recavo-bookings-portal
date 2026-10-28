@@ -148,7 +148,7 @@ export function ServiceDefaultsHint({ serviceIds }: { serviceIds: readonly strin
     <p className="text-xs text-muted-foreground">
       <Package className="mr-1 inline size-3.5 align-[-2px]" />
       Includes: {summariseUsage(merged)}
-      <span className="text-muted-foreground/70"> — your records only, not charged</span>
+      <span className="text-muted-foreground/70"> · your records only, not charged</span>
     </p>
   );
 }
