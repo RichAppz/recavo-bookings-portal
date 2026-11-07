@@ -60,6 +60,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RecordedPayments } from "@/components/RecordedPayments";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -84,6 +85,7 @@ import {
   useBusinessId,
   useBookingHistory,
   useBookingPayments,
+  useBookingSettlements,
   useCustomer,
   useDeleteBooking,
   useLinkedRecord,
@@ -242,6 +244,9 @@ export function BookingPanel({
   const linkedRecord = useLinkedRecord(booking?.linkedRecordId ?? undefined);
   const history = useBookingHistory(booking?.id);
   const payments = useBookingPayments(booking?.id);
+  const hasRecordedPayments = (useBookingSettlements(booking?.id).data ?? []).some(
+    (s) => s.kind === "payment" && s.method !== "card_online",
+  );
   // Same query the Payments tab uses, so this costs nothing extra.
   const invoices = useBookingInvoices(booking?.id);
 
@@ -1437,15 +1442,19 @@ export function BookingPanel({
                     </div>
                   ) : null}
 
+                  <RecordedPayments booking={booking} timezone={timezone} />
+
                   {payments.isLoading ? (
                     <TableGhost rows={3} />
                   ) : payments.isError ? (
                     <p className="text-xs text-destructive">Couldn't load payments.</p>
                   ) : (payments.data ?? []).length === 0 ? (
-                    <EmptyState
-                      title="No payments yet"
-                      description="Payments taken for this booking will appear here."
-                    />
+                    hasRecordedPayments ? null : (
+                      <EmptyState
+                        title="No payments yet"
+                        description="Payments taken for this booking will appear here."
+                      />
+                    )
                   ) : (
                     <ul className="divide-y rounded-xl border">
                       {payments.data!.map((p) => (

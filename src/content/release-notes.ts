@@ -6,6 +6,17 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-11-07",
+    title: "Move a payment recorded on the wrong booking",
+    items: [
+      {
+        kind: "new",
+        text: "Recorded cash, a bank transfer or a card machine payment against the wrong booking? Open that booking's Payments tab, tap Move next to the payment and pick the right booking, for the same client or anyone else. The amount comes off one booking and goes on the other; your takings for the day don't change. If the first booking already has an invoice showing the money as paid, void that invoice first. Card payments taken online stay with the booking they were charged for.",
+        where: "Booking → Payments → Recorded payments → Move",
+      },
+    ],
+  },
+  {
     date: "2026-10-14",
     title: "Several vehicles on one invoice, previews that work on a phone, reminders a year out",
     items: [

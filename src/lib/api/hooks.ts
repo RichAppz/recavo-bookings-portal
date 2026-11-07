@@ -804,6 +804,70 @@ export function useBookingPayments(bookingId: string | undefined) {
   });
 }
 
+export type SettlementMethod = "card_online" | "card_manual" | "cash" | "bank_transfer" | "other";
+
+/** One movement of money against a booking, however it arrived (the settlement ledger). */
+export interface BookingSettlementEntry {
+  id: string;
+  paymentId: string | null;
+  method: SettlementMethod;
+  kind: "payment" | "refund" | "dispute" | "dispute_reversal";
+  amountMinor: number;
+  currency: string;
+  occurredAt: string;
+}
+
+/**
+ * Money against the booking including what staff recorded by hand (cash, bank transfer,
+ * card machine), which never appears in `useBookingPayments`. Filled from the outbox, so
+ * a just-recorded payment can take a moment to show.
+ */
+export function useBookingSettlements(bookingId: string | undefined) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: queryKeys.bookingSettlements(businessId, bookingId ?? ""),
+    enabled: Boolean(businessId && bookingId),
+    queryFn: async () => {
+      const res = await api.get<{ settlements: BookingSettlementEntry[] }>(
+        `/api/v1/businesses/${businessId}/bookings/${bookingId}/settlements`,
+      );
+      return res.data.settlements;
+    },
+  });
+}
+
+/**
+ * Moves a payment recorded against the wrong booking onto the right one. The API takes the
+ * amount off one paid total and puts it on the other in one step; card payments taken
+ * online can't be moved.
+ */
+export function useMoveRecordedPayment() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<
+      { from: Booking; to: Booking },
+      { settlementId: string; fromBookingId: string; toBookingId: string }
+    >(async (vars, idempotencyKey) => {
+      const res = await api.post<{ from: Booking; to: Booking }>(
+        `/api/v1/businesses/${businessId}/payments/manual-moves`,
+        { settlementId: vars.settlementId, toBookingId: vars.toBookingId },
+        { idempotencyKey },
+      );
+      return res.data;
+    }),
+    onSuccess: (data) => {
+      for (const booking of [data.from, data.to]) {
+        qc.setQueryData(queryKeys.booking(businessId, booking.id), booking);
+      }
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customers"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "reports"] });
+    },
+  });
+}
+
 export function useTakeBookingPayment() {
   const businessId = useBusinessId();
   const qc = useQueryClient();

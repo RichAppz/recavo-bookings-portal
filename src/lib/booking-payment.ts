@@ -216,3 +216,25 @@ export function bookingNeedsPayment(
   if ((booking.paidMinor ?? 0) >= booking.priceMinor) return false;
   return !payments.some((p) => p.bookingId === booking.id && SETTLED.has(p.state));
 }
+
+/**
+ * Whether a recorded payment can be moved onto `target`. Mirrors the API's checks so the
+ * picker only offers bookings it will accept: confirmed or completed, not paid by package
+ * credit, same currency, and still owing at least the amount.
+ */
+export function canTakeMovedPayment(
+  target: Pick<
+    Booking,
+    "id" | "status" | "paymentMethod" | "currency" | "priceMinor" | "paidMinor"
+  >,
+  fromBookingId: string,
+  payment: { amountMinor: number; currency: string },
+): boolean {
+  return (
+    target.id !== fromBookingId &&
+    (target.status === "confirmed" || target.status === "completed") &&
+    target.paymentMethod !== "credit" &&
+    target.currency === payment.currency &&
+    target.priceMinor - (target.paidMinor ?? 0) >= payment.amountMinor
+  );
+}
