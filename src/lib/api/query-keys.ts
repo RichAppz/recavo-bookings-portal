@@ -22,6 +22,8 @@ export const queryKeys = {
     ["biz", businessId, "bookings", bookingId, "history"] as const,
   bookingPayments: (businessId: string, bookingId: string) =>
     ["biz", businessId, "bookings", bookingId, "payments"] as const,
+  bookingSettlements: (businessId: string, bookingId: string) =>
+    ["biz", businessId, "bookings", bookingId, "settlements"] as const,
 
   /** Prefix for every calendar-block list — invalidate after any block write. */
   calendarBlocksAll: (businessId: string) => ["biz", businessId, "calendar-blocks"] as const,

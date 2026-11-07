@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   balanceDueLabel,
   bookingSettlement,
+  canTakeMovedPayment,
   customerLifetimeSpendMinor,
   effectiveDepositMinor,
   paymentLabel,
@@ -204,5 +205,37 @@ describe("paymentLabel", () => {
       paidMinor: 5000,
     });
     assert.equal(paymentLabel(s, "GBP", fmt), "Deposit paid · £100.00 to collect");
+  });
+});
+
+describe("canTakeMovedPayment", () => {
+  type Target = Parameters<typeof canTakeMovedPayment>[0];
+  const target = (o: Partial<Target> = {}): Target => ({
+    id: "bk_right",
+    status: "confirmed",
+    paymentMethod: "pay_later",
+    currency: "GBP",
+    priceMinor: 5000,
+    paidMinor: 0,
+    ...o,
+  });
+  const cash = { amountMinor: 2000, currency: "GBP" };
+
+  it("takes a confirmed or completed booking that still owes the amount", () => {
+    assert.equal(canTakeMovedPayment(target(), "bk_wrong", cash), true);
+    assert.equal(canTakeMovedPayment(target({ status: "completed" }), "bk_wrong", cash), true);
+    assert.equal(canTakeMovedPayment(target({ paidMinor: 3000 }), "bk_wrong", cash), true);
+  });
+
+  it("refuses the booking it is on, one it would overpay, or one the API would refuse", () => {
+    assert.equal(canTakeMovedPayment(target({ id: "bk_wrong" }), "bk_wrong", cash), false);
+    assert.equal(canTakeMovedPayment(target({ paidMinor: 3001 }), "bk_wrong", cash), false);
+    assert.equal(
+      canTakeMovedPayment(target({ status: "cancelled_by_business" }), "bk_wrong", cash),
+      false,
+    );
+    assert.equal(canTakeMovedPayment(target({ status: "held" }), "bk_wrong", cash), false);
+    assert.equal(canTakeMovedPayment(target({ paymentMethod: "credit" }), "bk_wrong", cash), false);
+    assert.equal(canTakeMovedPayment(target({ currency: "EUR" }), "bk_wrong", cash), false);
   });
 });
