@@ -15,6 +15,7 @@ import {
   parseConsumablesSearch,
   parseCost,
   parseQuantity,
+  parseStockQuantity,
   quantityLabel,
   quantityStep,
   RECORDS_LINE,
@@ -24,6 +25,7 @@ import {
   shortUsageSummary,
   sortConsumables,
   stepQuantity,
+  stockAdvice,
   summariseUsage,
   uncostedLabel,
   unitCode,
@@ -338,5 +340,50 @@ describe("mergeUsage", () => {
       { consumableId: "a", quantity: 1.5 },
       { consumableId: "b", quantity: 2 },
     ]);
+  });
+});
+
+describe("stock", () => {
+  const stock = {
+    onHand: 3,
+    upcoming: 0,
+    afterUpcoming: 3,
+    shortBy: 0,
+    reorderLevel: null,
+    status: "ok" as const,
+  };
+
+  it("parses a stock count, allowing zero", () => {
+    assert.equal(parseStockQuantity("0"), 0);
+    assert.equal(parseStockQuantity("0,0"), 0);
+    assert.equal(parseStockQuantity("2.5 litres"), 2.5);
+    assert.equal(parseStockQuantity(""), null);
+    assert.equal(parseStockQuantity("-1"), null);
+  });
+
+  it("says what the shelf means for booked jobs", () => {
+    assert.equal(
+      stockAdvice(
+        { ...stock, upcoming: 5, afterUpcoming: -2, shortBy: 2, status: "short" },
+        "bottle",
+      ),
+      "Short 2 bottles for booked jobs",
+    );
+    assert.equal(
+      stockAdvice({ ...stock, onHand: 0, afterUpcoming: 0, status: "out" }, "pad"),
+      "None left",
+    );
+    assert.equal(
+      stockAdvice(
+        { ...stock, upcoming: 2, afterUpcoming: 1, reorderLevel: 2, status: "low" },
+        "bottle",
+      ),
+      "1 bottle left after booked jobs, reorder at 2",
+    );
+    assert.equal(
+      stockAdvice({ ...stock, upcoming: 1, afterUpcoming: 2 }, "pad"),
+      "2 pads left after booked jobs",
+    );
+    assert.equal(stockAdvice(stock, "pad"), "Nothing booked needs it yet");
   });
 });

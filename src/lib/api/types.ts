@@ -54,6 +54,15 @@ export type PublicUpsellOfferPage = schemas["PublicUpsellOfferPage"];
 export type Consumable = schemas["Consumable"];
 /** What was paid for what was bought ("5 litres for £40"). */
 export type ConsumablePack = NonNullable<Consumable["pack"]>;
+/** On hand, booked and what's left for a tracked consumable; null until stock is recorded. */
+export type ConsumableStock = NonNullable<Consumable["stock"]>;
+export type ConsumableStockStatus = ConsumableStock["status"];
+/** What needs ordering: short, out or low items and the booked jobs they'd leave short. */
+export type ConsumableStockOverview =
+  paths["/api/v1/businesses/{businessId}/consumables/stock"]["get"]["responses"]["200"]["content"]["application/json"]["stock"];
+/** A delivery or a stock count. */
+export type ConsumableStockMovement =
+  paths["/api/v1/businesses/{businessId}/consumables/{consumableId}/stock"]["get"]["responses"]["200"]["content"]["application/json"]["movements"][number];
 /** One consumable on a service (default usage) or a booking (actual usage). */
 export type ConsumableUsageLine = schemas["ConsumableUsageLine"];
 /** A booking's usage plus the staff-only estimated materials cost. */

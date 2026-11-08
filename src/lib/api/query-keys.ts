@@ -78,6 +78,10 @@ export const queryKeys = {
     ["biz", businessId, "consumables", "figures", period] as const,
   consumableActivity: (businessId: string, consumableId: string, period: string, limit: number) =>
     ["biz", businessId, "consumables", "activity", consumableId, period, limit] as const,
+  consumableStockOverview: (businessId: string) =>
+    ["biz", businessId, "consumables", "stock"] as const,
+  consumableStockHistory: (businessId: string, consumableId: string) =>
+    ["biz", businessId, "consumables", "stock", consumableId] as const,
   serviceConsumables: (businessId: string, serviceId: string) =>
     ["biz", businessId, "services", serviceId, "consumables"] as const,
   bookingConsumables: (businessId: string, bookingId: string) =>

@@ -1,9 +1,31 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, ChevronRight, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  ClipboardCheck,
+  MoreHorizontal,
+  PackagePlus,
+  PackageX,
+  Trash2,
+} from "lucide-react";
 import { TonePill } from "@/components/client-profile/parts";
+import { StockPill } from "@/components/consumables/NeedsOrdering";
 import { ItemTile } from "@/components/consumables/parts";
+import type { StockKind } from "@/components/consumables/StockDrawer";
 import { NumberPlate } from "@/components/vehicles/NumberPlate";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,9 +42,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsPhone } from "@/hooks/use-media-query";
-import { useConsumableActivity } from "@/lib/api/hooks";
+import {
+  useConsumableActivity,
+  useConsumableStockHistory,
+  useStopTrackingConsumableStock,
+} from "@/lib/api/hooks";
 import type { Consumable, ConsumableActivity, ConsumableUsagePeriod } from "@/lib/api/types";
-import { quantityLabel, unitCostLabel } from "@/lib/consumables";
+import { formatQuantity, quantityLabel, stockAdvice, unitCostLabel } from "@/lib/consumables";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +93,7 @@ export function ConsumablePanel({
   onRestore,
   onDelete,
   onOpenBooking,
+  onStock,
 }: {
   consumable: Consumable | null;
   open: boolean;
@@ -79,6 +106,7 @@ export function ConsumablePanel({
   onRestore: (c: Consumable) => void;
   onDelete: (c: Consumable) => void;
   onOpenBooking: (bookingId: string) => void;
+  onStock: (c: Consumable, kind: StockKind) => void;
 }) {
   const phone = useIsPhone();
   return (
@@ -105,6 +133,7 @@ export function ConsumablePanel({
             onRestore={onRestore}
             onDelete={onDelete}
             onOpenBooking={onOpenBooking}
+            onStock={onStock}
           />
         ) : (
           <>
@@ -135,6 +164,7 @@ function PanelBody({
   onRestore,
   onDelete,
   onOpenBooking,
+  onStock,
 }: {
   consumable: Consumable;
   initialPeriod: ConsumableUsagePeriod;
@@ -145,6 +175,7 @@ function PanelBody({
   onRestore: (c: Consumable) => void;
   onDelete: (c: Consumable) => void;
   onOpenBooking: (bookingId: string) => void;
+  onStock: (c: Consumable, kind: StockKind) => void;
 }) {
   const [period, setPeriod] = useState<ConsumableUsagePeriod>(
     PANEL_PERIODS.some((p) => p.value === initialPeriod) ? initialPeriod : "this_month",
@@ -161,6 +192,9 @@ function PanelBody({
   };
   const referenced = c.serviceIds.length > 0 || c.jobCount > 0;
   const canDelete = c.status === "active" || !referenced;
+  const history = useConsumableStockHistory(c.id, { enabled: c.stock !== null });
+  const stopTracking = useStopTrackingConsumableStock();
+  const [confirmStop, setConfirmStop] = useState(false);
 
   return (
     <>
@@ -223,6 +257,113 @@ function PanelBody({
               ) : null}
               <Fact label="Jobs" value={String(a?.usage.jobs ?? 0)} />
             </>
+          )}
+        </section>
+
+        <section aria-label="Stock" className="grid gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-[15px] font-extrabold">
+              Stock
+              {c.stock && c.stock.status !== "ok" ? <StockPill status={c.stock.status} /> : null}
+            </h3>
+            {canEdit && c.stock ? (
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 max-sm:h-10"
+                  onClick={() => onStock(c, "counted")}
+                >
+                  <ClipboardCheck className="size-3.5" /> Count
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 max-sm:h-10"
+                  onClick={() => onStock(c, "received")}
+                >
+                  <PackagePlus className="size-3.5" /> Add stock
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {c.stock ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <Fact label="On hand" value={quantityLabel(c.stock.onHand, c.unit)} />
+                <Fact label="Booked" value={quantityLabel(c.stock.upcoming, c.unit)} />
+                <Fact
+                  label="After booked"
+                  value={
+                    c.stock.afterUpcoming < 0
+                      ? `\u2212${quantityLabel(-c.stock.afterUpcoming, c.unit)}`
+                      : quantityLabel(c.stock.afterUpcoming, c.unit)
+                  }
+                />
+              </div>
+              <p className="text-[13px] text-muted-foreground">
+                {stockAdvice(c.stock, c.unit)}.
+                {c.stock.reorderLevel != null && c.stock.status !== "low"
+                  ? ` Reorder at ${formatQuantity(c.stock.reorderLevel)}.`
+                  : ""}{" "}
+                Jobs take what they record off the shelf when they start.
+              </p>
+              {history.data && history.data.length > 0 ? (
+                <ul className="divide-y overflow-hidden rounded-xl border">
+                  {history.data.slice(0, 5).map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between gap-3 px-3.5 py-2 text-[13px]"
+                    >
+                      <span className="grid min-w-0">
+                        <span className="font-semibold">
+                          {m.kind === "received" ? "Delivery" : "Counted"}
+                          <span className="font-normal text-muted-foreground">
+                            {" "}
+                            · {movementDate(m.occurredAt)}
+                          </span>
+                        </span>
+                        {m.note ? (
+                          <span className="truncate text-xs text-muted-foreground">{m.note}</span>
+                        ) : null}
+                      </span>
+                      <span className="grid shrink-0 text-right">
+                        <span className="font-bold tabular-nums">
+                          {m.kind === "received" ? "+" : ""}
+                          {quantityLabel(m.quantity, c.unit)}
+                        </span>
+                        {canMoney && m.costMinor != null ? (
+                          <span className="text-xs text-muted-foreground">
+                            {money(m.costMinor)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : (
+            <div className="grid gap-2 rounded-xl border border-dashed px-3.5 py-3">
+              <p className="text-sm text-muted-foreground">
+                Not tracked. Count what you have and we&rsquo;ll warn you when booked jobs need more
+                than is on the shelf.
+              </p>
+              {canEdit ? (
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-9" onClick={() => onStock(c, "counted")}>
+                    <ClipboardCheck className="size-3.5" /> Count stock
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9"
+                    onClick={() => onStock(c, "received")}
+                  >
+                    <PackagePlus className="size-3.5" /> Add a delivery
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           )}
         </section>
 
@@ -349,6 +490,11 @@ function PanelBody({
                   <ArchiveRestore className="size-4" /> Restore
                 </DropdownMenuItem>
               )}
+              {c.stock ? (
+                <DropdownMenuItem onSelect={() => setConfirmStop(true)}>
+                  <PackageX className="size-4" /> Stop tracking stock
+                </DropdownMenuItem>
+              ) : null}
               {canDelete ? (
                 <DropdownMenuItem
                   onSelect={() => onDelete(c)}
@@ -364,8 +510,45 @@ function PanelBody({
           </Button>
         </footer>
       ) : null}
+
+      <AlertDialog open={confirmStop} onOpenChange={setConfirmStop}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop tracking {c.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Its deliveries and counts are removed and it won&rsquo;t warn you about booked jobs
+              any more. Jobs keep what they recorded. You can start again with a count.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={stopTracking.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                stopTracking.mutate(c.id, {
+                  onSuccess: () => {
+                    setConfirmStop(false);
+                    toast.success(`Stopped tracking ${c.name}`);
+                  },
+                });
+              }}
+            >
+              Stop tracking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
+}
+
+function movementDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
