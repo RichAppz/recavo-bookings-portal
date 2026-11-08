@@ -6,6 +6,22 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    date: "2026-11-08",
+    title: "Cancel a payment recorded by mistake",
+    items: [
+      {
+        kind: "new",
+        text: "Recorded cash, a bank transfer or a card machine payment that never happened, or on the wrong booking? Tap Cancel next to it on the booking's Payments tab. It comes off the booking and out of your takings, as if it was never recorded. If the booking has an invoice showing the money as paid, void the invoice first. Money you actually gave back is still a refund.",
+        where: "Booking → Payments",
+      },
+      {
+        kind: "fixed",
+        text: "On a phone, the client search now has a Cancel button at the top, so you can close it without picking anyone.",
+        where: "Client picker",
+      },
+    ],
+  },
+  {
     date: "2026-10-21",
     title: "A waitlist that tells you who fits, and your own referral code",
     items: [

@@ -68,6 +68,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusPill } from "@/components/BookingStatusPill";
+import { CancelRecordedPayment } from "@/components/CancelRecordedPayment";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmptyState, PersonAvatar, StatusBadge } from "@/components/ui-bits";
@@ -1874,17 +1875,29 @@ export function BookingPanel({
                                 })}
                               </p>
                             </div>
-                            <span
-                              className={cn(
-                                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
-                                line.direction === "payment" ||
-                                  line.direction === "dispute_reversal"
-                                  ? "bg-success-soft text-success"
-                                  : "bg-secondary text-secondary-foreground",
-                              )}
-                            >
-                              {recordedDirectionLabel(line.direction)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                                  line.direction === "payment" ||
+                                    line.direction === "dispute_reversal"
+                                    ? "bg-success-soft text-success"
+                                    : "bg-secondary text-secondary-foreground",
+                                )}
+                              >
+                                {recordedDirectionLabel(line.direction)}
+                              </span>
+                              {line.direction === "payment" &&
+                              tenant.can(PERMISSIONS.BOOKING_CREATE) ? (
+                                <CancelRecordedPayment
+                                  bookingId={booking.id}
+                                  line={line}
+                                  issuedInvoice={(invoices.data ?? []).find(
+                                    (inv) => inv.status === "issued" || inv.status === "paid",
+                                  )}
+                                />
+                              ) : null}
+                            </div>
                           </li>
                         ),
                       )}

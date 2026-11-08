@@ -888,6 +888,35 @@ export function useBookingsSettlements(
   return { byBooking, isLoading: results.some((r) => r.isLoading) };
 }
 
+/**
+ * Cancels a cash, bank transfer, card machine or other payment recorded by mistake: the
+ * API takes it off the booking's paid total and out of takings, as if never recorded.
+ */
+export function useCancelRecordedPayment() {
+  const businessId = useBusinessId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createIdempotentMutationFn<Booking, { settlementId: string; bookingId: string }>(
+      async (vars, idempotencyKey) => {
+        const res = await api.post<{ booking: Booking }>(
+          `/api/v1/businesses/${businessId}/payments/manual-cancellations`,
+          { settlementId: vars.settlementId },
+          { idempotencyKey },
+        );
+        return res.data.booking;
+      },
+    ),
+    onSuccess: (booking) => {
+      qc.setQueryData(queryKeys.booking(businessId, booking.id), booking);
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "bookings"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "customers"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "payments"] });
+      void qc.invalidateQueries({ queryKey: ["biz", businessId, "reports"] });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useTakeBookingPayment() {
   const businessId = useBusinessId();
   const qc = useQueryClient();
