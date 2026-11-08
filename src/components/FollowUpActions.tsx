@@ -42,7 +42,21 @@ export function FollowUpActions({
     setBusy(true);
     try {
       await act.mutateAsync({ followUpId: followUp.id, action, until });
-      toast.success(success);
+      if (action === "dismiss") {
+        toast.success(success, {
+          duration: 6000,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              act.mutate(
+                { followUpId: followUp.id, action: "reopen" },
+                { onSuccess: () => toast.success("Reminder back on") },
+              ),
+          },
+        });
+      } else {
+        toast.success(success);
+      }
     } catch {
       // Toasted by the hook.
     } finally {
@@ -92,7 +106,7 @@ export function FollowUpActions({
                 <AlarmClock className="size-4" /> Snooze 1 month
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void run("dismiss", "Follow-up dismissed")}>
+              <DropdownMenuItem onSelect={() => void run("dismiss", "Reminder dismissed")}>
                 <BellOff className="size-4" /> Dismiss
               </DropdownMenuItem>
             </>

@@ -1,4 +1,5 @@
-import { AlertTriangle, Mail, MessageSquare, Smartphone } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { AlertTriangle, ChevronRight, Mail, MessageSquare, Smartphone } from "lucide-react";
 import { formatInTz } from "@/lib/format";
 import {
   messageHeadline,
@@ -11,13 +12,22 @@ import { cn } from "@/lib/utils";
 /**
  * One message in the booking history tab: what went, how, and — when it failed or fell
  * back from text to email — a short reason staff can act on. Never shows provider text.
+ *
+ * When the message carried an invoice (`invoice`), the whole row opens it: the link is
+ * stretched over the row with a pseudo-element so a phone thumb lands anywhere.
  */
 export function BookingMessageHistoryRow({
   entry,
   timezone,
+  invoice = null,
+  onOpenInvoice,
 }: {
   entry: MessageHistoryEntry;
   timezone: string;
+  /** The invoice this email carried, when it could be told; makes the row tappable. */
+  invoice?: { id: string; number: string | null } | null;
+  /** Called when the invoice link is followed — the drawer uses it to close itself. */
+  onOpenInvoice?: () => void;
 }) {
   const reason = messageReasonLabel(entry);
   const tone =
@@ -36,7 +46,14 @@ export function BookingMessageHistoryRow({
           : MessageSquare;
 
   return (
-    <li className="flex gap-3 border-b py-3 last:border-0" data-testid="booking-message-row">
+    <li
+      className={cn(
+        "flex gap-3 border-b py-3 last:border-0",
+        invoice &&
+          "relative -mx-2 rounded-lg px-2 transition-colors hover:bg-secondary/60 has-[a:focus-visible]:bg-secondary/60 active:bg-secondary",
+      )}
+      data-testid="booking-message-row"
+    >
       <div
         className={cn(
           "mt-1 flex size-5 shrink-0 items-center justify-center rounded-full",
@@ -73,6 +90,18 @@ export function BookingMessageHistoryRow({
             {reason}
           </p>
         ) : null}
+        {invoice ? (
+          <Link
+            to="/invoices/$invoiceId"
+            params={{ invoiceId: invoice.id }}
+            onClick={onOpenInvoice}
+            aria-label={`Open invoice ${invoice.number ?? ""}`.trim()}
+            data-testid="booking-message-invoice-link"
+            className="mt-1 inline-block text-xs font-medium text-primary outline-none after:absolute after:inset-0 after:content-['']"
+          >
+            {invoice.number ? `Open invoice ${invoice.number}` : "Open invoice"}
+          </Link>
+        ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
           System
           {entry.occurredAt
@@ -80,6 +109,12 @@ export function BookingMessageHistoryRow({
             : ""}
         </p>
       </div>
+      {invoice ? (
+        <ChevronRight
+          className="mt-1 size-4 shrink-0 self-start text-muted-foreground"
+          aria-hidden
+        />
+      ) : null}
     </li>
   );
 }

@@ -22,7 +22,7 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:flex-nowrap sm:items-end sm:gap-4">
       <div className="contents sm:block sm:min-w-0">
-        <h1 className="order-1 min-w-0 text-xl font-semibold tracking-tight sm:text-[28px]">
+        <h1 className="order-1 min-w-0 text-[30px] leading-tight font-extrabold tracking-[-0.025em] sm:text-[34px]">
           {title}
         </h1>
         {description ? (

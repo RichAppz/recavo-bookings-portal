@@ -19,6 +19,14 @@ export function canonicalToken(token: string): string {
     .toLowerCase();
 }
 
+/**
+ * Whether the wording puts the message's link where it wants it (`{{link}}`, or its
+ * follow-up alias `{{booking_link}}`) — the API then adds none at the end.
+ */
+export function wordingPlacesLink(text: string): boolean {
+  return /\{\{\s*(link|booking_?link)\s*\}\}/i.test(text);
+}
+
 const TOKEN_PATTERN = /\{\{\s*(\w+)\s*\}\}/g;
 
 /** Tokens in `text` that none of the placeholders (or their aliases) recognise. */

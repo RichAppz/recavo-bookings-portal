@@ -15,10 +15,12 @@ import {
   linkedRecordProblem,
   pluralRecordTerm,
   nextInvoiceNumberPreview,
+  normaliseLineDescription,
   pdfHandoff,
   percentInputToBps,
   showsVat,
   sortInvoicesNewestFirst,
+  splitLineDescription,
   supportsLinkedRecord,
   upperCaseRegistration,
   validateLineDrafts,
@@ -197,6 +199,32 @@ describe("validateLineDrafts", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.lines[1]?.unitPriceMinor, -14500);
+  });
+
+  it("keeps a heading plus detail lines, tidied, and caps them at six", () => {
+    assert.equal(
+      normaliseLineDescription("Paint correction\r\n  Bonnet and wings \n\n\nTwo stage "),
+      "Paint correction\nBonnet and wings\nTwo stage",
+    );
+    assert.equal(normaliseLineDescription(" \n\r\n "), "");
+    assert.deepEqual(splitLineDescription("Paint correction\nBonnet\nWings"), {
+      heading: "Paint correction",
+      details: ["Bonnet", "Wings"],
+    });
+    assert.deepEqual(splitLineDescription("Just a heading"), {
+      heading: "Just a heading",
+      details: [],
+    });
+
+    const ok = validateLineDrafts([{ ...good, description: "Heading\nd1\nd2\nd3\nd4\nd5" }]);
+    assert.equal(ok.ok, true);
+    if (ok.ok) assert.equal(ok.lines[0]?.description, "Heading\nd1\nd2\nd3\nd4\nd5");
+
+    const tooMany = validateLineDrafts([
+      { ...good, description: "Heading\nd1\nd2\nd3\nd4\nd5\nd6" },
+    ]);
+    assert.equal(tooMany.ok, false);
+    if (!tooMany.ok) assert.match(tooMany.errors[0]?.description ?? "", /At most 6 lines/);
   });
 });
 

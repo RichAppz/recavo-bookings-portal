@@ -60,6 +60,14 @@ const config: CapacitorConfig = {
     // round trip inside the app.
     allowNavigation: ["*.stripe.com"],
   },
+  plugins: {
+    PushNotifications: {
+      // iOS: show the system banner even while the app is in the foreground, so a
+      // push looks the same whether or not RECAVO happens to be open. (Android
+      // shows nothing in the foreground; PushBootstrap toasts it instead.)
+      presentationOptions: ["badge", "sound", "alert"],
+    },
+  },
   ios: {
     // Turns on App-Bound Domains (Info.plist → WKAppBoundDomains) so the WebView
     // can run our service worker and open offline. Navigating to a domain outside

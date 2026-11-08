@@ -79,17 +79,17 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "What the calendar colours mean",
-        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Configuration → Calendar colours** — pick a colour, or clear the box to go back to the default — then **Save colours**.",
+        body: "By default {bookings} are coloured by **payment status**: green for paid or nothing to collect, amber for a deposit or part payment, red for unpaid, and slate for events. Change any of them under **Settings → Calendar → Booking colours** — pick a colour, or clear the box to go back to the default — then **Save**.",
         image: {
           name: "calendar-colours",
-          alt: "The Calendar colours settings with a colour for paid, deposit or part paid, unpaid and events.",
+          alt: "The Booking colours settings with a colour for paid, deposit or part paid, unpaid and events.",
         },
-        link: { to: "/settings", search: { tab: "configuration" }, label: "Open Configuration" },
+        link: { to: "/settings/calendar", label: "Open Calendar settings" },
       },
       {
         heading: "Colour by {staff}",
         body: "Each {staff} has a **calendar colour** on their card under **{Staff}**. Filter the calendar to one person to see just their day, or use the colour to tell teams apart at a glance.",
-        link: { to: "/staff", label: "Open {Staff}" },
+        link: { to: "/team", label: "Open Team" },
       },
     ],
     related: ["add-staff-and-hours", "notification-preferences"],
@@ -123,7 +123,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
           name: "security",
           alt: "Settings, Security tab, with the Password form and the Two-factor authentication card with an Enrol authenticator button.",
         },
-        link: { to: "/settings", search: { tab: "security" }, label: "Open Security" },
+        link: { to: "/settings/security", label: "Open Security" },
       },
       {
         heading: "Turn on two-factor",
@@ -132,7 +132,7 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       {
         heading: "Your team",
         body: "Two-factor is per person, not per business. Ask everyone on your team — especially owners and managers under **Settings → Team** — to turn it on. Lost your phone? Contact support from the **Support** page and we'll verify you and reset it.",
-        link: { to: "/settings", search: { tab: "team" }, label: "Open Team" },
+        link: { to: "/settings/team", label: "Open Team" },
       },
     ],
     related: ["add-staff-and-hours", "whats-new-and-support"],
@@ -197,5 +197,59 @@ export const ACCOUNT_GUIDES: readonly Guide[] = [
       },
     ],
     related: ["working-offline", "two-factor-authentication"],
+  },
+  {
+    slug: "referrals",
+    title: "Refer a business, get a month free",
+    summary:
+      "Share your link with another business. When they start paying for RECAVO, you get a month free, and the Referrals page tracks each one.",
+    category: "account",
+    verticals: BOTH,
+    minutes: 3,
+    sharedImages: true,
+    keywords: [
+      "refer",
+      "referral",
+      "invite",
+      "free month",
+      "reward",
+      "referral code",
+      "referral link",
+      "partner",
+      "discount",
+      "qr code",
+    ],
+    steps: [
+      {
+        heading: "Share your link",
+        body: "Open **Referrals** in the sidebar. Your link and code are at the top: **Copy link**, or send it straight from **WhatsApp** or **Email**. On a phone, **Share link** opens your phone's share options. **QR code** shows a code another business can scan, and **Copy code** copies just the code for them to type when they sign up.",
+        image: {
+          name: "referrals",
+          alt: "The Referrals page with the referral link and its Copy link, WhatsApp, Email, QR code and Copy code buttons, above Free months earned, Signed up, On free trial and Paying figures.",
+        },
+        link: { to: "/referrals", label: "Open Referrals" },
+      },
+      {
+        heading: "How the free month works",
+        body: "The business you refer gets the usual free trial. Once they pay their first invoice, you get one free month: on a monthly plan your next invoice is free, and on an annual plan your renewal moves back a month. Refer several and the free months queue up, one per invoice or renewal. They have to use your link or code when they create their business, as it can't be added afterwards. **Terms** under **How it works** has the full rules (on a phone, open **How it works** at the bottom first).",
+        image: {
+          name: "referral-terms",
+          alt: "The Referral terms dialog explaining one free month per business that pays its first invoice.",
+        },
+      },
+      {
+        heading: "Track who signed up",
+        body: "The figures show your **Free months earned** and how many businesses have **Signed up**, are **On free trial** or are **Paying**. **Businesses you've referred** lists each one with when they signed up, their status and **Your reward**: *Waiting* until they pay, then **1 month free**, showing the invoice it comes off and *Applied* once it has been.",
+        image: {
+          name: "referrals-list",
+          alt: "The Businesses you've referred list with each business, when it signed up, its status and the reward.",
+        },
+      },
+      {
+        heading: "Partner programme",
+        body: "If you're on the partner programme, the page says **Partner programme** instead. Businesses you send get a discount rather than you getting free months: 20% off their first six months on a monthly plan, or 10% off their first year on an annual one.",
+      },
+    ],
+    related: ["choose-your-plan", "share-your-booking-page"],
   },
 ];

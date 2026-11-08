@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, ExternalLink, Link2, Plus, Trash2, Users, X } from "lucide-react";
+import { CalendarPlus, Copy, ExternalLink, Link2, Plus, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { CustomerSearchPicker } from "@/components/LinkedRecordDialogs";
 import { PersonAvatar, SectionCard } from "@/components/ui-bits";
@@ -35,12 +42,22 @@ import {
   useAssignPackageLink,
   useCustomer,
   useServices,
+  useUpdatePackageLinkExtraTimes,
 } from "@/lib/api/hooks";
 import type { CatalogueService, Customer, Package, PackageLink } from "@/lib/api/types";
 import { customerDisplayName } from "@/lib/api/types";
 import { formatMoney } from "@/lib/format";
 import { bookingUrlFor } from "@/lib/hosts";
 import { describeDiscount, discountedMinor, parseDiscountInput } from "@/lib/offer-discount";
+import {
+  describeExtraTimesCount,
+  fromExtraWindows,
+  newExtraTimeRow,
+  toExtraWindows,
+  validateExtraTimeRows,
+  WEEKDAYS,
+  type ExtraTimeRow,
+} from "@/lib/offer-extra-times";
 import { useTenant } from "@/lib/tenant/tenant-context";
 
 /** The URL a client opens: the booking page, narrowed to what the link names. */
@@ -90,6 +107,7 @@ export function PackageLinksCard({ slug }: { slug: string }) {
   const revoke = useRevokePackageLink();
   const [creating, setCreating] = useState(false);
   const [sharing, setSharing] = useState<PackageLink | null>(null);
+  const [editingTimes, setEditingTimes] = useState<PackageLink | null>(null);
 
   const serviceName = (id: string) =>
     (services.data ?? []).find((s) => s.id === id)?.name ?? `Removed ${nouns.lower}`;
@@ -100,6 +118,9 @@ export function PackageLinksCard({ slug }: { slug: string }) {
     // Older API builds predate discounts; a link without the field is at list price.
     const saving = describeDiscount(link.discount ?? null, tenant.business?.currency ?? "GBP");
     if (saving) items.unshift(saving);
+    // Older API builds predate extra times; a link without the field opens none.
+    const extraTimes = describeExtraTimesCount(link.extraAvailability);
+    if (extraTimes) items.push(extraTimes);
     const n = link.customerIds.length;
     // Assigned from the client profile; shown here so the PT can see a link is in use.
     if (n > 0) items.push(`sent to ${n} ${n === 1 ? "client" : "clients"}`);
@@ -164,6 +185,15 @@ export function PackageLinksCard({ slug }: { slug: string }) {
                     <Users className="size-4" /> Clients
                     {link.customerIds.length > 0 ? ` (${link.customerIds.length})` : null}
                   </Button>
+                  {/* Only sessions can carry extra times; a packages-only link has nothing to edit. */}
+                  {link.serviceIds.length > 0 ? (
+                    <Button size="sm" variant="outline" onClick={() => setEditingTimes(link)}>
+                      <CalendarPlus className="size-4" /> Extra times
+                      {(link.extraAvailability?.length ?? 0) > 0
+                        ? ` (${link.extraAvailability.length})`
+                        : null}
+                    </Button>
+                  ) : null}
                   <Button size="sm" variant="outline" onClick={() => copyLink(url)}>
                     <Copy className="size-4" /> Copy link
                   </Button>
@@ -187,6 +217,12 @@ export function PackageLinksCard({ slug }: { slug: string }) {
         // Read the live row so the list updates as clients are added or removed.
         link={(links.data ?? []).find((l) => l.id === sharing?.id) ?? null}
         onClose={() => setSharing(null)}
+      />
+      <EditExtraTimesDialog
+        link={(links.data ?? []).find((l) => l.id === editingTimes?.id) ?? null}
+        nouns={nouns}
+        serviceName={serviceName}
+        onClose={() => setEditingTimes(null)}
       />
       <CreateLinkDialog
         open={creating}
@@ -356,6 +392,229 @@ function ChoiceRow({
   );
 }
 
+/**
+ * Extra bookable times for the sessions a link names: rows of "Every <weekday>" or
+ * "On <date>" from–to. These are times outside the normal schedule that only a client
+ * arriving with the link sees; anything already in the diary still wins. Used inside
+ * the create dialog (under the ticked sessions) and on its own to edit a live link.
+ */
+function ExtraTimesEditor({
+  rows,
+  onChange,
+  serviceIds,
+  serviceName,
+  nouns,
+  errors,
+  listError,
+}: {
+  rows: ExtraTimeRow[];
+  onChange: (rows: ExtraTimeRow[]) => void;
+  /** The sessions the link names, in link order; one block each. */
+  serviceIds: string[];
+  serviceName: (id: string) => string;
+  nouns: ReturnType<typeof sessionNoun>;
+  /** Per-row messages by row key, shown inline once the business tries to save. */
+  errors: Map<string, string>;
+  listError: string | null;
+}) {
+  const update = (key: string, patch: Partial<ExtraTimeRow>) =>
+    onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const remove = (key: string) => onChange(rows.filter((r) => r.key !== key));
+
+  return (
+    <div className="grid gap-2">
+      <Label>Extra times for this offer (optional)</Label>
+      <p className="text-xs text-muted-foreground">
+        Open times you don’t normally offer — a Sunday morning, one particular evening — just for
+        clients who book through this link. Anything already in your diary stays unavailable.
+      </p>
+      {listError ? <p className="text-xs text-destructive">{listError}</p> : null}
+      {serviceIds.map((serviceId) => {
+        const mine = rows.filter((r) => r.serviceId === serviceId);
+        return (
+          <div key={serviceId} className="rounded-xl border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{serviceName(serviceId)}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange([...rows, newExtraTimeRow(serviceId)])}
+              >
+                <Plus className="size-3.5" /> Add time
+              </Button>
+            </div>
+            {mine.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No extra times. Clients see this {nouns.lower}’s usual availability.
+              </p>
+            ) : (
+              <div className="mt-2 divide-y divide-border/70 rounded-lg border border-border/70">
+                {mine.map((row) => {
+                  const error = errors.get(row.key);
+                  return (
+                    // Keyed by the row's own key, never by a value that changes while
+                    // typing: remounting a focused <input type="time"> upsets Safari.
+                    <div key={row.key} className="grid gap-1.5 px-2.5 py-2">
+                      {/* Wraps: day on the first line, times on the second when the dialog is narrow. */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                          value={row.mode}
+                          onValueChange={(v) =>
+                            update(row.key, { mode: v as ExtraTimeRow["mode"] })
+                          }
+                        >
+                          <SelectTrigger aria-label="Repeat" className="w-[5.25rem] shrink-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Every</SelectItem>
+                            <SelectItem value="date">On</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {row.mode === "weekly" ? (
+                          <Select
+                            value={String(row.dayOfWeek)}
+                            onValueChange={(v) => update(row.key, { dayOfWeek: Number(v) })}
+                          >
+                            <SelectTrigger aria-label="Day" className="w-[8.5rem] flex-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {WEEKDAYS.map((d) => (
+                                <SelectItem key={d.value} value={String(d.value)}>
+                                  {d.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            type="date"
+                            aria-label="Date"
+                            className="w-[9.5rem] flex-1"
+                            value={row.date}
+                            onChange={(e) => update(row.key, { date: e.target.value })}
+                          />
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            aria-label="From"
+                            className="w-[6.5rem]"
+                            value={row.start}
+                            onChange={(e) => update(row.key, { start: e.target.value })}
+                          />
+                          <span className="text-xs text-muted-foreground">to</span>
+                          <Input
+                            type="time"
+                            aria-label="To"
+                            className="w-[6.5rem]"
+                            value={row.end}
+                            onChange={(e) => update(row.key, { end: e.target.value })}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Remove time"
+                            onClick={() => remove(row.key)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Change the extra times on a link already shared; everything else on it stays fixed. */
+function EditExtraTimesDialog({
+  link,
+  nouns,
+  serviceName,
+  onClose,
+}: {
+  link: PackageLink | null;
+  nouns: ReturnType<typeof sessionNoun>;
+  serviceName: (id: string) => string;
+  onClose: () => void;
+}) {
+  const update = useUpdatePackageLinkExtraTimes();
+  const [rows, setRows] = useState<ExtraTimeRow[]>([]);
+  const [attempted, setAttempted] = useState(false);
+  const linkId = link?.id ?? null;
+
+  // Reset the draft when a different link opens, not on every refetch of the same one.
+  useEffect(() => {
+    if (linkId && link) {
+      setRows(fromExtraWindows(link.extraAvailability ?? []));
+      setAttempted(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkId]);
+
+  const validation = validateExtraTimeRows(rows);
+  const errors = attempted ? validation.byKey : new Map<string, string>();
+
+  const submit = async () => {
+    setAttempted(true);
+    if (!link || validation.byKey.size > 0 || validation.listError) return;
+    try {
+      await update.mutateAsync({ linkId: link.id, extraAvailability: toExtraWindows(rows) });
+      toast.success(rows.length === 0 ? "Extra times removed" : "Extra times saved");
+      onClose();
+    } catch {
+      // Surfaced by the mutation's toast.
+    }
+  };
+
+  return (
+    <Dialog open={link !== null} onOpenChange={(open) => (open ? null : onClose())}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Extra times</DialogTitle>
+          <DialogDescription>
+            {link ? `“${link.name}”: ` : ""}
+            times only clients who book through this link can choose, on top of your usual
+            availability.
+          </DialogDescription>
+        </DialogHeader>
+        {link ? (
+          <div className="no-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
+            <ExtraTimesEditor
+              rows={rows}
+              onChange={setRows}
+              serviceIds={link.serviceIds}
+              serviceName={serviceName}
+              nouns={nouns}
+              errors={errors}
+              listError={attempted ? validation.listError : null}
+            />
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={update.isPending} onClick={() => void submit()}>
+            {update.isPending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CreateLinkDialog({
   open,
   slug,
@@ -386,6 +645,11 @@ function CreateLinkDialog({
   const [discountMode, setDiscountMode] = useState<"none" | "percent" | "amount">("none");
   const [discountValue, setDiscountValue] = useState("");
   const discount = parseDiscountInput(discountMode, discountValue);
+  // Extra bookable times per ticked session; rows for an unticked session are dropped
+  // with it so a stale window never reaches the API.
+  const [extraTimes, setExtraTimes] = useState<ExtraTimeRow[]>([]);
+  const [attemptedTimes, setAttemptedTimes] = useState(false);
+  const extraValidation = validateExtraTimeRows(extraTimes);
   // Paused items would show nothing on the page, so they are not offered here.
   const serviceChoices = services.filter((s) => s.active);
   const packageChoices = packages.filter((p) => p.active);
@@ -400,6 +664,8 @@ function CreateLinkDialog({
       setShowFullCatalogue(true);
       setDiscountMode("none");
       setDiscountValue("");
+      setExtraTimes([]);
+      setAttemptedTimes(false);
     }
   }, [open]);
 
@@ -419,7 +685,12 @@ function CreateLinkDialog({
 
   const toggleIn = (set: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) =>
     set((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
-  const toggleService = toggleIn(setServiceIds);
+  const toggleService = (id: string) => {
+    if (serviceIds.includes(id)) {
+      setExtraTimes((rows) => rows.filter((r) => r.serviceId !== id));
+    }
+    toggleIn(setServiceIds)(id);
+  };
   const togglePackage = toggleIn(setPackageIds);
 
   const submit = async () => {
@@ -439,6 +710,11 @@ function CreateLinkDialog({
       );
       return;
     }
+    if (extraValidation.byKey.size > 0 || extraValidation.listError) {
+      setAttemptedTimes(true);
+      toast.error(extraValidation.listError ?? "Check the extra times");
+      return;
+    }
     try {
       const link = await create.mutateAsync({
         name: name.trim(),
@@ -447,6 +723,7 @@ function CreateLinkDialog({
         customerIds: clients.map((c) => c.id),
         showFullCatalogue,
         discount,
+        ...(extraTimes.length > 0 ? { extraAvailability: toExtraWindows(extraTimes) } : {}),
       });
       // Straight to the clipboard: the next thing the PT does is paste it into a message.
       copyLink(
@@ -533,6 +810,18 @@ function CreateLinkDialog({
               packages, or pick just one kind.
             </p>
           )}
+
+          {serviceIds.length > 0 ? (
+            <ExtraTimesEditor
+              rows={extraTimes}
+              onChange={setExtraTimes}
+              serviceIds={serviceIds}
+              serviceName={(id) => services.find((s) => s.id === id)?.name ?? nouns.noun}
+              nouns={nouns}
+              errors={attemptedTimes ? extraValidation.byKey : new Map<string, string>()}
+              listError={attemptedTimes ? extraValidation.listError : null}
+            />
+          ) : null}
 
           {nothingToShare ? null : (
             <div className="grid gap-2">

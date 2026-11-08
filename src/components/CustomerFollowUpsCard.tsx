@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { BellRing } from "lucide-react";
+import { BellRing, Plus } from "lucide-react";
+import { IconTile, ProfileCard, rowClass, TonePill } from "@/components/client-profile/parts";
 import { FollowUpActions } from "@/components/FollowUpActions";
-import { SectionCard, StatusBadge } from "@/components/ui-bits";
+import { Button } from "@/components/ui/button";
 import { useCustomerFollowUps } from "@/lib/api/hooks";
 import type { ServiceFollowUp } from "@/lib/api/types";
 import {
@@ -16,77 +18,146 @@ import { useTenant } from "@/lib/tenant/tenant-context";
 import { cn } from "@/lib/utils";
 
 /**
- * "Follow-ups" on a client's profile: what they are due back for and when — the
+ * "Due back" on a client's profile: what they are due back for and when — the
  * ceramic top-up in 2028, the re-treatment next spring. Open ones first; closed ones
- * (dismissed, booked again, cancelled) are listed under them so the story reads.
- * Hidden entirely when the client has never had a follow-up service.
+ * (dismissed, booked again, cancelled) are listed under them, faded, so the story reads.
+ * Hidden when the client has none and nobody can set one; with `onRemind` the card
+ * stays so staff can set a reminder for a client who has never had a job here.
  */
 export function CustomerFollowUpsCard({
   customerId,
+  firstName,
   onBook,
+  onRemind,
+  highlight,
 }: {
   customerId: string;
+  firstName?: string;
+  /** Scrolls to and flashes this reminder; a new object each time it is asked for. */
+  highlight?: { id: string } | null;
   /** Opens the booking form prefilled for this follow-up. */
   onBook?: (followUp: ServiceFollowUp) => void;
+  /** Opens "Remind a client" prefilled for this client. */
+  onRemind?: () => void;
 }) {
   const tenant = useTenant();
   const canAct = tenant.can(PERMISSIONS.BOOKING_CREATE);
   const timezone = tenant.business?.defaultTimezone || "Europe/London";
   const followUps = useCustomerFollowUps(customerId);
   const rows = followUps.data ?? [];
-  if (followUps.isLoading || rows.length === 0) return null;
+  const canRemind = Boolean(onRemind) && canAct;
+  const [flashId, setFlashId] = useState<string | null>(null);
+  // A reminder saved a moment ago only arrives with the refetch.
+  const highlightLoaded = Boolean(highlight && rows.some((r) => r.id === highlight.id));
+  useEffect(() => {
+    if (!highlight || !highlightLoaded) return;
+    // Waits a frame so the dialog that asked has let go of focus and scroll.
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(`client-follow-up-${highlight.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlashId(highlight.id);
+    });
+    const timer = window.setTimeout(() => setFlashId(null), 2500);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [highlight, highlightLoaded]);
+  if (followUps.isLoading || (rows.length === 0 && !canRemind)) return null;
 
   const open = rows.filter(isOpenFollowUp);
   const closed = rows.filter((f) => !isOpenFollowUp(f));
+  const date = (iso: string) => formatInTz(iso, timezone, { day: "numeric", month: "short" });
+  const who = firstName?.trim() || "this client";
 
   return (
-    <SectionCard
-      title="Follow-ups"
-      description="When this client is due back — scheduled from each finished job whose service has a follow-up reminder."
-      action={
-        <Link to="/follow-ups" className="text-xs font-medium text-primary hover:underline">
-          All follow-ups
-        </Link>
+    <ProfileCard
+      title="Due back"
+      aside={
+        <>
+          <Link
+            to="/follow-ups"
+            className="text-[13px] font-bold text-foreground/70 hover:text-foreground"
+          >
+            All reminders ›
+          </Link>
+          {canRemind ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-[30px]"
+              onClick={onRemind}
+            >
+              <Plus className="size-4" />
+              Set a reminder
+            </Button>
+          ) : null}
+        </>
       }
-      bodyClassName="p-0"
     >
-      <ul className="divide-y **:min-w-0">
+      {rows.length === 0 ? (
+        <p className={cn(rowClass, "text-sm text-muted-foreground")}>
+          No reminders yet. Set one so {who} (and you) know when they're due back.
+        </p>
+      ) : null}
+      <ul className="**:min-w-0">
         {[...open, ...closed].map((f) => {
           const bucket = followUpBucket(f);
+          const isOpen = isOpenFollowUp(f);
           return (
-            <li key={f.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start">
+            <li
+              key={f.id}
+              id={`client-follow-up-${f.id}`}
+              className={cn(
+                rowClass,
+                "flex scroll-mt-20 items-start gap-3 transition-colors duration-700",
+                flashId === f.id && "bg-primary-soft",
+                !isOpen && "opacity-60",
+              )}
+            >
+              <IconTile>
+                <BellRing className="size-4" />
+              </IconTile>
               <div className="grid min-w-0 flex-1 gap-0.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-sm font-medium">
-                    <BellRing className="size-3.5 text-muted-foreground" />
-                    {f.title}
-                  </span>
+                <p className="text-[14.5px] font-bold">
+                  {f.title}
                   {f.linkedRecord ? (
-                    <span className="text-xs text-muted-foreground">· {f.linkedRecord.label}</span>
+                    <span className="font-semibold text-muted-foreground">
+                      {" "}
+                      · {f.linkedRecord.label}
+                    </span>
                   ) : null}
-                  <StatusBadge status={f.status} />
-                </div>
-                <p
-                  className={cn(
-                    "text-xs",
-                    bucket === "overdue"
-                      ? "text-destructive"
-                      : bucket === "due_soon"
-                        ? "text-warning-foreground"
-                        : "text-muted-foreground",
+                  {isOpen && f.status === "sent" ? (
+                    <TonePill tone="blue" className="ml-2 align-middle">
+                      {FOLLOW_UP_STATUS_LABELS[f.status]}
+                    </TonePill>
+                  ) : null}
+                </p>
+                <p className="text-[13px] text-muted-foreground">
+                  {isOpen ? (
+                    <span
+                      className={cn(
+                        bucket === "overdue"
+                          ? "font-semibold text-destructive"
+                          : bucket === "due_soon"
+                            ? "font-semibold text-warning-foreground"
+                            : undefined,
+                      )}
+                    >
+                      Due {date(f.dueAt)} ({relativeDueLabel(f.dueAt)})
+                    </span>
+                  ) : (
+                    <TonePill tone="grey" className="mr-1 align-middle">
+                      {FOLLOW_UP_STATUS_LABELS[f.status]}
+                    </TonePill>
                   )}
-                >
-                  {isOpenFollowUp(f)
-                    ? `Due ${formatInTz(f.dueAt, timezone, { dateStyle: "medium" })} (${relativeDueLabel(f.dueAt)})`
-                    : FOLLOW_UP_STATUS_LABELS[f.status]}
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · last done {formatInTz(f.lastDoneAt, timezone, { dateStyle: "medium" })}
-                  </span>
+                  {f.source === "manual" ? " · set by you" : ""} · last done {date(f.lastDoneAt)}
                 </p>
               </div>
               {canAct ? (
-                <div className="shrink-0 self-end sm:self-start">
+                <div className="shrink-0">
                   <FollowUpActions followUp={f} onBook={onBook} compact />
                 </div>
               ) : null}
@@ -94,6 +165,6 @@ export function CustomerFollowUpsCard({
           );
         })}
       </ul>
-    </SectionCard>
+    </ProfileCard>
   );
 }

@@ -81,7 +81,8 @@ export type LiveEventType =
   | "booking.changed"
   | "invoice.changed"
   | "follow_up.changed"
-  | "waitlist.changed";
+  | "waitlist.changed"
+  | "conversation.changed";
 
 export type LiveEvent = {
   type: LiveEventType;
@@ -99,6 +100,7 @@ const LIVE_EVENT_TYPES = new Set<string>([
   "invoice.changed",
   "follow_up.changed",
   "waitlist.changed",
+  "conversation.changed",
 ]);
 
 /** Turns a raw SSE frame into a typed hint, or null for anything we do not recognise. */
@@ -165,6 +167,7 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
         followUpsPrefix,
         waitlistPrefix,
         upsellOffersPrefix,
+        ["biz", biz, "conversations"],
       ];
     case "sms_credits.changed":
       return [queryKeys.smsCredits(biz)];
@@ -188,6 +191,9 @@ export function queryKeysForLiveEvent(event: LiveEvent): readonly (readonly unkn
       return [followUpsPrefix];
     case "waitlist.changed":
       return [waitlistPrefix];
+    case "conversation.changed":
+      // Inbox, every thread and conversation state sit under this prefix.
+      return [["biz", biz, "conversations"]];
     default:
       return [];
   }

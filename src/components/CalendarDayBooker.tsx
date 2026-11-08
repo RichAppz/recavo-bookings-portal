@@ -122,21 +122,51 @@ export function CalendarDayBooker({
   credits: readonly (PortalCredit & { studio: PortalBusinessSummary })[];
   onBookPaid: (slot: CalendarPaidSlot) => void;
 }) {
+  // A client who books with several businesses picks one first; otherwise every
+  // studio's free times would pour into the panel at once.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const studio =
+    studios.length === 1 ? studios[0] : (studios.find((s) => s.id === chosenId) ?? null);
+
   if (date < isoDate(new Date())) return null;
 
   return (
     <div className="space-y-4 border-t pt-4">
       <h3 className="text-sm font-medium">Available to book</h3>
-      {studios.map((studio) => (
+      {studios.length > 1 ? (
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Business">
+          {studios.map((s) => {
+            const active = s.id === studio?.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setChosenId(s.id)}
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "border-primary bg-primary-soft font-medium text-primary"
+                    : "hover:bg-secondary"
+                }`}
+              >
+                {s.tradingName}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {studio ? (
         <StudioDaySlots
           key={`${studio.id}-${date}`}
           studio={studio}
           date={date}
           credits={credits.filter((c) => c.studio.id === studio.id)}
-          hideStudioName={studios.length === 1}
           onBookPaid={onBookPaid}
         />
-      ))}
+      ) : (
+        <p className="text-sm text-muted-foreground">Pick a business to see its free times.</p>
+      )}
     </div>
   );
 }
@@ -145,13 +175,11 @@ function StudioDaySlots({
   studio,
   date,
   credits,
-  hideStudioName,
   onBookPaid,
 }: {
   studio: PortalBusinessSummary;
   date: string;
   credits: readonly PortalCredit[];
-  hideStudioName: boolean;
   onBookPaid: (slot: CalendarPaidSlot) => void;
 }) {
   const queryClient = useQueryClient();
@@ -211,16 +239,11 @@ function StudioDaySlots({
   }
 
   if (slots.length === 0) {
-    return hideStudioName ? (
-      <p className="text-sm text-muted-foreground">No availability on this day.</p>
-    ) : null;
+    return <p className="text-sm text-muted-foreground">No availability on this day.</p>;
   }
 
   return (
     <div className="space-y-3">
-      {hideStudioName ? null : (
-        <p className="text-xs font-medium text-muted-foreground">{studio.tradingName}</p>
-      )}
       {grouped.map((group) => (
         <div key={group[0].serviceId} className="space-y-2">
           <p className="text-sm font-medium">{group[0].serviceName}</p>

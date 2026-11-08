@@ -19,11 +19,16 @@ export function normaliseCategory(value: string | null | undefined): string | nu
 }
 
 /**
- * Group in alphabetical category order, preserving the incoming order within each
- * group. Categories compare case-insensitively so "polishing" and "Polishing"
- * typed on different days land together.
+ * Group in the business's saved category order (`order`), then alphabetically for any
+ * category it doesn't list, preserving the incoming order within each group.
+ * Categories compare case-insensitively so "polishing" and "Polishing" typed on
+ * different days land together.
  */
-export function groupByCategory<T extends Categorised>(items: readonly T[]): CategoryGroup<T>[] {
+export function groupByCategory<T extends Categorised>(
+  items: readonly T[],
+  order: readonly string[] = [],
+): CategoryGroup<T>[] {
+  const rank = new Map(order.map((c, i) => [c.trim().toLowerCase(), i]));
   const groups = new Map<string, CategoryGroup<T>>();
   let uncategorised: T[] = [];
   for (const item of items) {
@@ -37,9 +42,12 @@ export function groupByCategory<T extends Categorised>(items: readonly T[]): Cat
     if (group) group.items.push(item);
     else groups.set(key, { category, items: [item] });
   }
-  const sorted = [...groups.values()].sort((a, b) =>
-    a.category!.localeCompare(b.category!, undefined, { sensitivity: "base" }),
-  );
+  const sorted = [...groups.values()].sort((a, b) => {
+    const ra = rank.get(a.category!.toLowerCase()) ?? Number.POSITIVE_INFINITY;
+    const rb = rank.get(b.category!.toLowerCase()) ?? Number.POSITIVE_INFINITY;
+    if (ra !== rb) return ra < rb ? -1 : 1;
+    return a.category!.localeCompare(b.category!, undefined, { sensitivity: "base" });
+  });
   return uncategorised.length > 0 ? [...sorted, { category: null, items: uncategorised }] : sorted;
 }
 

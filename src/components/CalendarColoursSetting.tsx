@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { useSettingsDraft } from "@/components/settings/save-bar";
 import { SectionCard } from "@/components/ui-bits";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ import {
 } from "@/lib/calendar-settings";
 import {
   DEFAULT_PAYMENT_HEX,
+  colourByStaff,
   HEX_COLOUR,
   PAYMENT_COLOUR_KEYS,
   paymentColoursFrom,
@@ -127,7 +129,7 @@ export function CalendarColoursDialog({
   );
 }
 
-function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
+export function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
   const tenant = useTenant();
   const update = useUpdateConfiguration();
   const saved = fromSaved(tenant.configuration);
@@ -150,32 +152,42 @@ function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
 
   const save = async (next: FormState) => {
     const hex = (v: string) => v.trim().toLowerCase() || null;
-    try {
-      await update.mutateAsync({
-        calendar: {
-          paymentColours: {
-            paid: hex(next.paid),
-            partial: hex(next.partial),
-            unpaid: hex(next.unpaid),
-          },
-          eventColour: hex(next.event),
+    // Rejects on API error (useUpdateConfiguration toasts it) so the save bar stays up.
+    await update.mutateAsync({
+      calendar: {
+        paymentColours: {
+          paid: hex(next.paid),
+          partial: hex(next.partial),
+          unpaid: hex(next.unpaid),
         },
-      });
-      toast.success("Calendar colours saved");
-      onSaved?.();
-    } catch {
-      // useUpdateConfiguration already toasts the API error.
-    }
+        eventColour: hex(next.event),
+      },
+    });
+    toast.success("Calendar colours saved");
+    onSaved?.();
   };
+
+  // Inside Settings the page's save bar owns Save; the dialog keeps its own button.
+  const bar = useSettingsDraft({
+    dirty: canEdit && dirty,
+    valid: allValid,
+    saving: update.isPending,
+    save: () => save(form),
+    discard: () => setForm(saved),
+  });
 
   return (
     <div className="grid gap-4">
+      <ColourBySetting />
       {ROWS.map(({ key, label, hint, sample }) => {
         const bg = effective(key);
         const isDefault = form[key] === "";
         const isEvent = key === "event";
         return (
-          <div key={key} className="grid gap-2 rounded-xl border p-3">
+          <div
+            key={key}
+            className="grid gap-2 rounded-[14px] border bg-secondary/30 p-3 dark:bg-secondary/20"
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{label}</p>
@@ -247,15 +259,21 @@ function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
 
       <Can
         permission={PERMISSIONS.BUSINESS_UPDATE}
-        fallback={<p className="text-xs text-muted-foreground">Requires business.update</p>}
+        fallback={
+          bar.managed ? null : (
+            <p className="text-xs text-muted-foreground">An admin can change this.</p>
+          )
+        }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            disabled={update.isPending || !allValid || !dirty}
-            onClick={() => void save(form)}
-          >
-            {update.isPending ? "Saving…" : "Save colours"}
-          </Button>
+          {bar.managed ? null : (
+            <Button
+              disabled={update.isPending || !allValid || !dirty}
+              onClick={() => void save(form).catch(() => undefined)}
+            >
+              {update.isPending ? "Saving…" : "Save colours"}
+            </Button>
+          )}
           {anyCustom ? (
             <Button
               variant="outline"
@@ -263,13 +281,15 @@ function CalendarColoursForm({ onSaved }: { onSaved?: () => void }) {
               onClick={() => {
                 const cleared: FormState = { paid: "", partial: "", unpaid: "", event: "" };
                 setForm(cleared);
-                void save(cleared);
+                void save(cleared).catch(() => undefined);
               }}
             >
               Reset all to defaults
             </Button>
           ) : null}
-          <p className={cn("text-xs text-muted-foreground", !dirty && "hidden")}>Unsaved changes</p>
+          <p className={cn("text-xs text-muted-foreground", (!dirty || bar.managed) && "hidden")}>
+            Unsaved changes
+          </p>
         </div>
       </Can>
     </div>
@@ -330,6 +350,55 @@ export function PublicHolidaysSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** "Colour bookings by: Payment status / {staff}"; saves straight away like bank holidays. */
+function ColourBySetting() {
+  const tenant = useTenant();
+  const update = useUpdateConfiguration();
+  const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
+  const current = colourByStaff(tenant.configuration) ? "staff" : "payment";
+  const staffWord = tenant.terminology.staff.trim() || "Staff";
+
+  const change = async (value: string) => {
+    if (value === current) return;
+    try {
+      await update.mutateAsync({ calendar: { colourBy: value as "payment" | "staff" } });
+      toast.success(
+        value === "staff"
+          ? `Bookings now show each ${staffWord.toLowerCase()}'s colour`
+          : "Bookings now show payment status",
+      );
+    } catch {
+      // useUpdateConfiguration already toasts the API error.
+    }
+  };
+
+  return (
+    <div className="grid gap-2 rounded-[14px] border bg-secondary/30 p-3 dark:bg-secondary/20">
+      <div>
+        <p className="text-sm font-medium">Colour bookings by</p>
+        <p className="text-xs text-muted-foreground">
+          {current === "staff"
+            ? `Each booking uses its ${staffWord.toLowerCase()}'s colour from Team. The due pill still shows what's owed.`
+            : "Paid, part paid and unpaid, using the colours below."}
+        </p>
+      </div>
+      <Select
+        value={current}
+        onValueChange={(v) => void change(v)}
+        disabled={!canEdit || update.isPending}
+      >
+        <SelectTrigger aria-label="Colour bookings by" className="w-full sm:w-64">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="payment">Payment status</SelectItem>
+          <SelectItem value="staff">{staffWord}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

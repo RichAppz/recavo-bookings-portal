@@ -1,12 +1,12 @@
-import { toast } from "sonner";
-
 /**
- * Registers /sw.js (built by scripts/build-sw.mjs) and handles updates.
+ * Registers /sw.js (built by scripts/build-sw.mjs).
  *
- * A new deploy installs a fresh worker that waits. We tell the person and let
- * them choose when to reload, so a half-filled form isn't lost to an update; the
- * next cold start picks it up regardless. Dev builds and environments without
- * service workers (Lovable preview, old WebViews) simply skip this.
+ * A new deploy installs a fresh worker that waits until every tab from the old
+ * one has closed, then takes over on the next start. Nobody is asked to reload:
+ * pages and un-cached assets come from the network anyway, so the running app
+ * already shows the latest deploy; only the offline shell lags until the next
+ * cold start. Dev builds and environments without service workers (Lovable
+ * preview, old WebViews) simply skip this.
  *
  * `workbox-window` is loaded only once those guards pass: it is a CommonJS
  * package, and importing it at module level breaks the dev server's SSR pass
@@ -21,33 +21,10 @@ export function registerServiceWorker(): void {
   registered = true;
 
   void import("workbox-window")
-    .then(({ Workbox }) => start(new Workbox("/sw.js", { scope: "/" })))
+    .then(({ Workbox }) => new Workbox("/sw.js", { scope: "/" }).register())
     .catch(() => {
+      // Registration failing (e.g. an iOS WebView without app-bound domains) just
+      // means no offline mode; the app keeps working as before.
       registered = false;
     });
-}
-
-function start(wb: import("workbox-window").Workbox): void {
-  // A worker is waiting either because we just found an update, or because one
-  // was already parked from an earlier visit.
-  wb.addEventListener("waiting", () => {
-    toast("A new version of RECAVO is ready", {
-      id: "sw-update",
-      duration: Infinity,
-      description: "Reload to get the latest changes. Your work is saved.",
-      action: {
-        label: "Reload",
-        onClick: () => {
-          wb.addEventListener("controlling", () => window.location.reload());
-          wb.messageSkipWaiting();
-        },
-      },
-    });
-  });
-
-  void wb.register().catch(() => {
-    // Registration failing (e.g. an iOS WebView without app-bound domains) just
-    // means no offline mode; the app keeps working as before.
-    registered = false;
-  });
 }

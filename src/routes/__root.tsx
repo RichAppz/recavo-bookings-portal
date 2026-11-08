@@ -14,6 +14,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { isStaleBundleError, reloadForNewVersion } from "@/lib/stale-bundle";
+import { clearPersistedQueries } from "@/lib/offline/persist";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-store";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
 import { MfaDialog } from "@/components/MfaDialog";
@@ -21,6 +23,7 @@ import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { RecoveryPending } from "@/components/RecoveryPending";
 import { NativeReturnGate } from "@/components/NativeReturnGate";
 import { OfflineProvider } from "@/components/OfflineProvider";
+import { PushBootstrap } from "@/components/PushBootstrap";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { HOSTED_FLOW_CLOSED_EVENT } from "@/lib/native";
 import { Toaster } from "@/components/ui/sonner";
@@ -51,9 +54,35 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const stale = isStaleBundleError(error);
+  const [reloading, setReloading] = useState(false);
   useEffect(() => {
+    if (stale && reloadForNewVersion()) {
+      setReloading(true);
+      return;
+    }
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    // Data the device saved under an older version can be a shape this one can't
+    // read, and the phone app restores it on every launch. Start once from fresh
+    // data before showing the error; the reload cooldown stops a loop.
+    let cancelled = false;
+    void clearPersistedQueries().then(() => {
+      if (!cancelled && reloadForNewVersion()) setReloading(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [error, stale]);
+
+  if (reloading) {
+    return (
+      <div className="screen-center bg-background px-safe-4">
+        <p className="text-sm text-muted-foreground">
+          {stale ? "Updating to the latest version…" : "Reloading…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="screen-center bg-background px-safe-4">
@@ -64,9 +93,18 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {error?.message ? (
+          <p className="mt-3 text-xs break-words text-muted-foreground/70">
+            Details: {error.message}
+          </p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
+              if (stale) {
+                window.location.reload();
+                return;
+              }
               router.invalidate();
               reset();
             }}
@@ -205,6 +243,14 @@ function RootComponent() {
     return () => window.removeEventListener(HOSTED_FLOW_CLOSED_EVENT, refresh);
   }, [queryClient]);
 
+  useEffect(() => {
+    const onPreloadError = (event: Event) => {
+      if (reloadForNewVersion()) event.preventDefault();
+    };
+    window.addEventListener("vite:preloadError", onPreloadError);
+    return () => window.removeEventListener("vite:preloadError", onPreloadError);
+  }, []);
+
   return (
     <OfflineProvider queryClient={queryClient}>
       <ThemeProvider>
@@ -222,6 +268,7 @@ function RootComponent() {
             <Toaster />
             <MfaDialog />
             <PullToRefresh />
+            <PushBootstrap />
           </TenantProvider>
         </AuthProvider>
       </ThemeProvider>

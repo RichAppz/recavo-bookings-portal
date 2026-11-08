@@ -10,6 +10,27 @@ export function usableCredits<T extends PortalCredit>(
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
 }
 
+/**
+ * Whether a staff-side credit bucket has lapsed. The API's expiry job can leave a
+ * bucket `active` with units on it after its date, and cancellations still return
+ * credits into it, so the date is the authority, not the status.
+ */
+export function entitlementExpired(
+  e: { status: string; expiresAt: string },
+  now: number = Date.now(),
+): boolean {
+  return e.status === "expired" || Date.parse(e.expiresAt) <= now;
+}
+
+/** Units on a staff-side bucket the client can actually book with. */
+export function spendableUnits(
+  view: { entitlement: { status: string; expiresAt: string }; balance: { available: number } },
+  now: number = Date.now(),
+): number {
+  if (view.entitlement.status !== "active" || entitlementExpired(view.entitlement, now)) return 0;
+  return Math.max(0, view.balance.available);
+}
+
 /** Usable credits that cover one service; empty `eligibleServiceIds` means any service. */
 export function creditsCovering<T extends PortalCredit>(
   credits: readonly T[] | undefined,

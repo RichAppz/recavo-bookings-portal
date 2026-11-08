@@ -118,7 +118,7 @@ function InvoicesPage() {
           <>
             <Can permission={PERMISSIONS.BUSINESS_UPDATE}>
               <Button variant="outline" asChild>
-                <Link to="/settings" search={{ tab: "payments" }}>
+                <Link to="/settings/$page" params={{ page: "get-paid" }}>
                   <Settings className="size-4" /> Invoicing settings
                 </Link>
               </Button>

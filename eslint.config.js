@@ -7,9 +7,11 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   // android/ and ios/ are generated Capacitor native projects, not web source;
-  // schema.d.ts is openapi-typescript output (npm run gen:api), never hand-edited.
+  // schema.d.ts is openapi-typescript output (npm run gen:api), never hand-edited;
+  // vendor/ holds locally installed Ruby gems (git-ignored).
   {
     ignores: [
+      "vendor",
       "dist",
       ".output",
       ".vinxi",

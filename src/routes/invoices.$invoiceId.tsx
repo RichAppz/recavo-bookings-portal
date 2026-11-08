@@ -1,13 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
-  createFileRoute,
-  Link,
-  useCanGoBack,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
-import {
-  ArrowLeft,
   Ban,
   CheckCircle2,
   ChevronDown,
@@ -24,7 +17,11 @@ import { PdfPreview } from "@/components/PdfPreview";
 import { BookingPanel } from "@/components/BookingPanel";
 import { DeleteDraftInvoiceDialog } from "@/components/DeleteDraftInvoiceDialog";
 import { DetailGhost } from "@/components/ghost";
-import { InvoiceDraftEditor } from "@/components/InvoiceDraftEditor";
+import {
+  INVOICE_DRAFT_EDITOR_ID,
+  InvoiceDraftEditor,
+  type InvoiceDraftEditorHandle,
+} from "@/components/InvoiceDraftEditor";
 import { InvoiceOriginTag, InvoiceStatusBadge } from "@/components/InvoicesTable";
 import { InvoicingUpgradeDialog } from "@/components/InvoicingUpgradeDialog";
 import { EmptyState, SectionCard } from "@/components/ui-bits";
@@ -39,6 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/BackLink";
 import {
   Dialog,
   DialogContent,
@@ -74,6 +72,7 @@ import {
 import { customerDisplayName } from "@/lib/api/types";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { formatInTz, formatMoney, ukDate } from "@/lib/format";
+import { paidRowLabel } from "@/lib/invoice-labels";
 import {
   formatVatRate,
   invoiceAllows,
@@ -81,6 +80,7 @@ import {
   invoiceLinkedRecord,
   linkedRecordEntries,
   showsVat,
+  splitLineDescription,
   type InvoiceAddress,
 } from "@/lib/invoices";
 import { isNativeApp, saasPurchasesAllowedInApp } from "@/lib/native";
@@ -120,11 +120,9 @@ function InvoiceDetail() {
   const { invoiceId } = Route.useParams();
   const tenant = useTenant();
   const navigate = useNavigate();
-  const router = useRouter();
   // Invoices are opened from a booking, a client's profile, the list… so the
   // back control retraces that step. Only a cold open (email link, refresh)
   // has nowhere to go back to, and then "All invoices" is the sensible place.
-  const canGoBack = useCanGoBack();
   const businessId = useBusinessId();
   const invoiceQuery = useInvoice(invoiceId);
   const invoice = invoiceQuery.data;
@@ -143,6 +141,8 @@ function InvoiceDetail() {
   const [confirmPaid, setConfirmPaid] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState<"download" | "preview" | null>(null);
+  const editor = useRef<InvoiceDraftEditorHandle>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
   const [upsell, setUpsell] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
 
@@ -192,9 +192,24 @@ function InvoiceDetail() {
     return true;
   };
 
+  // PDFs are rendered from the saved draft and issuing freezes it, so unsaved edits are
+  // saved first — otherwise the preview shows the last saved copy and looks as if the
+  // change was ignored.
+  const savePendingEdits = async (): Promise<boolean> => {
+    if (!editorDirty || !editor.current) return true;
+    const saved = await editor.current.save();
+    if (saved) return true;
+    toast.error("Fix the highlighted fields first", {
+      description: "Your latest changes couldn't be saved, so they aren't on the invoice yet.",
+    });
+    document.getElementById(INVOICE_DRAFT_EDITOR_ID)?.scrollIntoView({ behavior: "smooth" });
+    return false;
+  };
+
   const downloadPdf = async () => {
     setPdfBusy("download");
     try {
+      if (!(await savePendingEdits())) return;
       const outcome = await saveBlob(await fetchInvoicePdf(businessId, inv));
       if (outcome === "unsupported") {
         toast.error(SAVE_UNSUPPORTED_MESSAGE.title, {
@@ -211,6 +226,7 @@ function InvoiceDetail() {
   const previewPdf = async () => {
     setPdfBusy("preview");
     try {
+      if (!(await savePendingEdits())) return;
       const { blob } = await fetchInvoicePdf(businessId, inv);
       setPreviewBlob(blob);
     } catch (err) {
@@ -224,6 +240,8 @@ function InvoiceDetail() {
 
   const doIssue = async (withSend: boolean) => {
     if (!guardEntitled()) return;
+    // Issuing freezes the saved draft; edits still sitting in the form would be lost.
+    if (!(await savePendingEdits())) return;
     try {
       const issued = await issue.mutateAsync({ invoiceId: inv.id, send: withSend });
       toast.success(
@@ -303,22 +321,7 @@ function InvoiceDetail() {
 
   return (
     <>
-      {canGoBack ? (
-        <button
-          type="button"
-          onClick={() => router.history.back()}
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" /> Back
-        </button>
-      ) : (
-        <Link
-          to="/invoices"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" /> All invoices
-        </Link>
-      )}
+      <BackLink fallbackTo="/invoices" fallbackLabel="All invoices" />
 
       <div className="surface-card flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -384,11 +387,20 @@ function InvoiceDetail() {
 
         <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void previewPdf()}>
-            <Eye className="size-4" /> {pdfBusy === "preview" ? "Loading…" : "Preview"}
+            <Eye className="size-4" />{" "}
+            {pdfBusy === "preview" ? "Loading…" : editorDirty ? "Save & preview" : "Preview"}
           </Button>
           <Button variant="outline" disabled={pdfBusy !== null} onClick={() => void downloadPdf()}>
             <Download className="size-4" />{" "}
-            {pdfBusy === "download" ? "Preparing…" : isNativeApp() ? "Share PDF" : "Download PDF"}
+            {pdfBusy === "download"
+              ? "Preparing…"
+              : isNativeApp()
+                ? editorDirty
+                  ? "Save & share PDF"
+                  : "Share PDF"
+                : editorDirty
+                  ? "Save & download PDF"
+                  : "Download PDF"}
           </Button>
           {allows("issue") ? (
             <DropdownMenu>
@@ -462,7 +474,12 @@ function InvoiceDetail() {
       </div>
 
       {inv.status === "draft" ? (
-        <InvoiceDraftEditor invoice={inv} disabled={!canManage || entitled === false} />
+        <InvoiceDraftEditor
+          ref={editor}
+          invoice={inv}
+          disabled={!canManage || entitled === false}
+          onDirtyChange={setEditorDirty}
+        />
       ) : null}
 
       {inv.status === "draft" && entitled === false && canManage ? (
@@ -507,33 +524,43 @@ function InvoiceDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {inv.lines.map((line) => (
-                  <tr key={line.id}>
-                    <td className="px-4 py-3">
-                      {line.description}
-                      {vat && !line.taxable ? (
-                        <span className="ml-2 text-xs text-muted-foreground">(no VAT)</span>
+                {inv.lines.map((line) => {
+                  const { heading, details } = splitLineDescription(line.description);
+                  return (
+                    <tr key={line.id}>
+                      <td className="px-4 py-3">
+                        {heading}
+                        {vat && !line.taxable ? (
+                          <span className="ml-2 text-xs text-muted-foreground">(no VAT)</span>
+                        ) : null}
+                        {details.length > 0 ? (
+                          <ul className="mt-0.5 text-xs text-muted-foreground">
+                            {details.map((detail, i) => (
+                              <li key={i}>{detail}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{line.quantity}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {formatMoney(line.unitPriceMinor, inv.currency)}
+                      </td>
+                      {vat ? (
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatMoney(line.netMinor, inv.currency)}
+                        </td>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{line.quantity}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {formatMoney(line.unitPriceMinor, inv.currency)}
-                    </td>
-                    {vat ? (
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatMoney(line.netMinor, inv.currency)}
+                      {vat ? (
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatMoney(line.vatMinor, inv.currency)}
+                        </td>
+                      ) : null}
+                      <td className="px-4 py-3 text-right tabular-nums font-medium">
+                        {formatMoney(line.totalMinor, inv.currency)}
                       </td>
-                    ) : null}
-                    {vat ? (
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatMoney(line.vatMinor, inv.currency)}
-                      </td>
-                    ) : null}
-                    <td className="px-4 py-3 text-right tabular-nums font-medium">
-                      {formatMoney(line.totalMinor, inv.currency)}
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -558,7 +585,7 @@ function InvoiceDetail() {
             </div>
             {inv.paidMinor > 0 ? (
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Paid</dt>
+                <dt className="text-muted-foreground">{paidRowLabel(inv)}</dt>
                 <dd className="tabular-nums">−{formatMoney(inv.paidMinor, inv.currency)}</dd>
               </div>
             ) : null}

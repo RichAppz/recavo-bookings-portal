@@ -100,7 +100,7 @@ export function SessionCalendar({
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <section className="surface-card flex min-w-0 flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
           <h2 className="text-base font-semibold">{monthLabel(cursor.year, cursor.month)}</h2>
@@ -186,7 +186,9 @@ export function SessionCalendar({
         </div>
       </section>
 
-      <section className="surface-card flex min-w-0 flex-col">
+      {/* The day panel scrolls on its own, so a long list of free times never
+          stretches the month grid beside it. */}
+      <section className="surface-card flex min-w-0 flex-col xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)]">
         <header className="border-b px-4 py-3 sm:px-5">
           <h2 className="text-base font-semibold">
             {selected

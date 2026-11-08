@@ -17,8 +17,8 @@ const STEP_META: Record<
   { title: string; description: string; required: boolean; href: string }
 > = {
   location: {
-    title: "Add a training location",
-    description: "Where you train clients — studio, gym, or mobile.",
+    title: "Add where you work",
+    description: "Your studio, gym, or the area you cover.",
     required: true,
     href: "/locations",
   },
@@ -26,7 +26,7 @@ const STEP_META: Record<
     title: "Set your availability",
     description: "Working hours and locations so sessions can be booked.",
     required: true,
-    href: "/staff",
+    href: "/team",
   },
   service: {
     title: "Create a session",
@@ -68,7 +68,7 @@ const STEP_META: Record<
     title: "Publish cancellation & terms",
     description: "Set clear policies before clients book online.",
     required: false,
-    href: "/settings?tab=policies&assist=1",
+    href: "/settings/policies?assist=1",
   },
   package: {
     title: "Offer a package",

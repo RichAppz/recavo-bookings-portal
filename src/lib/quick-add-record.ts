@@ -28,7 +28,10 @@ export type LinkedRecordField = {
 export const UNSUPPORTED_FIELD_TYPES = new Set(["image", "file", "reference", "multi_select"]);
 
 /** Turns a raw string/boolean input into the typed value the API expects, or undefined when blank. */
-export function coerceFieldValue(field: LinkedRecordField, raw: unknown): unknown {
+export function coerceFieldValue(
+  field: Pick<LinkedRecordField, "dataType">,
+  raw: unknown,
+): unknown {
   if (field.dataType === "boolean") return Boolean(raw);
   if (raw === "" || raw === undefined || raw === null) return undefined;
   if (field.dataType === "integer") {

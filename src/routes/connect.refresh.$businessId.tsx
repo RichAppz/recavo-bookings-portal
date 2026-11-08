@@ -37,7 +37,9 @@ function ConnectRefreshPage() {
               {startOnboarding.isPending ? "Starting…" : "Restart onboarding"}
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/payments">Back to payments</Link>
+              <Link to="/settings/$page" params={{ page: "get-paid" }}>
+                Back to Get paid
+              </Link>
             </Button>
           </div>
         }

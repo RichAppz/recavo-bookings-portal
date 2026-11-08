@@ -37,11 +37,17 @@ export function CustomerAvatar({
   customer,
   size = 40,
   editable = false,
+  badge = false,
+  initialsClassName,
   className,
 }: {
   customer: Customer;
   size?: number;
   editable?: boolean;
+  /** Shows a small round camera button on the bottom-right instead of the hover overlay. */
+  badge?: boolean;
+  /** Colours the initials circle when there's no photo. */
+  initialsClassName?: string;
   className?: string;
 }) {
   const tenant = useTenant();
@@ -121,13 +127,25 @@ export function CustomerAvatar({
 
   const avatar = (
     <span className={cn("relative inline-flex shrink-0", className)}>
-      <PersonAvatar name={name} size={size} src={usable ? view.data?.downloadUrl : undefined} />
+      <PersonAvatar
+        name={name}
+        size={size}
+        src={usable ? view.data?.downloadUrl : undefined}
+        className={usable ? undefined : initialsClassName}
+      />
       {(busy || scanning) && (
         <span className="absolute inset-0 flex items-center justify-center rounded-full bg-background/60">
           <Loader2 className="size-1/3 animate-spin text-muted-foreground" aria-hidden />
         </span>
       )}
-      {canEdit && !busy ? (
+      {canEdit && badge ? (
+        <span
+          className="absolute -right-0.5 -bottom-0.5 flex size-6 items-center justify-center rounded-full border-2 border-card bg-foreground text-background"
+          aria-hidden
+        >
+          <Camera className="size-3" />
+        </span>
+      ) : canEdit && !busy ? (
         <span
           className="absolute inset-0 flex items-center justify-center rounded-full bg-background/0 text-foreground opacity-0 transition-opacity group-hover:bg-background/60 group-hover:opacity-100 group-focus-visible:bg-background/60 group-focus-visible:opacity-100"
           aria-hidden

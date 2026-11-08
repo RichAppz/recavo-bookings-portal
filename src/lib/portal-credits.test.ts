@@ -5,6 +5,8 @@ import {
   creditBalance,
   creditsCovering,
   creditsLeftLabel,
+  entitlementExpired,
+  spendableUnits,
   usableCredits,
 } from "./portal-credits.ts";
 
@@ -80,5 +82,28 @@ describe("creditsLeftLabel", () => {
     assert.equal(creditsLeftLabel(0), "No credits left");
     assert.equal(creditsLeftLabel(1), "1 credit left");
     assert.equal(creditsLeftLabel(4), "4 credits left");
+  });
+});
+
+describe("spendableUnits", () => {
+  const view = (status: string, expiresAt: string, available: number) => ({
+    entitlement: { status, expiresAt },
+    balance: { available },
+  });
+
+  it("counts an active bucket before its expiry", () => {
+    assert.equal(spendableUnits(view("active", "2026-11-08T08:33:00.000Z", 3), now), 3);
+  });
+
+  it("ignores a bucket still marked active after its date, e.g. a cancellation returned into it", () => {
+    const lapsed = view("active", "2026-10-01T08:24:00.000Z", 2);
+    assert.equal(entitlementExpired(lapsed.entitlement, now), true);
+    assert.equal(spendableUnits(lapsed, now), 0);
+  });
+
+  it("ignores expired, exhausted and negative buckets", () => {
+    assert.equal(spendableUnits(view("expired", "2026-12-01T00:00:00.000Z", 4), now), 0);
+    assert.equal(spendableUnits(view("exhausted", "2026-12-01T00:00:00.000Z", 0), now), 0);
+    assert.equal(spendableUnits(view("active", "2026-12-01T00:00:00.000Z", -1), now), 0);
   });
 });

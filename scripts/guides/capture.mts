@@ -7,6 +7,7 @@
  *   npm run guides:shots -- --vertical=car_detailing --viewport=mobile
  *   npm run guides:shots -- --step=calendar     # one step image of every guide
  *   npm run guides:shots -- --check             # report only, capture nothing
+ *   npm run guides:shots -- --day=2026-10-20    # the day the seed ran, if not today
  *
  * Signs in as each fictional business, walks scripts/guides/shots.ts at a desktop
  * and a phone viewport, and writes WebP files to
@@ -51,6 +52,8 @@ type Args = {
   step?: string;
   vertical?: Vertical;
   viewport?: Viewport;
+  /** The day the seed ran (YYYY-MM-DD), when capturing on a later day. */
+  day?: string;
   check: boolean;
   headed: boolean;
 };
@@ -64,6 +67,7 @@ function parseArgs(argv: string[]): Args {
     else if (k === "step") args.step = v;
     else if (k === "vertical") args.vertical = v as Vertical;
     else if (k === "viewport") args.viewport = v as Viewport;
+    else if (k === "day" && v && /^\d{4}-\d{2}-\d{2}$/.test(v)) args.day = v;
     else if (k === "check") args.check = true;
     else if (k === "headed") args.headed = true;
     else throw new Error(`Unknown argument ${arg}`);
@@ -164,6 +168,10 @@ const CAPTURE_CSS = `
   *, *::before, *::after { caret-color: transparent !important; transition-duration: 0s !important; animation-duration: 0s !important; }
 `;
 
+function onSignInPage(page: Page): boolean {
+  return new URL(page.url()).pathname.startsWith("/login");
+}
+
 async function signIn(page: Page, vertical: Vertical): Promise<void> {
   // Four sign-ins in quick succession can trip the auth rate limit; back off and retry.
   for (let attempt = 1; ; attempt++) {
@@ -215,9 +223,26 @@ function makeContext(
     await page.waitForTimeout(ms);
   };
   const go = async (path: string) => {
-    await page.goto(`${env.PORTAL_BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
-    await page.locator("main, [role=main]").first().waitFor({ timeout: 20_000 });
-    await settle(600);
+    const open = async () => {
+      await page.goto(`${env.PORTAL_BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
+      await page.locator("main, [role=main]").first().waitFor({ timeout: 20_000 });
+      await settle(600);
+    };
+    await open();
+    // A session that lapses mid-run lands on the sign-in page, which also has a <main>,
+    // so it would otherwise be captured as if it were the page asked for.
+    if (onSignInPage(page)) {
+      console.log(`  signed out before ${path}; signing in again…`);
+      await signIn(page, vertical);
+      await open();
+      if (onSignInPage(page)) throw new Error(`still on the sign-in page after opening ${path}`);
+    }
+    // One-off tips (calendar swipe hints and the like) would sit in every shot.
+    const tip = page.getByRole("button", { name: "Dismiss tip" }).first();
+    if (await tip.isVisible().catch(() => false)) {
+      await tip.click();
+      await settle(200);
+    }
   };
   const openNav = async () => {
     if (!isMobile) return;
@@ -296,37 +321,81 @@ async function captureShot(ctx: ShotContext, shot: Shot, dest: string): Promise<
 
 async function screenshotShot(ctx: ShotContext, shot: Shot, dest: string): Promise<void> {
   const { page } = ctx;
+  if (onSignInPage(page)) throw new Error(`signed out while preparing ${shot.guide}/${shot.step}`);
   let png: Buffer;
   if (shot.clip) {
-    const target: Locator = shot.clip(ctx);
-    await target.scrollIntoViewIfNeeded();
-    // Full-page captures keep the current scroll position, which leaves the sticky
-    // header painted wherever the page happened to be scrolled. Park at the top so
-    // it sits at document y=0 and the bounding box is already in document space.
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(150);
-    const box = await target.boundingBox();
-    if (!box) throw new Error(`clip target not visible for ${shot.guide}/${shot.step}`);
-    const pad = 12;
-    const vp = page.viewportSize()!;
-    // Clip in document coordinates on a full-page capture, so a card taller than the
-    // viewport (settings sections) comes out whole instead of cut at the fold.
-    const x = Math.max(0, box.x - pad);
-    const y = Math.max(0, box.y - pad);
-    png = await page.screenshot({
-      fullPage: true,
-      clip: {
-        x,
-        y,
-        width: Math.min(vp.width - Math.max(0, box.x - pad), box.width + pad * 2),
-        height: box.height + pad * 2,
-      },
-    });
+    const original = page.viewportSize()!;
+    try {
+      png = await clipScreenshot(ctx, shot.clip(ctx), `${shot.guide}/${shot.step}`);
+    } finally {
+      await page.setViewportSize(original);
+    }
+  } else if (shot.fullPage) {
+    const original = page.viewportSize()!;
+    try {
+      // The desktop shell scrolls inside its own panel, so the document never grows
+      // and a full-page capture would stop at the fold. Make the window tall enough
+      // for the panel's content instead.
+      const overflow = await page.evaluate(() =>
+        Math.max(
+          0,
+          ...[...document.querySelectorAll<HTMLElement>("body *")]
+            .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY))
+            .map((el) => el.scrollHeight - el.clientHeight),
+        ),
+      );
+      if (overflow > 0) {
+        await page.setViewportSize({ width: original.width, height: original.height + overflow });
+        await ctx.settle(300);
+      }
+      png = await page.screenshot({ fullPage: true });
+    } finally {
+      await page.setViewportSize(original);
+    }
   } else {
-    png = await page.screenshot({ fullPage: shot.fullPage ?? false });
+    png = await page.screenshot();
   }
   const bytes = await toWebp(png, dest);
   console.log(`  ${dest.slice(PUBLIC.length + 1)}  ${(bytes / 1024).toFixed(0)} KB`);
+}
+
+async function clipScreenshot(ctx: ShotContext, target: Locator, name: string): Promise<Buffer> {
+  const { page } = ctx;
+  const pad = 12;
+  const original = page.viewportSize()!;
+  // Pages that scroll inside the shell (settings) never grow the document, so a card
+  // taller than the space under the sticky top bar would be painted over by it.
+  // Give the window room for the whole card instead.
+  const first = await target.boundingBox();
+  if (first && first.height + pad * 2 > original.height - 120) {
+    await page.setViewportSize({
+      width: original.width,
+      height: Math.ceil(first.height + pad * 2 + 240),
+    });
+    await page.waitForTimeout(300);
+  }
+  await target.scrollIntoViewIfNeeded();
+  // Full-page captures keep the current scroll position, which leaves the sticky
+  // header painted wherever the page happened to be scrolled. Park at the top so
+  // it sits at document y=0 and the bounding box is already in document space.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(150);
+  const box = await target.boundingBox();
+  if (!box) throw new Error(`clip target not visible for ${name}`);
+  const vp = page.viewportSize()!;
+  // Clip in document coordinates on a full-page capture, so a card taller than the
+  // viewport (settings sections) comes out whole instead of cut at the fold.
+  const x = Math.max(0, box.x - pad);
+  const y = Math.max(0, box.y - pad);
+  return page.screenshot({
+    fullPage: true,
+    clip: {
+      x,
+      y,
+      width: Math.min(vp.width - Math.max(0, box.x - pad), box.width + pad * 2),
+      height: box.height + pad * 2,
+    },
+  });
 }
 
 async function runAccount(
@@ -348,7 +417,10 @@ async function runAccount(
   });
   const page = await context.newPage();
   // Same wall-clock for every shot: today at 10:30 in the business timezone.
-  const fixed = new Date();
+  // The seed's bookings are placed around the day it ran, so a later capture pins
+  // that day with --day. A clock ahead of real time makes every session token look
+  // expired and the portal refreshes until it signs out.
+  const fixed = args.day ? new Date(`${args.day}T00:00:00`) : new Date();
   fixed.setHours(10, 30, 0, 0);
   await page.clock.setFixedTime(fixed);
   await page.addStyleTag({ content: CAPTURE_CSS }).catch(() => {});

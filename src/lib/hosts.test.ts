@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bookingUrlFor, isCustomerHost, staffHostFor, staffUrlFor } from "./hosts.ts";
+import {
+  bookingUrlFor,
+  consoleAllowedOn,
+  isCustomerHost,
+  staffHostFor,
+  staffUrlFor,
+} from "./hosts.ts";
 
 describe("isCustomerHost", () => {
   it("recognises the customer hostname in both environments", () => {
@@ -80,5 +86,23 @@ describe("bookingUrlFor", () => {
       bookingUrlFor("northside-strength", "http://localhost:8080"),
       "http://localhost:8080/northside-strength",
     );
+  });
+});
+
+describe("consoleAllowedOn", () => {
+  it("never renders the staff console on the customer host, whoever is signed in", () => {
+    assert.equal(consoleAllowedOn("book.recavo.app", false), false);
+    assert.equal(consoleAllowedOn("staging.book.recavo.app", false), false);
+  });
+
+  it("renders it on the staff host and locally", () => {
+    assert.equal(consoleAllowedOn("bookings.recavo.app", false), true);
+    assert.equal(consoleAllowedOn("staging.bookings.recavo.app", false), true);
+    assert.equal(consoleAllowedOn("localhost", false), true);
+    assert.equal(consoleAllowedOn("127.0.0.1", false), true);
+  });
+
+  it("leaves the native app alone, which is the console wherever it points", () => {
+    assert.equal(consoleAllowedOn("book.recavo.app", true), true);
   });
 });

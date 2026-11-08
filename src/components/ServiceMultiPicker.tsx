@@ -455,7 +455,7 @@ export function ServiceMultiPicker({
                         ) : null}
                         <Input
                           inputMode="decimal"
-                          className="h-8 w-24 text-right text-xs tabular-nums"
+                          className="w-24 text-right tabular-nums md:h-8 md:text-xs"
                           aria-label={`${s.name} price`}
                           aria-invalid={typedMinor === null}
                           value={typed ?? (listMinor / 100).toFixed(2)}

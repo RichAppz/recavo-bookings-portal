@@ -1,24 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useBookingWords } from "@/lib/booking-words";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { BellRing, Clock, Eye, EyeOff, Package, Plus, Sparkles, Trash2, Users } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
-import { EmptyState, PageHeader, StatusBadge } from "@/components/ui-bits";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  BellRing,
+  ChevronRight,
+  GripVertical,
+  MoreHorizontal,
+  Package,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/ui-bits";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -27,85 +29,64 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  groupByCategory,
-  hasCategories,
-  knownCategories,
-  normaliseCategory,
-} from "@/lib/service-categories";
-import { cn } from "@/lib/utils";
-import { WeeklyWindowsEditor, type BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { PackageLinksCard } from "@/components/PackageLinksCard";
+import { ServiceDrawer, type ServiceTemplate } from "@/components/services/ServiceDrawer";
+import { ArchiveServiceDialog, DeleteServiceDialog } from "@/components/services/ServiceDialogs";
+import { TonePill } from "@/components/client-profile/parts";
+import type { BusinessHoursPreset } from "@/components/WeeklyWindowsEditor";
+import { useConsumablesOn } from "@/components/consumables/use-consumables-on";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
-import { useAuth } from "@/lib/auth/auth-store";
 import {
   useConsumables,
-  useCreateService,
   useDeleteService,
   useLocationsList,
-  useReplaceServiceConsumables,
-  useServiceConsumables,
   useServices,
+  useServicesConsumables,
   useStaffList,
   useUpdateService,
-  useUpdateStaff,
 } from "@/lib/api/hooks";
-import { ConsumableUsageEditor } from "@/components/ConsumableUsageEditor";
-import { rowsFromLines, rowsToItems, type UsageRow } from "@/lib/consumables";
-import { UpsellEditor } from "@/components/UpsellEditor";
-import { rowsFromUpsells, rowsToUpsellItems, type UpsellRow } from "@/lib/upsells";
-import { UpsellsUpgradeDialog } from "@/components/UpsellsUpgradeDialog";
 import {
-  isFeatureNotAvailable,
-  useReplaceServiceUpsells,
-  useServiceUpsells,
-  useUpsellsEntitled,
-} from "@/lib/api/upsells";
-import { FollowUpRuleEditor } from "@/components/FollowUpRuleEditor";
-import {
-  draftFromRule,
-  followUpRuleSummary,
-  ruleFromDraft,
-  type FollowUpRuleDraft,
-} from "@/lib/follow-ups";
-import { DeleteOrFallbackDialog } from "@/components/DeleteOrFallbackDialog";
-import { PackageLinksCard } from "@/components/PackageLinksCard";
+  useReorderServices,
+  useServiceCategoryOrder,
+  useServiceUsage,
+  useUpsellPairings,
+} from "@/lib/api/catalogue";
 import { ApiError } from "@/lib/api";
-import {
-  formatAvailabilityWindows,
-  isValidAvailabilityWindow,
-  windowsFromOpeningHours,
-  type AvailabilityWindow,
-} from "@/lib/availability-windows";
-import { formatDuration, formatMoney, parseMoneyToMinor } from "@/lib/format";
-import {
-  sameWorkingHours,
-  windowsToWorkingRules,
-  workingRulesToWindows,
-} from "@/lib/working-hours";
-import { UNIT_MINUTES, splitDuration, type DurationUnit } from "@/lib/quick-add-service";
-import { useSoleLocation, useSoleStaff } from "@/lib/sole";
 import type { CatalogueService, Staff } from "@/lib/api/types";
+import { estimateMaterialsCost } from "@/lib/consumables";
+import { groupByCategory, knownCategories, normaliseCategory } from "@/lib/service-categories";
+import {
+  SERVICE_STATUS_FILTERS,
+  SERVICE_STATUS_LABELS,
+  countLine,
+  durationLabel,
+  filterServices,
+  modeChip,
+  optionsChip,
+  priceLabel,
+  rowAriaLabel,
+  serviceNoun,
+  type ServiceStatusFilter,
+} from "@/lib/services-catalogue";
+import { windowsFromOpeningHours } from "@/lib/availability-windows";
+import { formatMoney } from "@/lib/format";
+import { PERMISSIONS } from "@/lib/permissions";
+import { useSoleStaff } from "@/lib/sole";
 import { useTenant } from "@/lib/tenant/tenant-context";
-import { toast } from "sonner";
-
-/**
- * Catalogue noun from the business's terminology: "Session" for PT
- * ("Session type" minus the suffix), "Service" for car detailing. Keeps this
- * page from reading like a PT product to other trades.
- */
-function serviceNoun(service: string) {
-  const noun = service.replace(/\s+type$/i, "").trim() || "Service";
-  const lower = noun.toLowerCase();
-  const plural = lower.endsWith("s") ? noun : `${noun}s`;
-  return { noun, lower, plural, pluralLower: plural.toLowerCase() };
-}
-
-/** Deposit input shows blank for "no deposit" so the field reads as optional. */
-function depositToInput(minor: number | null | undefined): string {
-  return minor && minor > 0 ? String(minor / 100) : "";
-}
+import { useIsPhone } from "@/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 
 const searchSchema = z.object({
   create: z.coerce.boolean().optional(),
+  q: z.string().optional(),
+  category: z.string().optional(),
+  status: z.enum(SERVICE_STATUS_FILTERS).optional(),
 });
 
 export const Route = createFileRoute("/services")({
@@ -134,33 +115,55 @@ export const Route = createFileRoute("/services")({
   ),
 });
 
+const QUICK_START: Record<"pt" | "detailing", ServiceTemplate[]> = {
+  pt: [
+    { name: "1-to-1 PT", durationMinutes: 60, basePriceMinor: 4500 },
+    { name: "Assessment", durationMinutes: 45, basePriceMinor: 3000 },
+    {
+      name: "Group class",
+      durationMinutes: 45,
+      basePriceMinor: 1200,
+      bookingMode: "group",
+      capacityMax: 8,
+    },
+    { name: "Nutrition", durationMinutes: 30, basePriceMinor: 3500 },
+  ],
+  detailing: [
+    { name: "Mini valet", durationMinutes: 90, basePriceMinor: 4500 },
+    { name: "Full valet", durationMinutes: 240, basePriceMinor: 12000 },
+    { name: "Ceramic coating", durationMinutes: 1440, basePriceMinor: 45000 },
+    { name: "Paint correction", durationMinutes: 2880, basePriceMinor: 60000 },
+  ],
+};
+
+const NONE = "__none";
+const groupKey = (category: string | null) => category?.toLowerCase() ?? NONE;
+
+type Lifted = { kind: "service"; id: string } | { kind: "group"; key: string };
+
 function ServicesPage() {
   const tenant = useTenant();
-  const { noun, lower, plural, pluralLower } = serviceNoun(tenant.terminology.service);
+  const phone = useIsPhone();
+  const { lower, plural, pluralLower } = serviceNoun(tenant.terminology.service);
   const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
-  const { create: openCreate } = Route.useSearch();
+  const bw = useBookingWords();
+  const canEdit = tenant.can(PERMISSIONS.BUSINESS_UPDATE);
+  const canMoney = tenant.can(PERMISSIONS.PAYMENT_READ);
+  const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const services = useServices();
+  const categoryOrder = useServiceCategoryOrder();
+  const usage = useServiceUsage();
+  const pairings = useUpsellPairings();
   const staff = useStaffList();
   const locations = useLocationsList();
   const soleStaff = useSoleStaff();
-  const soleLocation = useSoleLocation();
-  const { user } = useAuth();
-  // No offer windows on a one-person business means "whenever they're free" —
-  // say so in their words rather than the team wording.
-  const offeredLabel = (s: CatalogueService) => {
-    if (!soleStaff || s.availabilityWindows.length > 0) {
-      return formatAvailabilityWindows(s.availabilityWindows);
-    }
-    return soleStaff.userId === user?.id
-      ? "Whenever you're available"
-      : `Whenever ${soleStaff.displayName} is available`;
-  };
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
-  // "N consumables" on each card: the catalogue rows carry the services they're on,
-  // so one request covers every card. Detailing only; nothing is fetched otherwise.
-  const consumables = useConsumables({ enabled: isDetailing });
+  const reorder = useReorderServices();
+
+  const consumablesOn = useConsumablesOn();
+  const consumables = useConsumables({ enabled: consumablesOn });
   const consumableCountByService = useMemo(() => {
     const counts = new Map<string, number>();
     for (const c of consumables.data ?? []) {
@@ -168,11 +171,68 @@ function ServicesPage() {
     }
     return counts;
   }, [consumables.data]);
-  const [editing, setEditing] = useState<CatalogueService | null>(null);
-  const [deleting, setDeleting] = useState<CatalogueService | null>(null);
+  const costedServiceIds = useMemo(
+    () => (canMoney ? [...consumableCountByService.keys()].sort() : []),
+    [canMoney, consumableCountByService],
+  );
+  const serviceDefaults = useServicesConsumables(costedServiceIds, { enabled: consumablesOn });
+  const materialsByService = new Map<string, number | null>(
+    costedServiceIds.map((id, i) => [id, estimateMaterialsCost(serviceDefaults[i]?.data ?? [])]),
+  );
+
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  // New services default to the business's opening hours — the location picked
-  // in the sidebar, else the first active one with hours set.
+  const [template, setTemplate] = useState<ServiceTemplate | null>(null);
+  const [archiving, setArchiving] = useState<{
+    service: CatalogueService;
+    afterDelete: boolean;
+  } | null>(null);
+  const [deleting, setDeleting] = useState<CatalogueService | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [lifted, setLifted] = useState<Lifted | null>(null);
+  const [preview, setPreview] = useState<{ ids: string[]; categories: string[] } | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [orderMode, setOrderMode] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState("");
+  const dragging = useRef<Lifted | null>(null);
+  const longPress = useRef<number | null>(null);
+  const lastEditing = useRef<CatalogueService | null>(null);
+
+  const allServices = useMemo(() => services.data ?? [], [services.data]);
+  const listed = useMemo(
+    () => allServices.filter((s) => !s.archivedAt).sort((a, b) => a.displayOrder - b.displayOrder),
+    [allServices],
+  );
+  const archived = allServices.filter((s) => s.archivedAt);
+  const savedCategories = categoryOrder.data ?? [];
+
+  const q = search.q ?? "";
+  const status = (search.status ?? null) as ServiceStatusFilter | null;
+  const category = search.category ?? null;
+  const filtering = Boolean(q.trim() || status || category);
+  const setSearch = (patch: Partial<typeof search>) =>
+    void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+
+  const ordered = useMemo(() => {
+    if (!preview) return listed;
+    const pos = new Map(preview.ids.map((id, i) => [id, i]));
+    return [...listed].sort((a, b) => (pos.get(a.id) ?? 0) - (pos.get(b.id) ?? 0));
+  }, [listed, preview]);
+  const groupOrder = preview?.categories ?? savedCategories;
+  const shown = filterServices(ordered, { q, category, status });
+  const groups = groupByCategory(shown, groupOrder);
+  const allGroups = groupByCategory(ordered, groupOrder);
+  const categoriesInUse = knownCategories(listed);
+  const hasUncategorised = listed.some((s) => !normaliseCategory(s.category));
+  const grouped = categoriesInUse.length > 0;
+  const canReorder = canEdit && !filtering;
+
+  const editing = editingId ? (allServices.find((s) => s.id === editingId) ?? null) : null;
+  if (editing) lastEditing.current = editing;
+  const drawerService = editingId ? (editing ?? lastEditing.current) : null;
+
   const businessHours = useMemo<BusinessHoursPreset | undefined>(() => {
     const list = locations.data ?? [];
     const chosen =
@@ -183,1227 +243,1041 @@ function ServicesPage() {
     return { label: chosen.name, windows: windowsFromOpeningHours(chosen.openingHours) };
   }, [locations.data, tenant.currentLocationId]);
 
-  useEffect(() => {
-    if (!openCreate) return;
-    setCreating(true);
-    void navigate({ search: { create: undefined }, replace: true });
-  }, [openCreate, navigate]);
+  const byId = useMemo(() => new Map(allServices.map((s) => [s.id, s])), [allServices]);
+  const offeredWith = (serviceId: string) =>
+    (pairings.data ?? [])
+      .filter((p) => p.upsellServiceId === serviceId)
+      .map((p) => byId.get(p.serviceId))
+      .filter((s): s is CatalogueService => Boolean(s && !s.archivedAt));
+  const addOnCount = (serviceId: string) =>
+    (pairings.data ?? []).filter((p) => p.serviceId === serviceId).length;
 
   useEffect(() => {
-    if (!editing) return;
-    const fresh = (services.data ?? []).find((s) => s.id === editing.id);
-    if (fresh && fresh.version !== editing.version) setEditing(fresh);
-  }, [services.data, editing]);
+    if (!search.create) return;
+    openCreate(null);
+    void navigate({ search: (prev) => ({ ...prev, create: undefined }), replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.create]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    document
+      .querySelector(`[data-service-row="${highlightId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = window.setTimeout(() => setHighlightId(null), 2000);
+    return () => window.clearTimeout(t);
+  }, [highlightId]);
+
+  function openCreate(from: ServiceTemplate | null) {
+    setEditingId(null);
+    setTemplate(from);
+    setCreating(true);
+  }
+  function openEdit(s: CatalogueService) {
+    setCreating(false);
+    setTemplate(null);
+    setEditingId(s.id);
+  }
+  function duplicate(s: CatalogueService) {
+    openCreate({
+      name: `${s.name} (copy)`,
+      description: s.description,
+      category: s.category,
+      durationMinutes: s.durationMinutes,
+      basePriceMinor: s.basePriceMinor,
+      depositMinor: s.depositMinor,
+      capacityMax: s.capacityMax,
+      bookingMode: s.bookingMode,
+      eligibleStaffIds: s.eligibleStaffIds,
+      locationIds: s.locationIds,
+      availabilityWindows: s.availabilityWindows,
+      requiredResourceType: s.requiredResourceType,
+      variants: s.variants.map((v) => ({ ...v, id: "" })),
+      followUps: s.followUps,
+      publicVisible: s.publicVisible,
+      ruleSource: s,
+    });
+  }
+
+  const setActive = async (s: CatalogueService, active: boolean) => {
+    const saved = await updateService.mutateAsync({
+      serviceId: s.id,
+      version: s.version,
+      body: { active },
+    });
+    if (active) {
+      toast.success(`${s.name} is taking bookings`);
+      return;
+    }
+    toast.success(`${s.name} paused. Existing ${bw.plural} stay.`, {
+      duration: 6000,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          updateService.mutate({
+            serviceId: s.id,
+            version: saved.version,
+            body: { active: true },
+          }),
+      },
+    });
+  };
+  const setPublic = async (s: CatalogueService, publicVisible: boolean) => {
+    await updateService.mutateAsync({
+      serviceId: s.id,
+      version: s.version,
+      body: { publicVisible },
+    });
+    toast.success(
+      publicVisible ? `${s.name} is on your booking page` : `${s.name} is for offer links only`,
+    );
+  };
+  const archive = async (s: CatalogueService) => {
+    const saved = await updateService.mutateAsync({
+      serviceId: s.id,
+      version: s.version,
+      body: { archived: true },
+    });
+    setArchiving(null);
+    if (editingId === s.id) setEditingId(null);
+    toast.success(`${s.name} archived`, {
+      duration: 6000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          const restored = await updateService.mutateAsync({
+            serviceId: s.id,
+            version: saved.version,
+            body: { archived: false },
+          });
+          if (s.active) {
+            updateService.mutate({
+              serviceId: s.id,
+              version: restored.version,
+              body: { active: true },
+            });
+          }
+        },
+      },
+    });
+  };
+  const restore = async (s: CatalogueService) => {
+    await updateService.mutateAsync({
+      serviceId: s.id,
+      version: s.version,
+      body: { archived: false },
+    });
+    toast.success(`${s.name} restored. It's paused until you switch it on.`);
+  };
+  const confirmDelete = async (s: CatalogueService) => {
+    try {
+      await deleteService.mutateAsync(s.id);
+      setDeleting(null);
+      if (editingId === s.id) setEditingId(null);
+      toast.success(`${s.name} deleted`);
+    } catch (err) {
+      setDeleting(null);
+      // Booked since the list loaded: archive is the only way out, and the modal says why.
+      if (err instanceof ApiError && err.isConflict)
+        setArchiving({ service: s, afterDelete: true });
+      else toast.error(err instanceof ApiError ? err.detail || err.title : "Couldn't delete it.");
+    }
+  };
+  const requestDelete = (s: CatalogueService) => {
+    const u = usage.data?.get(s.id);
+    if (u && !u.canDelete) setArchiving({ service: s, afterDelete: true });
+    else setDeleting(s);
+  };
+
+  /* ---------------- Reorder ---------------- */
+
+  const flatIds = (groupsList = allGroups) => groupsList.flatMap((g) => g.items.map((s) => s.id));
+  const categoryNames = (groupsList = allGroups) =>
+    groupsList.map((g) => g.category).filter((c): c is string => c !== null);
+
+  const saveOrder = (ids: string[], categories: string[]) => {
+    reorder.mutate(
+      { serviceIds: ids, categoryOrder: categories },
+      {
+        onSuccess: () => toast.success("Order saved"),
+        onSettled: () => setPreview(null),
+      },
+    );
+  };
+
+  /** Moves a service before/after another, changing its category when it lands in another group. */
+  const moveService = async (
+    dragId: string,
+    targetId: string | null,
+    groupCategory: string | null,
+    after: boolean,
+  ) => {
+    const moving = byId.get(dragId);
+    if (!moving || dragId === targetId) return;
+    const ids = flatIds().filter((id) => id !== dragId);
+    let index: number;
+    if (targetId) {
+      index = ids.indexOf(targetId) + (after ? 1 : 0);
+    } else {
+      const inGroup = allGroups.find((g) => groupKey(g.category) === groupKey(groupCategory));
+      const last = inGroup?.items.filter((s) => s.id !== dragId).at(-1);
+      index = last ? ids.indexOf(last.id) + 1 : ids.length;
+    }
+    ids.splice(index, 0, dragId);
+    const categories = categoryNames();
+    setPreview({ ids, categories });
+    if (groupKey(normaliseCategory(moving.category)) !== groupKey(groupCategory)) {
+      try {
+        await updateService.mutateAsync({
+          serviceId: moving.id,
+          version: moving.version,
+          body: { category: groupCategory },
+        });
+      } catch {
+        setPreview(null);
+        return;
+      }
+    }
+    saveOrder(ids, categories);
+  };
+
+  const moveGroup = (dragKey: string, targetKey: string) => {
+    if (dragKey === targetKey || dragKey === NONE || targetKey === NONE) return;
+    const keys = allGroups.map((g) => groupKey(g.category));
+    const from = keys.indexOf(dragKey);
+    const to = keys.indexOf(targetKey);
+    if (from < 0 || to < 0) return;
+    const reordered = [...allGroups];
+    const [g] = reordered.splice(from, 1);
+    reordered.splice(to, 0, g!);
+    const ids = flatIds(reordered);
+    const categories = categoryNames(reordered);
+    setPreview({ ids, categories });
+    saveOrder(ids, categories);
+  };
+
+  /** Keyboard: Space lifts and drops, arrows move, Escape puts it back. */
+  const onHandleKey = (e: KeyboardEvent, item: Lifted) => {
+    const same =
+      lifted &&
+      lifted.kind === item.kind &&
+      (lifted.kind === "service"
+        ? lifted.id === (item as { id: string }).id
+        : lifted.key === (item as { key: string }).key);
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      if (same) {
+        setLifted(null);
+        if (preview) saveOrder(preview.ids, preview.categories);
+        setAnnounce("Dropped.");
+      } else {
+        setLifted(item);
+        setPreview({ ids: flatIds(), categories: categoryNames() });
+        setAnnounce("Picked up. Use the arrow keys to move, Space to drop.");
+      }
+      return;
+    }
+    if (e.key === "Escape" && same) {
+      setLifted(null);
+      setPreview(null);
+      setAnnounce("Move cancelled.");
+      return;
+    }
+    if (!same || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const dir = e.key === "ArrowUp" ? -1 : 1;
+    if (item.kind === "service") {
+      const group = allGroups.find((g) => g.items.some((s) => s.id === item.id));
+      if (!group) return;
+      const inGroup = group.items.map((s) => s.id);
+      const at = inGroup.indexOf(item.id);
+      const next = at + dir;
+      if (next < 0 || next >= inGroup.length) return;
+      const ids = flatIds();
+      const a = ids.indexOf(item.id);
+      const b = ids.indexOf(inGroup[next]!);
+      [ids[a], ids[b]] = [ids[b]!, ids[a]!];
+      setPreview({ ids, categories: categoryNames() });
+      setAnnounce(`Moved to position ${next + 1} in ${group.category ?? "Other"}.`);
+    } else {
+      const named = allGroups.filter((g) => g.category !== null);
+      const at = named.findIndex((g) => groupKey(g.category) === item.key);
+      const next = at + dir;
+      if (at < 0 || next < 0 || next >= named.length) return;
+      const reordered = [...named];
+      [reordered[at], reordered[next]] = [reordered[next]!, reordered[at]!];
+      const withOther = [...reordered, ...allGroups.filter((g) => g.category === null)];
+      setPreview({ ids: flatIds(withOther), categories: categoryNames(withOther) });
+      setAnnounce(`Moved to position ${next + 1}.`);
+    }
+  };
+
+  const nudge = (s: CatalogueService, dir: -1 | 1) => {
+    const group = allGroups.find((g) => g.items.some((x) => x.id === s.id));
+    if (!group) return;
+    const inGroup = group.items.map((x) => x.id);
+    const at = inGroup.indexOf(s.id);
+    const swapWith = inGroup[at + dir];
+    if (!swapWith) return;
+    const ids = flatIds();
+    const a = ids.indexOf(s.id);
+    const b = ids.indexOf(swapWith);
+    [ids[a], ids[b]] = [ids[b]!, ids[a]!];
+    const categories = categoryNames();
+    setPreview({ ids, categories });
+    saveOrder(ids, categories);
+  };
+
+  /* ---------------- Render ---------------- */
+
+  const staffPlural = (() => {
+    const t = tenant.terminology.staff.trim().toLowerCase() || "staff";
+    return t.endsWith("s") ? t : `${t}s`;
+  })();
+  const activeLocations = (locations.data ?? []).filter((l) => l.active);
+  const quickStart = QUICK_START[isDetailing ? "detailing" : "pt"];
+  const createButton = canEdit ? (
+    phone ? (
+      <Button
+        size="icon"
+        className="size-11 rounded-full"
+        aria-label={`Create ${lower}`}
+        onClick={() => openCreate(null)}
+      >
+        <Plus className="size-5" />
+      </Button>
+    ) : (
+      <Button onClick={() => openCreate(null)}>
+        <Plus className="size-4" /> Create {lower}
+      </Button>
+    )
+  ) : null;
+
+  const rowMenu = (s: CatalogueService, trigger: React.ReactNode, controlled = false) => {
+    const u = usage.data?.get(s.id);
+    const deletable = !u || u.canDelete;
+    return (
+      <DropdownMenu
+        {...(controlled
+          ? { open: menuFor === s.id, onOpenChange: (o: boolean) => setMenuFor(o ? s.id : null) }
+          : {})}
+      >
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onSelect={() => openEdit(s)}>Edit</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => duplicate(s)}>Duplicate</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void setActive(s, !s.active).catch(() => undefined)}>
+            {s.active ? "Pause bookings" : "Take bookings"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => void setPublic(s, !s.publicVisible).catch(() => undefined)}
+          >
+            {s.publicVisible ? "Offer links only" : "Show on booking page"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => setArchiving({ service: s, afterDelete: false })}
+            className="flex-col items-start gap-0"
+          >
+            Archive
+            <span className="text-xs text-muted-foreground">Keeps past {bw.plural}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!deletable}
+            onSelect={() => requestDelete(s)}
+            className="flex-col items-start gap-0 text-destructive"
+          >
+            Delete
+            {!deletable ? (
+              <span className="text-xs text-muted-foreground">
+                Not possible: booked {u!.bookingCount} {u!.bookingCount === 1 ? "time" : "times"}
+              </span>
+            ) : null}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  const renderRow = (s: CatalogueService, group: { category: string | null }) => {
+    const price = priceLabel(s);
+    const mode = modeChip(s, isDetailing);
+    const options = optionsChip(s.variants.length, isDetailing);
+    const who = soleStaff ? null : describeDeliverers(s, staff.data ?? [], staffPlural);
+    const where =
+      activeLocations.length > 1 &&
+      s.locationIds.length > 0 &&
+      s.locationIds.length < activeLocations.length
+        ? s.locationIds.length === 1
+          ? `${activeLocations.find((l) => l.id === s.locationIds[0])?.name ?? "1 location"} only`
+          : `${s.locationIds.length} locations`
+        : null;
+    const reminders = Array.isArray(s.followUps) ? s.followUps.length : 0;
+    const consumableCount = consumableCountByService.get(s.id) ?? 0;
+    const materials = materialsByService.get(s.id);
+    const addOns = addOnCount(s.id);
+    const isLifted = lifted?.kind === "service" && lifted.id === s.id;
+    const label = rowAriaLabel(s, { isDetailing, who: who?.text ?? null });
+
+    const facts: { key: string; text: string; icon?: React.ReactNode; grow?: boolean }[] = [
+      ...(where ? [{ key: "where", text: where, grow: true }] : []),
+      ...(isDetailing && reminders > 0
+        ? [
+            {
+              key: "reminders",
+              text: `${reminders} ${reminders === 1 ? "reminder" : "reminders"}`,
+              icon: <BellRing className="size-3" aria-hidden />,
+            },
+          ]
+        : []),
+      ...(consumablesOn && consumableCount > 0
+        ? [
+            {
+              key: "materials",
+              text:
+                canMoney && materials != null
+                  ? `${formatMoney(materials, s.currency, { compact: true })} materials`
+                  : `${consumableCount} ${consumableCount === 1 ? "consumable" : "consumables"}`,
+              icon: <Package className="size-3" aria-hidden />,
+            },
+          ]
+        : []),
+      ...(isDetailing && addOns > 0
+        ? [{ key: "addons", text: `${addOns} ${addOns === 1 ? "add-on" : "add-ons"}` }]
+        : []),
+    ];
+    const extras =
+      facts.length > 0 ? (
+        <span
+          className="flex max-w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+          title={facts.map((f) => f.text).join(" · ")}
+        >
+          {facts.map((f, i) => (
+            <span
+              key={f.key}
+              className={cn("flex items-center gap-1", f.grow ? "min-w-0" : "shrink-0")}
+            >
+              {i > 0 ? <span aria-hidden>·</span> : null}
+              {f.icon}
+              <span className={f.grow ? "truncate" : undefined}>{f.text}</span>
+            </span>
+          ))}
+        </span>
+      ) : null;
+
+    const handle = canReorder ? (
+      <span
+        role="button"
+        tabIndex={0}
+        draggable
+        aria-label={`Reorder ${s.name}`}
+        aria-pressed={isLifted}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => onHandleKey(e, { kind: "service", id: s.id })}
+        onDragStart={(e) => {
+          dragging.current = { kind: "service", id: s.id };
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", s.id);
+          const row = (e.currentTarget as HTMLElement).closest("[data-service-row]");
+          if (row) e.dataTransfer.setDragImage(row, 24, 24);
+        }}
+        onDragEnd={() => {
+          dragging.current = null;
+          setDragOver(null);
+        }}
+        className={cn(
+          "flex size-6 cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          isLifted && "bg-primary-soft text-primary",
+        )}
+      >
+        <GripVertical className="size-4" />
+      </span>
+    ) : (
+      <span />
+    );
+
+    const dropProps = canReorder
+      ? {
+          onDragOver: (e: React.DragEvent) => {
+            if (dragging.current?.kind !== "service") return;
+            e.preventDefault();
+            setDragOver(s.id);
+          },
+          onDragLeave: () => setDragOver((v) => (v === s.id ? null : v)),
+          onDrop: (e: React.DragEvent) => {
+            const drag = dragging.current;
+            if (drag?.kind !== "service") return;
+            e.preventDefault();
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const after = e.clientY > rect.top + rect.height / 2;
+            setDragOver(null);
+            void moveService(drag.id, s.id, group.category, after);
+          },
+        }
+      : {};
+
+    const toggle = canEdit ? (
+      <Switch
+        checked={s.active}
+        aria-label={`Taking bookings, ${s.name}`}
+        disabled={updateService.isPending}
+        onClick={(e) => e.stopPropagation()}
+        onCheckedChange={(v) => void setActive(s, v).catch(() => undefined)}
+      />
+    ) : null;
+
+    if (phone) {
+      return (
+        <li
+          key={s.id}
+          data-service-row={s.id}
+          className={cn(
+            "flex min-h-[64px] items-center gap-3 px-4 py-3 transition-colors",
+            !s.active && "opacity-60",
+            highlightId === s.id && "bg-primary-soft",
+          )}
+          onTouchStart={() => {
+            if (!canEdit) return;
+            longPress.current = window.setTimeout(() => setMenuFor(s.id), 500);
+          }}
+          onTouchEnd={() => longPress.current && window.clearTimeout(longPress.current)}
+          onTouchMove={() => longPress.current && window.clearTimeout(longPress.current)}
+          onContextMenu={(e) => {
+            if (!canEdit) return;
+            e.preventDefault();
+            setMenuFor(s.id);
+          }}
+        >
+          <button
+            type="button"
+            aria-label={label}
+            className="min-w-0 flex-1 cursor-pointer text-left"
+            onClick={() => openEdit(s)}
+          >
+            <span className="block truncate text-[15px] font-extrabold">{s.name}</span>
+            <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
+              {[durationLabel(s.durationMinutes), price.main, isDetailing ? null : mode.label]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+            {!s.publicVisible ? (
+              <span className="mt-1 inline-block">
+                <TonePill tone="grey">Offer links only</TonePill>
+              </span>
+            ) : null}
+          </button>
+          {orderMode && canReorder ? (
+            <span className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-9"
+                aria-label={`Move ${s.name} up`}
+                onClick={() => nudge(s, -1)}
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-9"
+                aria-label={`Move ${s.name} down`}
+                onClick={() => nudge(s, 1)}
+              >
+                <ArrowDown className="size-4" />
+              </Button>
+            </span>
+          ) : (
+            toggle
+          )}
+          {canEdit ? rowMenu(s, <span aria-hidden className="size-0" />, true) : null}
+        </li>
+      );
+    }
+
+    return (
+      <li
+        key={s.id}
+        data-service-row={s.id}
+        {...dropProps}
+        onClick={() => openEdit(s)}
+        className={cn(
+          // Narrow panels put time, who and status on a second line; the full
+          // single-line grid needs the list to be at least 64rem across.
+          "grid min-h-16 cursor-pointer grid-cols-[18px_auto_auto_minmax(0,1fr)_auto_auto_20px] items-center gap-x-3 gap-y-1.5 px-4 py-3 transition-colors hover:bg-secondary/40 @5xl:gap-y-3",
+          soleStaff
+            ? "[grid-template-areas:'h_n_n_n_p_t_m'_'._d_s_s_s_s_s'] @5xl:grid-cols-[18px_1.9fr_80px_100px_1fr_150px_20px] @5xl:[grid-template-areas:'h_n_d_p_s_t_m']"
+            : "[grid-template-areas:'h_n_n_n_p_t_m'_'._d_w_s_s_s_s'] @5xl:grid-cols-[18px_1.9fr_80px_100px_1.1fr_1fr_150px_20px] @5xl:[grid-template-areas:'h_n_d_p_w_s_t_m']",
+          !s.active && "[&>*:not(:nth-last-child(-n+2))]:opacity-60",
+          highlightId === s.id && "bg-primary-soft",
+          dragOver === s.id && "shadow-[inset_0_2px_0_var(--primary)]",
+          isLifted && "bg-primary-soft/60",
+        )}
+      >
+        <span className="[grid-area:h]">{handle}</span>
+        <div className="min-w-0 [grid-area:n]">
+          <button
+            type="button"
+            aria-label={label}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(s);
+            }}
+          >
+            <span className="truncate text-[15px] font-extrabold">{s.name}</span>
+            {options ? <TonePill tone="grey">{options}</TonePill> : null}
+          </button>
+          {s.description ? (
+            <p className="truncate text-[13px] text-muted-foreground">{s.description}</p>
+          ) : null}
+        </div>
+        <span className="self-start text-xs text-muted-foreground tabular-nums [grid-area:d] @5xl:self-center @5xl:text-sm @5xl:text-foreground">
+          {durationLabel(s.durationMinutes)}
+        </span>
+        <span className="grid justify-items-end text-right [grid-area:p] @5xl:justify-items-start @5xl:text-left">
+          <span className="text-sm font-extrabold tabular-nums">{price.main}</span>
+          {price.sub ? <span className="text-xs text-muted-foreground">{price.sub}</span> : null}
+        </span>
+        {soleStaff ? null : (
+          <span className="grid min-w-0 justify-items-start gap-1 [grid-area:w]">
+            <TonePill tone={mode.tone}>{mode.label}</TonePill>
+            {who ? (
+              <span
+                className={cn(
+                  "max-w-full truncate text-xs",
+                  who.none
+                    ? "font-semibold text-[#8a5300] dark:text-[#f3b878]"
+                    : "text-muted-foreground",
+                )}
+              >
+                {who.text}
+              </span>
+            ) : null}
+          </span>
+        )}
+        <span className="grid min-w-0 justify-items-start gap-1 [grid-area:s]">
+          <span className="flex min-w-0 flex-wrap items-center gap-1">
+            {soleStaff ? <TonePill tone={mode.tone}>{mode.label}</TonePill> : null}
+            <TonePill tone={s.publicVisible ? "green" : "grey"}>
+              {s.publicVisible ? "On booking page" : "Offer links only"}
+            </TonePill>
+          </span>
+          {extras}
+        </span>
+        <span
+          className="flex items-center justify-end gap-2 [grid-area:t]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span
+            className={cn(
+              "text-xs font-semibold",
+              s.active
+                ? "hidden text-[#1f6b41] @5xl:inline dark:text-[#9fe3bf]"
+                : "text-muted-foreground",
+            )}
+          >
+            {s.active ? "Taking bookings" : "Paused"}
+          </span>
+          {toggle}
+        </span>
+        <span className="[grid-area:m]" onClick={(e) => e.stopPropagation()}>
+          {canEdit
+            ? rowMenu(
+                s,
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  aria-label={`More actions for ${s.name}`}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>,
+              )
+            : null}
+        </span>
+      </li>
+    );
+  };
+
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className={cn("relative", phone ? "w-full" : "w-[260px]")}>
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          aria-label={`Search ${pluralLower}`}
+          placeholder={`Search ${pluralLower}`}
+          value={q}
+          onChange={(e) => setSearch({ q: e.target.value || undefined })}
+          className="pl-9"
+        />
+      </div>
+      {phone ? null : (
+        <>
+          {grouped ? (
+            <Select
+              value={category ?? "all"}
+              onValueChange={(v) => setSearch({ category: v === "all" ? undefined : v })}
+            >
+              <SelectTrigger className="w-auto min-w-[160px]" aria-label="Category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categoriesInUse.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+                {hasUncategorised ? <SelectItem value={NONE}>Other</SelectItem> : null}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <Select
+            value={status ?? "any"}
+            onValueChange={(v) =>
+              setSearch({ status: v === "any" ? undefined : (v as ServiceStatusFilter) })
+            }
+          >
+            <SelectTrigger className="w-auto min-w-[150px]" aria-label="Status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any status</SelectItem>
+              {SERVICE_STATUS_FILTERS.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {SERVICE_STATUS_LABELS[f]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {filtering ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSearch({ q: undefined, category: undefined, status: undefined })}
+            >
+              <X className="size-3.5" /> Clear filters
+            </Button>
+          ) : null}
+          <span className="ml-auto text-[13px] text-muted-foreground">
+            {countLine(shown, lower, pluralLower)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+
+  let body: React.ReactNode;
+  if (services.isLoading) {
+    body = (
+      <div className="space-y-5" aria-busy>
+        {[3, 2].map((n, gi) => (
+          <div key={gi} className="space-y-2">
+            <div className="h-4 w-28 animate-pulse rounded bg-secondary" />
+            <div className="surface-card divide-y">
+              {Array.from({ length: n }, (_, i) => (
+                <div key={i} className="flex h-16 items-center gap-4 px-4">
+                  <div className="h-4 w-1/3 animate-pulse rounded bg-secondary" />
+                  <div className="h-4 w-16 animate-pulse rounded bg-secondary" />
+                  <div className="h-4 w-20 animate-pulse rounded bg-secondary" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  } else if (services.isError) {
+    body = (
+      <div className="surface-card grid justify-items-center gap-2 px-6 py-10 text-center">
+        <p className="font-bold">Couldn't load your {pluralLower}</p>
+        <p className="text-sm text-muted-foreground">
+          {services.error instanceof ApiError
+            ? services.error.detail || services.error.title
+            : "Please try again shortly."}
+        </p>
+        <Button onClick={() => void services.refetch()}>Try again</Button>
+      </div>
+    );
+  } else if (allServices.length === 0) {
+    body = (
+      <div className="grid justify-items-center gap-3 rounded-2xl border-2 border-dashed px-6 py-12 text-center">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+          <Plus className="size-6" />
+        </span>
+        <p className="text-lg font-extrabold">No {pluralLower} yet</p>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Add what clients can book. Start with your most popular one, you can add the rest later.
+        </p>
+        {canEdit ? (
+          <>
+            <Button onClick={() => openCreate(null)}>
+              <Plus className="size-4" /> Create {lower}
+            </Button>
+            <div className="mt-2 grid justify-items-center gap-2">
+              <span className="text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                Quick start
+              </span>
+              <div className="flex flex-wrap justify-center gap-2">
+                {quickStart.map((t) => (
+                  <button
+                    key={t.name}
+                    type="button"
+                    onClick={() => openCreate(t)}
+                    className="min-h-9 cursor-pointer rounded-full border px-3 text-sm font-semibold hover:bg-secondary"
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  } else {
+    body = (
+      <div className="space-y-4">
+        {listed.length === 0 ? (
+          <div className="surface-card grid justify-items-center gap-2 px-6 py-10 text-center">
+            <p className="font-bold">No {pluralLower} in use</p>
+            <p className="text-sm text-muted-foreground">
+              Every {lower} is archived. Create one, or restore one below.
+            </p>
+            {canEdit ? <Button onClick={() => openCreate(null)}>Create {lower}</Button> : null}
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="surface-card grid justify-items-center gap-2 px-6 py-10 text-center">
+            <p className="font-bold">
+              {q.trim() ? `No ${pluralLower} match "${q.trim()}"` : `No ${pluralLower} match`}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => setSearch({ q: undefined, category: undefined, status: undefined })}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          groups.map((group) => {
+            const key = groupKey(group.category);
+            const groupLifted = lifted?.kind === "group" && lifted.key === key;
+            const groupDraggable = canReorder && grouped && group.category !== null;
+            return (
+              <section
+                key={key}
+                className="space-y-2"
+                onDragOver={(e) => {
+                  const d = dragging.current;
+                  if (!canReorder || !d) return;
+                  if (d.kind === "group" && group.category === null) return;
+                  e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  const d = dragging.current;
+                  if (!canReorder || !d) return;
+                  e.preventDefault();
+                  setDragOver(null);
+                  if (d.kind === "group") moveGroup(d.key, key);
+                  else if (!(e.target as HTMLElement).closest("[data-service-row]")) {
+                    void moveService(d.id, null, group.category, true);
+                  }
+                }}
+              >
+                {grouped ? (
+                  <h2 className="flex items-center gap-2 text-[12.5px] font-extrabold tracking-[0.08em] text-muted-foreground uppercase">
+                    {groupDraggable ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        draggable
+                        aria-label={`Reorder ${group.category}`}
+                        aria-pressed={groupLifted}
+                        onKeyDown={(e) => onHandleKey(e, { kind: "group", key })}
+                        onDragStart={(e) => {
+                          dragging.current = { kind: "group", key };
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", key);
+                          const section = (e.currentTarget as HTMLElement).closest("section");
+                          if (section) e.dataTransfer.setDragImage(section, 24, 12);
+                        }}
+                        onDragEnd={() => {
+                          dragging.current = null;
+                        }}
+                        className={cn(
+                          "flex size-6 cursor-grab items-center justify-center rounded hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                          groupLifted && "bg-primary-soft text-primary",
+                        )}
+                      >
+                        <GripVertical className="size-4" />
+                      </span>
+                    ) : null}
+                    {group.category ?? "Other"}
+                    <span className="font-semibold tabular-nums">{group.items.length}</span>
+                  </h2>
+                ) : null}
+                <ul className="surface-card @container divide-y overflow-hidden">
+                  {group.items.map((s) => renderRow(s, group))}
+                </ul>
+              </section>
+            );
+          })
+        )}
+
+        {phone && canReorder && listed.length > 1 ? (
+          <Button variant="outline" className="w-full" onClick={() => setOrderMode((v) => !v)}>
+            {orderMode ? "Done" : "Edit order"}
+          </Button>
+        ) : null}
+
+        {archived.length > 0 ? (
+          <section className="space-y-2">
+            <button
+              type="button"
+              aria-expanded={showArchived}
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground"
+            >
+              <ChevronRight
+                className={cn("size-4 transition-transform", showArchived && "rotate-90")}
+              />
+              <Archive className="size-4" />
+              Archived {archived.length}
+            </button>
+            {showArchived ? (
+              <ul className="surface-card divide-y">
+                {archived.map((s) => {
+                  const u = usage.data?.get(s.id);
+                  const past = Math.max(0, (u?.bookingCount ?? 0) - (u?.upcomingBookingCount ?? 0));
+                  return (
+                    <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <button
+                        type="button"
+                        className="min-w-0 cursor-pointer text-left"
+                        onClick={() => openEdit(s)}
+                      >
+                        <p className="truncate font-bold">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Archived{" "}
+                          {new Date(s.archivedAt!).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                          })}{" "}
+                          · {past} past {past === 1 ? bw.lower : bw.plural}
+                        </p>
+                      </button>
+                      {canEdit ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={updateService.isPending}
+                          onClick={() => void restore(s).catch(() => undefined)}
+                        >
+                          Restore
+                        </Button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <>
       <PageHeader
         title={plural}
-        description="What clients can book, how long it takes and what it costs."
-        actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" /> Create {lower}
-          </Button>
+        description={
+          phone && listed.length > 0
+            ? countLine(listed, lower, pluralLower)
+            : "What clients can book, how long it takes and what it costs."
         }
+        actions={createButton}
       />
-
-      {services.isLoading ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="surface-card h-[280px] animate-pulse" />
-          ))}
-        </div>
-      ) : services.isError ? (
-        <EmptyState
-          title={`Couldn't load ${pluralLower}`}
-          description={
-            services.error instanceof ApiError
-              ? services.error.detail || services.error.title
-              : "Please try again shortly."
-          }
-          action={<Button onClick={() => services.refetch()}>Try again</Button>}
-        />
-      ) : (services.data ?? []).length === 0 ? (
-        <EmptyState
-          title={`No ${pluralLower} yet`}
-          description={`Create your first bookable ${lower} to start taking bookings.`}
-          action={<Button onClick={() => setCreating(true)}>Create {lower}</Button>}
-        />
-      ) : (
-        <div className="space-y-8">
-          {groupByCategory(services.data ?? []).map((group) => (
-            <section key={group.category ?? "__none"} className="space-y-3">
-              {/* Headings only once categories are in use; a flat catalogue stays flat. */}
-              {hasCategories(services.data ?? []) ? (
-                <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-                  {group.category ?? "Other"}
-                  <span className="ml-2 font-normal tabular-nums normal-case">
-                    {group.items.length}
-                  </span>
-                </h2>
-              ) : null}
-              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {group.items.map((s) => (
-                  <article key={s.id} className="surface-card flex flex-col p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {s.publicVisible ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <Eye className="size-3.5" /> Public
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <EyeOff className="size-3.5" /> Hidden from booking page
-                          </span>
-                        )}
-                        <StatusBadge status={s.active ? "active" : "inactive"} />
-                      </div>
-                    </div>
-                    <h2 className="mt-3 text-lg font-semibold">{s.name}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
-
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="size-4 text-muted-foreground" />
-                        {formatDuration(s.durationMinutes)}
-                      </span>
-                      <span className="flex items-center gap-1.5 font-semibold">
-                        {formatMoney(s.basePriceMinor, s.currency)}
-                        {s.capacityMax > 1 ? " pp" : ""}
-                      </span>
-                      {s.depositMinor && s.depositMinor > 0 ? (
-                        <span className="text-muted-foreground">
-                          {formatMoney(s.depositMinor, s.currency)} deposit
-                        </span>
-                      ) : null}
-                      {isDetailing && s.capacityMax === 1 ? null : (
-                        <span className="flex items-center gap-1.5">
-                          <Users className="size-4 text-muted-foreground" />
-                          {s.capacityMax} {s.capacityMax === 1 ? "place" : "places"}
-                        </span>
-                      )}
-                      {isDetailing && (consumableCountByService.get(s.id) ?? 0) > 0 ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title="Materials this service uses by default — your records only"
-                        >
-                          <Package className="size-4" />
-                          {consumableCountByService.get(s.id)}{" "}
-                          {consumableCountByService.get(s.id) === 1 ? "consumable" : "consumables"}
-                        </span>
-                      ) : null}
-                      {s.followUp ? (
-                        <span
-                          className="flex items-center gap-1.5 text-muted-foreground"
-                          title={`Clients (and you) are reminded ${s.followUp.leadDays} days before it is due again`}
-                        >
-                          <BellRing className="size-4" />
-                          {followUpRuleSummary(s.followUp)}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {s.variants.length > 0 ? (
-                      <ul className="mt-3 space-y-1 border-t pt-3 text-xs text-muted-foreground">
-                        {s.variants.map((v) => (
-                          <li key={v.id} className="flex items-center justify-between">
-                            <span>{v.name}</span>
-                            <span className="tabular-nums">
-                              {v.durationMinutes ? formatDuration(v.durationMinutes) : "—"} ·{" "}
-                              {v.priceMinor != null ? formatMoney(v.priceMinor, s.currency) : "—"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    <dl className="mt-4 space-y-2 border-t pt-4 text-xs">
-                      {/* One person / one place: the rows would only ever say "All". */}
-                      {soleStaff ? null : (
-                        <Row
-                          label={
-                            tenant.terminology.staff.toLowerCase().endsWith("s")
-                              ? tenant.terminology.staff
-                              : `${tenant.terminology.staff}s`
-                          }
-                          value={describeDeliverers(s, staff.data ?? [])}
-                        />
-                      )}
-                      {soleLocation ? null : (
-                        <Row
-                          label="Locations"
-                          value={
-                            s.locationIds
-                              .map((id) => locations.data?.find((l) => l.id === id)?.name)
-                              .filter(Boolean)
-                              .join(", ") || "All"
-                          }
-                        />
-                      )}
-                      <Row
-                        label="Booking notice"
-                        value={`${Math.round(s.bookingNoticeMinutes / 60)} hours`}
-                      />
-                      <Row
-                        label="Cancellation"
-                        value={`${s.cancellationPolicy.windowHours} hours`}
-                      />
-                      <Row
-                        label="Buffer"
-                        value={formatDuration(s.bufferBeforeMinutes + s.bufferAfterMinutes)}
-                      />
-                      <Row label="Offered" value={offeredLabel(s)} />
-                    </dl>
-
-                    <div className="mt-5 flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Switch
-                          checked={s.active}
-                          disabled={updateService.isPending}
-                          onCheckedChange={(v) => {
-                            updateService.mutate(
-                              {
-                                serviceId: s.id,
-                                version: s.version,
-                                body: { active: v },
-                              },
-                              {
-                                onSuccess: () =>
-                                  toast.success(v ? `${noun} activated` : `${noun} paused`),
-                              },
-                            );
-                          }}
-                        />
-                        {s.active ? "Bookable" : "Hidden"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-destructive"
-                          aria-label={`Delete ${lower}`}
-                          onClick={() => setDeleting(s)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditing(s)}>
-                          Edit {lower}
-                        </Button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+      {allServices.length > 0 && !services.isError ? toolbar : null}
+      {body}
+      <p aria-live="polite" className="sr-only">
+        {announce}
+      </p>
 
       {tenant.business ? <PackageLinksCard slug={tenant.business.slug} /> : null}
 
-      <ServiceDialog
-        open={creating || editing !== null}
-        service={editing}
+      <ServiceDrawer
+        open={creating || editingId !== null}
+        service={drawerService}
+        template={creating ? template : null}
+        usage={drawerService ? usage.data?.get(drawerService.id) : undefined}
         businessHours={businessHours}
+        readOnly={!canEdit}
         onClose={() => {
           setCreating(false);
-          setEditing(null);
+          setEditingId(null);
+          setTemplate(null);
         }}
+        onSaved={(saved) => {
+          setCreating(false);
+          setEditingId(null);
+          setTemplate(null);
+          setHighlightId(saved.id);
+        }}
+        onDuplicate={(s) => duplicate(s)}
+        onArchive={(s) => setArchiving({ service: s, afterDelete: false })}
+        onDelete={(s) => requestDelete(s)}
       />
 
-      <DeleteOrFallbackDialog
-        item={deleting}
-        onClose={() => setDeleting(null)}
-        copy={(s) => ({
-          title: `Delete ${s.name}?`,
-          description: `This permanently removes the ${lower} from your catalogue. It can't be undone.`,
-          inUseTitle: `Pause this ${lower} instead?`,
-          inUseDescription: `This ${lower} has bookings against it, so it can't be deleted without losing that history. Pausing hides it from your booking page and pickers while past bookings keep their details.`,
-          fallbackLabel: "Pause",
-        })}
-        onDelete={async (s) => {
-          await deleteService.mutateAsync(s.id);
-          toast.success(`${noun} deleted`);
+      <ArchiveServiceDialog
+        service={archiving?.service ?? null}
+        usage={archiving ? usage.data?.get(archiving.service.id) : undefined}
+        offeredWith={archiving ? offeredWith(archiving.service.id) : []}
+        afterDelete={archiving?.afterDelete ?? false}
+        pluralLower={pluralLower}
+        pending={updateService.isPending}
+        onCancel={() => setArchiving(null)}
+        onConfirm={() => {
+          const s = archiving?.service;
+          if (!s) return;
+          const fresh = byId.get(s.id) ?? s;
+          void archive(fresh).catch(() => undefined);
         }}
-        onFallback={async (s) => {
-          await updateService.mutateAsync({
-            serviceId: s.id,
-            version: s.version,
-            body: { active: false },
-          });
-          toast.success(`${noun} paused`);
-        }}
+      />
+      <DeleteServiceDialog
+        service={deleting}
+        offeredWith={deleting ? offeredWith(deleting.id) : []}
+        pending={deleteService.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => deleting && void confirmDelete(deleting)}
       />
     </>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
-    </div>
-  );
-}
-
-type VariantRow = {
-  id?: string;
-  name: string;
-  /** Number in `durationUnit`, not necessarily minutes — converted on submit. */
-  durationValue: string;
-  durationUnit: DurationUnit;
-  priceMinor: string;
-};
-
-function toVariantRows(service: CatalogueService | null): VariantRow[] {
-  if (!service) return [];
-  return service.variants.map((v) => {
-    const split = v.durationMinutes != null ? splitDuration(v.durationMinutes) : null;
-    return {
-      id: v.id,
-      name: v.name,
-      durationValue: split?.value ?? "",
-      durationUnit: split?.unit ?? "minutes",
-      priceMinor: v.priceMinor != null ? (v.priceMinor / 100).toFixed(2) : "",
-    };
-  });
-}
-
-function ServiceDialog({
-  open,
-  service,
-  businessHours,
-  onClose,
-}: {
-  open: boolean;
-  service: CatalogueService | null;
-  businessHours?: BusinessHoursPreset;
-  onClose: () => void;
-}) {
-  const tenant = useTenant();
-  const { noun, lower, pluralLower } = serviceNoun(tenant.terminology.service);
-  const isDetailing = tenant.business?.industryTemplateKey === "car_detailing";
-  // Example names must read like the user's trade, not like a PT product.
-  const namePlaceholder = isDetailing ? "Maintenance wash" : "1-to-1 Personal Training";
-  const createService = useCreateService();
-  const updateService = useUpdateService();
-  const staffList = useStaffList();
-  const soleStaff = useSoleStaff();
-  const activeStaff = useMemo(
-    () => (staffList.data ?? []).filter((m) => m.status !== "suspended"),
-    [staffList.data],
-  );
-  const [name, setName] = useState(service?.name ?? "");
-  // Who delivers it. Empty `eligibleStaffIds` on the API means everyone, which is
-  // the default — owners shouldn't have to visit each staff record to switch a
-  // new service on.
-  const [staffMode, setStaffMode] = useState<"all" | "selected">(
-    service && service.eligibleStaffIds.length > 0 ? "selected" : "all",
-  );
-  const [staffIds, setStaffIds] = useState<string[]>(service?.eligibleStaffIds ?? []);
-  const staffPluralLower = (() => {
-    const t = tenant.terminology.staff.trim().toLowerCase() || "staff member";
-    return t.endsWith("s") ? t : `${t}s`;
-  })();
-  const reconcileNames = useMemo(
-    () =>
-      staffNeedingReconcile(
-        service?.id ?? null,
-        staffMode === "selected" ? staffIds : [],
-        activeStaff,
-      ).map((m) => m.displayName),
-    [service?.id, staffMode, staffIds, activeStaff],
-  );
-  const [price, setPrice] = useState(String(service ? service.basePriceMinor / 100 : 50));
-  const [deposit, setDeposit] = useState(depositToInput(service?.depositMinor));
-  // Detailers state how long they keep the vehicle ("2 days"), trainers "1.5
-  // hours"; the split keeps the stored minutes editable in whichever unit reads
-  // naturally rather than bouncing "3.5 hours" back as "210 minutes".
-  const initialDuration = splitDuration(service?.durationMinutes ?? 60);
-  const [duration, setDuration] = useState(initialDuration.value);
-  const [durationUnit, setDurationUnit] = useState<DurationUnit>(initialDuration.unit);
-  const [capacity, setCapacity] = useState(String(service?.capacityMax ?? 1));
-  const [description, setDescription] = useState(service?.description ?? "");
-  // Free text, but the categories already in use are offered as one-tap chips so
-  // "Polishing" is spelt the same way on every service and groups cleanly.
-  const [category, setCategory] = useState(service?.category ?? "");
-  const catalogue = useServices();
-  const categorySuggestions = useMemo(
-    () => knownCategories(catalogue.data ?? []),
-    [catalogue.data],
-  );
-  const [active, setActive] = useState(service?.active ?? true);
-  const [publicVisible, setPublicVisible] = useState(service?.publicVisible ?? true);
-  const [variants, setVariants] = useState<VariantRow[]>(() => toVariantRows(service));
-  // Creating: start from the business's opening hours so the offer matches the
-  // door hours without retyping them. Editing: whatever is saved.
-  const defaultWindows = (s: CatalogueService | null) =>
-    s ? [...s.availabilityWindows] : [...(businessHours?.windows ?? [])];
-  const [windows, setWindows] = useState<AvailabilityWindow[]>(() => defaultWindows(service));
-  // One person: their availability already says when they can be booked, so a
-  // second weekly grid for the session is noise. It stays behind a switch for the
-  // odd session that really is narrower (a Saturday-only class); off saves no
-  // windows, which the API reads as "whenever they're available".
-  const [restrictWindows, setRestrictWindows] = useState(
-    () => (service?.availabilityWindows.length ?? 0) > 0,
-  );
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  // One-person business: the Staff page is hidden on Solo, so the only person's
-  // working hours are set here too — without them nothing is ever bookable, however
-  // the session itself is configured. Someone who has never set hours starts from
-  // the business's opening hours so saving the session makes them bookable at once.
-  const { user } = useAuth();
-  const updateStaff = useUpdateStaff();
-  const defaultHours = (member: Staff | null) =>
-    member
-      ? member.workingRules.length > 0
-        ? workingRulesToWindows(member.workingRules)
-        : [...(businessHours?.windows ?? [])]
-      : [];
-  const [hours, setHours] = useState<AvailabilityWindow[]>(() => defaultHours(soleStaff));
-  const hoursOwnerIsMe = Boolean(soleStaff && user && soleStaff.userId === user.id);
-  const hoursCopy = useMemo(() => {
-    const who = hoursOwnerIsMe ? "you" : (soleStaff?.displayName ?? "they");
-    const whose = hoursOwnerIsMe ? "your" : `${soleStaff?.displayName ?? "their"}'s`;
-    return {
-      label: hoursOwnerIsMe
-        ? "Your availability"
-        : `${soleStaff?.displayName ?? "Their"} availability`,
-      matchesPreset: (preset: string) =>
-        `Matches ${preset}'s opening hours. These are the hours clients can book ${who} for any ${lower}.`,
-      hint: `The hours clients can book ${who}. Applies to every ${lower}, not just this one.`,
-      empty: `No hours set — clients can't book ${who} until ${whose} hours are added.`,
-    };
-  }, [hoursOwnerIsMe, soleStaff?.displayName, lower]);
-
-  // Consumables used (detailing only): the materials a job of this service uses by
-  // default, saved through their own endpoint once the service itself has saved.
-  // Staff-only records — they never touch the price.
-  const consumableCatalogue = useConsumables({ enabled: isDetailing && open });
-  const serviceUsage = useServiceConsumables(service?.id, { enabled: isDetailing && open });
-  const replaceServiceUsage = useReplaceServiceConsumables();
-  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
-  const [usageDirty, setUsageDirty] = useState(false);
-  const [usageInvalid, setUsageInvalid] = useState<number | null>(null);
-  // Upsells: add-ons offered with this service, at a price set here. Their own
-  // endpoint, saved after the service; gated by the `upsells` plan feature on write.
-  const upsellsEntitled = useUpsellsEntitled();
-  const serviceUpsells = useServiceUpsells(open ? service?.id : undefined);
-  const replaceUpsells = useReplaceServiceUpsells();
-  const [upsellRows, setUpsellRows] = useState<UpsellRow[]>([]);
-  const [upsellsDirty, setUpsellsDirty] = useState(false);
-  const [upsellInvalid, setUpsellInvalid] = useState<number | null>(null);
-  const [upsellsPaywall, setUpsellsPaywall] = useState(false);
-  useEffect(() => {
-    if (open && !upsellsDirty && serviceUpsells.data) {
-      setUpsellRows(rowsFromUpsells(serviceUpsells.data));
-    }
-  }, [open, upsellsDirty, serviceUpsells.data]);
-  // Follow-up reminder ("ceramic top-up every 2 years"): part of the service payload,
-  // so it saves with the service itself. All verticals.
-  const [followUpDraft, setFollowUpDraft] = useState<FollowUpRuleDraft>(() =>
-    draftFromRule(service?.followUp),
-  );
-  const [followUpError, setFollowUpError] = useState<{
-    field: "intervalMonths" | "leadDays" | "label";
-    message: string;
-  } | null>(null);
-  // The defaults arrive after the dialog opens; adopt them until staff start editing.
-  useEffect(() => {
-    if (open && !usageDirty && serviceUsage.data) setUsageRows(rowsFromLines(serviceUsage.data));
-  }, [open, usageDirty, serviceUsage.data]);
-
-  const submitting =
-    createService.isPending ||
-    updateService.isPending ||
-    updateStaff.isPending ||
-    replaceServiceUsage.isPending ||
-    replaceUpsells.isPending;
-
-  const resetFrom = (s: CatalogueService | null) => {
-    setName(s?.name ?? "");
-    setStaffMode(s && s.eligibleStaffIds.length > 0 ? "selected" : "all");
-    setStaffIds(s?.eligibleStaffIds ?? []);
-    setPrice(String(s ? s.basePriceMinor / 100 : 50));
-    setDeposit(depositToInput(s?.depositMinor));
-    const split = splitDuration(s?.durationMinutes ?? 60);
-    setDuration(split.value);
-    setDurationUnit(split.unit);
-    setCapacity(String(s?.capacityMax ?? 1));
-    setDescription(s?.description ?? "");
-    setCategory(s?.category ?? "");
-    setActive(s?.active ?? true);
-    setPublicVisible(s?.publicVisible ?? true);
-    setVariants(toVariantRows(s));
-    setWindows(defaultWindows(s));
-    setRestrictWindows((s?.availabilityWindows.length ?? 0) > 0);
-    setHours(defaultHours(soleStaff));
-    setFieldErrors({});
-    // Seed from whatever the usage query already holds. The adopt effect below
-    // can't be relied on here: it runs in the same commit as this reset and its
-    // deps don't change afterwards, so a reopen after a save used to land on an
-    // empty list — and the next save would then wipe the lines already recorded.
-    setUsageRows(s && serviceUsage.data ? rowsFromLines(serviceUsage.data) : []);
-    setUsageDirty(false);
-    setUsageInvalid(null);
-    setUpsellRows(s && serviceUpsells.data ? rowsFromUpsells(serviceUpsells.data) : []);
-    setUpsellsDirty(false);
-    setUpsellInvalid(null);
-    setFollowUpDraft(draftFromRule(s?.followUp));
-    setFollowUpError(null);
-  };
-
-  // Radix only reports open changes it initiates itself, so a dialog opened by the
-  // parent flipping `open` never re-seeded its fields — every edit showed the create
-  // defaults, or whatever the previous edit left behind. Rehydrate on version too so
-  // a 409 reload replaces stale If-Match and windows.
-  useEffect(() => {
-    if (open) resetFrom(service);
-    // resetFrom closes over fresh setters each render; the service is what matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, service?.id, service?.version]);
-
-  // The staff list can land after the dialog opens (and re-lands after a save
-  // bumps the version), so the hours follow the person rather than the service.
-  useEffect(() => {
-    if (open) setHours(defaultHours(soleStaff));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, soleStaff?.id, soleStaff?.version]);
-
-  const updateVariant = (index: number, patch: Partial<VariantRow>) => {
-    setVariants((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  };
-
-  const removeVariant = (index: number) => {
-    setVariants((rows) => rows.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      toast.error(`Give the ${lower} a name`);
-      throw new Error("validation");
-    }
-
-    let basePriceMinor: number;
-    try {
-      basePriceMinor = parseMoneyToMinor(price);
-    } catch {
-      setFieldErrors((prev) => ({ ...prev, basePriceMinor: "Enter a valid price" }));
-      toast.error("Enter a valid price");
-      throw new Error("validation");
-    }
-
-    // Deposit: what the customer pays to secure the booking; the balance is
-    // collected later. Blank/0 = pay in full. A deposit at or above the price is
-    // just "pay in full" too, so refuse it here rather than storing a confusing one.
-    let depositMinor = 0;
-    if (deposit.trim()) {
-      try {
-        depositMinor = parseMoneyToMinor(deposit);
-      } catch {
-        setFieldErrors((prev) => ({ ...prev, depositMinor: "Enter a valid deposit" }));
-        toast.error("Enter a valid deposit");
-        throw new Error("validation");
-      }
-      if (depositMinor >= basePriceMinor) {
-        setFieldErrors((prev) => ({
-          ...prev,
-          depositMinor:
-            "The deposit must be less than the price — leave blank to take full payment.",
-        }));
-        toast.error("Deposit must be less than the price");
-        throw new Error("validation");
-      }
-    }
-
-    const durationMinutes = Math.round((Number(duration) || 0) * UNIT_MINUTES[durationUnit]) || 60;
-    // Detailing jobs are one vehicle at a time; the field is hidden, so keep
-    // whatever the record already has rather than inventing a new value.
-    const capacityMax = isDetailing ? (service?.capacityMax ?? 1) : Number(capacity) || 1;
-
-    const offerWindows = soleStaff && !restrictWindows ? [] : windows;
-    if (offerWindows.some((w) => !isValidAvailabilityWindow(w))) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        availabilityWindows: "Each window needs a start time before its end.",
-      }));
-      toast.error(`Check the ${lower} offer windows`);
-      throw new Error("validation");
-    }
-
-    // The sole person's hours save alongside the session, only when they changed.
-    const hoursChanged = soleStaff ? !sameWorkingHours(hours, soleStaff.workingRules) : false;
-    if (hoursChanged && hours.some((w) => !isValidAvailabilityWindow(w))) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        workingRules: "Each day needs a start time before its end.",
-      }));
-      toast.error("Check the availability hours");
-      throw new Error("validation");
-    }
-
-    const variantsPayload = variants
-      .filter((v) => v.name.trim())
-      .map((v) => ({
-        ...(v.id ? { id: v.id } : {}),
-        name: v.name.trim(),
-        durationMinutes: v.durationValue.trim()
-          ? Math.round(Number(v.durationValue) * UNIT_MINUTES[v.durationUnit]) || null
-          : null,
-        priceMinor: v.priceMinor.trim() ? parseMoneyToMinor(v.priceMinor) : null,
-      }));
-
-    const eligibleStaffIds = staffMode === "selected" ? staffIds : [];
-    if (staffMode === "selected" && staffIds.length === 0) {
-      setFieldErrors((prev) => ({ ...prev, eligibleStaffIds: "Pick at least one person." }));
-      toast.error(`Choose who delivers this ${lower}`);
-      throw new Error("validation");
-    }
-
-    // Validate the consumables before anything saves, so a bad row can't leave the
-    // service written and its materials not.
-    const usage = isDetailing && usageDirty ? rowsToItems(usageRows) : null;
-    if (usage && !usage.ok) {
-      setUsageInvalid(usage.index);
-      toast.error("Pick a consumable and a quantity above zero on each line");
-      throw new Error("validation");
-    }
-    setUsageInvalid(null);
-
-    const upsells = upsellsDirty ? rowsToUpsellItems(upsellRows) : null;
-    if (upsells && !upsells.ok) {
-      setUpsellInvalid(upsells.index);
-      toast.error(upsells.message);
-      throw new Error("validation");
-    }
-    setUpsellInvalid(null);
-
-    const followUp = ruleFromDraft(followUpDraft);
-    if (!followUp.ok) {
-      setFollowUpError({ field: followUp.field, message: followUp.message });
-      toast.error("Check the follow-up reminder");
-      throw new Error("validation");
-    }
-    setFollowUpError(null);
-
-    const body: Record<string, unknown> = {
-      name,
-      eligibleStaffIds,
-      description: description || null,
-      category: normaliseCategory(category),
-      durationMinutes,
-      basePriceMinor,
-      capacityMax,
-      active,
-      publicVisible,
-      depositMinor,
-      variants: variantsPayload,
-      availabilityWindows: offerWindows,
-      followUp: followUp.rule,
-    };
-
-    setFieldErrors({});
-    // Hours go first: saving the service can itself touch the staff record (to add
-    // the service to a restricted list), which would stale the If-Match we hold.
-    // The hook toasts failures and refetches on 409; the dialog stays open.
-    if (hoursChanged && soleStaff) {
-      await updateStaff.mutateAsync({
-        staffId: soleStaff.id,
-        version: soleStaff.version,
-        body: { workingRules: windowsToWorkingRules(hours, soleStaff.workingRules) },
-      });
-    }
-    try {
-      let saved: CatalogueService;
-      if (service) {
-        saved = await updateService.mutateAsync({
-          serviceId: service.id,
-          version: service.version,
-          body,
-        });
-        toast.success(`${noun} updated`);
-      } else {
-        saved = await createService.mutateAsync({ ...body, currency: "GBP", capacityMin: 1 });
-        toast.success(`${noun} created`);
-      }
-      // Materials used by default. Its own endpoint, so it follows the service save;
-      // a failure here is toasted by the hook and leaves the service itself saved.
-      if (usage?.ok) {
-        try {
-          await replaceServiceUsage.mutateAsync({ serviceId: saved.id, items: usage.items });
-        } catch {
-          toast.warning("The consumables list didn't save — open the service and try again.");
-        }
-      }
-      // Add-ons offered with this service. Its own endpoint; a plan without the
-      // feature answers 403, which opens the bolt-on dialog rather than a toast.
-      if (upsells?.ok) {
-        try {
-          await replaceUpsells.mutateAsync({ serviceId: saved.id, items: upsells.items });
-        } catch (err) {
-          if (isFeatureNotAvailable(err)) {
-            setUpsellsPaywall(true);
-          } else {
-            toast.warning("The add-ons list didn't save — open the service and try again.");
-          }
-        }
-      }
-      // A staff record with its own services list would otherwise veto this service
-      // even though it was just assigned to them here. The API brings those lists
-      // into line on save (so quick-add and other clients get it too); the hooks
-      // refetch staff so the pages reflect it.
-    } catch (err) {
-      // The mutation hooks already toast the error. On 409, the services list is
-      // refetched and this dialog rehydrates from the fresh version.
-      if (err instanceof ApiError && err.fieldErrors.length > 0) {
-        setFieldErrors((prev) => ({
-          ...prev,
-          ...Object.fromEntries(
-            err.fieldErrors
-              .filter((fe) => fe.field)
-              .map((fe) => [fe.field, fe.message || fe.code || "Invalid"]),
-          ),
-        }));
-      }
-      throw err;
-    }
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{service ? `Edit ${lower}` : `Create ${lower}`}</DialogTitle>
-          <DialogDescription>
-            Set pricing, capacity and the booking rules clients see on your booking page.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto pr-1">
-          <div className="grid gap-2">
-            <Label htmlFor="s-name">Name</Label>
-            <Input
-              id="s-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={namePlaceholder}
-              aria-invalid={Boolean(fieldErrors.name)}
-            />
-            {fieldErrors.name ? (
-              <p className="text-xs text-destructive">{fieldErrors.name}</p>
-            ) : null}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="s-desc">Description</Label>
-            <Textarea
-              id="s-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="s-category">Category (optional)</Label>
-            <Input
-              id="s-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder={isDetailing ? "Polishing" : "Classes"}
-              list="s-category-options"
-              autoComplete="off"
-            />
-            <datalist id="s-category-options">
-              {categorySuggestions.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-            {categorySuggestions.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {categorySuggestions.map((c) => {
-                  const on = normaliseCategory(category)?.toLowerCase() === c.toLowerCase();
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setCategory(on ? "" : c)}
-                      aria-pressed={on}
-                      className={cn(
-                        "cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                        on
-                          ? "border-primary bg-primary-soft text-primary"
-                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                      )}
-                    >
-                      {c}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-            <p className="text-xs text-muted-foreground">
-              Groups {pluralLower} on your booking page and in the calendar filter — e.g. all your
-              polishing work under one heading.
-            </p>
-          </div>
-          {/* Detailing stacks duration over price: the long label wraps and would
-              leave the price field floating half a line lower beside it. */}
-          <div className={cn("grid gap-4", isDetailing ? "" : "sm:grid-cols-3")}>
-            <div className="grid gap-2">
-              <Label htmlFor="s-dur">
-                {isDetailing ? "How long you'll have the vehicle" : "Duration"}
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="s-dur"
-                  inputMode="decimal"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.durationMinutes)}
-                  className="flex-1"
-                />
-                <Select
-                  value={durationUnit}
-                  onValueChange={(v) => setDurationUnit(v as DurationUnit)}
-                >
-                  <SelectTrigger className="w-28 shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="minutes">minutes</SelectItem>
-                    <SelectItem value="hours">hours</SelectItem>
-                    <SelectItem value="days">days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {fieldErrors.durationMinutes ? (
-                <p className="text-xs text-destructive">{fieldErrors.durationMinutes}</p>
-              ) : null}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="s-price">Price (£)</Label>
-              <Input
-                id="s-price"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                aria-invalid={Boolean(fieldErrors.basePriceMinor)}
-              />
-              {fieldErrors.basePriceMinor ? (
-                <p className="text-xs text-destructive">{fieldErrors.basePriceMinor}</p>
-              ) : null}
-            </div>
-            {isDetailing ? null : (
-              <div className="grid gap-2">
-                <Label htmlFor="s-cap">Max capacity</Label>
-                <Input
-                  id="s-cap"
-                  value={capacity}
-                  onChange={(e) => setCapacity(e.target.value)}
-                  aria-invalid={Boolean(fieldErrors.capacityMax)}
-                />
-                {fieldErrors.capacityMax ? (
-                  <p className="text-xs text-destructive">{fieldErrors.capacityMax}</p>
-                ) : null}
-              </div>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="s-deposit">Deposit to book (£)</Label>
-            <Input
-              id="s-deposit"
-              value={deposit}
-              onChange={(e) => setDeposit(e.target.value)}
-              placeholder="0"
-              inputMode="decimal"
-              aria-invalid={Boolean(fieldErrors.depositMinor)}
-            />
-            <p className="text-xs text-muted-foreground">
-              {deposit.trim() && Number(deposit) > 0
-                ? `Customers pay £${deposit.trim()} to secure the booking and the balance later. Leave blank to take the full price up front.`
-                : "Optional. Take part of the price now to secure the booking and collect the rest on the day."}
-            </p>
-            {fieldErrors.depositMinor ? (
-              <p className="text-xs text-destructive">{fieldErrors.depositMinor}</p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2 border-t pt-4">
-            <div className="flex items-center justify-between">
-              <Label>Variants</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setVariants((rows) => [
-                    ...rows,
-                    {
-                      name: "",
-                      durationValue: "",
-                      durationUnit,
-                      priceMinor: "",
-                    },
-                  ])
-                }
-              >
-                <Plus className="size-3.5" /> Add variant
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {isDetailing
-                ? 'Optional named options (e.g. "Large vehicle / SUV"). Leave duration or price blank to fall back to the service default.'
-                : 'Optional named options (e.g. "60 min" / "90 min"). Leave duration or price blank to fall back to the service default.'}
-            </p>
-            {variants.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No variants — this service books as-is.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {variants.map((v, i) => (
-                  <div key={i} className="flex items-end gap-2">
-                    <div className="grid flex-1 gap-1">
-                      <Label className="text-xs text-muted-foreground">Name</Label>
-                      <Input
-                        value={v.name}
-                        onChange={(e) => updateVariant(i, { name: e.target.value })}
-                        placeholder={isDetailing ? "Large vehicle / SUV" : "60 minutes"}
-                      />
-                    </div>
-                    <div className="grid w-20 gap-1">
-                      <Label className="text-xs text-muted-foreground">Duration</Label>
-                      <Input
-                        inputMode="decimal"
-                        value={v.durationValue}
-                        onChange={(e) => updateVariant(i, { durationValue: e.target.value })}
-                        placeholder={duration}
-                      />
-                    </div>
-                    <div className="grid w-28 gap-1">
-                      <Label className="text-xs text-muted-foreground">Unit</Label>
-                      <Select
-                        value={v.durationUnit}
-                        onValueChange={(unit) =>
-                          updateVariant(i, { durationUnit: unit as DurationUnit })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="minutes">minutes</SelectItem>
-                          <SelectItem value="hours">hours</SelectItem>
-                          <SelectItem value="days">days</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid w-24 gap-1">
-                      <Label className="text-xs text-muted-foreground">Price (£)</Label>
-                      <Input
-                        value={v.priceMinor}
-                        onChange={(e) => updateVariant(i, { priceMinor: e.target.value })}
-                        placeholder={price}
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeVariant(i)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Detailing: what a job of this service uses up. Records only; never priced in. */}
-          {isDetailing ? (
-            <div className="grid gap-2 border-t pt-4">
-              <Label>Consumables used</Label>
-              <p className="text-xs text-muted-foreground">
-                What one job of this {lower} typically uses — a bottle of coating, two pads. New
-                bookings start with this list, which you can adjust per job. For your records only;
-                it never changes the price or shows to clients.
-              </p>
-              {serviceUsage.isLoading || consumableCatalogue.isLoading ? (
-                <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
-              ) : (
-                <ConsumableUsageEditor
-                  rows={usageRows}
-                  onChange={(rows) => {
-                    setUsageRows(rows);
-                    setUsageDirty(true);
-                    setUsageInvalid(null);
-                  }}
-                  catalogue={consumableCatalogue.data ?? []}
-                  invalidIndex={usageInvalid}
-                  idPrefix="sc"
-                />
-              )}
-            </div>
-          ) : null}
-
-          {/* Upsells: add-ons offered alongside this service, on the booking page and
-              by email after staff book someone in. */}
-          <div className="grid gap-2 border-t pt-4">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Add-ons to offer</Label>
-              {upsellsEntitled === false ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setUpsellsPaywall(true)}
-                >
-                  <Sparkles className="size-4" />
-                  Unlock upsells
-                </Button>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Other {lower}s to suggest with this one — ticked as extras when clients book online,
-              and offered by email when you book them in. Set a special price for the pairing or
-              leave it blank to charge the add-on&apos;s own price.
-            </p>
-            {serviceUpsells.isLoading || catalogue.isLoading ? (
-              <div className="h-10 animate-pulse rounded-xl bg-secondary/70" />
-            ) : (
-              <UpsellEditor
-                rows={upsellRows}
-                onChange={(rows) => {
-                  setUpsellRows(rows);
-                  setUpsellsDirty(true);
-                  setUpsellInvalid(null);
-                }}
-                catalogue={catalogue.data ?? []}
-                ownServiceId={service?.id ?? null}
-                invalidIndex={upsellInvalid}
-                disabled={upsellsEntitled === false}
-                idPrefix="su"
-              />
-            )}
-          </div>
-          <UpsellsUpgradeDialog open={upsellsPaywall} onOpenChange={setUpsellsPaywall} />
-
-          {/* Follow-up reminder: schedules a top-up nudge from each finished job. */}
-          <FollowUpRuleEditor
-            draft={followUpDraft}
-            onChange={(next) => {
-              setFollowUpDraft(next);
-              setFollowUpError(null);
-            }}
-            error={followUpError}
-            serviceNoun={lower}
-            idPrefix="sfu"
-          />
-
-          {/* With one person on the books "everyone" and "them" are the same answer. */}
-          {soleStaff ? null : (
-            <div className="grid gap-3 border-t pt-4">
-              <Label>Who delivers this {lower}</Label>
-              <RadioGroup
-                value={staffMode}
-                onValueChange={(v) => setStaffMode(v as "all" | "selected")}
-                className="grid gap-2 sm:grid-cols-2"
-              >
-                <label
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                    staffMode === "all" && "border-primary/40 bg-primary-soft/40",
-                  )}
-                >
-                  <RadioGroupItem value="all" className="mt-0.5" />
-                  <span className="grid gap-0.5">
-                    <span className="text-sm font-medium">All {staffPluralLower}</span>
-                    <span className="text-xs text-muted-foreground">
-                      Anyone on the team, including people you add later.
-                    </span>
-                  </span>
-                </label>
-                <label
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-xl border p-3",
-                    staffMode === "selected" && "border-primary/40 bg-primary-soft/40",
-                  )}
-                >
-                  <RadioGroupItem value="selected" className="mt-0.5" />
-                  <span className="grid gap-0.5">
-                    <span className="text-sm font-medium">Only certain people</span>
-                    <span className="text-xs text-muted-foreground">
-                      Pick who can be booked for it.
-                    </span>
-                  </span>
-                </label>
-              </RadioGroup>
-              {staffMode === "selected" ? (
-                activeStaff.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No {staffPluralLower} yet — add your team first.
-                  </p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {activeStaff.map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={staffIds.includes(m.id)}
-                          onCheckedChange={(checked) =>
-                            setStaffIds((ids) =>
-                              checked ? [...ids, m.id] : ids.filter((id) => id !== m.id),
-                            )
-                          }
-                        />
-                        {m.displayName}
-                      </label>
-                    ))}
-                  </div>
-                )
-              ) : null}
-              {fieldErrors.eligibleStaffIds ? (
-                <p className="text-xs text-destructive">{fieldErrors.eligibleStaffIds}</p>
-              ) : null}
-              {reconcileNames.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {reconcileNames.join(", ")} {reconcileNames.length === 1 ? "has" : "have"} a
-                  restricted services list — saving will add this {lower} to it.
-                </p>
-              ) : null}
-            </div>
-          )}
-
-          {soleStaff ? (
-            <WeeklyWindowsEditor
-              windows={hours}
-              onChange={setHours}
-              error={fieldErrors.workingRules}
-              businessHours={businessHours}
-              copy={hoursCopy}
-            />
-          ) : null}
-
-          {soleStaff ? (
-            <div className="grid gap-3 border-t pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Only offer this {lower} at certain times</p>
-                  <p className="text-xs text-muted-foreground">
-                    Off: clients can book it whenever {hoursOwnerIsMe ? "you're" : "they're"}{" "}
-                    available. On: narrow it further — a weekend-only class, early sessions.
-                  </p>
-                </div>
-                <Switch
-                  checked={restrictWindows}
-                  onCheckedChange={(on) => {
-                    setRestrictWindows(on);
-                    // Give them something to edit rather than an empty grid.
-                    if (on && windows.length === 0) {
-                      setWindows(
-                        businessHours?.windows.length ? [...businessHours.windows] : [...hours],
-                      );
-                    }
-                  }}
-                />
-              </div>
-              {restrictWindows ? (
-                <WeeklyWindowsEditor
-                  windows={windows}
-                  onChange={setWindows}
-                  error={fieldErrors.availabilityWindows}
-                  businessHours={businessHours}
-                  className="border-t-0 pt-0"
-                  copy={{
-                    label: `When this ${lower} is offered`,
-                    matchesPreset: (preset) =>
-                      `Matches ${preset}'s opening hours. Clients can only book this ${lower} inside these times.`,
-                    hint: `Clients can only book this ${lower} inside these times, and only when ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
-                    empty: `No times listed — turn the switch off to offer it whenever ${hoursOwnerIsMe ? "you're" : "they're"} available.`,
-                  }}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <WeeklyWindowsEditor
-              windows={windows}
-              onChange={setWindows}
-              error={fieldErrors.availabilityWindows}
-              businessHours={businessHours}
-            />
-          )}
-
-          <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-muted-foreground">Allow new bookings for this service</p>
-              </div>
-              <Switch checked={active} onCheckedChange={setActive} />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">Public</p>
-                <p className="text-xs text-muted-foreground">Show on the public booking page</p>
-              </div>
-              <Switch checked={publicVisible} onCheckedChange={setPublicVisible} />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={submitting}
-            onClick={async () => {
-              try {
-                await handleSubmit();
-                onClose();
-              } catch {
-                // Errors are surfaced via toast/inline field messages above.
-              }
-            }}
-          >
-            {submitting ? "Saving…" : service ? "Save changes" : `Create ${lower}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Staff who are meant to deliver a service (everyone when `eligibleStaffIds` is
- * empty) but whose own `eligibleServiceIds` list is restricted and misses it. With
- * a null service id (creating) we can only report who *will* need the update.
- */
-function staffNeedingReconcile(
-  serviceId: string | null,
-  eligibleStaffIds: readonly string[],
-  staff: readonly Staff[],
-): Staff[] {
-  return staff.filter(
-    (m) =>
-      (eligibleStaffIds.length === 0 || eligibleStaffIds.includes(m.id)) &&
-      m.eligibleServiceIds.length > 0 &&
-      (serviceId === null || !m.eligibleServiceIds.includes(serviceId)),
-  );
-}
-
 /** Who can actually be booked for a service once both sides' restrictions apply. */
-function describeDeliverers(service: CatalogueService, staff: readonly Staff[]): string {
+function describeDeliverers(
+  service: CatalogueService,
+  staff: readonly Staff[],
+  staffPlural: string,
+): { text: string; none: boolean } {
+  const all = `All ${staffPlural}`;
   const active = staff.filter((m) => m.status === "active");
-  if (active.length === 0) return service.eligibleStaffIds.length === 0 ? "All staff" : "—";
+  if (active.length === 0) {
+    return service.eligibleStaffIds.length === 0
+      ? { text: all, none: false }
+      : { text: "Nobody yet", none: true };
+  }
   const can = active.filter(
     (m) =>
       (service.eligibleStaffIds.length === 0 || service.eligibleStaffIds.includes(m.id)) &&
       (m.eligibleServiceIds.length === 0 || m.eligibleServiceIds.includes(service.id)),
   );
-  if (can.length === 0) return "Nobody yet";
-  if (can.length === active.length && service.eligibleStaffIds.length === 0) return "All staff";
-  return can.map((m) => m.displayName).join(", ");
+  if (can.length === 0) return { text: "Nobody yet", none: true };
+  if (can.length === active.length && service.eligibleStaffIds.length === 0) {
+    return { text: all, none: false };
+  }
+  return { text: can.map((m) => m.displayName).join(", "), none: false };
 }

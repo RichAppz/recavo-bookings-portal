@@ -25,10 +25,10 @@ export const CLIENT_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "The Clients list",
-        body: "**Clients** in the sidebar is everyone who has booked with you or that you've added. Search by name, email or phone, filter by status, and click a name to open their record. Clients who book online are added here automatically.",
+        body: "**Clients** in the sidebar is everyone who has booked with you or that you've added. The tabs narrow it to **New this month**, **Not seen in 60 days**, **With a package** or **Archived**; search by name, email or phone, sort by last visit, next booking, spend and more, and click a name to open their record. Pills flag anyone who **Owes** money or is **New**. Clients who book online are added here automatically.",
         image: {
           name: "clients",
-          alt: "The Clients page with a search box, status filter and a table of clients with their contact details.",
+          alt: "The Clients page with All, New this month, Not seen in 60 days, With a package and Archived tabs, a search box and a list of clients with their last visit, next booking and spend.",
         },
         link: { to: "/clients", label: "Open Clients" },
       },
@@ -36,13 +36,13 @@ export const CLIENT_GUIDES: readonly Guide[] = [
         heading: "Add one client",
         body: {
           personal_training:
-            "Click **Add client**. Only a first name is required; add an email or mobile so confirmations and reminders can reach them. **Known as** is a private nickname to tell two Sams apart — the client never sees it. **Preferred channel** decides whether they get texts or emails by default.",
+            "Click **Add client**. Only a first name is required; add an email or mobile so confirmations and reminders can reach them. **Known as** is a private nickname to tell two Sams apart — the client never sees it. **How they hear from you** decides whether booking reminders and updates go by email or text. Address, tags and a first note are optional. If someone with the same name, email or mobile is already on your list, the form says so before you create a duplicate. **Add and book** saves them and opens a new booking straight away.",
           car_detailing:
-            'Click **Add client**. Only a first name is required; add an email or mobile so confirmations and reminders can reach them. **Known as** is a private note to tell two Daves apart ("Dave – red Audi") — the client never sees it. The **address** is handy for mobile jobs and lifts; **Preferred channel** decides whether they get texts or emails by default.',
+            'Click **Add client**. Only a first name is required; add an email or mobile so confirmations and reminders can reach them. **Known as** is a private note to tell two Daves apart ("Dave – red Audi") — the client never sees it. **How they hear from you** decides whether booking reminders and updates go by email or text, and the **address** is handy for mobile jobs and lifts. If someone with the same name, email or mobile is already on your list, the form says so before you create a duplicate. **Add and book** saves them and opens a new job straight away.',
         },
         image: {
           name: "add-client",
-          alt: "The Add client form with name, known as, email, mobile, address and preferred channel fields.",
+          alt: "The Add client form with name, known as, email, mobile, how they hear from you and address fields.",
         },
       },
       {
@@ -56,7 +56,7 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "After importing",
-        body: "Imported clients get no message — nobody is emailed until you book them or send something yourself. Add **tags** from a client's record to group them (*Marathon*, *Trade*), and use **Add to waitlist** or **Create booking** from the top of their profile.",
+        body: "Imported clients get no message — nobody is emailed until you book them or send something yourself. Add **tags** under **Details** on a client's record to group them (*Marathon*, *Trade*), and use **New booking** or **⋯ → Add to waitlist** from the top of their profile.",
       },
     ],
     related: ["client-profile-and-history", "add-a-booking", "send-a-message"],
@@ -84,37 +84,47 @@ export const CLIENT_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "The header",
-        body: "The top of a client's record shows their contact details and status, with buttons for the things you do most: **Message**, **Sell package**, **Add to waitlist** and **Create booking**. The cards underneath total their bookings, upcoming {bookings}, lifetime spend and credit balance.",
+        body: {
+          personal_training:
+            "The top of a client's record shows their name, a status pill when something stands out (*New*, *Package*, *Owes*) and how to reach them. **New booking** and **Message** are the buttons you'll use most; **⋯** holds **Sell package**, **Add to waitlist**, **New invoice**, copying their email or phone, and **Archive client**. On a phone the buttons are **Book**, **Message**, **Call** and **More** (the same menu). The strip underneath shows sessions attended, their next booking, credits left, what they've spent and anything they owe — tap one to jump to the detail.",
+          car_detailing:
+            "The top of a customer's record shows their name, a status pill when something stands out (*New*, *Owes*) and how to reach them. **New booking** and **Message** are the buttons you'll use most; **⋯** holds **Add to waitlist**, **Set a reminder**, **New invoice**, copying their email or phone, and **Archive client**. On a phone the buttons are **Book**, **Message**, **Call** and **More** (the same menu). The strip underneath shows jobs done, their next booking, what they've spent and anything they owe — tap one to jump to the detail.",
+        },
         image: {
           name: "client-profile",
-          alt: "A client's record: contact details and action buttons, summary cards, and a row of tabs starting with Profile.",
+          alt: "A client's record: name and status, New booking and Message buttons, a strip of summary tiles, and tabs starting with Overview.",
         },
         link: { to: "/clients", label: "Open Clients" },
       },
       {
-        heading: "Upcoming and past bookings",
-        body: "**Upcoming** lists what they've got booked, with a link into each {booking}. **Payments** and **Invoices** show what they've paid and what's owed. **Messages** is the conversation with them, and **Notifications** every confirmation and reminder that went out, with delivery status.",
+        heading: "Overview, bookings and money",
+        body: {
+          personal_training:
+            "**Overview** puts what matters now first: **Coming up** with their next {bookings}, any waitlist entry, the latest notes and an **About** card. **Bookings** lists everything, filtered by **Upcoming**, **Past**, **Cancelled**, **No-shows** or **All** — click one to open it. **Money** has their **Payments**, **Packages and credits** and **Invoices**.",
+          car_detailing:
+            "**Overview** puts what matters now first: **Coming up** with their next jobs, their reminders, any waitlist entry, the latest notes and an **About** card. **Bookings** lists everything, filtered by **Upcoming**, **Past**, **Cancelled**, **No-shows** or **All** — click one to open it. **Money** has their **Payments** and **Invoices**, and **Vehicles** lists their cars.",
+        },
         image: {
-          name: "client-upcoming",
-          alt: "The Upcoming tab on a client's record listing their next bookings.",
+          name: "client-bookings",
+          alt: "The Bookings tab on a client's record with Upcoming, Past, Cancelled, No-shows and All filters above their bookings.",
         },
       },
       {
-        heading: "Notes, tags and files",
+        heading: "Messages, notes and files",
         body: {
           personal_training:
-            "**Notes** are private to your team — goals, injuries, how they like to train. **Tags** group clients for filtering. **Files** holds PAR-Qs, programmes and anything else you want to hand. **Consents** records what they've agreed to, including your cancellation terms and marketing.",
+            "**Messages** is one conversation: what you and they have written, plus every confirmation and reminder RECAVO sent, with whether it was delivered. **Notes and files** holds private team notes — goals, injuries, how they like to train — and files such as PAR-Qs and programmes (up to 25 MB each).",
           car_detailing:
-            "**Notes** are private to your team — how they like the car left, where the spare key lives. **Tags** group clients (*Trade*, *Fleet*). **Files** holds photos and anything else worth keeping. **Consents** records what they've agreed to, including your cancellation terms and marketing.",
+            "**Messages** is one conversation: what you and they have written, plus every confirmation and reminder RECAVO sent, with whether it was delivered. **Notes and files** holds private team notes — how they like the car left, where the spare key lives — and files such as photos (up to 25 MB each).",
         },
         image: {
           name: "client-notes",
-          alt: "The Notes tab on a client's record with the team's private notes.",
+          alt: "The Notes and files tab on a client's record with the team's private notes and an upload area for files.",
         },
       },
       {
-        heading: "Portal and privacy",
-        body: "**Portal** shows whether they've claimed their client login, where they can see and manage their own {bookings}. **Privacy** is where you export everything held about them or delete the record if they ask — bookings are kept for your accounts but the personal details are removed.",
+        heading: "Details, portal and privacy",
+        body: "**Details** is where you edit their name, contact details, how they hear from you (email or text), address and **tags**. **Client portal** shows whether they've claimed their login to see and manage their own {bookings}. **Privacy** exports everything held about them, or deletes the record if they ask — bookings are kept for your accounts but the personal details are removed. **Archive** hides them from your list without losing anything.",
       },
     ],
     related: ["add-and-import-clients", "send-a-message", "record-a-payment"],
@@ -149,7 +159,7 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Sell one to a client",
-        body: "Click **Sell package** (also on a client's record and the **Create** menu), pick the client and the package, then say how it's paid. **Card checkout** starts a Stripe payment and issues the credits once it succeeds; **Already paid** is for cash or your own card machine and issues them straight away. The sale shows under the client's **Payments**.",
+        body: "Click **Sell package** (also in the **⋯** menu on a client's record and the top bar's **New booking** menu), pick the client and the package, then say how it's paid. **Card checkout** starts a Stripe payment and issues the credits once it succeeds; **Already paid** is for cash or your own card machine and issues them straight away. The sale shows on the client's **Money** tab.",
         image: {
           name: "sell-package",
           alt: "The Sell package form with client, package and a choice between card checkout and already paid.",
@@ -162,10 +172,10 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       },
       {
         heading: "Balances and expiry",
-        body: "The **Packages** tab on a client's record lists each package they hold, credits left and the expiry date. **+** and **−** adjust the balance by hand (a goodwill session, say) and **Ledger** shows every credit in and out. **Run expiry sweep** on the Packages page retires anything past its date. **Offer links** let you share a package that isn't on your booking page — a discounted block for one client, say.",
+        body: "**Packages and credits**, under the **Money** tab on a client's record, lists each package they hold, credits left and the expiry date, with every credit in and out underneath; the credits tile at the top of their record shows the total. **Adjust credits** changes the balance by hand (a goodwill session, say) with a reason. **Run expiry sweep** on the Packages page retires anything past its date. **Offer links** let you share a package that isn't on your booking page — a discounted block for one client, say.",
         image: {
           name: "client-packages",
-          alt: "The Packages tab on a client's record showing their packages, credits remaining and expiry.",
+          alt: "The Packages and credits card on a client's Money tab showing their package, credits remaining, expiry and credit history.",
         },
       },
     ],
@@ -173,12 +183,12 @@ export const CLIENT_GUIDES: readonly Guide[] = [
   },
   {
     slug: "vehicles-and-follow-ups",
-    title: "Vehicles and follow-ups",
+    title: "Vehicles",
     summary:
-      "Every job is booked against a vehicle, so you can see a car's history at a glance — and follow-ups remind you and the customer when a coating or treatment is due again.",
+      "Every job is booked against a vehicle, so you can see a car's history, owner and next booking at a glance.",
     category: "clients",
     verticals: ["car_detailing"],
-    minutes: 4,
+    minutes: 3,
     keywords: [
       "car",
       "registration",
@@ -187,46 +197,124 @@ export const CLIENT_GUIDES: readonly Guide[] = [
       "make",
       "model",
       "history",
-      "repeat",
-      "top-up",
-      "reminder",
-      "coating due",
-      "retention",
+      "owner",
+      "duplicate",
+      "sold",
+      "archive vehicle",
     ],
     steps: [
       {
         heading: "Vehicles",
-        body: "**Vehicles** in the sidebar lists every car on record across all your customers — registration, make, model and owner. Search by reg or owner, and click one to see the jobs done on it. A customer with more than one car has each listed separately.",
+        body: "**Vehicles** in the sidebar lists every car on record across all your customers, with its number plate, make and model, owner, last job and next booking. The tabs narrow it to **Due back**, **Not seen in 6 months** or **Archived**; search by registration, make, model or owner, and filter by make or fuel. If the same registration is on more than one record — usually a car that changed hands — a banner offers **Review** so you can merge or tidy them.",
         image: {
           name: "vehicles",
-          alt: "The Vehicles page listing cars with registration, make and model, owner, last update and status.",
+          alt: "The Vehicles page with All, Due back, Not seen in 6 months and Archived tabs, a search box and filters above a list of cars with their number plates, owners, last job and next booking.",
         },
         link: { to: "/vehicles", label: "Open Vehicles" },
       },
       {
+        heading: "A vehicle's history",
+        body: "Click a car to open its panel: the owner (with a link to their profile), how many jobs it has had, what's been spent on it and when it was last in, then every job, photos, condition notes and who has owned it. **Book this vehicle** starts a job with the car and owner filled in; **Edit** changes its details. The **⋯** on each row of the list has the same shortcuts, plus **Photos**, **Ownership history** and **Archive**.",
+        image: {
+          name: "vehicle-panel",
+          alt: "A vehicle's panel showing its number plate, owner, jobs, spend and last visit, a list of jobs, photos, condition and ownership, with Edit and Book this vehicle buttons.",
+        },
+      },
+      {
         heading: "Adding a vehicle",
-        body: "Add one from the **Vehicles** tab on the customer's record, from the **Add vehicle** button on the Vehicles page, or right inside **Add job** when you pick a customer with no car on file. Registration, make and model are enough; year and colour help when two cars look alike. Sold the car? **Archive** it and it drops off the pickers but keeps its history.",
+        body: "Click **Add vehicle** on the Vehicles page, add one from the **Vehicles** tab on the customer's record, or add it right inside **Add job** when the customer has no car on file. Start with the registration, choose the owner, then add what you know — make, model, year, colour and fuel — plus any condition notes or photos. **Add and book** saves it and opens a job for it straight away. Sold the car? **Archive** it and it drops off the pickers but keeps its history.",
         image: {
           name: "client-vehicles",
           alt: "The Vehicles tab on a customer's record listing their cars with an option to add another.",
         },
       },
+    ],
+    related: ["reminders", "client-profile-and-history", "add-a-booking"],
+  },
+  {
+    slug: "reminders",
+    title: "Reminders that bring clients back",
+    summary:
+      "Put a repeat reminder on a service and RECAVO tells each customer when their wash, valet or coating is due again, then shows you who came back and what they spent.",
+    category: "clients",
+    verticals: ["car_detailing"],
+    minutes: 5,
+    keywords: [
+      "follow up",
+      "follow-up",
+      "repeat",
+      "top-up",
+      "coating due",
+      "maintenance wash",
+      "retention",
+      "rebook",
+      "remind a client",
+      "one-off",
+      "snooze",
+      "dismiss",
+      "remove reminder",
+      "booked again",
+      "came back",
+    ],
+    steps: [
       {
-        heading: "Set a follow-up interval",
-        body: "On a service — a ceramic coating, say — set the **follow-up** interval under **Services**: *every 2 years*, *every 6 months*. When a job with that service is marked done, RECAVO schedules the follow-up for that vehicle automatically.",
-        link: { to: "/services", label: "Open Services" },
-      },
-      {
-        heading: "Follow-ups",
-        body: "**Follow-ups** in the sidebar lists every scheduled repeat, with when it's due and when the reminder goes to the customer. Click **Book** to turn one into a job with the customer, vehicle and service filled in, or use its menu to snooze it or dismiss it. The customer gets a reminder ahead of the due date so they come back to you rather than someone else.",
+        heading: "Who is due",
+        body: "**Reminders** in the sidebar opens with four figures: **Overdue** (due and not booked yet), **Due in 30 days**, how many clients **Came back** in the last 90 days and what they **Brought in**. Below, the **Due** tab lists each customer with the service and vehicle, when it's due and when their reminder goes out. Click a row for the full detail, or **Book** to open a job with the customer, vehicle and service already filled in.",
         image: {
           name: "follow-ups",
-          alt: "The Follow-ups page with an upcoming coating top-up showing the vehicle, due date, reminder date and a Book button.",
+          alt: "The Reminders page with Overdue, Due in 30 days, Came back and Brought in figures, the Due tab listing customers with their service, vehicle and due date, and the Repeat reminders card on the right.",
         },
-        link: { to: "/follow-ups", label: "Open Follow-ups" },
+        link: { to: "/follow-ups", label: "Open Reminders" },
+      },
+      {
+        heading: "Act on one",
+        body: "The **⋯** on a row lets you **Send now** rather than waiting, **Snooze** it for a week, two weeks, a month or a date you pick, or **Dismiss** it if they've sold the car or moved away. Snoozed and dismissed reminders move to their own tabs, where **Unsnooze** and **Restore** put them back. **View client** opens their record.",
+        image: {
+          name: "reminder-menu",
+          alt: "A reminder's menu open with Send now, Snooze, Edit repeat reminder, View client and Dismiss.",
+        },
+      },
+      {
+        heading: "Add a repeat reminder",
+        body: "Click **Add reminder** and keep **Everyone** selected. Choose the service, when it's **Due again** (a maintenance wash every month, a coating top-up every year) and how far ahead to **Remind them**. You can give it a friendlier name under **Call it**. **How it works** at the bottom shows the timeline. From then on, every finished job with that service schedules a reminder for that customer and vehicle.",
+        image: {
+          name: "reminder-drawer",
+          alt: "The Add reminder drawer with Everyone selected, the service, Due again after choices, Remind them choices and a How it works timeline.",
+        },
+        link: { to: "/follow-ups", label: "Open Reminders" },
+      },
+      {
+        heading: "Remind one customer",
+        body: "For work done before you used RECAVO, or a one-off, choose **One client** in the same drawer. Pick the customer (or add a new one), the vehicle, the service and when it was last done. **Set a reminder** in the **⋯** menu on a customer's record opens the drawer with them already picked. These show as **One-off** in the list, and **One-offs only** filters to them.",
+        image: {
+          name: "reminder-one-client",
+          alt: "The Add reminder drawer with One client selected, asking for the customer, vehicle, service and when it was last done.",
+        },
+      },
+      {
+        heading: "When they book again",
+        body: "Once that customer is booked in for the same service, the reminder closes by itself and moves to **Booked again**, showing when they're booked for and what the job is worth. Those are what the **Came back** and **Brought in** figures count, and each rule under **Repeat reminders** shows how many clients it has brought back.",
+        image: {
+          name: "reminders-booked-again",
+          alt: "The Booked again tab listing customers whose reminder was closed by a new booking.",
+        },
+        link: { to: "/follow-ups?tab=booked", label: "Open Booked again" },
+      },
+      {
+        heading: "Change or remove a rule",
+        body: "Click a rule under **Repeat reminders** (on a phone, tap **Repeat reminders** first) to change how often it's due or when it reminds. **Delete** at the bottom removes it. If customers are already waiting on it, **Delete and keep them** lets those reminders still go out, and **Delete and dismiss them** stops them, so nobody is reminded about something you no longer offer.",
+        image: {
+          name: "reminder-rule",
+          alt: "A repeat reminder open for editing, with how often it's due, when it reminds and a Delete button.",
+        },
+      },
+      {
+        heading: "What clients get",
+        body: "**What clients get** previews the message. It names the reminder, their number plate and the due date, with a link to book. It's sent by email, and by text if they've agreed to texts. Change the wording in **Settings › Client messages**. Reminders about an upcoming job, like the day before, are set there too.",
+        link: { to: "/settings/client-messages", label: "Open Client messages" },
       },
     ],
-    related: ["create-your-services", "client-profile-and-history", "add-a-booking"],
+    related: ["create-your-services", "confirmations-and-reminders", "vehicles-and-follow-ups"],
   },
   {
     slug: "client-lifts",

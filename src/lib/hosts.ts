@@ -8,8 +8,8 @@
  *
  * So the host never decides *who someone is*. That question has an authoritative
  * answer already, in whether they hold a staff membership or a customer link. The
- * host decides only what to do when both of those come back empty, where there is
- * nothing to go on and the address they typed is the last piece of evidence left.
+ * host decides which side of the app is shown: the customer host is the client
+ * account and booking pages only, even for someone who also runs a studio.
  */
 
 const CUSTOMER_LABEL = "book";
@@ -37,6 +37,17 @@ function hostFor(role: string, staging: boolean, domain: string): string {
  */
 export function isCustomerHost(hostname: string): boolean {
   return parse(hostname)?.role === CUSTOMER_LABEL;
+}
+
+/**
+ * Whether the staff console may render here. Never on the customer hostname:
+ * an owner who also books as a client signs in there with the same account, and
+ * the console's own redirects (the plan chooser at `/billing` bounces to the
+ * staff host) would carry them off the page they opened. The native app loads
+ * one origin and is the console wherever it points.
+ */
+export function consoleAllowedOn(hostname: string, native: boolean): boolean {
+  return native || !isCustomerHost(hostname);
 }
 
 /**

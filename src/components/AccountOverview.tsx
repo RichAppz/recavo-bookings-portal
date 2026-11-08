@@ -1,0 +1,566 @@
+import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { CalendarDays, CalendarPlus, Hourglass, Navigation, Ticket } from "lucide-react";
+import { toast } from "sonner";
+import { ClientBookingActions } from "@/components/ClientBookingActions";
+import { Button } from "@/components/ui/button";
+import { EmptyState, SectionCard } from "@/components/ui-bits";
+import { TableGhost } from "@/components/ghost";
+import {
+  useLeavePortalWaitlist,
+  usePortalWaitlist,
+  usePublicBusiness,
+  usePublicLocations,
+  usePublicPackagesAcrossStudios,
+  usePublicStaff,
+  type FromStudio,
+  type PortalBusinessSummary,
+  type PortalCredit,
+  type PortalPackageRequest,
+  type PortalWaitlistEntry,
+} from "@/lib/api/hooks";
+import type { Booking, Payment } from "@/lib/api/types";
+import { bookingNeedsPayment, bookingSettlement } from "@/lib/booking-payment";
+import { downloadIcs, directionsUrl, googleCalendarUrl } from "@/lib/calendar-links";
+import { paymentChip, relativeWhen, type ChipTone } from "@/lib/client-account";
+import {
+  creditsCards,
+  pendingHeadline,
+  pendingLine,
+  type CreditsCardModel,
+  type PendingSummary,
+} from "@/lib/credits-card";
+import { formatInTz, formatMoney } from "@/lib/format";
+import { initials } from "@/lib/client-theme";
+import { cn } from "@/lib/utils";
+import { describeForClient } from "@/lib/waitlist";
+
+function Chip({
+  label,
+  tone,
+  dark = false,
+}: {
+  label: string;
+  tone: "ok" | "warn" | "neutral";
+  dark?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap",
+        dark
+          ? tone === "warn"
+            ? "bg-amber-400/20 text-amber-200"
+            : "bg-emerald-400/20 text-emerald-200"
+          : tone === "ok"
+            ? "bg-success-soft text-success-foreground"
+            : tone === "warn"
+              ? "bg-warning-soft text-warning-foreground"
+              : "bg-muted text-muted-foreground",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function AccountOverview({
+  solo,
+  studios,
+  upcoming,
+  usable,
+  pendingRequests,
+  history,
+  loading,
+  payingId,
+  onPay,
+  onBook,
+  onSeePackages,
+}: {
+  solo: boolean;
+  studios: PortalBusinessSummary[];
+  upcoming: FromStudio<Booking>[];
+  usable: FromStudio<PortalCredit>[];
+  pendingRequests: FromStudio<PortalPackageRequest>[];
+  history: FromStudio<Payment>[];
+  loading: boolean;
+  payingId: string | null;
+  onPay: (booking: FromStudio<Booking>) => void;
+  onBook: (studio: PortalBusinessSummary) => void;
+  onSeePackages: (studio: PortalBusinessSummary) => void;
+}) {
+  const next = upcoming[0];
+  const rest = upcoming.slice(1);
+
+  // The "buy a package" invitation needs something to buy; until the catalogues
+  // have loaded nothing is shown rather than a card that may vanish.
+  const packages = usePublicPackagesAcrossStudios(studios);
+  const creditCards = packages.isPending
+    ? []
+    : creditsCards({
+        studios,
+        credits: usable,
+        requests: pendingRequests,
+        packages: packages.data,
+      });
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        {loading && !next ? (
+          <div className="h-[200px] animate-pulse rounded-3xl bg-foreground/90" />
+        ) : next ? (
+          <NextUpCard booking={next} payments={history} payingId={payingId} onPay={onPay} />
+        ) : (
+          <div className="surface-card p-5">
+            <EmptyState
+              icon={<CalendarDays className="size-5" />}
+              title="Nothing booked yet"
+              description="Book your next session and it'll show up here."
+              action={
+                solo ? (
+                  <Button size="sm" onClick={() => onBook(studios[0]!)}>
+                    Book now
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {creditCards.length > 0 ? (
+            creditCards.map((card) => (
+              <CreditsCard
+                key={card.studio.id}
+                card={card}
+                onBook={onBook}
+                onSeePackages={onSeePackages}
+              />
+            ))
+          ) : solo ? (
+            <div className="surface-card flex items-center justify-between gap-4 p-4 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[17px] font-semibold">{studios[0]!.tradingName}</p>
+                <p className="text-[14px] text-muted-foreground">Book your next session</p>
+              </div>
+              <Button className="shrink-0 rounded-full" onClick={() => onBook(studios[0]!)}>
+                Book
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <section>
+        <h2 className="mb-2 text-[15px] font-semibold text-muted-foreground">Coming up</h2>
+        <SectionCard bodyClassName="p-0 sm:p-0">
+          {loading && upcoming.length === 0 ? (
+            <TableGhost rows={3} />
+          ) : rest.length === 0 ? (
+            <p className="px-4 py-5 text-[15px] text-muted-foreground sm:px-5">
+              {next ? "Nothing else booked yet." : "Nothing booked yet."}
+              {solo ? (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={() => onBook(studios[0]!)}
+                    className="font-semibold text-foreground underline underline-offset-4"
+                  >
+                    Book a session
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {rest.slice(0, 8).map((b) => {
+                const chip = paymentChip(b, history);
+                const needsPay = bookingNeedsPayment(b, history);
+                const s = bookingSettlement(b);
+                const payLabel =
+                  s.depositMinor != null && s.paidMinor < s.depositMinor
+                    ? `Pay ${formatMoney(s.dueNowMinor, b.currency)} deposit`
+                    : `Pay ${formatMoney(s.dueNowMinor, b.currency)}`;
+                return (
+                  <li key={b.id} className="px-4 py-4 sm:px-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[17px] font-semibold">
+                          {relativeWhen(b.start, b.timezone)}
+                        </p>
+                        <p className="mt-0.5 text-[14px] text-muted-foreground">
+                          {b.serviceSnapshot.name}
+                          {solo ? "" : ` · ${b.studio.tradingName}`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {chip ? <Chip label={chip.label} tone={chip.tone} /> : null}
+                        <ClientBookingActions
+                          booking={b}
+                          businessId={b.studio.id}
+                          businessName={b.studio.tradingName}
+                          className="hidden sm:flex"
+                        />
+                      </div>
+                    </div>
+                    {needsPay ? (
+                      <Button
+                        variant="outline"
+                        className="mt-3 h-11 w-full rounded-xl text-[15px] font-semibold"
+                        disabled={payingId === b.id}
+                        onClick={() => onPay(b)}
+                      >
+                        {payingId === b.id ? "Starting…" : payLabel}
+                      </Button>
+                    ) : null}
+                    <ClientBookingActions
+                      booking={b}
+                      businessId={b.studio.id}
+                      businessName={b.studio.tradingName}
+                      className="mt-3 sm:hidden"
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
+        {upcoming.length > 9 ? (
+          <p className="mt-2 text-right text-[14px]">
+            <Link
+              to="/account"
+              search={{ view: "calendar" }}
+              className="font-semibold underline underline-offset-4"
+            >
+              See all in the calendar
+            </Link>
+          </p>
+        ) : null}
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
+          {studios.map((studio) => (
+            <WaitlistCard key={studio.id} studio={studio} solo={solo} />
+          ))}
+        </div>
+        {!solo ? (
+          <SectionCard title="Businesses you book with" bodyClassName="p-0 sm:p-0">
+            <ul className="divide-y">
+              {studios.map((studio) => (
+                <li
+                  key={studio.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                      {initials(studio.tradingName)}
+                    </span>
+                    <p className="truncate text-[15px] font-medium">{studio.tradingName}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onBook(studio)}
+                    className="text-[14px] font-semibold underline underline-offset-4"
+                  >
+                    Book
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The Credits card in its three looks (see `creditsCards`). The pending package
+ * request lives inside it as "+N on the way", so a request that is waiting on the
+ * studio is one quiet line beside the balance it will top up, not a banner.
+ */
+function CreditsCard({
+  card,
+  onBook,
+  onSeePackages,
+}: {
+  card: CreditsCardModel<PortalBusinessSummary>;
+  onBook: (studio: PortalBusinessSummary) => void;
+  onSeePackages: (studio: PortalBusinessSummary) => void;
+}) {
+  const viewAll = (
+    <Link
+      to="/account"
+      search={{ view: "credits" }}
+      className="shrink-0 text-[14px] font-semibold underline underline-offset-4"
+    >
+      View all
+    </Link>
+  );
+  const pendingRow = (pending: PendingSummary, tone: "credits" | "pending") => (
+    <div
+      data-testid="credits-pending"
+      className="flex items-start justify-between gap-3 rounded-xl bg-warning-soft/60 px-3 py-2.5 text-[13px] leading-snug"
+    >
+      <span className="flex min-w-0 items-start gap-2">
+        <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-full bg-warning" />
+        <span className="min-w-0">
+          <span className="font-semibold">{pendingLine(pending)}</span>
+          <span className="text-muted-foreground">
+            {tone === "credits"
+              ? ` · waiting for ${card.studio.tradingName} to confirm payment`
+              : " · awaiting payment"}
+          </span>
+        </span>
+      </span>
+      {tone === "pending" ? <Chip label="Pending" tone="warn" /> : null}
+    </div>
+  );
+
+  if (card.kind === "none") {
+    return (
+      <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card-none">
+        <p className="text-[17px] font-semibold">Credits</p>
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <Ticket className="size-4.5" />
+          </span>
+          <p className="text-[14px] text-muted-foreground">
+            No credits yet. Buy a package and save on every session.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          onClick={() => onSeePackages(card.studio)}
+        >
+          See packages
+        </Button>
+      </div>
+    );
+  }
+
+  if (card.kind === "pending") {
+    return (
+      <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card-pending">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[17px] font-semibold">Credits</p>
+          {viewAll}
+        </div>
+        <div className="flex items-start gap-3">
+          <span className="text-[34px] font-bold leading-none text-muted-foreground/60 tabular-nums">
+            0
+          </span>
+          <p className="pt-1 text-[14px] text-muted-foreground">
+            {pendingHeadline(card.pending, card.studio.tradingName)}
+          </p>
+        </div>
+        {pendingRow(card.pending, "pending")}
+        <Button
+          variant="outline"
+          className="h-11 w-full rounded-full text-[15px] font-semibold"
+          onClick={() => onBook(card.studio)}
+        >
+          Book and pay for a session
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="surface-card space-y-4 p-4 sm:p-5" data-testid="credits-card">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[17px] font-semibold">Credits</p>
+        {viewAll}
+      </div>
+      <div className="flex items-start gap-3">
+        <span className="text-[34px] font-bold leading-none tabular-nums">{card.total}</span>
+        <div className="min-w-0 pt-0.5 text-[14px]">
+          <p className="truncate">
+            {card.total === 1 ? "session" : "sessions"} left · {card.studio.tradingName}
+          </p>
+          <p className="text-muted-foreground">
+            Use by{" "}
+            {formatInTz(card.useBy, "Europe/London", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </p>
+        </div>
+      </div>
+      {card.pending ? pendingRow(card.pending, "credits") : null}
+      <Button
+        className="h-11 w-full rounded-full text-[15px] font-semibold"
+        onClick={() => onBook(card.studio)}
+      >
+        Book with a credit
+      </Button>
+    </div>
+  );
+}
+
+function NextUpCard({
+  booking,
+  payments,
+  payingId,
+  onPay,
+}: {
+  booking: FromStudio<Booking>;
+  payments: readonly Payment[];
+  payingId: string | null;
+  onPay: (booking: FromStudio<Booking>) => void;
+}) {
+  const studioId = booking.studio.id;
+  const staff = usePublicStaff(studioId);
+  const locations = usePublicLocations(studioId);
+  const profile = usePublicBusiness(studioId, "id");
+  const chip = paymentChip(booking, payments);
+  const needsPay = bookingNeedsPayment(booking, payments);
+  const s = bookingSettlement(booking);
+
+  const staffName = staff.data?.find((p) => p.id === booking.staffId)?.displayName ?? null;
+  const location = locations.data?.find((l) => l.id === booking.locationId) ?? null;
+  const address = profile.data?.page?.venue?.address ?? profile.data?.address ?? null;
+
+  const event = {
+    title: `${booking.serviceSnapshot.name} at ${booking.studio.tradingName}`,
+    start: booking.start,
+    end: booking.end,
+    location: [location?.name, address].filter(Boolean).join(", ") || null,
+    details: `Booking reference ${booking.reference}`,
+  };
+  const addToCalendar = () => {
+    if (!downloadIcs(event, `${booking.reference}.ics`)) {
+      window.open(googleCalendarUrl(event), "_blank", "noopener");
+      return;
+    }
+    toast.success("Calendar file saved");
+  };
+
+  const inkButton =
+    "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/12 px-4 text-[15px] font-semibold text-white transition hover:bg-white/20";
+
+  return (
+    <div className="rounded-3xl bg-[#111214] p-5 text-white sm:p-6 dark:bg-[#1c1f25]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-[14px] text-white/70">Next up · {booking.studio.tradingName}</p>
+        {chip ? (
+          <Chip label={chip.label} tone={chip.tone === "neutral" ? "ok" : chip.tone} dark />
+        ) : null}
+      </div>
+      <p className="mt-3 text-[30px] font-bold leading-tight tracking-tight sm:text-[34px]">
+        {relativeWhen(booking.start, booking.timezone)}
+      </p>
+      <p className="mt-1 truncate text-[15px] text-white/70">
+        {booking.serviceSnapshot.name}
+        {staffName ? ` with ${staffName}` : ""}
+        {location ? ` · ${location.name}` : ""}
+      </p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {needsPay ? (
+          <button
+            type="button"
+            disabled={payingId === booking.id}
+            onClick={() => onPay(booking)}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-white px-4 text-[15px] font-semibold text-[#111214] transition hover:bg-white/90 disabled:opacity-60"
+          >
+            {payingId === booking.id
+              ? "Starting…"
+              : s.depositMinor != null && s.paidMinor < s.depositMinor
+                ? `Pay ${formatMoney(s.dueNowMinor, booking.currency)} deposit`
+                : `Pay ${formatMoney(s.dueNowMinor, booking.currency)}`}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={addToCalendar}
+          className={cn(inkButton, "hidden sm:inline-flex")}
+        >
+          <CalendarPlus className="size-4" /> Add to calendar
+        </button>
+        {address ? (
+          <a href={directionsUrl(address)} target="_blank" rel="noreferrer" className={inkButton}>
+            <Navigation className="size-4" /> Directions
+          </a>
+        ) : null}
+        <ClientBookingActions
+          booking={booking}
+          businessId={studioId}
+          businessName={booking.studio.tradingName}
+          variant="ink"
+          className="flex-1 flex-nowrap [&>button]:flex-1"
+        />
+      </div>
+    </div>
+  );
+}
+
+function WaitlistCard({ studio, solo }: { studio: PortalBusinessSummary; solo: boolean }) {
+  const waitlist = usePortalWaitlist(studio.id);
+  const leave = useLeavePortalWaitlist(studio.id);
+  // Rows fade out on Leave; the refetch then drops them for good.
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  const entries = (waitlist.data ?? []).filter((e) => e.status === "waiting");
+  if (entries.length === 0) return null;
+  return (
+    <div className="rounded-3xl border-2 border-dashed border-border bg-card p-4 sm:p-5">
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+          <Hourglass className="size-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[16px] font-semibold">On the waitlist</p>
+          {solo ? null : <p className="text-[13px] text-muted-foreground">{studio.tradingName}</p>}
+        </div>
+      </div>
+      <ul className="mt-3 space-y-3">
+        {entries.map((entry) => (
+          <li
+            key={entry.id}
+            className={cn(
+              "flex items-center justify-between gap-3 transition-opacity duration-300",
+              leaving.has(entry.id) && "pointer-events-none opacity-0",
+            )}
+          >
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold">{entry.service?.name ?? "Any service"}</p>
+              <p className="text-[14px] text-muted-foreground">
+                {describeForClient(entry.preferences)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="shrink-0 rounded-full"
+              disabled={leave.isPending}
+              onClick={() =>
+                leave.mutate(
+                  { entryId: entry.id },
+                  {
+                    onSuccess: () => {
+                      setLeaving((s) => new Set(s).add(entry.id));
+                      toast.success(
+                        entry.service
+                          ? `You've left the waitlist for ${entry.service.name}`
+                          : "You've left the waitlist",
+                      );
+                    },
+                  },
+                )
+              }
+            >
+              Leave
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[13px] text-muted-foreground">
+        {studio.tradingName} will be in touch if a time opens up. Nothing is booked until they
+        confirm with you.
+      </p>
+    </div>
+  );
+}
