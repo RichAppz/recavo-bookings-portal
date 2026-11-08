@@ -14,11 +14,14 @@ export function ClientLiftFields({
   value,
   onChange,
   idPrefix,
+  clientFirstName,
 }: {
   value: ClientLiftDraft;
   onChange: (next: ClientLiftDraft) => void;
   /** Unique per form so the Add and Edit dialogs never share ids. */
   idPrefix: string;
+  /** Names the client in the help line once they're known. */
+  clientFirstName?: string | null;
 }) {
   return (
     <div className="grid min-w-0 gap-2">
@@ -41,7 +44,7 @@ export function ClientLiftFields({
               id={`${idPrefix}-lift-destination`}
               value={value.destination}
               onChange={(e) => onChange({ ...value, destination: e.target.value })}
-              placeholder="Home — 12 Elm Rd, or Train station"
+              placeholder="Home, 12 Elm Rd, or train station"
               maxLength={200}
               autoFocus
             />
@@ -59,8 +62,9 @@ export function ClientLiftFields({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Shows on the booking and calendar. The client's confirmation says where you'll drop them
-            once they've dropped the car off.
+            Shows on the booking and calendar.{" "}
+            {clientFirstName ? `${clientFirstName}'s` : "The client's"} confirmation says where
+            you'll drop them.
           </p>
         </div>
       ) : null}

@@ -195,6 +195,7 @@ describe("reading saved bookings", () => {
 
   it("spells the real span with the working-day count", () => {
     assert.equal(formatWorkingSpan(job, TZ), "Thu 24 – Mon 28 Sept · 3 working days");
+    assert.equal(formatWorkingSpan(job, TZ, " to "), "Thu 24 to Mon 28 Sept · 3 working days");
     assert.equal(
       formatWorkingSpan({ start: "2026-09-24T08:00:00.000Z", end: "2026-09-24T11:00:00.000Z" }, TZ),
       null,

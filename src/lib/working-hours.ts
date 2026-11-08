@@ -61,6 +61,16 @@ function localClock(iso: string, timeZone: string): { dayOfWeek: number; minute:
   return { dayOfWeek: dayOfWeek || 1, minute: hour * 60 + minute };
 }
 
+const WEEKDAY_NAMES = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
 const clock = (minute: number) =>
   `${`${Math.floor(minute / 60)}`.padStart(2, "0")}:${`${minute % 60}`.padStart(2, "0")}`;
 
@@ -100,9 +110,9 @@ export function outsideWorkingHours(
     .sort((a, b) => a.startMinute - b.startMinute);
   const usual =
     dayRules.length > 0
-      ? dayRules.map((r) => `${clock(r.startMinute)}–${clock(r.endMinute)}`).join(", ")
+      ? dayRules.map((r) => `${clock(r.startMinute)} to ${clock(r.endMinute)}`).join(", ")
       : null;
   return usual
     ? `Outside ${staff.displayName}'s usual hours (${usual}). You can still book it.`
-    : `${staff.displayName} doesn't usually work that day. You can still book it.`;
+    : `${staff.displayName} doesn't usually work on ${WEEKDAY_NAMES[startDay - 1] ?? "that day"}. You can still book it.`;
 }

@@ -89,6 +89,8 @@ export function CustomerSearchPicker({
   excludeCustomerId,
   suggestions,
   placeholder = "Search for a client…",
+  defaultOpen = false,
+  onOpenChange,
 }: {
   value: Customer | null;
   onSelect: (customer: Customer) => void;
@@ -97,8 +99,15 @@ export function CustomerSearchPicker({
   /** Shown before typing, and filtered locally on a single character. */
   suggestions?: Customer[];
   placeholder?: string;
+  /** Open the list on mount, e.g. after "Change" on a chosen client. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpenState] = useState(defaultOpen);
+  const setPickerOpen = (open: boolean) => {
+    setPickerOpenState(open);
+    onOpenChange?.(open);
+  };
   const [search, setSearch] = useState("");
   const term = search.trim();
   const searching = term.length > 1;
@@ -171,8 +180,10 @@ export function CustomerSearchPicker({
                 <Check className={cn("size-4", value?.id === c.id ? "opacity-100" : "opacity-0")} />
                 <div className="min-w-0">
                   <p className="truncate text-sm">{customerDisplayName(c)}</p>
-                  {c.emailDisplay ? (
-                    <p className="truncate text-xs text-muted-foreground">{c.emailDisplay}</p>
+                  {c.emailDisplay || c.phoneDisplay ? (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.emailDisplay || c.phoneDisplay}
+                    </p>
                   ) : null}
                 </div>
               </CommandItem>
@@ -948,7 +959,7 @@ export function QuickAddLinkedRecord({
     hasInput && inputHint
       ? inputHint
       : requiredLabels.length === 0
-        ? "Nothing's required — add what you know, the rest later."
+        ? "Nothing's required. Add what you know, the rest later."
         : `Only the ${requiredLabels.join(" and ")} is needed now.`;
 
   return (

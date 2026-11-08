@@ -76,7 +76,7 @@ export const MONEY_GUIDES: readonly Guide[] = [
     steps: [
       {
         heading: "Ask for it with the booking",
-        body: "The simplest route is the **payment method** you choose when you book. *Request payment up front* sends a confirmation with the amount and a **pay online** link (once Stripe is connected). Clients booking through your page pay or leave a deposit as they book, so there's nothing to chase.",
+        body: "The simplest route is the **payment method** you choose when you book. *Pay up front* sends a confirmation with the amount and a **pay online** link (once Stripe is connected). Clients booking through your page pay or leave a deposit as they book, so there's nothing to chase.",
         link: { to: "/calendar", label: "Open Calendar" },
       },
       {

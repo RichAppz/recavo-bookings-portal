@@ -56,9 +56,9 @@ export const BOOKING_GUIDES: readonly Guide[] = [
         heading: "Choose who, when and how they pay",
         body: {
           personal_training:
-            "Pick a **trainer** (or leave it on *Any*), then a **date** — the free slots for that day appear underneath, or use **Set the time** for an exact start. Knock money off with the **Discount** box (a percentage or an amount). **Payment method** decides what the confirmation asks for: *Request payment up front* sends the amount due with a pay link if card payments are on; *Pay after the session* sends a plain confirmation; *Use package credit* takes one credit from a package they've bought.",
+            "Pick a **trainer** (or leave it on *Any*), then a **date** — the free slots for that day appear underneath, or use **Set the time** for an exact start. Knock money off with the **Discount** box (a percentage or an amount). **Payment method** decides what the confirmation asks for: *Pay up front* sends the amount due with a pay link if card payments are on; *Pay after the session* sends a plain confirmation; *Package credit* takes one credit from a package they've bought.",
           car_detailing:
-            "Pick a **staff member** (or leave it on *Any*), then a **date** — the free slots for that day appear underneath, **Set the time** takes an exact start, and **All day** books the bay for the whole day. Knock money off with the **Discount** box (a percentage or an amount). **Payment method** is *Pay after the job* by default: a plain confirmation, and you take payment when the car is collected. Switch to *Request payment up front* to send the amount with a pay link, or *Bank transfer* to send your account details and hold the job as *awaiting payment*.",
+            "Pick a **staff member** (or leave it on *Any*), then a **date** — the free slots for that day appear underneath, **Set the time** takes an exact start, and **All day** books the bay for the whole day. Knock money off with the **Discount** box (a percentage or an amount). **Payment method** is *Pay after the job* by default: a plain confirmation, and you take payment when the car is collected. Switch to *Pay up front* to send the amount with a pay link, or *Bank transfer* to send your account details and hold the job as *awaiting payment*.",
         },
       },
       {

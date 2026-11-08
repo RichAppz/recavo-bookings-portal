@@ -7,8 +7,18 @@ import type { ReleaseNote } from "../lib/release-notes.ts";
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
     date: "2026-11-08",
-    title: "Cancel a payment recorded by mistake",
+    title: "Add booking and Edit booking redesigned, and cancel a mistaken payment",
     items: [
+      {
+        kind: "improved",
+        text: "Add booking is now six numbered steps: client, services, when, price, payment, and notes. A step's number turns amber if something in it is still needed and becomes a tick once it's done, and the bar at the bottom says what you've booked or how many things are left. Pick the day from a strip of the next few days (or the calendar), put a discount right next to the price, and choose how it's paid from clear cards: Pay up front, Pay after the job, Package credit or Bank transfer.",
+        where: "Calendar → Add booking",
+      },
+      {
+        kind: "improved",
+        text: "Edit booking follows the same layout. The price and discount sit together, payment and deposit are out in the open instead of under More options, and you choose Email, Text message or both when telling the client about a change. Change how it's paid on a bank transfer booking now takes you straight to Payment.",
+        where: "Booking → ⋯ → Edit booking",
+      },
       {
         kind: "new",
         text: "Recorded cash, a bank transfer or a card machine payment that never happened, or on the wrong booking? Tap Cancel next to it on the booking's Payments tab. It comes off the booking and out of your takings, as if it was never recorded. If the booking has an invoice showing the money as paid, void the invoice first. Money you actually gave back is still a refund.",
