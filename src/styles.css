@@ -50,6 +50,8 @@
   --color-destructive-soft: var(--destructive-soft);
   --color-border: var(--border);
   --color-input: var(--input);
+  /* Fill of text fields and select boxes; sheets and drawers sit on --card. */
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
   --color-chart-1: var(--chart-1);
@@ -170,6 +172,7 @@
   --sidebar-ring: oklch(0.68 0.12 178);
   --panel: var(--card);
   --panel-border: var(--border);
+  --field: var(--card);
   --panel-shadow: 0 0 #0000;
 }
 
@@ -212,6 +215,7 @@
   --sidebar-ring: #2ee6a6;
   --panel: #ffffff;
   --panel-border: #e4e0d8;
+  --field: #f7f5f1;
   --cal-paid: #349d62;
   --cal-paid-bg: #e6f3eb;
   --cal-paid-fg: #1d5c38;
@@ -265,6 +269,7 @@
   --sidebar-ring: #2ee6a6;
   --panel: #161a22;
   --panel-border: #232833;
+  --field: #1d222b;
   --cal-paid: #349d62;
   --cal-paid-bg: #1b3127;
   --cal-paid-fg: #b5e5c8;

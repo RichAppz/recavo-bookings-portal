@@ -29,7 +29,7 @@ export function InboxSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search clients or messages"
-        className="h-10 w-full rounded-[10px] border border-input bg-background pr-9 pl-9 text-base outline-none md:text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-search-cancel-button]:hidden"
+        className="h-10 w-full rounded-[10px] border border-input bg-field pr-9 pl-9 text-base outline-none md:text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
         <button

@@ -458,7 +458,7 @@ export function PrefixField({
   return (
     <div className="grid min-w-0 gap-1.5">
       <div className="flex min-w-0 gap-2">
-        <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+        <div className="flex min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-field focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <span
             title={prefix}
             className="flex min-w-0 max-w-[60%] items-center border-r bg-secondary px-3 text-sm text-muted-foreground select-none"

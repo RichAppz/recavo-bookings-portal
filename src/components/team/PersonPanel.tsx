@@ -827,7 +827,7 @@ function SignInSection({
               </span>
               <div className="flex gap-2">
                 <Select value={linking} onValueChange={setLinking}>
-                  <SelectTrigger className="h-9 flex-1 bg-card">
+                  <SelectTrigger className="h-9 flex-1">
                     <SelectValue placeholder="Choose a sign-in" />
                   </SelectTrigger>
                   <SelectContent>

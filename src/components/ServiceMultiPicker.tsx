@@ -177,7 +177,7 @@ export function ServiceMultiPicker({
       variant="outline"
       role="combobox"
       aria-expanded={open}
-      className="w-full justify-between font-normal"
+      className="w-full justify-between bg-field font-normal hover:bg-field"
     >
       <span className={cn("truncate", picked.length === 0 && "text-muted-foreground")}>
         {triggerText}

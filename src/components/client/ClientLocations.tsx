@@ -164,7 +164,7 @@ export function ClientLocationStep({
                   onBlur={() => void check(postcode)}
                   autoComplete="postal-code"
                   placeholder="e.g. LS6 2AB"
-                  className="h-12 w-full min-w-0 rounded-[var(--radius)] border border-input bg-card px-4 text-[16px] uppercase outline-none placeholder:normal-case focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  className="h-12 w-full min-w-0 rounded-[var(--radius)] border border-input bg-field px-4 text-[16px] uppercase outline-none placeholder:normal-case focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </label>
               <button
