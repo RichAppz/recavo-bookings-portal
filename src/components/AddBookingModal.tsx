@@ -1543,7 +1543,10 @@ export function AddBookingModal({
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Choose a location" />
+                      {/* Just the name: the option's second line doesn't fit the box. */}
+                      <SelectValue placeholder="Choose a location">
+                        {chosenLocation?.name}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {locationList
@@ -1576,6 +1579,14 @@ export function AddBookingModal({
                         })}
                     </SelectContent>
                   </Select>
+                  {service &&
+                  chosenLocation &&
+                  service.locationIds.length > 0 &&
+                  !service.locationIds.includes(chosenLocation.id) ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Doesn't offer {service.name}
+                    </p>
+                  ) : null}
                 </div>
               )}
               {mobileJob ? (
