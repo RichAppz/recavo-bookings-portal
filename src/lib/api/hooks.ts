@@ -5243,6 +5243,16 @@ export type SubscriptionView = {
   /** A platform billing_bypass override is standing in for a Stripe subscription. */
   billingBypass?: boolean;
   /**
+   * A free plan from Recavo is deciding the tier (only while no subscription gives
+   * paid access). `plan` names the same tier. `endsAt` null: no end date.
+   */
+  complimentaryPlan?: {
+    overrideId: string;
+    plan: "solo" | "business" | "growth";
+    name: string;
+    endsAt: string | null;
+  } | null;
+  /**
    * A fresh Checkout would still include the one free trial. False once Stripe
    * has started one for this business, so lapsed accounts are offered
    * "Subscribe", not another trial.

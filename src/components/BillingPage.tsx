@@ -52,6 +52,7 @@ import {
   type SubscriptionDiscount,
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api";
+import type { SubscriptionView } from "@/lib/api/hooks";
 import type {
   PublicCataloguePlan,
   SaasInterval,
@@ -644,6 +645,35 @@ function DiscountBanner({
   );
 }
 
+/** A free plan from Recavo: what they have, and until when. */
+function ComplimentaryPlanCard({
+  plan,
+  tz,
+}: {
+  plan: NonNullable<SubscriptionView["complimentaryPlan"]>;
+  tz: string;
+}) {
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100"
+    >
+      <Sparkles className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="space-y-0.5">
+        <p className="font-medium">
+          You're on the {plan.name} plan for free
+          {plan.endsAt ? ` until ${formatInTz(plan.endsAt, tz, { dateStyle: "long" })}` : ""}
+        </p>
+        <p className="text-emerald-800/90 dark:text-emerald-200/80">
+          {plan.endsAt
+            ? "A gift from Recavo. Nothing to pay and no card needed. To keep going after that date, choose a plan below."
+            : "A gift from Recavo. Nothing to pay and no card needed."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function BillingPage() {
   // Three surfaces (see billingSurface): the web sells through Stripe, the store
   // apps through In-App Purchase, and a store app that cannot sell shows plan
@@ -670,6 +700,16 @@ function InAppBillingPage() {
 
   if (tenant.isLoading || subscription.isLoading) {
     return <PageGhost />;
+  }
+
+  const complimentary = subscription.data?.complimentaryPlan;
+  if (complimentary) {
+    return (
+      <div className="space-y-6">
+        <ComplimentaryPlanCard plan={complimentary} tz={tz} />
+        <SmsCreditsCard />
+      </div>
+    );
   }
 
   if (!current || isBillingBlocked(current)) {
@@ -798,7 +838,10 @@ function StoreBillingPage() {
   }
 
   if (!canManage) {
-    return (
+    const free = subscription.data?.complimentaryPlan;
+    return free ? (
+      <ComplimentaryPlanCard plan={free} tz={tz} />
+    ) : (
       <EmptyState
         title="Ask the owner to subscribe"
         description="A business owner needs to start a Recavo plan before this workspace can be used."
@@ -816,6 +859,9 @@ function StoreBillingPage() {
 
   return (
     <div className="space-y-6">
+      {subscription.data?.complimentaryPlan ? (
+        <ComplimentaryPlanCard plan={subscription.data.complimentaryPlan} tz={tz} />
+      ) : null}
       {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
       {owedElsewhere && blocked ? (
         <section
@@ -1252,7 +1298,10 @@ function WebBillingPage() {
   }
 
   if (!canManage) {
-    return (
+    const free = subscription.data?.complimentaryPlan;
+    return free ? (
+      <ComplimentaryPlanCard plan={free} tz={tz} />
+    ) : (
       <EmptyState
         title="Ask the owner to subscribe"
         description="A business owner needs to start a Recavo plan before this workspace can be used."
@@ -1260,12 +1309,15 @@ function WebBillingPage() {
     );
   }
 
+  const complimentary = subscription.data?.complimentaryPlan;
+
   return (
     <div className="space-y-6">
+      {complimentary ? <ComplimentaryPlanCard plan={complimentary} tz={tz} /> : null}
       {!blocked && current ? <DiscountBanner discount={current.discount} tz={tz} /> : null}
       {/* Once a plan is in place the current-plan card carries the state; this line
             is only needed while the console is still locked. */}
-      {blocked && !lapsed ? (
+      {blocked && !lapsed && !complimentary ? (
         <div className="max-w-2xl">
           <p className="text-sm text-muted-foreground">{accessCopy(current, trialAvailable)}</p>
         </div>
