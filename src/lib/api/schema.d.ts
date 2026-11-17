@@ -38098,6 +38098,327 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/businesses/{businessId}/payments/manual-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a recorded payment to another booking
+         * @description For a cash, bank transfer, card machine or other payment recorded against the wrong booking. The amount comes off that booking's paid total and onto the target's, and the payment (with any refunds recorded against it) moves with it. Takings do not change. The target must be confirmed or completed, not credit-paid, in the same currency and owe at least the amount; the booking it comes off must not have an issued invoice (void it first). Card payments taken online cannot be moved (422). A payment already moved returns 409. Needs `booking.create`. Audited and emits booking.payment_moved. Requires an Idempotency-Key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The payment row id from the Payments activity list. */
+                        settlementId: string;
+                        /** Format: uuid */
+                        toBookingId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Both bookings after the move */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            from: components["schemas"]["Booking"];
+                            to: components["schemas"]["Booking"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/businesses/{businessId}/payments/manual-cancellations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment recorded by mistake
+         * @description For a cash, bank transfer, card machine or other payment that was recorded but never taken. It comes off the booking's paid total and out of takings, as if it was never recorded; money really given back is a manual refund instead. The booking must not have an issued invoice (void it first) and the payment must not have a refund recorded against it. Card payments taken online cannot be cancelled (422). A payment already cancelled returns 404 or 409. Needs `booking.create`. Audited and emits booking.payment_cancelled. Requires an Idempotency-Key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "Idempotency-Key": string;
+                };
+                path: {
+                    businessId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description The payment row id from the booking settlements list. */
+                        settlementId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The booking after the payment came off */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            booking: components["schemas"]["Booking"];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/payments/{paymentId}/dispute/accept": {
         parameters: {
             query?: never;
@@ -40764,6 +41085,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -41154,6 +41485,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -41367,6 +41708,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -42153,6 +42504,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -42535,6 +42896,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -43085,6 +43456,16 @@ export interface paths {
                                 };
                                 /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                                 billingBypass?: boolean;
+                                /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                                complimentaryPlan?: {
+                                    /** Format: uuid */
+                                    overrideId: string;
+                                    /** @enum {string} */
+                                    plan: "solo" | "business" | "growth";
+                                    name: string;
+                                    /** Format: date-time */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                                 trialAvailable?: boolean;
                                 /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -43316,6 +43697,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -43542,6 +43933,16 @@ export interface paths {
                             };
                             /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                             billingBypass?: boolean;
+                            /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                            complimentaryPlan?: {
+                                /** Format: uuid */
+                                overrideId: string;
+                                /** @enum {string} */
+                                plan: "solo" | "business" | "growth";
+                                name: string;
+                                /** Format: date-time */
+                                endsAt: string | null;
+                            } | null;
                             /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                             trialAvailable?: boolean;
                             /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -43974,6 +44375,16 @@ export interface paths {
                                 };
                                 /** @description True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null. */
                                 billingBypass?: boolean;
+                                /** @description Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date. */
+                                complimentaryPlan?: {
+                                    /** Format: uuid */
+                                    overrideId: string;
+                                    /** @enum {string} */
+                                    plan: "solo" | "business" | "growth";
+                                    name: string;
+                                    /** Format: date-time */
+                                    endsAt: string | null;
+                                } | null;
                                 /** @description Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer "Subscribe" rather than "Start free trial" to a lapsed or ended account. */
                                 trialAvailable?: boolean;
                                 /** @description Sellable add-ons with their state for this business (RECA-526). Empty when there is no subscription. */
@@ -44703,7 +45114,7 @@ export interface paths {
         put?: never;
         /**
          * Create entitlement override
-         * @description Creates a grant/deny/limit/billing_bypass/suspension override. billing_bypass requires endsAt + confirmation=CONFIRM. Suspension requires confirmation=CONFIRM. Impersonated actors cannot create overrides. Invalidates effective-policy cache.
+         * @description Creates a grant/deny/limit/billing_bypass/suspension/complimentary_plan override. billing_bypass requires endsAt + confirmation=CONFIRM. Suspension requires confirmation=CONFIRM. complimentary_plan requires planCode and puts the business on that tier for free (endsAt optional) while no subscription gives paid access. Impersonated actors cannot create overrides. Invalidates effective-policy cache.
          */
         post: {
             parameters: {
@@ -44718,8 +45129,10 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        kind: "grant" | "deny" | "limit" | "billing_bypass" | "suspension";
+                        kind: "grant" | "deny" | "limit" | "billing_bypass" | "suspension" | "complimentary_plan";
                         featureKey?: string | null;
+                        /** @enum {string|null} */
+                        planCode?: "solo" | "business" | "growth" | null;
                         limitKey?: string | null;
                         limitValue?: number | null;
                         reason: string;
@@ -65101,6 +65514,607 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portal/support-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the signed-in client’s support requests
+         * @description Requests this person raised as a client, across every business, newest first, up to 50. `businessName` is the business each was raised from.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support requests */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            requests: (components["schemas"]["SupportRequest"] & {
+                                businessName: string | null;
+                            })[];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Ask RECAVO for help with the booking app (client)
+         * @description For technical problems only; bookings, cancellations and refunds are for the business. The caller must be a client of `businessId`. Text only. Rate limited like staff requests; the body is customer content and is never logged.
+         */
+        post: {
+            parameters: {
+                query: {
+                    businessId: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        category: "bug" | "question" | "other";
+                        subject: string;
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Support request raised */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/support-requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One of the client’s support requests, with its thread
+         * @description The request plus every reply so far, oldest first. 404 for anyone else’s.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Support request and thread */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                            messages: components["schemas"]["SupportMessage"][];
+                        };
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portal/support-requests/{requestId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply on a support request (client)
+         * @description Adds a message from the client. Replying to a resolved request reopens it. Text only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Reply posted */
+                201: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            request: components["schemas"]["SupportRequest"];
+                            message: components["schemas"]["SupportMessage"];
+                        };
+                    };
+                };
+                /** @description No content */
+                204: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Validation failed (VALIDATION_FAILED) */
+                400: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unauthenticated (UNAUTHENTICATED) */
+                401: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action */
+                402: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED) */
+                403: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Not found (NOT_FOUND) */
+                404: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS) */
+                409: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Unprocessable (UNPROCESSABLE) */
+                422: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Rate limited (RATE_LIMITED) */
+                429: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Internal error (INTERNAL) */
+                500: {
+                    headers: {
+                        "x-request-id": components["headers"]["X-Request-Id"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/businesses/{businessId}/upsells/pairings": {
         parameters: {
             query?: never;
@@ -71009,12 +72023,17 @@ export interface components {
             runAt: string;
             status: string;
         };
-        /** @description A request for help raised by staff from the console. Worked through the internal platform console; the business sees its status but never the internal note. */
+        /** @description A request for help raised by staff from the console, or by a client from their account. Worked through the internal platform console; the raiser sees its status but never the internal note. */
         SupportRequest: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             businessId: string;
+            /**
+             * @description `client`: raised by one of the business’s clients about the booking app. Filed under that business but never shown to it.
+             * @enum {string}
+             */
+            source: "staff" | "client";
             /** Format: uuid */
             userId: string | null;
             /** @enum {string} */
@@ -71152,6 +72171,13 @@ export interface components {
                 /** Format: date-time */
                 currentPeriodEnd: string | null;
                 cancelAtPeriodEnd: boolean;
+                /** @description Free plan from Recavo in force now. It decides the tier only while no subscription gives paid access. */
+                freePlan: {
+                    plan: string;
+                    name: string;
+                    /** Format: date-time */
+                    endsAt: string | null;
+                } | null;
                 /** @description Every sellable bolt-on and where this business stands on it. */
                 addons: components["schemas"]["PlatformBusinessAddon"][];
             };

@@ -11,6 +11,7 @@ import {
   Ticket,
   Wallet,
 } from "lucide-react";
+import { AccountHelp } from "@/components/AccountHelp";
 import { AccountProfileForm } from "@/components/AccountProfileForm";
 import { PushNotificationsSetting } from "@/components/PushNotificationsSetting";
 import { AccountInvoices } from "@/components/AccountInvoices";
@@ -96,8 +97,10 @@ function customerMoneyHint(booking: Booking, payments: readonly Payment[]): stri
 
 const searchSchema = z.object({
   view: z
-    .enum(["overview", "calendar", "offers", "credits", "purchases", "invoices", "profile"])
+    .enum(["overview", "calendar", "offers", "credits", "purchases", "invoices", "profile", "help"])
     .optional(),
+  /** An app-help thread to open, from the link in our reply email. */
+  request: z.string().optional(),
   // Booking now runs on the business's own page, so 3-D Secure returns there.
   // These stay accepted so a return from before that change still lands here.
   payment_intent: z.string().optional(),
@@ -128,6 +131,7 @@ const TITLES: Record<AccountView, { title: string; description: string }> = {
   purchases: { title: "Purchases", description: "Everything you've bought, newest first." },
   invoices: { title: "Invoices", description: "Invoices businesses have sent you, as PDFs." },
   profile: { title: "Profile", description: "Your name and contact details." },
+  help: { title: "App help", description: "Report a problem with the booking app to RECAVO." },
 };
 
 /**
@@ -139,7 +143,9 @@ const TITLES: Record<AccountView, { title: string; description: string }> = {
 function AccountPage() {
   const { status } = useAuth();
   const signedIn = status === "authenticated";
-  const view = Route.useSearch().view ?? "overview";
+  const search = Route.useSearch();
+  const view = search.view ?? "overview";
+  const navigate = useNavigate();
   // Attach guest purchases first: someone who bought before signing up has
   // sessions under their address and no link to them until this runs.
   const link = usePortalLink(signedIn);
@@ -181,6 +187,18 @@ function AccountPage() {
           icon={<Store className="size-5" />}
           title="Nothing here yet"
           description="Once you book or buy with a business, everything you've got with them shows up here. Use the link the business gave you to get started."
+        />
+      </AccountShell>
+    );
+  }
+
+  if (view === "help") {
+    return (
+      <AccountShell view={view} title={copy.title} description={copy.description}>
+        <AccountHelp
+          studios={studios.data}
+          requestId={search.request}
+          onOpen={(request) => void navigate({ to: "/account", search: { view: "help", request } })}
         />
       </AccountShell>
     );
