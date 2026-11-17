@@ -10218,10 +10218,11 @@
       },
       "SupportRequest": {
         "type": "object",
-        "description": "A request for help raised by staff from the console. Worked through the internal platform console; the business sees its status but never the internal note.",
+        "description": "A request for help raised by staff from the console, or by a client from their account. Worked through the internal platform console; the raiser sees its status but never the internal note.",
         "required": [
           "id",
           "businessId",
+          "source",
           "userId",
           "category",
           "subject",
@@ -10241,6 +10242,14 @@
           "businessId": {
             "type": "string",
             "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "client"
+            ],
+            "description": "`client`: raised by one of the business’s clients about the booking app. Filed under that business but never shown to it."
           },
           "userId": {
             "type": [
@@ -10646,6 +10655,7 @@
               "trialEnd",
               "currentPeriodEnd",
               "cancelAtPeriodEnd",
+              "freePlan",
               "addons"
             ],
             "properties": {
@@ -10730,6 +10740,33 @@
               },
               "cancelAtPeriodEnd": {
                 "type": "boolean"
+              },
+              "freePlan": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Free plan from Recavo in force now. It decides the tier only while no subscription gives paid access.",
+                "required": [
+                  "plan",
+                  "name",
+                  "endsAt"
+                ],
+                "properties": {
+                  "plan": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "endsAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                }
               },
               "addons": {
                 "type": "array",
@@ -70180,6 +70217,467 @@
         }
       }
     },
+    "/api/v1/businesses/{businessId}/payments/manual-moves": {
+      "post": {
+        "summary": "Move a recorded payment to another booking",
+        "description": "For a cash, bank transfer, card machine or other payment recorded against the wrong booking. The amount comes off that booking's paid total and onto the target's, and the payment (with any refunds recorded against it) moves with it. Takings do not change. The target must be confirmed or completed, not credit-paid, in the same currency and owe at least the amount; the booking it comes off must not have an issued invoice (void it first). Card payments taken online cannot be moved (422). A payment already moved returns 409. Needs `booking.create`. Audited and emits booking.payment_moved. Requires an Idempotency-Key.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "settlementId",
+                  "toBookingId"
+                ],
+                "properties": {
+                  "settlementId": {
+                    "type": "string",
+                    "description": "The payment row id from the Payments activity list."
+                  },
+                  "toBookingId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Both bookings after the move",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "from",
+                    "to"
+                  ],
+                  "properties": {
+                    "from": {
+                      "$ref": "#/components/schemas/Booking"
+                    },
+                    "to": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/businesses/{businessId}/payments/manual-cancellations": {
+      "post": {
+        "summary": "Cancel a payment recorded by mistake",
+        "description": "For a cash, bank transfer, card machine or other payment that was recorded but never taken. It comes off the booking's paid total and out of takings, as if it was never recorded; money really given back is a manual refund instead. The booking must not have an issued invoice (void it first) and the payment must not have a refund recorded against it. Card payments taken online cannot be cancelled (422). A payment already cancelled returns 404 or 409. Needs `booking.create`. Audited and emits booking.payment_cancelled. Requires an Idempotency-Key.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "settlementId"
+                ],
+                "properties": {
+                  "settlementId": {
+                    "type": "string",
+                    "description": "The payment row id from the booking settlements list."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The booking after the payment came off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "booking"
+                  ],
+                  "properties": {
+                    "booking": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/businesses/{businessId}/payments/{paymentId}/dispute/accept": {
       "post": {
         "summary": "Accept a card dispute",
@@ -74057,6 +74555,39 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
                     "trialAvailable": {
                       "type": "boolean",
                       "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
@@ -74719,6 +75250,39 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
                     "trialAvailable": {
                       "type": "boolean",
                       "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
@@ -75146,6 +75710,39 @@
                     "billingBypass": {
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                    },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
                     },
                     "trialAvailable": {
                       "type": "boolean",
@@ -76485,6 +77082,39 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
                     "trialAvailable": {
                       "type": "boolean",
                       "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
@@ -77126,6 +77756,39 @@
                         "billingBypass": {
                           "type": "boolean",
                           "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                        },
+                        "complimentaryPlan": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                          "required": [
+                            "overrideId",
+                            "plan",
+                            "name",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "overrideId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "plan": {
+                              "type": "string",
+                              "enum": [
+                                "solo",
+                                "business",
+                                "growth"
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            }
+                          }
                         },
                         "trialAvailable": {
                           "type": "boolean",
@@ -78020,6 +78683,39 @@
                               "type": "boolean",
                               "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                             },
+                            "complimentaryPlan": {
+                              "type": "object",
+                              "nullable": true,
+                              "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                              "required": [
+                                "overrideId",
+                                "plan",
+                                "name",
+                                "endsAt"
+                              ],
+                              "properties": {
+                                "overrideId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "plan": {
+                                  "type": "string",
+                                  "enum": [
+                                    "solo",
+                                    "business",
+                                    "growth"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "endsAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "nullable": true
+                                }
+                              }
+                            },
                             "trialAvailable": {
                               "type": "boolean",
                               "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
@@ -78458,6 +79154,39 @@
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
                     },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
                     "trialAvailable": {
                       "type": "boolean",
                       "description": "Whether a new Checkout would still include the one self-serve trial (ADR 0014). False once Stripe has started a trial for this business, so clients offer \"Subscribe\" rather than \"Start free trial\" to a lapsed or ended account."
@@ -78873,6 +79602,39 @@
                     "billingBypass": {
                       "type": "boolean",
                       "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                    },
+                    "complimentaryPlan": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                      "required": [
+                        "overrideId",
+                        "plan",
+                        "name",
+                        "endsAt"
+                      ],
+                      "properties": {
+                        "overrideId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "solo",
+                            "business",
+                            "growth"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
                     },
                     "trialAvailable": {
                       "type": "boolean",
@@ -79704,6 +80466,39 @@
                         "billingBypass": {
                           "type": "boolean",
                           "description": "True when an active platform `billing_bypass` override grants paid access without a Stripe subscription (demo, review and comp accounts). Clients should not billing-lock the console while this is set, even if `subscription` is null."
+                        },
+                        "complimentaryPlan": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Free plan from Recavo deciding the tier: set only while no subscription gives paid access. `plan` then names that tier. `endsAt` null means no end date.",
+                          "required": [
+                            "overrideId",
+                            "plan",
+                            "name",
+                            "endsAt"
+                          ],
+                          "properties": {
+                            "overrideId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "plan": {
+                              "type": "string",
+                              "enum": [
+                                "solo",
+                                "business",
+                                "growth"
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "endsAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            }
+                          }
                         },
                         "trialAvailable": {
                           "type": "boolean",
@@ -80659,7 +81454,7 @@
       },
       "post": {
         "summary": "Create entitlement override",
-        "description": "Creates a grant/deny/limit/billing_bypass/suspension override. billing_bypass requires endsAt + confirmation=CONFIRM. Suspension requires confirmation=CONFIRM. Impersonated actors cannot create overrides. Invalidates effective-policy cache.",
+        "description": "Creates a grant/deny/limit/billing_bypass/suspension/complimentary_plan override. billing_bypass requires endsAt + confirmation=CONFIRM. Suspension requires confirmation=CONFIRM. complimentary_plan requires planCode and puts the business on that tier for free (endsAt optional) while no subscription gives paid access. Impersonated actors cannot create overrides. Invalidates effective-policy cache.",
         "security": [
           {
             "bearerAuth": []
@@ -80694,13 +81489,26 @@
                       "deny",
                       "limit",
                       "billing_bypass",
-                      "suspension"
+                      "suspension",
+                      "complimentary_plan"
                     ]
                   },
                   "featureKey": {
                     "type": [
                       "string",
                       "null"
+                    ]
+                  },
+                  "planCode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "solo",
+                      "business",
+                      "growth",
+                      null
                     ]
                   },
                   "limitKey": {
@@ -110490,6 +111298,872 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/support-requests": {
+      "get": {
+        "summary": "List the signed-in client’s support requests",
+        "description": "Requests this person raised as a client, across every business, newest first, up to 50. `businessName` is the business each was raised from.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Support requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "requests"
+                  ],
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/SupportRequest"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "businessName"
+                            ],
+                            "properties": {
+                              "businessName": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Ask RECAVO for help with the booking app (client)",
+        "description": "For technical problems only; bookings, cancellations and refunds are for the business. The caller must be a client of `businessId`. Text only. Rate limited like staff requests; the body is customer content and is never logged.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "businessId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "category",
+                  "subject",
+                  "body"
+                ],
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "bug",
+                      "question",
+                      "other"
+                    ]
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Support request raised",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/SupportRequest"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/support-requests/{requestId}": {
+      "get": {
+        "summary": "One of the client’s support requests, with its thread",
+        "description": "The request plus every reply so far, oldest first. 404 for anyone else’s.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Support request and thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "messages"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/SupportRequest"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SupportMessage"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "204": {
+            "description": "No content",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated (UNAUTHENTICATED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "402": {
+            "description": "Billing access required (BILLING_ACCESS_REQUIRED) — subscription access_state blocks the action",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / feature not available / MFA (FORBIDDEN, FEATURE_NOT_AVAILABLE, or MFA_REQUIRED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (NOT_FOUND)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict / plan limit exceeded (CONFLICT, BOOKING_CONFLICT, PLAN_LIMIT_EXCEEDED, SUBSCRIPTION_ALREADY_EXISTS)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable (UNPROCESSABLE)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (RATE_LIMITED)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error (INTERNAL)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/support-requests/{requestId}/messages": {
+      "post": {
+        "summary": "Reply on a support request (client)",
+        "description": "Adds a message from the client. Replying to a resolved request reopens it. Text only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "x-request-id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "201": {
+            "description": "Reply posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "request",
+                    "message"
+                  ],
+                  "properties": {
+                    "request": {
+                      "$ref": "#/components/schemas/SupportRequest"
+                    },
+                    "message": {
+                      "$ref": "#/components/schemas/SupportMessage"
+                    }
+                  }
+                }
+              }
+            },
             "headers": {
               "x-request-id": {
                 "$ref": "#/components/headers/X-Request-Id"

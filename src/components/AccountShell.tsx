@@ -6,6 +6,7 @@ import {
   Gift,
   House,
   LayoutDashboard,
+  LifeBuoy,
   Menu,
   Receipt,
   Ticket,
@@ -21,7 +22,7 @@ import { useFixedTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export type AccountView =
-  "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile";
+  "overview" | "calendar" | "offers" | "credits" | "purchases" | "invoices" | "profile" | "help";
 
 /** The five things a client reaches for on a phone; the rest live in the slide-out menu. */
 const TAB_BAR: readonly { view: AccountView; label: string; icon: typeof LayoutDashboard }[] = [
@@ -40,6 +41,7 @@ const NAV: readonly { view: AccountView; label: string; icon: typeof LayoutDashb
   { view: "purchases", label: "Purchases", icon: Receipt },
   { view: "invoices", label: "Invoices", icon: FileText },
   { view: "profile", label: "Profile", icon: UserRound },
+  { view: "help", label: "App help", icon: LifeBuoy },
 ];
 
 /**
