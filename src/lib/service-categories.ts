@@ -51,6 +51,16 @@ export function groupByCategory<T extends Categorised>(
   return uncategorised.length > 0 ? [...sorted, { category: null, items: uncategorised }] : sorted;
 }
 
+/** The order a client sees the list in: grouped when there are groups to show, else as given. */
+export function inDisplayOrder<T extends Categorised>(
+  items: readonly T[],
+  order: readonly string[] = [],
+): T[] {
+  if (!hasCategories(items)) return [...items];
+  const groups = groupByCategory(items, order);
+  return groups.length > 1 ? groups.flatMap((g) => g.items) : [...items];
+}
+
 /** Distinct category names, alphabetical — for suggestions when typing a new one. */
 export function knownCategories(items: readonly Categorised[]): string[] {
   return groupByCategory(items)

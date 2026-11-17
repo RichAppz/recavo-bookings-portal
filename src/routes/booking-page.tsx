@@ -58,6 +58,7 @@ import {
 } from "@/lib/api/hooks";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
 import { addCalendarDays, filterReviews, nextAvailableLabel } from "@/lib/client-booking";
+import { inDisplayOrder } from "@/lib/service-categories";
 import {
   BOOKING_PAGE_THEMES,
   CLIENT_FONTS_HREF,
@@ -1237,7 +1238,10 @@ function LivePreview({
   const previewToday = isoDateInTz(fromIso, tz);
 
   // The phone bar reads "Next available · Today, 17:00" from the first session's real times.
-  const firstService = services.data?.[0] ?? null;
+  const firstService = useMemo(
+    () => inDisplayOrder(services.data ?? [])[0] ?? null,
+    [services.data],
+  );
   const firstLocation = locations.data?.find((l) => l.type === "physical") ?? locations.data?.[0];
   const peek = usePublicAvailability(businessId, {
     serviceId: firstService?.id,
@@ -1249,7 +1253,11 @@ function LivePreview({
   const nextAvailable = useMemo(() => {
     const first = (peek.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start))[0];
     if (!first || !firstService) return null;
-    return { label: nextAvailableLabel(first.start, tz, previewToday), serviceId: firstService.id };
+    return {
+      label: nextAvailableLabel(first.start, tz, previewToday),
+      serviceId: firstService.id,
+      serviceName: firstService.name,
+    };
   }, [peek.data, firstService, tz, previewToday]);
 
   const noop = () => undefined;

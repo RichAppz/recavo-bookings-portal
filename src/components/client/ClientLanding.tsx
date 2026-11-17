@@ -40,7 +40,7 @@ import { validityLabel } from "@/lib/packages";
 import { groupByCategory, hasCategories } from "@/lib/service-categories";
 import { cn } from "@/lib/utils";
 
-export type NextAvailable = { label: string; serviceId: string } | null;
+export type NextAvailable = { label: string; serviceId: string; serviceName: string } | null;
 
 type SectionNodes = Partial<Record<BookingPageSectionKey, ReactNode>>;
 
@@ -236,7 +236,13 @@ export function ClientLanding({
   ) : (
     <>
       <BarSummary
-        caption={nextAvailable ? "Next available" : "Book online"}
+        caption={
+          !nextAvailable
+            ? "Book online"
+            : services.length > 1
+              ? `Next ${nextAvailable.serviceName}`
+              : "Next available"
+        }
         value={nextAvailable ? nextAvailable.label : "Pick a session"}
       />
       <PrimaryButton onClick={onBookNow} disabled={services.length === 0}>
