@@ -101,6 +101,7 @@ import { addressText } from "@/lib/locations";
 import { creditsCovering } from "@/lib/portal-credits";
 import { describeDiscount, discountMinorOff } from "@/lib/offer-discount";
 import { hasExtraTimesForService } from "@/lib/offer-extra-times";
+import { inDisplayOrder } from "@/lib/service-categories";
 
 type Step = "landing" | "location" | "time" | "details" | "review" | "done";
 
@@ -443,8 +444,11 @@ export function ClientBookingFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingStartAt, availability.data, dayWindow.data]);
 
-  // The landing's "Next available" reads one window for the first bookable session.
-  const firstService = services.data?.[0] ?? null;
+  // The landing's "Next available" reads one window for the first session on the page.
+  const firstService = useMemo(
+    () => inDisplayOrder(services.data ?? [], categoryOrder)[0] ?? null,
+    [services.data, categoryOrder],
+  );
   const landingAvailability = usePublicAvailability(businessId, {
     serviceId: firstService?.id,
     locationId: activeLocationId ?? undefined,
@@ -461,7 +465,11 @@ export function ClientBookingFlow({
       .slice()
       .sort((a, b) => a.start.localeCompare(b.start))[0];
     if (!first || !firstService) return null;
-    return { label: nextAvailableLabel(first.start, tz, today), serviceId: firstService.id };
+    return {
+      label: nextAvailableLabel(first.start, tz, today),
+      serviceId: firstService.id,
+      serviceName: firstService.name,
+    };
   }, [landingAvailability.data, firstService, tz, today, upcoming, offerOnly]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);
