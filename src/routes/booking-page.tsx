@@ -42,7 +42,7 @@ import {
   useGooglePlace,
   useGooglePlaceSearch,
   useLocationsList,
-  usePublicAvailability,
+  usePublicNextAvailable,
   usePublicBusiness,
   usePublicLocations,
   usePublicPackages,
@@ -1237,28 +1237,29 @@ function LivePreview({
   const fromIso = previewWindowStart();
   const previewToday = isoDateInTz(fromIso, tz);
 
-  // The phone bar reads "Next available · Today, 17:00" from the first session's real times.
+  // Each session row, and the phone bar for the first one, show the real next free time.
   const firstService = useMemo(
     () => inDisplayOrder(services.data ?? [])[0] ?? null,
     [services.data],
   );
   const firstLocation = locations.data?.find((l) => l.type === "physical") ?? locations.data?.[0];
-  const peek = usePublicAvailability(businessId, {
-    serviceId: firstService?.id,
+  const peek = usePublicNextAvailable(businessId, {
     locationId: firstLocation?.id,
     from: fromIso,
     to: `${addCalendarDays(previewToday, 14)}T00:00:00.000Z`,
-    enabled: device === "phone",
   });
+  const nextByService = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const [id, start] of Object.entries(peek.data ?? {})) {
+      if (start) labels[id] = nextAvailableLabel(start, tz, previewToday);
+    }
+    return labels;
+  }, [peek.data, tz, previewToday]);
   const nextAvailable = useMemo(() => {
-    const first = (peek.data ?? []).slice().sort((a, b) => a.start.localeCompare(b.start))[0];
-    if (!first || !firstService) return null;
-    return {
-      label: nextAvailableLabel(first.start, tz, previewToday),
-      serviceId: firstService.id,
-      serviceName: firstService.name,
-    };
-  }, [peek.data, firstService, tz, previewToday]);
+    const label = firstService && device === "phone" ? nextByService[firstService.id] : undefined;
+    if (!label || !firstService) return null;
+    return { label, serviceId: firstService.id, serviceName: firstService.name };
+  }, [nextByService, firstService, device]);
 
   const noop = () => undefined;
   const content = business.data ? (
@@ -1274,6 +1275,7 @@ function LivePreview({
           locations={locations.data ?? []}
           reviews={reviews}
           nextAvailable={nextAvailable}
+          nextByService={nextByService}
           onPickService={noop}
           onPickPackage={noop}
           onBookNow={noop}
