@@ -6834,6 +6834,31 @@ export function usePublicAvailability(
   });
 }
 
+/** First free time for every public session at a location, keyed by service id. */
+export function usePublicNextAvailable(
+  businessId: string | undefined,
+  filters: { locationId?: string; from?: string; to?: string; enabled?: boolean },
+) {
+  const ready =
+    Boolean(businessId && filters.locationId && filters.from && filters.to) &&
+    filters.enabled !== false;
+  const query = { locationId: filters.locationId!, from: filters.from!, to: filters.to! };
+  return useQuery({
+    queryKey: queryKeys.publicNextAvailable(businessId ?? "", query),
+    enabled: ready,
+    queryFn: async () => {
+      const res = await api.get<{ next: { serviceId: string; start: string | null }[] }>(
+        `/api/v1/public/businesses/${businessId}/next-available`,
+        { public: true, query },
+      );
+      return Object.fromEntries(res.data.next.map((n) => [n.serviceId, n.start])) as Record<
+        string,
+        string | null
+      >;
+    },
+  });
+}
+
 /** A package as an unauthenticated buyer sees it on the booking page. */
 export type PublicPackage = {
   id: string;

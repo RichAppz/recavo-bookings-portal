@@ -54,6 +54,7 @@ export function ClientLanding({
   locations,
   reviews = null,
   nextAvailable,
+  nextByService = {},
   onPickService,
   onPickPackage,
   onBookNow,
@@ -83,6 +84,8 @@ export function ClientLanding({
   /** Google reviews already filtered to the page's star floor; null hides the section. */
   reviews?: PublicReviews | null;
   nextAvailable: NextAvailable;
+  /** "Today, 16:30"-style first free time per session id; missing ids show nothing. */
+  nextByService?: Readonly<Record<string, string>>;
   onPickService: (serviceId: string) => void;
   onPickPackage: (packageId: string) => void;
   /**
@@ -294,6 +297,7 @@ export function ClientLanding({
                       services={group.items}
                       locations={locations}
                       selectedId={sessionSelectedId}
+                      nextByService={nextByService}
                       onPick={onPickService}
                     />
                   </div>
@@ -303,6 +307,7 @@ export function ClientLanding({
                   services={services}
                   locations={locations}
                   selectedId={sessionSelectedId}
+                  nextByService={nextByService}
                   onPick={onPickService}
                 />
               )}
@@ -490,13 +495,19 @@ export function ClientLanding({
                   <ServiceList
                     services={group.items}
                     locations={locations}
+                    nextByService={nextByService}
                     onPick={onPickService}
                   />
                 </div>
               ))}
             </div>
           ) : (
-            <ServiceList services={services} locations={locations} onPick={onPickService} />
+            <ServiceList
+              services={services}
+              locations={locations}
+              nextByService={nextByService}
+              onPick={onPickService}
+            />
           )}
         </div>
 
@@ -726,10 +737,12 @@ export function ClientLanding({
 function ServiceList({
   services,
   locations,
+  nextByService,
   onPick,
 }: {
   services: PublicService[];
   locations: PublicLocation[];
+  nextByService: Readonly<Record<string, string>>;
   onPick: (serviceId: string) => void;
 }) {
   const travels = locations.length > 0 && locations.every((l) => l.type !== "physical");
@@ -749,6 +762,7 @@ function ServiceList({
                   {formatDuration(service.durationMinutes)}
                   {travels ? " · We come to you" : locations.length > 0 ? " · In person" : ""}
                 </span>
+                {nextByService[service.id] ? <NextLine label={nextByService[service.id]!} /> : null}
               </span>
               <span className="text-[16px] font-semibold">
                 {service.basePriceMinor === 0
@@ -784,11 +798,13 @@ function RadioRows({
   services,
   locations,
   selectedId,
+  nextByService,
   onPick,
 }: {
   services: PublicService[];
   locations: PublicLocation[];
   selectedId: string | null;
+  nextByService: Readonly<Record<string, string>>;
   onPick: (serviceId: string) => void;
 }) {
   const travels = locations.length > 0 && locations.every((l) => l.type !== "physical");
@@ -805,6 +821,7 @@ function RadioRows({
               onClick={() => onPick(service.id)}
               title={service.name}
               subtitle={parts.join(" · ")}
+              next={nextByService[service.id]}
               price={
                 service.basePriceMinor === 0
                   ? "Free"
@@ -823,12 +840,14 @@ function RadioRow({
   onClick,
   title,
   subtitle,
+  next,
   price,
 }: {
   active: boolean;
   onClick: () => void;
   title: string;
   subtitle: string;
+  next?: string;
   price: string;
 }) {
   return (
@@ -854,10 +873,15 @@ function RadioRow({
       <span className="min-w-0 flex-1">
         <span className="block text-[16px] font-semibold leading-tight">{title}</span>
         <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{subtitle}</span>
+        {next ? <NextLine label={next} /> : null}
       </span>
       <span className="shrink-0 text-[16px] font-semibold">{price}</span>
     </button>
   );
+}
+
+function NextLine({ label }: { label: string }) {
+  return <span className="mt-1 block text-[13px] font-medium text-primary">Next: {label}</span>;
 }
 
 /** One Google review: stars, up to three lines of text, "Sarah K. · 2 weeks ago". */

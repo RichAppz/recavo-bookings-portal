@@ -51,6 +51,7 @@ import {
   usePortalMe,
   usePortalPackageLinks,
   usePublicAvailability,
+  usePublicNextAvailable,
   usePublicCancellationPolicy,
   usePublicLocations,
   type PublicLocation,
@@ -444,33 +445,33 @@ export function ClientBookingFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingStartAt, availability.data, dayWindow.data]);
 
-  // The landing's "Next available" reads one window for the first session on the page.
+  // The landing's "Next available" bar is for the first session on the page.
   const firstService = useMemo(
     () => inDisplayOrder(services.data ?? [], categoryOrder)[0] ?? null,
     [services.data, categoryOrder],
   );
-  const landingAvailability = usePublicAvailability(businessId, {
-    serviceId: firstService?.id,
+  const landingNext = usePublicNextAvailable(businessId, {
     locationId: activeLocationId ?? undefined,
     from: fromIso,
     to: `${addCalendarDays(today, 14)}T00:00:00.000Z`,
-    // The desktop card shows the times themselves, so no separate peek is needed; a
-    // private offer's bar names the offer rather than the catalogue's next time.
-    enabled:
-      !desktop && !offerOnly && step === "landing" && Boolean(firstService && activeLocationId),
+    // A private offer's page names the offer rather than the catalogue's next times.
+    // Desktop keeps the session list beside the times.
+    enabled: !offerOnly && (step === "landing" || (desktop && step === "time")),
   });
+  const nextByService = useMemo<Record<string, string>>(() => {
+    if (offerOnly || !landingNext.data) return {};
+    const labels: Record<string, string> = {};
+    for (const [id, start] of Object.entries(landingNext.data)) {
+      if (start && Date.parse(start) > now) labels[id] = nextAvailableLabel(start, tz, today);
+    }
+    return labels;
+  }, [landingNext.data, offerOnly, now, tz, today]);
   const nextAvailable = useMemo<NextAvailable>(() => {
-    if (offerOnly) return null;
-    const first = upcoming(landingAvailability.data)
-      .slice()
-      .sort((a, b) => a.start.localeCompare(b.start))[0];
-    if (!first || !firstService) return null;
-    return {
-      label: nextAvailableLabel(first.start, tz, today),
-      serviceId: firstService.id,
-      serviceName: firstService.name,
-    };
-  }, [landingAvailability.data, firstService, tz, today, upcoming, offerOnly]);
+    // The desktop card shows the times themselves.
+    const label = firstService && !desktop ? nextByService[firstService.id] : undefined;
+    if (!label || !firstService) return null;
+    return { label, serviceId: firstService.id, serviceName: firstService.name };
+  }, [nextByService, firstService, desktop]);
 
   const holdMutation = useCreatePublicBookingHold(businessId);
   const releaseMutation = useReleasePublicBookingHold(businessId);
@@ -1282,6 +1283,7 @@ export function ClientBookingFlow({
             locations={locations.data ?? []}
             reviews={reviews.data ?? null}
             nextAvailable={nextAvailable}
+            nextByService={nextByService}
             onPickService={pickService}
             onPickPackage={pickPackage}
             onBookNow={bookNow}

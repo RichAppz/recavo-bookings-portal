@@ -240,6 +240,8 @@ export const queryKeys = {
     ["public", businessId, "package-links", code] as const,
   publicAvailability: (businessId: string, filters?: Record<string, unknown>) =>
     ["public", businessId, "availability", filters ?? {}] as const,
+  publicNextAvailable: (businessId: string, filters: Record<string, unknown>) =>
+    ["public", businessId, "availability", "next", filters] as const,
   /** Every cached day of availability, for when a booking has just taken a slot. */
   publicAvailabilityAll: (businessId: string) => ["public", businessId, "availability"] as const,
   publicStaff: (businessId: string) => ["public", businessId, "staff"] as const,
