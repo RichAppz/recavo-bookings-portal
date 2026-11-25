@@ -154,7 +154,7 @@ export function AccountShell({
       </aside>
 
       <div className="lg:pl-sidebar">
-        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-safe-4 pb-28 sm:p-6 lg:px-10 lg:pt-8 lg:pb-safe-12">
+        <main className="px-safe-4 sm:px-safe-6 mx-auto w-full min-w-0 max-w-[1440px] space-y-6 pt-safe-4 pb-safe-24 sm:pt-safe-6 lg:px-10 lg:pt-8 lg:pb-safe-12">
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">{title}</h1>
@@ -189,6 +189,7 @@ export function AccountShell({
           {children}
         </main>
 
+        {/* Shown below `lg`, so `main` keeps room for it (`pb-safe-24`) until then. */}
         <nav
           aria-label="Account"
           className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--account-line)] bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:hidden"
